@@ -1,0 +1,101 @@
+.projectclad-cart-actions {
+  margin-top: 1rem;
+}
+
+.projectclad-cart-actions__buttons {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.projectclad-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1.2rem;
+  border: 1px solid #1a1a1a;
+  border-radius: 4px;
+  background: transparent;
+  color: #1a1a1a;
+  text-decoration: none;
+  cursor: pointer;
+  height: 30px;
+  min-height: 30px;
+  min-width: 160px;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.projectclad-button--primary {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+.projectclad-modal[hidden] {
+  display: none;
+}
+
+.projectclad-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.projectclad-modal__content {
+  background: #fff;
+  padding: 1.5rem;
+  border-radius: 8px;
+  width: min(480px, 90vw);
+  position: relative;
+  display: grid;
+  gap: 0.75rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.projectclad-modal__close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  border: none;
+  background: transparent;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.projectclad-section {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.projectclad-field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.projectclad-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+/* Prevent iOS Safari zoom on focus */
+.projectclad-modal__content input,
+.projectclad-modal__content select,
+.projectclad-modal__content textarea {
+  font-size: 16px;
+}
+
+.projectclad-fieldset {
+  border: 1px solid #e1e1e1;
+  padding: 0.75rem;
+  border-radius: 6px;
+}

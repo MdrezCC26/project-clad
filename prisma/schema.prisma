@@ -1,0 +1,147 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.sqlite"
+}
+
+enum ProjectRole {
+  view
+  edit
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+  refreshToken  String?
+  refreshTokenExpires DateTime?
+}
+
+model Project {
+  id               String            @id @default(cuid())
+  shop             String
+  name             String
+  ownerCustomerId  String
+  poNumber         String?
+  companyName      String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  jobs             Job[]
+  members          ProjectMember[]
+  shareTokens      ProjectShareToken[]
+  approvalRequests ApprovalRequest[]
+
+  @@index([shop])
+  @@index([ownerCustomerId])
+}
+
+model Job {
+  id        String      @id @default(cuid())
+  projectId String
+  name      String
+  createdAt DateTime    @default(now())
+  isLocked  Boolean     @default(false)
+  sortOrder Int         @default(0)
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items     JobItem[]
+  orderLink JobOrderLink?
+
+  @@index([projectId])
+  @@index([projectId, sortOrder])
+}
+
+model JobItem {
+  id            String   @id @default(cuid())
+  jobId         String
+  variantId     String
+  quantity      Int
+  priceSnapshot Decimal
+  sortOrder     Int      @default(0)
+  job           Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, variantId])
+  @@index([jobId])
+  @@index([jobId, sortOrder])
+}
+
+model ProjectMember {
+  id         String      @id @default(cuid())
+  projectId  String
+  customerId String
+  role       ProjectRole
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, customerId])
+  @@index([customerId])
+}
+
+model ProjectShareToken {
+  id        String      @id @default(cuid())
+  projectId String
+  token     String      @unique
+  role      ProjectRole
+  createdAt DateTime    @default(now())
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model JobOrderLink {
+  id        String   @id @default(cuid())
+  jobId     String   @unique
+  orderId   String   @unique
+  createdAt DateTime @default(now())
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model ApprovalRequest {
+  id                   String    @id @default(cuid())
+  projectId            String
+  jobId                String    @default("")
+  itemId               String    @default("")
+  requestedAt          DateTime  @default(now())
+  approvedAt           DateTime?
+  approvedByCustomerId String?
+  project              Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, jobId, itemId])
+  @@index([projectId])
+}
+
+model ShopSettings {
+  id                   String   @id @default(cuid())
+  shop                 String   @unique
+  logoDataUrl          String?
+  pricingPasswordHash  String?
+  pricingPasswordSalt  String?
+  storefrontTheme      String?  @default("default")
+  navButton1Label      String?
+  navButton1Url        String?
+  navButton2Label      String?
+  navButton2Url        String?
+  navButton3Label      String?
+  navButton3Url        String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}

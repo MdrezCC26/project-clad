@@ -1,0 +1,19 @@
+{
+  "projectclad": {
+    "view_projects": "View Projects",
+    "save_order": "Save Order",
+    "clear_cart": "Clear cart",
+    "save_cart_to_project": "Save cart to project",
+    "create_new_project": "Create new project",
+    "save_to_existing_project": "Save to existing project",
+    "save_to_existing_order": "Save to existing order",
+    "po_number": "PO number",
+    "company_name": "Company name",
+    "project_name": "Project name",
+    "order_name": "Order name",
+    "project": "Project",
+    "order": "Order",
+    "add_quantities": "Add quantities",
+    "replace_quantities": "Replace quantities"
+  }
+}

@@ -1,0 +1,109 @@
+{% assign view_projects_url = "https://" | append: request.host | append: "/apps/project-clad/projects" %}
+{% assign return_url_param = view_projects_url | url_encode %}
+{% assign login_url = "/account/login?return_url=" | append: return_url_param %}
+<div
+  class="projectclad-cart-actions"
+  data-projectclad
+  data-projectclad-login-url="{% if customer %}{{ view_projects_url }}{% else %}{{ login_url }}{% endif %}"
+  data-projectclad-projects-url="/apps/project-clad/api/projects"
+  data-projectclad-save-url="/apps/project-clad/api/save-job"
+  data-projectclad-view-projects-url="{% if customer %}{{ view_projects_url }}{% else %}{{ login_url }}{% endif %}"
+>
+  <div class="projectclad-cart-actions__buttons">
+    <a
+      class="projectclad-button"
+      href="{% if customer %}{{ view_projects_url }}{% else %}{{ login_url }}{% endif %}"
+      data-projectclad-view-projects
+    >
+      View Projects
+    </a>
+    {% if cart.item_count > 0 %}
+      <button class="projectclad-button projectclad-button--primary" type="button" data-projectclad-save>
+        Save Order
+      </button>
+      <form method="post" action="/cart/clear" style="display:inline;">
+        <input type="hidden" name="return_to" value="/cart" />
+        <button class="projectclad-button" type="submit">
+          Clear cart
+        </button>
+      </form>
+    {% endif %}
+  </div>
+
+    <div class="projectclad-modal" data-projectclad-modal hidden>
+      <div class="projectclad-modal__content" role="dialog" aria-modal="true" aria-label="Save cart as order">
+        <button class="projectclad-modal__close" type="button" data-projectclad-close>&times;</button>
+        <h2>Save cart to project</h2>
+        <form data-projectclad-form>
+          <label for="projectclad-mode">Save mode</label>
+          <select id="projectclad-mode" data-projectclad-mode>
+            <option value="newProject">Create new project</option>
+            <option value="existingProject">Save to existing project</option>
+            <option value="existingJob">Save to existing order</option>
+          </select>
+
+        <div class="projectclad-field-row">
+          <div class="projectclad-field">
+            <label for="projectclad-po-number">PO number</label>
+            <input id="projectclad-po-number" type="text" data-projectclad-po required />
+          </div>
+          <div class="projectclad-field">
+            <label for="projectclad-company-name">Company name</label>
+            <input
+              id="projectclad-company-name"
+              type="text"
+              data-projectclad-company
+              required
+            />
+          </div>
+        </div>
+
+          <div class="projectclad-section" data-projectclad-section="newProject">
+            <label for="projectclad-project-name">Project name</label>
+            <input id="projectclad-project-name" type="text" data-projectclad-project-name required />
+            <label for="projectclad-job-name">Order name</label>
+            <input id="projectclad-job-name" type="text" data-projectclad-job-name required />
+          </div>
+
+          <div class="projectclad-section" data-projectclad-section="existingProject" hidden>
+            <label for="projectclad-project-select">Project</label>
+            <select id="projectclad-project-select" data-projectclad-project required></select>
+            <label for="projectclad-job-name-existing">Order name</label>
+            <input id="projectclad-job-name-existing" type="text" data-projectclad-job-name required />
+          </div>
+
+          <div class="projectclad-section" data-projectclad-section="existingJob" hidden>
+            <label for="projectclad-project-select-job">Project</label>
+            <select id="projectclad-project-select-job" data-projectclad-project required></select>
+            <label for="projectclad-job-select">Order</label>
+            <select id="projectclad-job-select" data-projectclad-job required></select>
+            <fieldset class="projectclad-fieldset">
+              <legend>Quantity mode</legend>
+              <label>
+                <input type="radio" name="projectclad-quantity" value="add" checked />
+                Add quantities
+              </label>
+              <label>
+                <input type="radio" name="projectclad-quantity" value="replace" />
+                Replace quantities
+              </label>
+            </fieldset>
+          </div>
+
+          <button class="projectclad-button projectclad-button--primary" type="submit">
+            Save order
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+{% schema %}
+{
+  "name": "ProjectClad cart actions",
+  "target": "section",
+  "stylesheet": "project-clad-cart.css",
+  "javascript": "project-clad-cart.js",
+  "settings": []
+}
+{% endschema %}
