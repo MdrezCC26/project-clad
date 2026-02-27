@@ -1,18 +1,3 @@
-import path from "path";
-import { fileURLToPath } from "url";
-import dotenv from "dotenv";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Load .env from project root
-const envPaths = [
-  path.resolve(__dirname, "..", "..", ".env"),
-  path.resolve(process.cwd(), ".env"),
-];
-for (const envPath of envPaths) {
-  const result = dotenv.config({ path: envPath });
-  if (!result.error) break;
-}
-
 import nodemailer from "nodemailer";
 
 const from =
