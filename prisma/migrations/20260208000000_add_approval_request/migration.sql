@@ -4,8 +4,8 @@ CREATE TABLE "ApprovalRequest" (
     "projectId" TEXT NOT NULL,
     "jobId" TEXT NOT NULL DEFAULT '',
     "itemId" TEXT NOT NULL DEFAULT '',
-    "requestedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "approvedAt" DATETIME,
+    "requestedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "approvedAt" TIMESTAMP,
     "approvedByCustomerId" TEXT,
     CONSTRAINT "ApprovalRequest_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
