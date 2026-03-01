@@ -55,7 +55,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   > = {};
   let variantLookupError: string | null = null;
   try {
-    variantInfo = await getAdminVariantInfo(session.shop, variantIds);
+    variantInfo = await getAdminVariantInfo(session.shop, variantIds, session);
   } catch (error) {
     variantLookupError =
       error instanceof Error ? error.message : "Product lookup failed.";

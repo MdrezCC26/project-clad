@@ -16,18 +16,25 @@ const chunk = <T,>(items: T[], size: number) => {
   return result;
 };
 
+type SessionWithToken = { accessToken: string };
+
 export const getAdminVariantInfo = async (
   shop: string,
   variantIds: string[],
+  currentSession?: SessionWithToken,
 ): Promise<Record<string, VariantInfo>> => {
   if (variantIds.length === 0) {
     return {};
   }
 
-  const sessions = await sessionStorage.findSessionsByShop(shop);
-  const offlineSession = sessions.find((session) => !session.isOnline);
+  let accessToken: string | undefined = currentSession?.accessToken;
+  if (!accessToken) {
+    const sessions = await sessionStorage.findSessionsByShop(shop);
+    const offlineSession = sessions.find((session) => !session.isOnline);
+    accessToken = offlineSession?.accessToken;
+  }
 
-  if (!offlineSession) {
+  if (!accessToken) {
     throw new Error(
       "Product details unavailable. Reauthorize the app to refresh access.",
     );
@@ -49,7 +56,7 @@ export const getAdminVariantInfo = async (
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": offlineSession.accessToken,
+        "X-Shopify-Access-Token": accessToken,
       },
       body: JSON.stringify({
         query: `
