@@ -1625,11 +1625,13 @@ export default function ProjectDetailPage() {
                                       <div className="project-clad-edit-view" style={{ display: "none" }} data-projectclad-item-actions>
                                         <Form
                                           method="post"
-                                          action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+                                          action={`/apps/project-clad/project?id=${project.id}`}
                                           style={{ display: "inline" }}
-                                          data-projectclad-ajax
-                                          data-projectclad-intent="delete-item"
-                                          data-projectclad-project-id={project.id}
+                                          onSubmit={(e) => {
+                                            if (!confirm("Are you sure you want to remove this item?")) {
+                                              e.preventDefault();
+                                            }
+                                          }}
                                         >
                                           <input type="hidden" name="intent" value="delete-item" />
                                           <input type="hidden" name="itemId" value={item.id} />
@@ -1746,15 +1748,33 @@ export default function ProjectDetailPage() {
                           </div>
                         )}
                         {canEdit && !job.isLocked && (
-                          <button
-                            type="button"
-                            className="project-clad-button"
-                            data-projectclad-edit-order
-                            data-job-id={job.id}
-                            data-project-id={project.id}
-                          >
-                            Edit order
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="project-clad-button"
+                              data-projectclad-edit-order
+                              data-job-id={job.id}
+                              data-project-id={project.id}
+                            >
+                              Edit order
+                            </button>
+                            <Form
+                              method="post"
+                              action={`/apps/project-clad/project?id=${project.id}`}
+                              style={{ display: "inline" }}
+                              onSubmit={(e) => {
+                                if (!confirm("Are you sure you want to delete this order? This cannot be undone.")) {
+                                  e.preventDefault();
+                                }
+                              }}
+                            >
+                              <input type="hidden" name="intent" value="delete-job" />
+                              <input type="hidden" name="jobId" value={job.id} />
+                              <button type="submit" className="project-clad-button">
+                                Delete order
+                              </button>
+                            </Form>
+                          </>
                         )}
                       </div>
                       <div className="project-clad-edit-view project-clad-actions" style={{ display: "none" }}>
@@ -1764,7 +1784,7 @@ export default function ProjectDetailPage() {
                           data-projectclad-delete-order-btn
                           data-job-id={job.id}
                         >
-                          Delete order
+                          Mark for deletion
                         </button>
                         <button
                           type="button"
@@ -2172,14 +2192,6 @@ export default function ProjectDetailPage() {
       const modal = document.querySelector('[data-projectclad-edit-project-modal]');
       if (modal instanceof HTMLElement) modal.style.display = 'none';
     }
-    const deleteProjectBtn = event.target?.closest?.('[data-projectclad-delete-project]');
-    if (deleteProjectBtn instanceof HTMLElement) {
-      event.preventDefault();
-      const form = deleteProjectBtn.closest('form');
-      if (form && confirm('Are you sure you want to delete this project?')) {
-        form.submit();
-      }
-    }
   }, true);
 
   document.addEventListener('submit', async (event) => {
@@ -2396,14 +2408,15 @@ export default function ProjectDetailPage() {
                     method="post"
                     action="/apps/project-clad/projects"
                     style={{ display: "inline" }}
+                    onSubmit={(e) => {
+                      if (!confirm("Are you sure you want to delete this project?")) {
+                        e.preventDefault();
+                      }
+                    }}
                   >
                     <input type="hidden" name="intent" value="delete-project" />
                     <input type="hidden" name="projectId" value={project.id} />
-                    <button
-                      type="button"
-                      className="project-clad-button"
-                      data-projectclad-delete-project
-                    >
+                    <button type="submit" className="project-clad-button">
                       Delete this project
                     </button>
                   </form>
