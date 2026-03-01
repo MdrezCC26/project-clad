@@ -488,6 +488,19 @@
   min-height: 40px;
 }
 
+/* Edit project modal - black text box outlines */
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] input,
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] select,
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] textarea {
+  border-color: #000;
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal][data-theme="dark"] input,
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal][data-theme="dark"] select,
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal][data-theme="dark"] textarea {
+  border-color: #e8e8e8;
+}
+
 /* Edit-save modal: compact layout, cleaner formatting */
 .project-clad-edit-save-modal {
   padding: 1.25rem 1.5rem;
