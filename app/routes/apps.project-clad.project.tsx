@@ -286,9 +286,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, customerId } = requireAppProxyCustomer(request);
-  const projectId = getProjectId(request);
   const contentType = request.headers.get("Content-Type") || "";
+  const isJsonRequest = contentType.includes("application/json");
+  const { shop, customerId } = requireAppProxyCustomer(request, {
+    jsonOnFail: isJsonRequest,
+  });
+  const projectId = getProjectId(request);
 
   if (!projectId) {
     return new Response("Project not found", { status: 404 });
@@ -2068,11 +2071,17 @@ export default function ProjectDetailPage() {
         }
       });
       try {
-        await fetch('/apps/project-clad/project?id=' + encodeURIComponent(projectId), {
+        const res = await fetch('/apps/project-clad/project?id=' + encodeURIComponent(projectId), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ intent: 'save-order-edit', jobId, removeItemIds: [], itemUpdates: itemUpdates, deleteJob: deleteJob })
+          body: JSON.stringify({ intent: 'save-order-edit', jobId, removeItemIds: [], itemUpdates: itemUpdates, deleteJob: deleteJob }),
+          credentials: 'include',
         });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok && payload?.redirectTo) {
+          window.location.href = payload.redirectTo;
+          return;
+        }
         window.location.reload();
       } catch (e) {
         console.error(e);
@@ -2127,9 +2136,14 @@ export default function ProjectDetailPage() {
             itemId: rejectItemId,
             rejectReason: reason,
           }),
+          credentials: 'include',
         });
         const payload = await res.json().catch(() => ({}));
         if (!res.ok || payload.error) {
+          if (payload?.redirectTo) {
+            window.location.href = payload.redirectTo;
+            return;
+          }
           if (errEl) errEl.textContent = payload.error || 'Unable to reject.';
           return;
         }
@@ -2235,9 +2249,13 @@ export default function ProjectDetailPage() {
     }
 
     try {
-      const response = await fetch(actionsEndpoint + '?' + params.toString());
+      const response = await fetch(actionsEndpoint + '?' + params.toString(), { credentials: 'include' });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (payload?.redirectTo) {
+          window.location.href = payload.redirectTo;
+          return;
+        }
         setFormMessage(payload.error || 'Unable to complete action.');
         return;
       }
@@ -2376,7 +2394,7 @@ export default function ProjectDetailPage() {
                   </button>
                   <form
                     method="post"
-                    action={`https://${shop}/apps/project-clad/projects`}
+                    action="/apps/project-clad/projects"
                     style={{ display: "inline" }}
                   >
                     <input type="hidden" name="intent" value="delete-project" />

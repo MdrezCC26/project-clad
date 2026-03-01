@@ -511,7 +511,17 @@ export default function ProjectsPage() {
       setMsg('');
       var intent = form.getAttribute('data-intent') || 'submit-for-approval';
       var url = 'https://' + shop + '/apps/project-clad/api/project-actions?intent=' + encodeURIComponent(intent) + '&projectId=' + encodeURIComponent(projectId);
-      fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+      fetch(url, { credentials: 'include' }).then(function(r) {
+        return r.json().then(function(data) {
+          if (!r.ok && data?.redirectTo) {
+            window.location.href = data.redirectTo;
+            return;
+          }
+          return { response: r, data: data };
+        });
+      }).then(function(result) {
+        if (!result) return;
+        var data = result.data;
         if (data.ok) {
           setMsg(intent === 'cancel-approval-request' ? 'Approval request cancelled.' : 'Approval request sent.');
           window.location.reload();

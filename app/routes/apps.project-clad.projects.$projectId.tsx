@@ -160,9 +160,12 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
-  const { shop, customerId } = requireAppProxyCustomer(request);
-  const projectId = params.projectId || "";
   const contentType = request.headers.get("Content-Type") || "";
+  const isJsonRequest = contentType.includes("application/json");
+  const { shop, customerId } = requireAppProxyCustomer(request, {
+    jsonOnFail: isJsonRequest,
+  });
+  const projectId = params.projectId || "";
 
   if (contentType.includes("application/json")) {
     const payload = (await request.json()) as {
@@ -600,7 +603,7 @@ export default function ProjectDetailPage() {
       dragItemId.current = null;
       return;
     }
-    await fetch(`/apps/project-clad/projects/${project.id}`, {
+    const res = await fetch(`/apps/project-clad/projects/${project.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -608,7 +611,13 @@ export default function ProjectDetailPage() {
         jobId,
         itemIds: reordered,
       }),
+      credentials: "include",
     });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok && payload?.redirectTo) {
+      window.location.href = payload.redirectTo;
+      return;
+    }
 
     dragItemId.current = null;
   };
@@ -637,14 +646,20 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    await fetch(`/apps/project-clad/projects/${project.id}`, {
+    const res = await fetch(`/apps/project-clad/projects/${project.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         intent: "reorder-jobs",
         jobIds: reordered,
       }),
+      credentials: "include",
     });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok && payload?.redirectTo) {
+      window.location.href = payload.redirectTo;
+      return;
+    }
 
     dragJobId.current = null;
   };
