@@ -1,0 +1,1 @@
+   ALTER TABLE "JobItem" ADD COLUMN "customData" JSONB;
