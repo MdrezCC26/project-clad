@@ -1474,7 +1474,7 @@ export default function ProjectDetailPage() {
                             {(() => {
                               const approval = getJobApprovalInfo(job.id);
                               return approval ? (
-                                <> • Order received {new Date(approval.approvedAt).toLocaleDateString()} by {approval.approvedBy}</>
+                                <> • Order approved {new Date(approval.approvedAt).toLocaleDateString()} by {approval.approvedBy}</>
                               ) : null;
                             })()}
                           </p>
@@ -1482,10 +1482,10 @@ export default function ProjectDetailPage() {
                         {hideAddToCart && (() => {
                           const status = getApprovalStatus(job.id, "");
                           if (status === "approved") {
-                            return <span className="project-clad-muted">Order received</span>;
+                            return <span className="project-clad-muted">Order approved</span>;
                           }
                           const intent = status === "awaiting" ? "cancel-approval-request" : "submit-for-approval";
-                          const label = status === "awaiting" ? "Confirming order" : "Send to shop";
+                          const label = status === "awaiting" ? "Confirming order" : "Send for review";
                           return (
                             <form
                               method="get"

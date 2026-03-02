@@ -384,7 +384,7 @@ export default function ProjectsPage() {
                       <dd>{project.jobCount}</dd>
                     </div>
                     <div>
-                      <dt>Confirmed orders</dt>
+                      <dt>Approved orders</dt>
                       <dd>{project.approvedJobCount}</dd>
                     </div>
                     <div>
@@ -449,7 +449,7 @@ export default function ProjectsPage() {
                     if (status.approved) {
                       return (
                         <div className="project-clad-actions">
-                          <span className="project-clad-muted">Order received</span>
+                          <span className="project-clad-muted">Order approved</span>
                         </div>
                       );
                     }
