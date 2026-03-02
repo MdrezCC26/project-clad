@@ -1,0 +1,1 @@
+   ALTER TABLE "JobItem" DROP CONSTRAINT "JobItem_jobId_variantId_key";

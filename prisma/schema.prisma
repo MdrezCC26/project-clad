@@ -81,7 +81,6 @@ model JobItem {
   customData    Json?
   job           Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
-  @@unique([jobId, variantId])
   @@index([jobId])
   @@index([jobId, sortOrder])
 }
