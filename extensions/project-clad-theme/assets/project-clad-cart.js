@@ -322,6 +322,7 @@
   });
 
   form.addEventListener("submit", async (event) => {
+    const clearCart = !!event.submitter?.hasAttribute?.("data-projectclad-clear");
     event.preventDefault();
     await refreshCartState();
     if (saveButton.style.display === "none") {
@@ -396,11 +397,22 @@
     }
 
     const result = await response.json();
-    await fetch("/cart/clear.js", { method: "POST", credentials: "same-origin" });
-    if (result?.projectId) {
-      window.location.href = `/apps/project-clad/project?id=${result.projectId}`;
+    const redirectTo = result?.projectId
+      ? `/apps/project-clad/project?id=${result.projectId}`
+      : "/apps/project-clad/projects";
+    if (clearCart) {
+      const clearForm = document.createElement("form");
+      clearForm.method = "post";
+      clearForm.action = "/cart/clear";
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = "return_to";
+      input.value = redirectTo;
+      clearForm.appendChild(input);
+      document.body.appendChild(clearForm);
+      clearForm.submit();
     } else {
-      window.location.href = "/apps/project-clad/projects";
+      window.location.href = redirectTo;
     }
   });
 
