@@ -1629,12 +1629,23 @@ export default function ProjectDetailPage() {
 
                                         // Generic fallback for other properties
                                         return item.properties
-                                          .filter(
-                                            (p) =>
-                                              p.value &&
-                                              p.value.trim() !== "" &&
-                                              !p.name.startsWith("__oo"),
-                                          )
+                                          .filter((p) => {
+                                            if (
+                                              !p.value ||
+                                              p.value.trim() === "" ||
+                                              p.name.startsWith("__oo")
+                                            ) {
+                                              return false;
+                                            }
+                                            // For the special Upload Part product, hide the File: row
+                                            if (
+                                              item.displayName.toLowerCase().includes("upload part") &&
+                                              p.name.toLowerCase() === "file"
+                                            ) {
+                                              return false;
+                                            }
+                                            return true;
+                                          })
                                           .map((prop, index) => {
                                             const v = prop.value.trim();
                                             if (v.startsWith("http://") || v.startsWith("https://")) {
