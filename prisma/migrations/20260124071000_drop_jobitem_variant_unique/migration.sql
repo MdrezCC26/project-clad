@@ -1,1 +1,2 @@
-ALTER TABLE "JobItem" DROP CONSTRAINT IF EXISTS "JobItem_jobId_variantId_key";
+ALTER TABLE "JobItem" DROP CONSTRAINT IF EXISTS "JobItem_jobId_variantId_key";ALTER TABLE "JobItem" DROP CONSTRAINT IF EXISTS "JobItem_jobId_variantId_key";
+ALTER TABLE "JobItem" DROP CONSTRAINT IF EXISTS jobitem_jobid_variantid_key;
