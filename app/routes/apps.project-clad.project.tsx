@@ -1543,39 +1543,81 @@ export default function ProjectDetailPage() {
                                   canEdit && !job.isLocked ? "project-clad-draggable" : undefined
                                 }
                               >
-                                        <td>
-                                          {item.productUrl ? (
-                                            <a
-                                              href={item.productUrl}
-                                              className="project-clad-item-link"
-                                              onClick={(event) => event.stopPropagation()}
-                                            >
-                                              {item.imageUrl ? (
-                                                <img
-                                                  src={item.imageUrl}
-                                                  alt={item.imageAlt || item.displayName}
-                                                  className="project-clad-thumb"
-                                                />
-                                              ) : (
-                                                <span className="project-clad-thumb project-clad-thumb--placeholder" />
-                                              )}
-                                              <span data-projectclad-item-name data-display-name={item.displayName}>{item.quantity === 0 ? `${item.displayName} (Removed)` : item.displayName}</span>
-                                            </a>
-                                          ) : (
-                                            <div className="project-clad-item-link">
-                                              {item.imageUrl ? (
-                                                <img
-                                                  src={item.imageUrl}
-                                                  alt={item.imageAlt || item.displayName}
-                                                  className="project-clad-thumb"
-                                                />
-                                              ) : (
-                                                <span className="project-clad-thumb project-clad-thumb--placeholder" />
-                                              )}
-                                              <span data-projectclad-item-name data-display-name={item.displayName}>{item.quantity === 0 ? `${item.displayName} (Removed)` : item.displayName}</span>
+                                <td>
+                                  {item.productUrl ? (
+                                    <a
+                                      href={item.productUrl}
+                                      className="project-clad-item-link"
+                                      onClick={(event) => event.stopPropagation()}
+                                    >
+                                      {item.imageUrl ? (
+                                        <img
+                                          src={item.imageUrl}
+                                          alt={item.imageAlt || item.displayName}
+                                          className="project-clad-thumb"
+                                        />
+                                      ) : (
+                                        <span className="project-clad-thumb project-clad-thumb--placeholder" />
+                                      )}
+                                      <span
+                                        data-projectclad-item-name
+                                        data-display-name={item.displayName}
+                                      >
+                                        {item.quantity === 0
+                                          ? `${item.displayName} (Removed)`
+                                          : item.displayName}
+                                      </span>
+                                    </a>
+                                  ) : (
+                                    <div className="project-clad-item-link">
+                                      {item.imageUrl ? (
+                                        <img
+                                          src={item.imageUrl}
+                                          alt={item.imageAlt || item.displayName}
+                                          className="project-clad-thumb"
+                                        />
+                                      ) : (
+                                        <span className="project-clad-thumb project-clad-thumb--placeholder" />
+                                      )}
+                                      <span
+                                        data-projectclad-item-name
+                                        data-display-name={item.displayName}
+                                      >
+                                        {item.quantity === 0
+                                          ? `${item.displayName} (Removed)`
+                                          : item.displayName}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {item.properties && item.properties.length > 0 && (
+                                    <div className="project-clad-item-properties" style={{ marginTop: "0.5rem" }}>
+                                      {item.properties
+                                        .filter((p) => p.value && p.value.trim() !== "")
+                                        .map((prop, index) => {
+                                          const v = prop.value.trim();
+                                          if (v.startsWith("http://") || v.startsWith("https://")) {
+                                            return (
+                                              <div key={index} style={{ marginTop: "0.25rem" }}>
+                                                <strong>{prop.name}:</strong>
+                                                <div>
+                                                  <img
+                                                    src={v}
+                                                    alt={prop.name}
+                                                    style={{ maxWidth: "200px", maxHeight: "200px", display: "block", marginTop: "0.25rem" }}
+                                                  />
+                                                </div>
+                                              </div>
+                                            );
+                                          }
+                                          return (
+                                            <div key={index} style={{ marginTop: "0.25rem" }}>
+                                              <strong>{prop.name}:</strong> {v}
                                             </div>
-                                          )}
-                                        </td>
+                                          );
+                                        })}
+                                    </div>
+                                  )}
+                                </td>
                                 <td className="project-clad-table-right">
                                   <span className="project-clad-normal-view">{item.quantity}</span>
                                   <span className="project-clad-edit-view" style={{ display: "none" }}>
