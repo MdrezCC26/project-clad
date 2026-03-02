@@ -205,11 +205,40 @@
   const getCartItems = async () => {
     const response = await fetch("/cart.js", { credentials: "same-origin" });
     const cart = await response.json();
-    return (cart.items || []).map((item) => ({
-      variantId: String(item.id),
-      quantity: Number(item.quantity),
-      priceSnapshot: Number(item.price) / 100,
-    }));
+    return (cart.items || []).map((item) => {
+      const rawProps = item.properties || {};
+      const properties = [];
+      if (Array.isArray(rawProps)) {
+        rawProps.forEach((prop) => {
+          if (!prop || !prop.name) return;
+          properties.push({
+            name: String(prop.name),
+            value:
+              typeof prop.value === "string"
+                ? prop.value
+                : JSON.stringify(prop.value),
+          });
+        });
+      } else {
+        Object.entries(rawProps).forEach(([name, value]) => {
+          if (!name) return;
+          properties.push({
+            name: String(name),
+            value:
+              typeof value === "string"
+                ? value
+                : JSON.stringify(value),
+          });
+        });
+      }
+
+      return {
+        variantId: String(item.id),
+        quantity: Number(item.quantity),
+        priceSnapshot: Number(item.price) / 100,
+        properties,
+      };
+    });
   };
 
   saveButton.addEventListener("click", async () => {

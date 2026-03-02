@@ -16,13 +16,19 @@ type SaveJobPayload = {
     variantId: string;
     quantity: number;
     priceSnapshot: string | number;
+    properties?: { name: string; value: string }[];
   }[];
 };
 
 const normalizeItems = (items: SaveJobPayload["items"] = []) => {
   const merged = new Map<
     string,
-    { variantId: string; quantity: number; priceSnapshot: Prisma.Decimal }
+    {
+      variantId: string;
+      quantity: number;
+      priceSnapshot: Prisma.Decimal;
+      properties?: { name: string; value: string }[];
+    }
   >();
 
   for (const raw of items) {
@@ -36,8 +42,19 @@ const normalizeItems = (items: SaveJobPayload["items"] = []) => {
     if (existing) {
       existing.quantity += quantity;
       existing.priceSnapshot = priceSnapshot;
+      if (raw.properties && raw.properties.length) {
+        existing.properties = [
+          ...(existing.properties || []),
+          ...raw.properties,
+        ];
+      }
     } else {
-      merged.set(variantId, { variantId, quantity, priceSnapshot });
+      merged.set(variantId, {
+        variantId,
+        quantity,
+        priceSnapshot,
+        properties: raw.properties && raw.properties.length ? raw.properties : undefined,
+      });
     }
   }
 
@@ -108,8 +125,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             sortOrder: 1,
             items: {
               create: items.map((item, index) => ({
-                ...item,
+                variantId: item.variantId,
+                quantity: item.quantity,
+                priceSnapshot: item.priceSnapshot,
                 sortOrder: index + 1,
+                customData:
+                  item.properties && item.properties.length
+                    ? (item.properties as unknown as Prisma.JsonValue)
+                    : undefined,
               })),
             },
           },
@@ -166,8 +189,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         sortOrder: nextJobSortOrder,
         items: {
           create: items.map((item, index) => ({
-            ...item,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            priceSnapshot: item.priceSnapshot,
             sortOrder: index + 1,
+            customData:
+              item.properties && item.properties.length
+                ? (item.properties as unknown as Prisma.JsonValue)
+                : undefined,
           })),
         },
       },
@@ -266,6 +295,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             quantity: item.quantity,
             priceSnapshot: item.priceSnapshot,
             sortOrder: index + 1,
+            customData:
+              item.properties && item.properties.length
+                ? (item.properties as unknown as Prisma.JsonValue)
+                : undefined,
           })),
         }),
       ]);
@@ -282,6 +315,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             data: {
               quantity: existing.quantity + item.quantity,
               priceSnapshot: item.priceSnapshot,
+              customData:
+                item.properties && item.properties.length
+                  ? (item.properties as unknown as Prisma.JsonValue)
+                  : existing.customData,
             },
           });
         } else {
@@ -292,6 +329,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               quantity: item.quantity,
               priceSnapshot: item.priceSnapshot,
               sortOrder: nextSortOrder,
+              customData:
+                item.properties && item.properties.length
+                  ? (item.properties as unknown as Prisma.JsonValue)
+                  : undefined,
             },
           });
           nextSortOrder += 1;

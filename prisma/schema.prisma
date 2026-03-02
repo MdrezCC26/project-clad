@@ -78,6 +78,7 @@ model JobItem {
   quantity      Int
   priceSnapshot Decimal
   sortOrder     Int      @default(0)
+  customData    Json?
   job           Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@unique([jobId, variantId])

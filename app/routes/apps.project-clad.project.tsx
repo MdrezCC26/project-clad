@@ -30,6 +30,7 @@ type JobItemView = {
   imageUrl: string | null;
   imageAlt: string | null;
   productUrl: string | null;
+  properties?: { name: string; value: string }[] | null;
 };
 
 type JobView = {
@@ -185,26 +186,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         isLocked: job.isLocked || Boolean(job.orderLink),
         subtotal: jobSubtotal,
         items: job.items.map((item) => {
-        const info = variantInfo[item.variantId];
-        const displayName = info
-          ? info.title && info.title !== "Default Title"
-            ? `${info.productTitle} — ${info.title}`
-            : info.productTitle
-          : `Variant ${item.variantId}`;
-        const productUrl = info?.productHandle
-          ? `https://${shop}/products/${info.productHandle}?variant=${item.variantId}`
-          : null;
+          const info = variantInfo[item.variantId];
+          const displayName = info
+            ? info.title && info.title !== "Default Title"
+              ? `${info.productTitle} — ${info.title}`
+              : info.productTitle
+            : `Variant ${item.variantId}`;
+          const productUrl = info?.productHandle
+            ? `https://${shop}/products/${info.productHandle}?variant=${item.variantId}`
+            : null;
 
-        return {
-          id: item.id,
-          variantId: item.variantId,
-          quantity: item.quantity,
-          priceSnapshot: item.priceSnapshot.toString(),
-          displayName,
-          imageUrl: info?.imageUrl || null,
-          imageAlt: info?.imageAlt || null,
-          productUrl,
-        };
+          let properties: { name: string; value: string }[] | null = null;
+          if (item.customData && Array.isArray(item.customData)) {
+            properties = item.customData as { name: string; value: string }[];
+          }
+
+          return {
+            id: item.id,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            priceSnapshot: item.priceSnapshot.toString(),
+            displayName,
+            imageUrl: info?.imageUrl || null,
+            imageAlt: info?.imageAlt || null,
+            productUrl,
+            properties,
+          };
         }),
       };
     }),
