@@ -396,6 +396,7 @@
     }
 
     const result = await response.json();
+    await fetch("/cart/clear.js", { method: "POST", credentials: "same-origin" });
     if (result?.projectId) {
       window.location.href = `/apps/project-clad/project?id=${result.projectId}`;
     } else {
