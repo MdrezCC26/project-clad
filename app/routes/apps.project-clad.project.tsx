@@ -197,8 +197,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             : null;
 
           let properties: { name: string; value: string }[] | null = null;
+          let customImageUrl: string | null = null;
+
           if (item.customData && Array.isArray(item.customData)) {
             properties = item.customData as { name: string; value: string }[];
+
+            // For the special "Upload Part" product, use any URL property as the main image
+            if (displayName.toLowerCase().includes("upload part")) {
+              const uploadProp = properties.find((p) => {
+                const v = (p.value || "").trim();
+                return v.startsWith("http://") || v.startsWith("https://");
+              });
+              if (uploadProp) {
+                customImageUrl = uploadProp.value.trim();
+              }
+            }
           }
 
           return {
@@ -207,7 +220,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             quantity: item.quantity,
             priceSnapshot: item.priceSnapshot.toString(),
             displayName,
-            imageUrl: info?.imageUrl || null,
+            imageUrl: customImageUrl || info?.imageUrl || null,
             imageAlt: info?.imageAlt || null,
             productUrl,
             properties,
