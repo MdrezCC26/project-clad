@@ -19,14 +19,30 @@ type SaveJobPayload = {
   }[];
 };
 
-const normalizeItems = (items: SaveJobPayload["items"] = []) =>
-  items
-    .filter((item) => item && item.variantId && item.quantity > 0)
-    .map((item) => ({
-      variantId: String(item.variantId),
-      quantity: Number(item.quantity),
-      priceSnapshot: new Prisma.Decimal(item.priceSnapshot ?? 0),
-    }));
+const normalizeItems = (items: SaveJobPayload["items"] = []) => {
+  const merged = new Map<
+    string,
+    { variantId: string; quantity: number; priceSnapshot: Prisma.Decimal }
+  >();
+
+  for (const raw of items) {
+    if (!raw || !raw.variantId || raw.quantity <= 0) continue;
+
+    const variantId = String(raw.variantId);
+    const quantity = Number(raw.quantity);
+    const priceSnapshot = new Prisma.Decimal(raw.priceSnapshot ?? 0);
+
+    const existing = merged.get(variantId);
+    if (existing) {
+      existing.quantity += quantity;
+      existing.priceSnapshot = priceSnapshot;
+    } else {
+      merged.set(variantId, { variantId, quantity, priceSnapshot });
+    }
+  }
+
+  return Array.from(merged.values());
+};
 
 const getNextSortOrder = async (jobId: string) => {
   const result = await prisma.jobItem.aggregate({
