@@ -20,46 +20,16 @@ type SaveJobPayload = {
   }[];
 };
 
-const normalizeItems = (items: SaveJobPayload["items"] = []) => {
-  const merged = new Map<
-    string,
-    {
-      variantId: string;
-      quantity: number;
-      priceSnapshot: Prisma.Decimal;
-      properties?: { name: string; value: string }[];
-    }
-  >();
-
-  for (const raw of items) {
-    if (!raw || !raw.variantId || raw.quantity <= 0) continue;
-
-    const variantId = String(raw.variantId);
-    const quantity = Number(raw.quantity);
-    const priceSnapshot = new Prisma.Decimal(raw.priceSnapshot ?? 0);
-
-    const existing = merged.get(variantId);
-    if (existing) {
-      existing.quantity += quantity;
-      existing.priceSnapshot = priceSnapshot;
-      if (raw.properties && raw.properties.length) {
-        existing.properties = [
-          ...(existing.properties || []),
-          ...raw.properties,
-        ];
-      }
-    } else {
-      merged.set(variantId, {
-        variantId,
-        quantity,
-        priceSnapshot,
-        properties: raw.properties && raw.properties.length ? raw.properties : undefined,
-      });
-    }
-  }
-
-  return Array.from(merged.values());
-};
+const normalizeItems = (items: SaveJobPayload["items"] = []) =>
+  items
+    .filter((raw) => raw && raw.variantId && raw.quantity > 0)
+    .map((raw) => ({
+      variantId: String(raw.variantId),
+      quantity: Number(raw.quantity),
+      priceSnapshot: new Prisma.Decimal(raw.priceSnapshot ?? 0),
+      properties:
+        raw.properties && raw.properties.length ? raw.properties : undefined,
+    }));
 
 const getNextSortOrder = async (jobId: string) => {
   const result = await prisma.jobItem.aggregate({
@@ -303,40 +273,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }),
       ]);
     } else {
+      // In "add" mode, always create a new JobItem per cart line,
+      // so multiple uploads for the same variant become separate rows.
       let nextSortOrder = await getNextSortOrder(targetJobId);
       for (const item of items) {
-        const existing = await prisma.jobItem.findFirst({
-          where: { jobId: targetJobId, variantId: item.variantId },
+        await prisma.jobItem.create({
+          data: {
+            jobId: targetJobId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            priceSnapshot: item.priceSnapshot,
+            sortOrder: nextSortOrder,
+            customData:
+              item.properties && item.properties.length
+                ? (item.properties as unknown as Prisma.JsonValue)
+                : undefined,
+          },
         });
-
-        if (existing) {
-          await prisma.jobItem.update({
-            where: { id: existing.id },
-            data: {
-              quantity: existing.quantity + item.quantity,
-              priceSnapshot: item.priceSnapshot,
-              customData:
-                item.properties && item.properties.length
-                  ? (item.properties as unknown as Prisma.JsonValue)
-                  : existing.customData,
-            },
-          });
-        } else {
-          await prisma.jobItem.create({
-            data: {
-              jobId: targetJobId,
-              variantId: item.variantId,
-              quantity: item.quantity,
-              priceSnapshot: item.priceSnapshot,
-              sortOrder: nextSortOrder,
-              customData:
-                item.properties && item.properties.length
-                  ? (item.properties as unknown as Prisma.JsonValue)
-                  : undefined,
-            },
-          });
-          nextSortOrder += 1;
-        }
+        nextSortOrder += 1;
       }
     }
 
