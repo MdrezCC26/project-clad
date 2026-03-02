@@ -1557,51 +1557,70 @@ export default function ProjectDetailPage() {
                                 }
                               >
                                 <td>
-                                  {item.productUrl ? (
-                                    <a
-                                      href={item.productUrl}
-                                      className="project-clad-item-link"
-                                      onClick={(event) => event.stopPropagation()}
-                                    >
-                                      {item.imageUrl ? (
-                                        <img
-                                          src={item.imageUrl}
-                                          alt={item.imageAlt || item.displayName}
-                                          className="project-clad-thumb"
-                                        />
-                                      ) : (
-                                        <span className="project-clad-thumb project-clad-thumb--placeholder" />
-                                      )}
-                                      <span
-                                        data-projectclad-item-name
-                                        data-display-name={item.displayName}
-                                      >
-                                        {item.quantity === 0
-                                          ? `${item.displayName} (Removed)`
-                                          : item.displayName}
-                                      </span>
-                                    </a>
-                                  ) : (
-                                    <div className="project-clad-item-link">
-                                      {item.imageUrl ? (
-                                        <img
-                                          src={item.imageUrl}
-                                          alt={item.imageAlt || item.displayName}
-                                          className="project-clad-thumb"
-                                        />
-                                      ) : (
-                                        <span className="project-clad-thumb project-clad-thumb--placeholder" />
-                                      )}
-                                      <span
-                                        data-projectclad-item-name
-                                        data-display-name={item.displayName}
-                                      >
-                                        {item.quantity === 0
-                                          ? `${item.displayName} (Removed)`
-                                          : item.displayName}
-                                      </span>
-                                    </div>
-                                  )}
+                                  {(() => {
+                                    const isUploadPart = item.displayName
+                                      .toLowerCase()
+                                      .includes("upload part");
+                                    const href = isUploadPart
+                                      ? item.imageUrl
+                                      : item.productUrl;
+
+                                    if (href) {
+                                      return (
+                                        <a
+                                          href={href}
+                                          target={isUploadPart ? "_blank" : undefined}
+                                          rel={
+                                            isUploadPart
+                                              ? "noopener noreferrer"
+                                              : undefined
+                                          }
+                                          className="project-clad-item-link"
+                                          onClick={(event) => event.stopPropagation()}
+                                        >
+                                          {item.imageUrl ? (
+                                            <img
+                                              src={item.imageUrl}
+                                              alt={item.imageAlt || item.displayName}
+                                              className="project-clad-thumb"
+                                            />
+                                          ) : (
+                                            <span className="project-clad-thumb project-clad-thumb--placeholder" />
+                                          )}
+                                          <span
+                                            data-projectclad-item-name
+                                            data-display-name={item.displayName}
+                                          >
+                                            {item.quantity === 0
+                                              ? `${item.displayName} (Removed)`
+                                              : item.displayName}
+                                          </span>
+                                        </a>
+                                      );
+                                    }
+
+                                    return (
+                                      <div className="project-clad-item-link">
+                                        {item.imageUrl ? (
+                                          <img
+                                            src={item.imageUrl}
+                                            alt={item.imageAlt || item.displayName}
+                                            className="project-clad-thumb"
+                                          />
+                                        ) : (
+                                          <span className="project-clad-thumb project-clad-thumb--placeholder" />
+                                        )}
+                                        <span
+                                          data-projectclad-item-name
+                                          data-display-name={item.displayName}
+                                        >
+                                          {item.quantity === 0
+                                            ? `${item.displayName} (Removed)`
+                                            : item.displayName}
+                                        </span>
+                                      </div>
+                                    );
+                                  })()}
                                   {item.properties && item.properties.length > 0 && (
                                     <div className="project-clad-item-properties" style={{ marginTop: "0.5rem" }}>
                                       {(() => {
