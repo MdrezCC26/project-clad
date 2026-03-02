@@ -1591,30 +1591,65 @@ export default function ProjectDetailPage() {
                                   )}
                                   {item.properties && item.properties.length > 0 && (
                                     <div className="project-clad-item-properties" style={{ marginTop: "0.5rem" }}>
-                                      {item.properties
-                                        .filter((p) => p.value && p.value.trim() !== "")
-                                        .map((prop, index) => {
-                                          const v = prop.value.trim();
-                                          if (v.startsWith("http://") || v.startsWith("https://")) {
+                                      {(() => {
+                                        // Special handling for the calculator app payload
+                                        const calcPayload = item.properties.find(
+                                          (p) => p.name === "__ooCalcPayload",
+                                        );
+                                        if (calcPayload && calcPayload.value) {
+                                          try {
+                                            const parsed = JSON.parse(calcPayload.value);
+                                            return Object.entries(parsed).map(([key, value], index) => (
+                                              <div key={`calc-${index}`} style={{ marginTop: "0.25rem" }}>
+                                                <strong>{key}:</strong> {String(value)}
+                                              </div>
+                                            ));
+                                          } catch {
+                                            // Fallback to showing the raw payload if JSON parse fails
                                             return (
-                                              <div key={index} style={{ marginTop: "0.25rem" }}>
-                                                <strong>{prop.name}:</strong>
-                                                <div>
-                                                  <img
-                                                    src={v}
-                                                    alt={prop.name}
-                                                    style={{ maxWidth: "200px", maxHeight: "200px", display: "block", marginTop: "0.25rem" }}
-                                                  />
-                                                </div>
+                                              <div style={{ marginTop: "0.25rem" }}>
+                                                <strong>Details:</strong> {calcPayload.value}
                                               </div>
                                             );
                                           }
-                                          return (
-                                            <div key={index} style={{ marginTop: "0.25rem" }}>
-                                              <strong>{prop.name}:</strong> {v}
-                                            </div>
-                                          );
-                                        })}
+                                        }
+
+                                        // Generic fallback for other properties
+                                        return item.properties
+                                          .filter(
+                                            (p) =>
+                                              p.value &&
+                                              p.value.trim() !== "" &&
+                                              !p.name.startsWith("__oo"),
+                                          )
+                                          .map((prop, index) => {
+                                            const v = prop.value.trim();
+                                            if (v.startsWith("http://") || v.startsWith("https://")) {
+                                              return (
+                                                <div key={index} style={{ marginTop: "0.25rem" }}>
+                                                  <strong>{prop.name}:</strong>
+                                                  <div>
+                                                    <img
+                                                      src={v}
+                                                      alt={prop.name}
+                                                      style={{
+                                                        maxWidth: "200px",
+                                                        maxHeight: "200px",
+                                                        display: "block",
+                                                        marginTop: "0.25rem",
+                                                      }}
+                                                    />
+                                                  </div>
+                                                </div>
+                                              );
+                                            }
+                                            return (
+                                              <div key={index} style={{ marginTop: "0.25rem" }}>
+                                                <strong>{prop.name}:</strong> {v}
+                                              </div>
+                                            );
+                                          });
+                                      })()}
                                     </div>
                                   )}
                                 </td>
