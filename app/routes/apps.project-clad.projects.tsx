@@ -370,41 +370,38 @@ export default function ProjectsPage() {
             <section className="project-clad-grid">
               {projects.map((project) => (
                 <div key={project.id} className="project-clad-card">
-                  <div className="project-clad-summary-row">
-                    <div>
-                      <h2 className="project-clad-title">{project.name}</h2>
-                      <p className="project-clad-muted">
-                        Created {new Date(project.createdAt).toLocaleDateString()}
-                      </p>
+                  <a
+                    href={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+                    className="project-clad-card-link"
+                    rel="noopener"
+                  >
+                    <div className="project-clad-summary-row">
+                      <div>
+                        <h2 className="project-clad-title">{project.name}</h2>
+                        <p className="project-clad-muted">
+                          Created {new Date(project.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
                     </div>
-                    <div className="project-clad-actions">
-                      <a
-                        href={`https://${shop}/apps/project-clad/project?id=${project.id}`}
-                        className="project-clad-button"
-                        rel="noopener"
-                      >
-                        View project
-                      </a>
-                    </div>
-                  </div>
-                  <dl className="project-clad-meta">
-                    <div>
-                      <dt>Orders</dt>
-                      <dd>{project.jobCount}</dd>
-                    </div>
-                    <div>
-                      <dt>Approved orders</dt>
-                      <dd>{project.approvedJobCount}</dd>
-                    </div>
-                    <div>
-                      <dt>PO number</dt>
-                      <dd>{project.poNumber || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>Company name</dt>
-                      <dd>{project.companyName || "—"}</dd>
-                    </div>
-                  </dl>
+                    <dl className="project-clad-meta">
+                      <div>
+                        <dt>Orders</dt>
+                        <dd>{project.jobCount}</dd>
+                      </div>
+                      <div>
+                        <dt>Approved orders</dt>
+                        <dd>{project.approvedJobCount}</dd>
+                      </div>
+                      <div>
+                        <dt>PO number</dt>
+                        <dd>{project.poNumber || "—"}</dd>
+                      </div>
+                      <div>
+                        <dt>Company name</dt>
+                        <dd>{project.companyName || "—"}</dd>
+                      </div>
+                    </dl>
+                  </a>
                   {hideAddToCart && (() => {
                     const status = project.approvalStatus;
                     if (status.approved) {

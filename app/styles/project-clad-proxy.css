@@ -65,6 +65,10 @@
   border-color: var(--pc-card-border);
 }
 
+.project-clad-page[data-theme="dark"] .project-clad-card-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .project-clad-page[data-theme="dark"] .project-clad-muted {
   color: var(--pc-muted);
 }
@@ -269,6 +273,20 @@
   border-radius: var(--card-corner-radius, 8px);
   padding: 1.5rem;
   background: var(--color-background, #fff);
+}
+
+.project-clad-card-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  margin: -1.5rem;
+  padding: 1.5rem;
+  border-radius: var(--card-corner-radius, 8px);
+}
+
+.project-clad-card-link:hover {
+  background: rgba(0, 0, 0, 0.03);
 }
 
 .project-clad-details > summary {
