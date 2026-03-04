@@ -35,9 +35,7 @@ export const getAdminVariantInfo = async (
   }
 
   if (!accessToken) {
-    throw new Error(
-      "Product details unavailable. Reauthorize the app to refresh access.",
-    );
+    throw new Error("Product details unavailable.");
   }
 
   const uniqueIds = Array.from(new Set(variantIds));

@@ -12,6 +12,7 @@ import { redirect } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import { getVariantInfo } from "../utils/storefront.server";
+import { getAdminVariantInfo } from "../utils/adminVariants.server";
 import {
   findCustomerIdByEmail,
   getCustomersByIds,
@@ -141,10 +142,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   > = {};
   let variantLookupError: string | null = null;
   try {
+    // Prefer Storefront API (does not depend on admin auth),
+    // but fall back to Admin API if needed.
     variantInfo = await getVariantInfo(shop, variantIds);
+    if (Object.keys(variantInfo).length === 0) {
+      variantInfo = await getAdminVariantInfo(shop, variantIds);
+    }
   } catch (error) {
-    variantLookupError =
-      error instanceof Error ? error.message : "Product lookup failed.";
+    try {
+      variantInfo = await getAdminVariantInfo(shop, variantIds);
+    } catch (error2) {
+      variantLookupError =
+        error2 instanceof Error ? error2.message : "Product lookup failed.";
+    }
   }
   const memberIds = [
     project.ownerCustomerId,

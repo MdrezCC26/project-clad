@@ -6,6 +6,7 @@ import { getCustomersByIds } from "../utils/adminCustomers.server";
 import { getCsvForProjectIds } from "../utils/exportProjectsCsv.server";
 import { isEmailConfigured, sendEmail } from "../utils/email.server";
 import { getVariantInfo } from "../utils/storefront.server";
+import { getAdminVariantInfo } from "../utils/adminVariants.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
 import proxyStylesText from "../styles/project-clad-proxy.css?raw";
@@ -88,10 +89,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   > = {};
   let variantLookupError: string | null = null;
   try {
+    // Prefer Storefront API; fall back to Admin API if needed.
     variantInfo = await getVariantInfo(shop, variantIds);
+    if (Object.keys(variantInfo).length === 0) {
+      variantInfo = await getAdminVariantInfo(shop, variantIds);
+    }
   } catch (error) {
-    variantLookupError =
-      error instanceof Error ? error.message : "Product lookup failed.";
+    try {
+      variantInfo = await getAdminVariantInfo(shop, variantIds);
+    } catch (error2) {
+      variantLookupError =
+        error2 instanceof Error ? error2.message : "Product lookup failed.";
+    }
   }
 
   let hideAddToCart = false;
