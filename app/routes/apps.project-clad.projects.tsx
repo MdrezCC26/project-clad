@@ -429,28 +429,6 @@ export default function ProjectsPage() {
                           Add to cart
                         </button>
                       </form>
-                      <form method="post" action="/cart/add" style={{ display: "inline" }}>
-                        {buildProjectCartItems(project.jobs).map((item, index) => (
-                          <input
-                            key={`${project.id}-checkout-${item.variantId}`}
-                            type="hidden"
-                            name={`items[${index}][id]`}
-                            value={item.variantId}
-                          />
-                        ))}
-                        {buildProjectCartItems(project.jobs).map((item, index) => (
-                          <input
-                            key={`${project.id}-checkout-qty-${item.variantId}`}
-                            type="hidden"
-                            name={`items[${index}][quantity]`}
-                            value={item.quantity}
-                          />
-                        ))}
-                        <input type="hidden" name="return_to" value="/checkout" />
-                        <button type="submit" className="project-clad-button">
-                          Proceed to checkout
-                        </button>
-                      </form>
                     </div>
                   )}
                   {hideAddToCart && (() => {

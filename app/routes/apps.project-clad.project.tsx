@@ -1759,15 +1759,6 @@ export default function ProjectDetailPage() {
                                               <input type="hidden" name="return_to" value="/cart" />
                                               <button type="submit" className="project-clad-button">Add to cart</button>
                                             </form>
-                                            <form method="post" action="/cart/add" style={{ display: "inline" }}>
-                                              <input type="hidden" name="items[0][id]" value={item.variantId} />
-                                              <input type="hidden" name="items[0][quantity]" value={item.quantity} />
-                                              {item.properties?.map((p, i) => (
-                                                <input key={i} type="hidden" name={`items[0][properties][${p.name}]`} value={p.value} />
-                                              ))}
-                                              <input type="hidden" name="return_to" value="/checkout" />
-                                              <button type="submit" className="project-clad-button">Proceed to checkout</button>
-                                            </form>
                                           </div>
                                         )}
                                       </div>
@@ -1885,23 +1876,6 @@ export default function ProjectDetailPage() {
                               <input type="hidden" name="return_to" value="/cart" />
                               <button type="submit" className="project-clad-button">
                                 Add to cart
-                              </button>
-                            </form>
-                            <form method="post" action="/cart/add" style={{ display: "inline" }} onPointerDownCapture={(e) => e.stopPropagation()}>
-                              {job.items.filter((i) => i.quantity > 0).map((item, index) => (
-                                <input key={`${job.id}-checkout-${item.variantId}`} type="hidden" name={`items[${index}][id]`} value={item.variantId} />
-                              ))}
-                              {job.items.filter((i) => i.quantity > 0).map((item, index) => (
-                                <input key={`${job.id}-checkout-${item.variantId}-qty`} type="hidden" name={`items[${index}][quantity]`} value={item.quantity} />
-                              ))}
-                              {job.items.filter((i) => i.quantity > 0).map((item, index) =>
-                                item.properties?.map((p, pi) => (
-                                  <input key={`${job.id}-checkout-${item.variantId}-p-${pi}`} type="hidden" name={`items[${index}][properties][${p.name}]`} value={p.value} />
-                                )),
-                              )}
-                              <input type="hidden" name="return_to" value="/checkout" />
-                              <button type="submit" className="project-clad-button">
-                                Proceed to checkout
                               </button>
                             </form>
                           </div>
