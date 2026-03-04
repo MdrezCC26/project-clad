@@ -1885,7 +1885,7 @@ export default function ProjectDetailPage() {
                           </div>
                         )}
                         {canEdit && !job.isLocked && (
-                          <>
+                          <div className="project-clad-actions" style={{ flexWrap: "wrap", gap: "0.75rem" }}>
                             <button
                               type="button"
                               className="project-clad-button"
@@ -1911,7 +1911,7 @@ export default function ProjectDetailPage() {
                                 Delete order
                               </button>
                             </Form>
-                          </>
+                          </div>
                         )}
                       </div>
                       <div className="project-clad-edit-view project-clad-actions" style={{ display: "none" }}>
