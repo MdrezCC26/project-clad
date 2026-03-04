@@ -405,32 +405,6 @@ export default function ProjectsPage() {
                       <dd>{project.companyName || "—"}</dd>
                     </div>
                   </dl>
-                  {!hideAddToCart && (
-                    <div className="project-clad-actions" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
-                      <form method="post" action="/cart/add" style={{ display: "inline" }}>
-                        {buildProjectCartItems(project.jobs).map((item, index) => (
-                          <input
-                            key={`${project.id}-${item.variantId}`}
-                            type="hidden"
-                            name={`items[${index}][id]`}
-                            value={item.variantId}
-                          />
-                        ))}
-                        {buildProjectCartItems(project.jobs).map((item, index) => (
-                          <input
-                            key={`${project.id}-${item.variantId}-qty`}
-                            type="hidden"
-                            name={`items[${index}][quantity]`}
-                            value={item.quantity}
-                          />
-                        ))}
-                        <input type="hidden" name="return_to" value="/cart" />
-                        <button type="submit" className="project-clad-button">
-                          Add to cart
-                        </button>
-                      </form>
-                    </div>
-                  )}
                   {hideAddToCart && (() => {
                     const status = project.approvalStatus;
                     if (status.approved) {
