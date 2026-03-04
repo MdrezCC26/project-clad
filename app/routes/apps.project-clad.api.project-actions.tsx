@@ -6,7 +6,7 @@ import {
   findCustomerIdByEmail,
   getCustomersByIds,
 } from "../utils/adminCustomers.server";
-import { getAdminVariantInfo } from "../utils/adminVariants.server";
+import { getVariantInfo } from "../utils/storefront.server";
 import { isEmailConfigured, sendEmail } from "../utils/email.server";
 import { verifyPassword } from "../utils/passwords.server";
 
@@ -299,7 +299,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           include: { job: { select: { name: true } } },
         });
         if (item?.job) {
-          const variantInfo = await getAdminVariantInfo(shop, [
+          const variantInfo = await getVariantInfo(shop, [
             item.variantId,
           ]).catch(() => ({}));
           const productLabel =
@@ -463,7 +463,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             include: { job: { select: { name: true } } },
           });
           if (item?.job) {
-            const variantInfo = await getAdminVariantInfo(shop, [
+            const variantInfo = await getVariantInfo(shop, [
               item.variantId,
             ]).catch(() => ({}));
             const productLabel =
@@ -484,7 +484,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         } else if (job) {
           contextLabel = `${jobName} in ${project.name}`;
           const variantIds = job.items.map((i) => i.variantId);
-          const variantInfo = await getAdminVariantInfo(shop, variantIds).catch(() => ({}));
+          const variantInfo = await getVariantInfo(shop, variantIds).catch(() => ({}));
           for (const i of job.items) {
             const label =
               variantInfo[i.variantId]?.productTitle ||
@@ -500,7 +500,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           orderBy: { sortOrder: "asc" },
         });
         const variantIds = jobs.flatMap((j) => j.items.map((i) => i.variantId));
-        const variantInfo = await getAdminVariantInfo(shop, variantIds).catch(() => ({}));
+        const variantInfo = await getVariantInfo(shop, variantIds).catch(() => ({}));
         for (const j of jobs) {
           for (const i of j.items) {
             const label =
@@ -650,7 +650,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         include: { job: { select: { name: true } } },
       });
       if (item?.job) {
-        const variantInfo = await getAdminVariantInfo(shop, [
+        const variantInfo = await getVariantInfo(shop, [
           item.variantId,
         ]).catch(() => ({}));
         const productLabel =

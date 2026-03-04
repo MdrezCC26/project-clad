@@ -11,7 +11,7 @@ import {
 import { redirect } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
-import { getAdminVariantInfo } from "../utils/adminVariants.server";
+import { getVariantInfo } from "../utils/storefront.server";
 import {
   findCustomerIdByEmail,
   getCustomersByIds,
@@ -141,7 +141,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   > = {};
   let variantLookupError: string | null = null;
   try {
-    variantInfo = await getAdminVariantInfo(shop, variantIds);
+    variantInfo = await getVariantInfo(shop, variantIds);
   } catch (error) {
     variantLookupError =
       error instanceof Error ? error.message : "Product lookup failed.";

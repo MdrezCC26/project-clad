@@ -5,7 +5,7 @@ import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import { getCustomersByIds } from "../utils/adminCustomers.server";
 import { getCsvForProjectIds } from "../utils/exportProjectsCsv.server";
 import { isEmailConfigured, sendEmail } from "../utils/email.server";
-import { getAdminVariantInfo } from "../utils/adminVariants.server";
+import { getVariantInfo } from "../utils/storefront.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
 import proxyStylesText from "../styles/project-clad-proxy.css?raw";
@@ -88,7 +88,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   > = {};
   let variantLookupError: string | null = null;
   try {
-    variantInfo = await getAdminVariantInfo(shop, variantIds);
+    variantInfo = await getVariantInfo(shop, variantIds);
   } catch (error) {
     variantLookupError =
       error instanceof Error ? error.message : "Product lookup failed.";
