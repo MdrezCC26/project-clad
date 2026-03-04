@@ -7,12 +7,13 @@
   padding: 2.5rem 0;
   font-family: "Radio Canada", "Helvetica Neue", Arial, sans-serif;
   font-weight: 700;
-  --pc-button-height: 30px;
-  --pc-button-padding-y: 0px;
-  --pc-button-padding-x: 1.2rem;
+  --pc-button-min-height: 40px;
+  --pc-button-padding-y: 0.5rem;
+  --pc-button-padding-x: 1.25rem;
   --pc-button-font-size: 0.9rem;
   --pc-button-letter-spacing: 0.02em;
   --pc-button-min-width: 0px;
+  --pc-button-line-height: 1.25;
   --pc-bg: #fff;
   --pc-fg: #111;
   --pc-muted: #444;
@@ -359,19 +360,22 @@
   border: none;
   border-radius: 999px;
   padding: var(--pc-button-padding-y) var(--pc-button-padding-x);
+  font-family: inherit;
   font-weight: 700;
   font-size: var(--pc-button-font-size);
   letter-spacing: var(--pc-button-letter-spacing);
+  line-height: var(--pc-button-line-height);
   cursor: pointer;
-  min-height: var(--pc-button-height);
-  height: var(--pc-button-height);
+  min-height: var(--pc-button-min-height);
+  height: auto;
   width: auto;
   min-width: var(--pc-button-min-width);
-  line-height: 1;
   text-transform: uppercase;
   text-decoration: none;
   justify-self: start;
   pointer-events: auto;
+  white-space: nowrap;
+  box-sizing: border-box;
 }
 
 .project-clad-button:hover {
