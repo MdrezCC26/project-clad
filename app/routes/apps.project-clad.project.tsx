@@ -1875,7 +1875,7 @@ export default function ProjectDetailPage() {
                               )}
                               <input type="hidden" name="return_to" value="/cart" />
                               <button type="submit" className="project-clad-button">
-                                Add to cart
+                                Add all items to cart
                               </button>
                             </form>
                           </div>
