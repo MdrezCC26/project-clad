@@ -19,9 +19,8 @@ const shopify = shopifyApp({
     connectionRetryIntervalMs: 3000,
   }),
   distribution: AppDistribution.AppStore,
-  future: {
-    expiringOfflineAccessTokens: true,
-  },
+  // Keep offline tokens non-expiring for now to avoid
+  // frequent reauthorization loops while things are stabilizing.
   ...(process.env.SHOP_CUSTOM_DOMAIN
     ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
     : {}),
