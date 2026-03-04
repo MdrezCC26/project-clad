@@ -322,7 +322,7 @@ export default function ProjectsPage() {
         <div className="page-width project-clad-container">
           {logoDataUrl && (
             <div className="project-clad-logo">
-              <a href="/apps/project-clad/projects" className="project-clad-logo__link">
+              <a href="/" className="project-clad-logo__link">
                 <img
                   src={logoDataUrl}
                   alt="Logo"
