@@ -99,6 +99,17 @@
         </form>
       </div>
     </div>
+
+    <div class="projectclad-modal projectclad-modal--duplicate" data-projectclad-duplicate-modal hidden>
+      <div class="projectclad-modal__content" role="dialog" aria-modal="true" aria-label="Duplicate project name">
+        <p class="projectclad-duplicate-message">You already have a project with this name, are you sure you want to save another?</p>
+        <div class="projectclad-duplicate-buttons">
+          <button type="button" class="projectclad-button projectclad-button--primary" data-projectclad-duplicate-yes>Yes</button>
+          <button type="button" class="projectclad-button" data-projectclad-duplicate-no>No</button>
+          <button type="button" class="projectclad-button" data-projectclad-duplicate-merge>Merge projects</button>
+        </div>
+      </div>
+    </div>
   </div>
 
 {% schema %}

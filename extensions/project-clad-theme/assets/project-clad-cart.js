@@ -15,6 +15,10 @@
   const closeButton = root.querySelector("[data-projectclad-close]");
   const form = root.querySelector("[data-projectclad-form]");
   const modeSelect = root.querySelector("[data-projectclad-mode]");
+  const duplicateModal = root.querySelector("[data-projectclad-duplicate-modal]");
+  const duplicateYesBtn = root.querySelector("[data-projectclad-duplicate-yes]");
+  const duplicateNoBtn = root.querySelector("[data-projectclad-duplicate-no]");
+  const duplicateMergeBtn = root.querySelector("[data-projectclad-duplicate-merge]");
 
   const sections = Array.from(
     root.querySelectorAll("[data-projectclad-section]"),
@@ -321,6 +325,109 @@
     });
   });
 
+  const getUniqueProjectName = (baseName) => {
+    const names = cachedProjects.map((p) => p.name);
+    const baseLower = baseName.trim().toLowerCase();
+    const exactMatch = names.some(
+      (n) => n.trim().toLowerCase() === baseLower,
+    );
+    if (!exactMatch) return baseName;
+    const regex = new RegExp(
+      "^" + baseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " \\((\\d+)\\)$",
+      "i",
+    );
+    let maxN = 0;
+    names.forEach((n) => {
+      const m = n.trim().match(regex);
+      if (m) {
+        const num = parseInt(m[1], 10);
+        if (num > maxN) maxN = num;
+      }
+    });
+    return baseName.trim() + " (" + (maxN + 1) + ")";
+  };
+
+  const performSave = async (payload, clearCart) => {
+    const response = await fetch(saveUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(payload),
+    });
+
+    if (response.status === 401) {
+      const data = await response.json();
+      if (data?.redirectTo) {
+        window.location.href = data.redirectTo;
+      }
+      return;
+    }
+
+    if (!response.ok) {
+      alert("Unable to save order. Please try again.");
+      return;
+    }
+
+    const result = await response.json();
+    const redirectTo = result?.projectId
+      ? `/apps/project-clad/project?id=${result.projectId}`
+      : "/apps/project-clad/projects";
+    if (clearCart) {
+      const clearForm = document.createElement("form");
+      clearForm.method = "post";
+      clearForm.action = "/cart/clear";
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = "return_to";
+      input.value = redirectTo;
+      clearForm.appendChild(input);
+      document.body.appendChild(clearForm);
+      clearForm.submit();
+    } else {
+      window.location.href = redirectTo;
+    }
+  };
+
+  let pendingDuplicate = null;
+
+  duplicateNoBtn?.addEventListener("click", () => {
+    if (duplicateModal) duplicateModal.hidden = true;
+    pendingDuplicate = null;
+  });
+
+  duplicateModal?.addEventListener("pointerdown", (event) => {
+    if (event.target === duplicateModal) {
+      duplicateModal.hidden = true;
+      pendingDuplicate = null;
+    }
+  });
+
+  duplicateYesBtn?.addEventListener("click", async () => {
+    if (!pendingDuplicate) return;
+    const { payload, clearCart } = pendingDuplicate;
+    pendingDuplicate = null;
+    if (duplicateModal) duplicateModal.hidden = true;
+    payload.projectName = getUniqueProjectName(payload.projectName);
+    await performSave(payload, clearCart);
+  });
+
+  duplicateMergeBtn?.addEventListener("click", async () => {
+    if (!pendingDuplicate) return;
+    const { payload, clearCart, matchingProject } = pendingDuplicate;
+    pendingDuplicate = null;
+    if (duplicateModal) duplicateModal.hidden = true;
+    const mergePayload = {
+      mode: "existingProject",
+      poNumber: payload.poNumber,
+      companyName: payload.companyName,
+      projectId: matchingProject.id,
+      jobName: payload.jobName,
+      quantityMode: payload.quantityMode || "add",
+      items: payload.items,
+    };
+    await performSave(mergePayload, clearCart);
+  });
+
   form.addEventListener("submit", async (event) => {
     const clearCart = !!event.submitter?.hasAttribute?.("data-projectclad-clear");
     event.preventDefault();
@@ -376,44 +483,18 @@
       items: await getCartItems(),
     };
 
-    const response = await fetch(saveUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify(payload),
-    });
-
-    if (response.status === 401) {
-      const payload = await response.json();
-      if (payload?.redirectTo) {
-        window.location.href = payload.redirectTo;
+    if (mode === "newProject" && projectName) {
+      const matchingProject = cachedProjects.find(
+        (p) => p.name.trim().toLowerCase() === projectName.trim().toLowerCase(),
+      );
+      if (matchingProject) {
+        pendingDuplicate = { payload, clearCart, matchingProject };
+        if (duplicateModal) duplicateModal.hidden = false;
+        return;
       }
-      return;
     }
 
-    if (!response.ok) {
-      alert("Unable to save order. Please try again.");
-      return;
-    }
-
-    const result = await response.json();
-    const redirectTo = result?.projectId
-      ? `/apps/project-clad/project?id=${result.projectId}`
-      : "/apps/project-clad/projects";
-    if (clearCart) {
-      const clearForm = document.createElement("form");
-      clearForm.method = "post";
-      clearForm.action = "/cart/clear";
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = "return_to";
-      input.value = redirectTo;
-      clearForm.appendChild(input);
-      document.body.appendChild(clearForm);
-      clearForm.submit();
-    } else {
-      window.location.href = redirectTo;
-    }
+    await performSave(payload, clearCart);
   });
 
   document.addEventListener("change", () => {

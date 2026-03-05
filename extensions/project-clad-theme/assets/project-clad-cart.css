@@ -36,6 +36,10 @@
   display: none;
 }
 
+.projectclad-modal--duplicate {
+  z-index: 60;
+}
+
 .projectclad-modal {
   position: fixed;
   inset: 0;
@@ -98,4 +102,14 @@
   border: 1px solid #e1e1e1;
   padding: 0.75rem;
   border-radius: 6px;
+}
+
+.projectclad-duplicate-message {
+  margin: 0 0 1rem 0;
+}
+
+.projectclad-duplicate-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
