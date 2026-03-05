@@ -269,7 +269,7 @@
 }
 
 .project-clad-card {
-  border: 7px solid #000;
+  border: 5px solid #000;
   border-radius: var(--card-corner-radius, 8px);
   padding: 1.5rem;
   background: var(--color-background, #fff);
