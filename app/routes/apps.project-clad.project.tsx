@@ -1939,7 +1939,7 @@ export default function ProjectDetailPage() {
           </section>
 
           <section className="project-clad-section">
-            <div className="project-clad-card">
+            <div className="project-clad-card project-clad-card--no-border">
               <div className="project-clad-summary-row">
                 <div>
                   <h2 className="project-clad-title">Project subtotal</h2>
@@ -2528,7 +2528,7 @@ export default function ProjectDetailPage() {
           {isOwner && (
             <section className="project-clad-section">
               <h2 className="project-clad-section-title">Project settings</h2>
-              <div className="project-clad-card">
+              <div className="project-clad-card project-clad-card--no-border">
                 <div className="project-clad-actions" style={{ flexWrap: "wrap", gap: "1rem" }}>
                   <button
                     type="button"

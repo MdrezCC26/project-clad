@@ -269,10 +269,14 @@
 }
 
 .project-clad-card {
-  border: 2px solid #000;
+  border: 7px solid #000;
   border-radius: var(--card-corner-radius, 8px);
   padding: 1.5rem;
   background: var(--color-background, #fff);
+}
+
+.project-clad-card--no-border {
+  border: none;
 }
 
 .project-clad-card-link {
