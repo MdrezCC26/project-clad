@@ -213,8 +213,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const safeMime = allowedTypes.includes(mime) ? mime : "image/png";
       const arrayBuffer = await res.arrayBuffer();
       const base64 = Buffer.from(arrayBuffer).toString("base64");
-      if (base64.length > 700000) {
-        return { logoError: "Image is too large. Max 500 KB recommended." };
+      if (base64.length > 2800000) {
+        return { logoError: "Image is too large. Max 2 MB recommended." };
       }
       const dataUrl = `data:${safeMime};base64,${base64}`;
       await prisma.shopSettings.upsert({
@@ -237,8 +237,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (!isFile || file.size === 0) {
         return { logoError: "Please select an image file (PNG, JPEG, GIF, or WebP)." };
       }
-      if (file.size > 500 * 1024) {
-        return { logoError: "Image must be under 500 KB." };
+      if (file.size > 2 * 1024 * 1024) {
+        return { logoError: "Image must be under 2 MB." };
       }
       const allowedTypes = ["image/png", "image/jpeg", "image/gif", "image/webp"];
       if (!allowedTypes.includes(file.type)) {
@@ -808,7 +808,7 @@ export default function Settings() {
       <s-section heading="Storefront logo">
         <s-paragraph>
           Upload a logo to display at the top center of Projects and Project
-          detail pages. Max 500 KB. PNG, JPEG, GIF, or WebP.
+          detail pages. Max 2 MB. PNG, JPEG, GIF, or WebP.
         </s-paragraph>
         <s-stack direction="block" gap="base">
           {mediaError ? (
