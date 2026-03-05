@@ -2,15 +2,35 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&display=swap");
 
+/*
+  TEXT SIZE GUIDE (storefront app)
+  Change --pc-text-scale below to scale body text, buttons, cards, etc. (e.g. 1.2 = 20% bigger).
+  NOT scaled: main page title ("PROJECTS"), section headings ("Orders").
+  What's what:
+  - Main page title ("PROJECTS")     .project-clad-header .main-page-title  (fixed, not scaled)
+  - Section headings ("Orders")     .project-clad-section-title  (fixed, not scaled)
+  - Card/order titles               .project-clad-title
+  - Nav links (Store, Cart)        .project-clad-nav .link
+  - Muted/secondary text           .project-clad-muted (inherits)
+  - Meta labels (Orders, PO#)      .project-clad-meta dt
+  - Buttons                        --pc-button-font-size
+  - Table header "Product"         .project-clad-orders-table th:first-child::before
+  - Edit-save modal title          .project-clad-edit-save-modal h2
+  - Approval/confirmation messages  .project-clad-approval-msg
+  - Form inputs                    fixed 16px to prevent mobile zoom (do not scale)
+*/
+
 /* Base */
 .project-clad-page {
+  --pc-text-scale: 1.2;
   padding: 2.5rem 0;
   font-family: "Radio Canada", "Helvetica Neue", Arial, sans-serif;
   font-weight: 700;
+  font-size: calc(1rem * var(--pc-text-scale));
   --pc-button-min-height: 40px;
   --pc-button-padding-y: 0.5rem;
   --pc-button-padding-x: 1.25rem;
-  --pc-button-font-size: 0.9rem;
+  --pc-button-font-size: calc(0.9rem * var(--pc-text-scale));
   --pc-button-letter-spacing: 0.02em;
   --pc-button-min-width: 0px;
   --pc-button-line-height: 1.25;
@@ -276,7 +296,7 @@
 
 .project-clad-nav .link {
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: calc(0.95rem * var(--pc-text-scale));
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -345,10 +365,11 @@
 
 .project-clad-title {
   margin: 0 0 0.35rem;
-  font-size: 1.1rem;
+  font-size: calc(1.1rem * var(--pc-text-scale));
 }
 
 .project-clad-header .main-page-title {
+  font-size: 1rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -361,7 +382,7 @@
 }
 
 .project-clad-meta dt {
-  font-size: 0.85rem;
+  font-size: calc(0.85rem * var(--pc-text-scale));
   opacity: 0.7;
 }
 
@@ -375,6 +396,7 @@
 
 .project-clad-section-title {
   margin-bottom: 1rem;
+  font-size: 1.1rem;
 }
 
 .project-clad-actions {
@@ -559,7 +581,7 @@
 
 .project-clad-edit-save-modal h2 {
   margin: 0 0 1.25rem 0;
-  font-size: 1.1rem;
+  font-size: calc(1.1rem * var(--pc-text-scale));
   font-weight: 700;
   text-align: center;
 }
@@ -577,7 +599,7 @@
   padding-top: 0.5rem !important;
   padding-bottom: 0.5rem !important;
   min-height: 36px;
-  font-size: 0.9rem;
+  font-size: calc(0.9rem * var(--pc-text-scale));
 }
 
 .project-clad-items {
@@ -709,7 +731,7 @@
 
 .project-clad-orders-table th:first-child::before {
   content: "Product";
-  font-size: 1rem;
+  font-size: calc(1rem * var(--pc-text-scale));
   display: block;
   width: 288px;
   min-width: 288px;
@@ -784,7 +806,7 @@ details.project-clad-edit-mode .project-clad-edit-view {
 }
 
 .project-clad-approval-buttons .project-clad-approval-msg {
-  font-size: 0.85rem;
+  font-size: calc(0.85rem * var(--pc-text-scale));
   min-height: 1.2em;
 }
 
