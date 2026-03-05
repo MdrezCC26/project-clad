@@ -112,6 +112,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     hasPricingPassword: Boolean(settings?.pricingPasswordHash),
     storefrontTheme: settings?.storefrontTheme || "default",
     hasLogo: Boolean(settings?.logoDataUrl),
+    hasBackgroundLogo: Boolean(settings?.backgroundLogoDataUrl),
     mediaImages,
     mediaError,
     navButtons,
@@ -266,6 +267,79 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       create: { shop: session.shop },
     });
     return { ok: true, logoRemoved: true };
+  }
+
+  if (intent === "save-bg-logo-from-media") {
+    const mediaUrl = String(formData.get("bgLogoMediaUrl") || "").trim();
+    if (!mediaUrl) {
+      return { bgLogoError: "Please select an image from the media library." };
+    }
+    try {
+      const res = await fetch(mediaUrl);
+      if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
+      const contentType = res.headers.get("content-type") || "image/png";
+      const mime = contentType.split(";")[0].trim().toLowerCase();
+      const allowedTypes = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+      if (!mime.startsWith("image/")) {
+        return { bgLogoError: "Selected file is not an image." };
+      }
+      const safeMime = allowedTypes.includes(mime) ? mime : "image/png";
+      const arrayBuffer = await res.arrayBuffer();
+      const base64 = Buffer.from(arrayBuffer).toString("base64");
+      if (base64.length > 700000) {
+        return { bgLogoError: "Image is too large. Max 500 KB recommended." };
+      }
+      const dataUrl = `data:${safeMime};base64,${base64}`;
+      await prisma.shopSettings.upsert({
+        where: { shop: session.shop },
+        update: { backgroundLogoDataUrl: dataUrl },
+        create: { shop: session.shop, backgroundLogoDataUrl: dataUrl },
+      });
+      return { ok: true, bgLogoSaved: true };
+    } catch (err) {
+      console.error("Background logo from media error:", err);
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      return { bgLogoError: `Failed to use image: ${msg}` };
+    }
+  }
+
+  if (intent === "save-bg-logo") {
+    try {
+      const file = formData.get("bgLogo");
+      const isFile = file instanceof File;
+      if (!isFile || file.size === 0) {
+        return { bgLogoError: "Please select an image file (PNG, JPEG, GIF, or WebP)." };
+      }
+      if (file.size > 500 * 1024) {
+        return { bgLogoError: "Image must be under 500 KB." };
+      }
+      const allowedTypes = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+      if (!allowedTypes.includes(file.type)) {
+        return { bgLogoError: "Please select an image file (PNG, JPEG, GIF, or WebP)." };
+      }
+      const bytes = await file.arrayBuffer();
+      const base64 = Buffer.from(bytes).toString("base64");
+      const dataUrl = `data:${file.type};base64,${base64}`;
+      await prisma.shopSettings.upsert({
+        where: { shop: session.shop },
+        update: { backgroundLogoDataUrl: dataUrl },
+        create: { shop: session.shop, backgroundLogoDataUrl: dataUrl },
+      });
+      return { ok: true, bgLogoSaved: true };
+    } catch (err) {
+      console.error("Background logo upload error:", err);
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      return { bgLogoError: `Upload failed: ${msg}. Please try again.` };
+    }
+  }
+
+  if (intent === "remove-bg-logo") {
+    await prisma.shopSettings.upsert({
+      where: { shop: session.shop },
+      update: { backgroundLogoDataUrl: null },
+      create: { shop: session.shop },
+    });
+    return { ok: true, bgLogoRemoved: true };
   }
 
   if (intent === "save-nav-buttons") {
@@ -547,6 +621,7 @@ export default function Settings() {
     hasPricingPassword,
     storefrontTheme,
     hasLogo,
+    hasBackgroundLogo,
     mediaImages,
     mediaError,
     navButtons,
@@ -842,6 +917,108 @@ export default function Settings() {
                 <s-paragraph>
                   {actionData.logoError as string}
                 </s-paragraph>
+              )}
+          </Form>
+        </s-stack>
+      </s-section>
+      <s-section heading="Projects page background logo">
+        <s-paragraph>
+          Optional image shown as a faint watermark behind the Projects list (5%
+          opacity). Can be different from the header logo. Max 500 KB. PNG, JPEG,
+          GIF, or WebP.
+        </s-paragraph>
+        <s-stack direction="block" gap="base">
+          {mediaImages.length > 0 && (
+            <div>
+              <s-paragraph>Choose from media library:</s-paragraph>
+              <Form method="post">
+                <input type="hidden" name="intent" value="save-bg-logo-from-media" />
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))",
+                    gap: "0.5rem",
+                    marginTop: "0.5rem",
+                  }}
+                >
+                  {mediaImages.map((img) => (
+                    <button
+                      key={img.id}
+                      type="submit"
+                      name="bgLogoMediaUrl"
+                      value={img.url}
+                      style={{
+                        padding: 0,
+                        border: "2px solid transparent",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                        overflow: "hidden",
+                        background: "transparent",
+                      }}
+                    >
+                      <img
+                        src={img.url}
+                        alt={img.alt || "Media"}
+                        style={{
+                          width: 80,
+                          height: 80,
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </Form>
+            </div>
+          )}
+          {hasBackgroundLogo && (
+            <div
+              style={{
+                padding: "1rem",
+                border: "1px solid var(--color-border)",
+                borderRadius: "8px",
+                textAlign: "center",
+              }}
+            >
+              <s-paragraph>Background logo set</s-paragraph>
+              <Form method="post" style={{ marginTop: "0.5rem" }}>
+                <input type="hidden" name="intent" value="remove-bg-logo" />
+                <button type="submit">Remove background logo</button>
+              </Form>
+            </div>
+          )}
+          <Form
+            method="post"
+            encType="multipart/form-data"
+            style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
+          >
+            <input type="hidden" name="intent" value="save-bg-logo" />
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <label
+                htmlFor="bg-logo-upload"
+                style={{
+                  padding: "0.5rem 1rem",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                }}
+              >
+                Choose image
+              </label>
+              <input
+                id="bg-logo-upload"
+                name="bgLogo"
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                required
+              />
+              <button type="submit">Upload background logo</button>
+            </div>
+            {actionData &&
+              typeof actionData === "object" &&
+              "bgLogoError" in actionData && (
+                <s-paragraph>{actionData.bgLogoError as string}</s-paragraph>
               )}
           </Form>
         </s-stack>

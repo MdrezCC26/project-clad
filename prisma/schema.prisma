@@ -130,9 +130,10 @@ model ApprovalRequest {
 }
 
 model ShopSettings {
-  id                   String   @id @default(cuid())
-  shop                 String   @unique
-  logoDataUrl          String?
+  id                     String   @id @default(cuid())
+  shop                   String   @unique
+  logoDataUrl            String?
+  backgroundLogoDataUrl  String?
   pricingPasswordHash  String?
   pricingPasswordSalt  String?
   storefrontTheme      String?  @default("default")

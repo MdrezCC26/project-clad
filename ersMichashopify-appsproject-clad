@@ -1,0 +1,210 @@
+warning: in the working copy of 'app/routes/apps.project-clad.api.project-actions.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/routes/apps.project-clad.project.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/routes/apps.project-clad.projects.tsx', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/app/routes/apps.project-clad.api.project-actions.tsx b/app/routes/apps.project-clad.api.project-actions.tsx[m
+[1mindex 9535b58..1522234 100644[m
+[1m--- a/app/routes/apps.project-clad.api.project-actions.tsx[m
+[1m+++ b/app/routes/apps.project-clad.api.project-actions.tsx[m
+[36m@@ -6,7 +6,7 @@[m [mimport {[m
+   findCustomerIdByEmail,[m
+   getCustomersByIds,[m
+ } from "../utils/adminCustomers.server";[m
+[31m-import { getAdminVariantInfo } from "../utils/adminVariants.server";[m
+[32m+[m[32mimport { getVariantInfo } from "../utils/storefront.server";[m
+ import { isEmailConfigured, sendEmail } from "../utils/email.server";[m
+ import { verifyPassword } from "../utils/passwords.server";[m
+ [m
+[36m@@ -299,7 +299,7 @@[m [mexport const loader = async ({ request }: LoaderFunctionArgs) => {[m
+           include: { job: { select: { name: true } } },[m
+         });[m
+         if (item?.job) {[m
+[31m-          const variantInfo = await getAdminVariantInfo(shop, [[m
+[32m+[m[32m          const variantInfo = await getVariantInfo(shop, [[m
+             item.variantId,[m
+           ]).catch(() => ({}));[m
+           const productLabel =[m
+[36m@@ -463,7 +463,7 @@[m [mexport const loader = async ({ request }: LoaderFunctionArgs) => {[m
+             include: { job: { select: { name: true } } },[m
+           });[m
+           if (item?.job) {[m
+[31m-            const variantInfo = await getAdminVariantInfo(shop, [[m
+[32m+[m[32m            const variantInfo = await getVariantInfo(shop, [[m
+               item.variantId,[m
+             ]).catch(() => ({}));[m
+             const productLabel =[m
+[36m@@ -484,7 +484,7 @@[m [mexport const loader = async ({ request }: LoaderFunctionArgs) => {[m
+         } else if (job) {[m
+           contextLabel = `${jobName} in ${project.name}`;[m
+           const variantIds = job.items.map((i) => i.variantId);[m
+[31m-          const variantInfo = await getAdminVariantInfo(shop, variantIds).catch(() => ({}));[m
+[32m+[m[32m          const variantInfo = await getVariantInfo(shop, variantIds).catch(() => ({}));[m
+           for (const i of job.items) {[m
+             const label =[m
+               variantInfo[i.variantId]?.productTitle ||[m
+[36m@@ -500,7 +500,7 @@[m [mexport const loader = async ({ request }: LoaderFunctionArgs) => {[m
+           orderBy: { sortOrder: "asc" },[m
+         });[m
+         const variantIds = jobs.flatMap((j) => j.items.map((i) => i.variantId));[m
+[31m-        const variantInfo = await getAdminVariantInfo(shop, variantIds).catch(() => ({}));[m
+[32m+[m[32m        const variantInfo = await getVariantInfo(shop, variantIds).catch(() => ({}));[m
+         for (const j of jobs) {[m
+           for (const i of j.items) {[m
+             const label =[m
+[36m@@ -650,7 +650,7 @@[m [mexport const action = async ({ request }: ActionFunctionArgs) => {[m
+         include: { job: { select: { name: true } } },[m
+       });[m
+       if (item?.job) {[m
+[31m-        const variantInfo = await getAdminVariantInfo(shop, [[m
+[32m+[m[32m        const variantInfo = await getVariantInfo(shop, [[m
+           item.variantId,[m
+         ]).catch(() => ({}));[m
+         const productLabel =[m
+[1mdiff --git a/app/routes/apps.project-clad.project.tsx b/app/routes/apps.project-clad.project.tsx[m
+[1mindex 4cd8b87..50b6204 100644[m
+[1m--- a/app/routes/apps.project-clad.project.tsx[m
+[1m+++ b/app/routes/apps.project-clad.project.tsx[m
+[36m@@ -11,7 +11,7 @@[m [mimport {[m
+ import { redirect } from "react-router";[m
+ import prisma from "../db.server";[m
+ import { requireAppProxyCustomer } from "../utils/appProxy.server";[m
+[31m-import { getAdminVariantInfo } from "../utils/adminVariants.server";[m
+[32m+[m[32mimport { getVariantInfo } from "../utils/storefront.server";[m
+ import {[m
+   findCustomerIdByEmail,[m
+   getCustomersByIds,[m
+[36m@@ -141,7 +141,7 @@[m [mexport const loader = async ({ request }: LoaderFunctionArgs) => {[m
+   > = {};[m
+   let variantLookupError: string | null = null;[m
+   try {[m
+[31m-    variantInfo = await getAdminVariantInfo(shop, variantIds);[m
+[32m+[m[32m    variantInfo = await getVariantInfo(shop, variantIds);[m
+   } catch (error) {[m
+     variantLookupError =[m
+       error instanceof Error ? error.message : "Product lookup failed.";[m
+[1mdiff --git a/app/routes/apps.project-clad.projects.tsx b/app/routes/apps.project-clad.projects.tsx[m
+[1mindex 194f2dc..2c3b515 100644[m
+[1m--- a/app/routes/apps.project-clad.projects.tsx[m
+[1m+++ b/app/routes/apps.project-clad.projects.tsx[m
+[36m@@ -5,7 +5,7 @@[m [mimport { requireAppProxyCustomer } from "../utils/appProxy.server";[m
+ import { getCustomersByIds } from "../utils/adminCustomers.server";[m
+ import { getCsvForProjectIds } from "../utils/exportProjectsCsv.server";[m
+ import { isEmailConfigured, sendEmail } from "../utils/email.server";[m
+[31m-import { getAdminVariantInfo } from "../utils/adminVariants.server";[m
+[32m+[m[32mimport { getVariantInfo } from "../utils/storefront.server";[m
+ import { getThemeStyles } from "../utils/themeAssets.server";[m
+ import proxyStylesUrl from "../styles/project-clad-proxy.css?url";[m
+ import proxyStylesText from "../styles/project-clad-proxy.css?raw";[m
+[36m@@ -88,7 +88,7 @@[m [mexport const loader = async ({ request }: LoaderFunctionArgs) => {[m
+   > = {};[m
+   let variantLookupError: string | null = null;[m
+   try {[m
+[31m-    variantInfo = await getAdminVariantInfo(shop, variantIds);[m
+[32m+[m[32m    variantInfo = await getVariantInfo(shop, variantIds);[m
+   } catch (error) {[m
+     variantLookupError =[m
+       error instanceof Error ? error.message : "Product lookup failed.";[m
+warning: in the working copy of 'app/routes/apps.project-clad.api.project-actions.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/routes/apps.project-clad.project.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/routes/apps.project-clad.projects.tsx', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/app/routes/apps.project-clad.api.project-actions.tsx b/app/routes/apps.project-clad.api.project-actions.tsx[m
+[1mindex 9535b58..1522234 100644[m
+[1m--- a/app/routes/apps.project-clad.api.project-actions.tsx[m
+[1m+++ b/app/routes/apps.project-clad.api.project-actions.tsx[m
+[36m@@ -6,7 +6,7 @@[m [mimport {[m
+   findCustomerIdByEmail,[m
+   getCustomersByIds,[m
+ } from "../utils/adminCustomers.server";[m
+[31m-import { getAdminVariantInfo } from "../utils/adminVariants.server";[m
+[32m+[m[32mimport { getVariantInfo } from "../utils/storefront.server";[m
+ import { isEmailConfigured, sendEmail } from "../utils/email.server";[m
+ import { verifyPassword } from "../utils/passwords.server";[m
+ [m
+[36m@@ -299,7 +299,7 @@[m [mexport const loader = async ({ request }: LoaderFunctionArgs) => {[m
+           include: { job: { select: { name: true } } },[m
+         });[m
+         if (item?.job) {[m
+[31m-          const variantInfo = await getAdminVariantInfo(shop, [[m
+[32m+[m[32m          const variantInfo = await getVariantInfo(shop, [[m
+             item.variantId,[m
+           ]).catch(() => ({}));[m
+           const productLabel =[m
+[36m@@ -463,7 +463,7 @@[m [mexport const loader = async ({ request }: LoaderFunctionArgs) => {[m
+             include: { job: { select: { name: true } } },[m
+           });[m
+           if (item?.job) {[m
+[31m-            const variantInfo = await getAdminVariantInfo(shop, [[m
+[32m+[m[32m            const variantInfo = await getVariantInfo(shop, [[m
+               item.variantId,[m
+             ]).catch(() => ({}));[m
+             const productLabel =[m
+[36m@@ -484,7 +484,7 @@[m [mexport const loader = async ({ request }: LoaderFunctionArgs) => {[m
+         } else if (job) {[m
+           contextLabel = `${jobName} in ${project.name}`;[m
+           const variantIds = job.items.map((i) => i.variantId);[m
+[31m-          const variantInfo = await getAdminVariantInfo(shop, variantIds).catch(() => ({}));[m
+[32m+[m[32m          const variantInfo = await getVariantInfo(shop, variantIds).catch(() => ({}));[m
+           for (const i of job.items) {[m
+             const label =[m
+               variantInfo[i.variantId]?.productTitle ||[m
+[36m@@ -500,7 +500,7 @@[m [mexport const loader = async ({ request }: LoaderFunctionArgs) => {[m
+           orderBy: { sortOrder: "asc" },[m
+         });[m
+         const variantIds = jobs.flatMap((j) => j.items.map((i) => i.variantId));[m
+[31m-        const variantInfo = await getAdminVariantInfo(shop, variantIds).catch(() => ({}));[m
+[32m+[m[32m        const variantInfo = await getVariantInfo(shop, variantIds).catch(() => ({}));[m
+         for (const j of jobs) {[m
+           for (const i of j.items) {[m
+             const label =[m
+[36m@@ -650,7 +650,7 @@[m [mexport const action = async ({ request }: ActionFunctionArgs) => {[m
+         include: { job: { select: { name: true } } },[m
+       });[m
+       if (item?.job) {[m
+[31m-        const variantInfo = await getAdminVariantInfo(shop, [[m
+[32m+[m[32m        const variantInfo = await getVariantInfo(shop, [[m
+           item.variantId,[m
+         ]).catch(() => ({}));[m
+         const productLabel =[m
+[1mdiff --git a/app/routes/apps.project-clad.project.tsx b/app/routes/apps.project-clad.project.tsx[m
+[1mindex 4cd8b87..50b6204 100644[m
+[1m--- a/app/routes/apps.project-clad.project.tsx[m
+[1m+++ b/app/routes/apps.project-clad.project.tsx[m
+[36m@@ -11,7 +11,7 @@[m [mimport {[m
+ import { redirect } from "react-router";[m
+ import prisma from "../db.server";[m
+ import { requireAppProxyCustomer } from "../utils/appProxy.server";[m
+[31m-import { getAdminVariantInfo } from "../utils/adminVariants.server";[m
+[32m+[m[32mimport { getVariantInfo } from "../utils/storefront.server";[m
+ import {[m
+   findCustomerIdByEmail,[m
+   getCustomersByIds,[m
+[36m@@ -141,7 +141,7 @@[m [mexport const loader = async ({ request }: LoaderFunctionArgs) => {[m
+   > = {};[m
+   let variantLookupError: string | null = null;[m
+   try {[m
+[31m-    variantInfo = await getAdminVariantInfo(shop, variantIds);[m
+[32m+[m[32m    variantInfo = await getVariantInfo(shop, variantIds);[m
+   } catch (error) {[m
+     variantLookupError =[m
+       error instanceof Error ? error.message : "Product lookup failed.";[m
+[1mdiff --git a/app/routes/apps.project-clad.projects.tsx b/app/routes/apps.project-clad.projects.tsx[m
+[1mindex 194f2dc..2c3b515 100644[m
+[1m--- a/app/routes/apps.project-clad.projects.tsx[m
+[1m+++ b/app/routes/apps.project-clad.projects.tsx[m
+[36m@@ -5,7 +5,7 @@[m [mimport { requireAppProxyCustomer } from "../utils/appProxy.server";[m
+ import { getCustomersByIds } from "../utils/adminCustomers.server";[m
+ import { getCsvForProjectIds } from "../utils/exportProjectsCsv.server";[m
+ import { isEmailConfigured, sendEmail } from "../utils/email.server";[m
+[31m-import { getAdminVariantInfo } from "../utils/adminVariants.server";[m
+[32m+[m[32mimport { getVariantInfo } from "../utils/storefront.server";[m
+ import { getThemeStyles } from "../utils/themeAssets.server";[m
+ import proxyStylesUrl from "../styles/project-clad-proxy.css?url";[m
+ import proxyStylesText from "../styles/project-clad-proxy.css?raw";[m
+[36m@@ -88,7 +88,7 @@[m [mexport const loader = async ({ request }: LoaderFunctionArgs) => {[m
+   > = {};[m
+   let variantLookupError: string | null = null;[m
+   try {[m
+[31m-    variantInfo = await getAdminVariantInfo(shop, variantIds);[m
+[32m+[m[32m    variantInfo = await getVariantInfo(shop, variantIds);[m
+   } catch (error) {[m
+     variantLookupError =[m
+       error instanceof Error ? error.message : "Product lookup failed.";[m

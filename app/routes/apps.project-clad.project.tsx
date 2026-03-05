@@ -1814,7 +1814,7 @@ export default function ProjectDetailPage() {
                         </table>
                       )}
                     {!hideAddToCart && getApprovalStatus(job.id, "") === "awaiting" && (
-                      <div className="project-clad-approval-buttons" style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+                      <div className="project-clad-approval-buttons" style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #000" }}>
                         <form
                           method="get"
                           action="/apps/project-clad/api/project-actions"
@@ -1856,12 +1856,12 @@ export default function ProjectDetailPage() {
                       className="project-clad-actions project-clad-order-actions"
                       data-projectclad-order-section
                       data-job-id={job.id}
-                      style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid rgba(0,0,0,0.08)" }}
+                      style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #000" }}
                     >
                       <div className="project-clad-normal-view">
                         {!hideAddToCart && job.items.filter((i) => i.quantity > 0).length > 0 && (
                           <div className="project-clad-actions" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
-                            <form method="post" action="/cart/add" style={{ display: "inline" }} onPointerDownCapture={(e) => e.stopPropagation()}>
+                            <form method="post" action="/cart/add" style={{ display: "inline" }} onPointerDownCapture={(e) => e.stopPropagation()} data-projectclad-add-all-to-cart data-job-name={job.name} onSubmit={(e) => { e.preventDefault(); handleAddItemsClick(job, e.currentTarget as HTMLFormElement, "cart"); }}>
                               {job.items.filter((i) => i.quantity > 0).map((item, index) => (
                                 <input key={`${job.id}-${item.variantId}`} type="hidden" name={`items[${index}][id]`} value={item.variantId} />
                               ))}
@@ -1874,7 +1874,7 @@ export default function ProjectDetailPage() {
                                 )),
                               )}
                               <input type="hidden" name="return_to" value="/cart" />
-                              <button type="submit" className="project-clad-button">
+                              <button type="submit" className="project-clad-button" data-projectclad-add-all-btn>
                                 Add all items to cart
                               </button>
                             </form>
@@ -2045,6 +2045,27 @@ export default function ProjectDetailPage() {
   if (window.__pcShareCopyInitialized) return;
   window.__pcShareCopyInitialized = true;
   const actionsEndpoint = '/apps/project-clad/api/project-actions';
+
+  document.addEventListener('click', async (event) => {
+    const btn = event.target?.closest?.('button[data-projectclad-add-all-btn]');
+    if (!btn) return;
+    const form = btn.closest('form[data-projectclad-add-all-to-cart]');
+    if (!(form instanceof HTMLFormElement)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    try {
+      const res = await fetch('/cart.js', { headers: { Accept: 'application/json' } });
+      const cart = res.ok ? await res.json() : {};
+      if ((cart.item_count || 0) > 0) {
+        const jobName = form.getAttribute('data-job-name') || 'this order';
+        if (!confirm('Your cart already has items. Add all items from "' + jobName + '" to your existing cart?')) return;
+      }
+      form.submit();
+    } catch (e) {
+      form.submit();
+    }
+  }, true);
   const memberMessage = document.querySelector('[data-projectclad-member-message]');
   const setMemberMessage = (text) => {
     if (memberMessage) {

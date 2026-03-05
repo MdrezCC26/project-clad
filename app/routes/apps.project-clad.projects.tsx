@@ -250,6 +250,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     storefrontTheme: settings?.storefrontTheme || "default",
     navButtons,
     logoDataUrl: settings?.logoDataUrl || null,
+    backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
   };
 };
 
@@ -315,6 +316,7 @@ export default function ProjectsPage() {
     storefrontTheme,
     navButtons,
     logoDataUrl,
+    backgroundLogoDataUrl,
   } = useLoaderData<typeof loader>();
   const inlineStyles = themeStyles?.styles || [];
 
@@ -325,10 +327,23 @@ export default function ProjectsPage() {
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
       <main
-        className="project-clad-page"
+        className="project-clad-page project-clad-page--projects"
         data-theme={storefrontTheme || "default"}
       >
-        <div className="page-width project-clad-container">
+        <div
+          className={
+            backgroundLogoDataUrl
+              ? "page-width project-clad-container project-clad-container--with-bg-logo"
+              : "page-width project-clad-container"
+          }
+          style={
+            backgroundLogoDataUrl
+              ? {
+                  ["--project-clad-bg-logo" as string]: `url(${backgroundLogoDataUrl})`,
+                }
+              : undefined
+          }
+        >
           {logoDataUrl && (
             <div className="project-clad-logo">
               <a href="/" className="project-clad-logo__link">
