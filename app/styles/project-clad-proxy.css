@@ -210,12 +210,12 @@
   display: block;
 }
 
-/* Projects page: logo as faint background, scaled so 5% top & 5% bottom are cropped */
-.project-clad-page--projects .project-clad-container--with-bg-logo {
+/* Projects page: logo as faint background on each card, scaled so 5% top & 5% bottom are cropped */
+.project-clad-page--projects.project-clad-page--card-bg-logo .project-clad-card {
   position: relative;
 }
 
-.project-clad-page--projects .project-clad-container--with-bg-logo::before {
+.project-clad-page--projects.project-clad-page--card-bg-logo .project-clad-card::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -226,9 +226,10 @@
   opacity: 0.05;
   pointer-events: none;
   z-index: 0;
+  border-radius: inherit;
 }
 
-.project-clad-page--projects .project-clad-container--with-bg-logo > * {
+.project-clad-page--projects.project-clad-page--card-bg-logo .project-clad-card > * {
   position: relative;
   z-index: 1;
 }

@@ -327,23 +327,15 @@ export default function ProjectsPage() {
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
       <main
-        className="project-clad-page project-clad-page--projects"
+        className={`project-clad-page project-clad-page--projects${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
         data-theme={storefrontTheme || "default"}
+        style={
+          backgroundLogoDataUrl
+            ? { ["--project-clad-bg-logo" as string]: `url(${backgroundLogoDataUrl})` }
+            : undefined
+        }
       >
-        <div
-          className={
-            backgroundLogoDataUrl
-              ? "page-width project-clad-container project-clad-container--with-bg-logo"
-              : "page-width project-clad-container"
-          }
-          style={
-            backgroundLogoDataUrl
-              ? {
-                  ["--project-clad-bg-logo" as string]: `url(${backgroundLogoDataUrl})`,
-                }
-              : undefined
-          }
-        >
+        <div className="page-width project-clad-container">
           {logoDataUrl && (
             <div className="project-clad-logo">
               <a href="/" className="project-clad-logo__link">
