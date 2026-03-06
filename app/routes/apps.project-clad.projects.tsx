@@ -359,9 +359,6 @@ export default function ProjectsPage() {
                   ))}
               </nav>
             </div>
-            <p className="project-clad-muted">
-              Click on a project to view orders.
-            </p>
           </header>
           {variantLookupError && (
             <p className="project-clad-muted">{variantLookupError}</p>
