@@ -333,7 +333,7 @@ body.project-clad-leaving .project-clad-page {
 
 @media (min-width: 900px) {
   .project-clad-logo__img {
-    transform: translateX(40px);
+    transform: translateX(60px);
   }
 }
 
