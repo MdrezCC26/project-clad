@@ -1409,34 +1409,6 @@ export default function ProjectDetailPage() {
             {variantLookupError && (
               <p className="project-clad-muted">{variantLookupError}</p>
             )}
-            {canEdit && (
-                      <Form
-                        method="post"
-                        action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
-                        className="project-clad-inline-form"
-                data-projectclad-ajax
-                data-projectclad-intent="create-job"
-                data-projectclad-project-id={project.id}
-                      >
-                <input type="hidden" name="intent" value="create-job" />
-                <label htmlFor="new-job-name">New order</label>
-                <input
-                  id="new-job-name"
-                  name="jobName"
-                  placeholder="Order name"
-                  required
-                />
-                <button type="submit" className="project-clad-button">
-                  Add order
-                </button>
-                <span
-                  className="project-clad-muted"
-                  data-projectclad-form-message
-                >
-                  {jobError || ""}
-                </span>
-              </Form>
-            )}
             {project.jobs.length === 0 ? (
               <p className="project-clad-muted">No orders saved yet.</p>
             ) : (
@@ -1963,6 +1935,35 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
             </div>
+            {canEdit && (
+              <Form
+                method="post"
+                action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+                className="project-clad-inline-form project-clad-create-order-form"
+                data-projectclad-ajax
+                data-projectclad-intent="create-job"
+                data-projectclad-project-id={project.id}
+                style={{ marginTop: "1rem" }}
+              >
+                <input type="hidden" name="intent" value="create-job" />
+                <input
+                  id="new-job-name"
+                  name="jobName"
+                  placeholder="Create new order"
+                  required
+                  aria-label="Create new order"
+                />
+                <button type="submit" className="project-clad-button">
+                  Create new order
+                </button>
+                <span
+                  className="project-clad-muted"
+                  data-projectclad-form-message
+                >
+                  {jobError || ""}
+                </span>
+              </Form>
+            )}
           </section>
 
           <section className="project-clad-section">
