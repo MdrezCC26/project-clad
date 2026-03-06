@@ -1291,6 +1291,183 @@ export default function ProjectDetailPage() {
               </button>
             </div>
           </Form>
+
+          {canEdit && (
+            <>
+              <h3 className="project-clad-section-title" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>Create new order</h3>
+              <Form
+                method="post"
+                action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+                className="project-clad-inline-form project-clad-create-order-form"
+                data-projectclad-ajax
+                data-projectclad-intent="create-job"
+                data-projectclad-project-id={project.id}
+                style={{ marginBottom: "1rem" }}
+              >
+                <input type="hidden" name="intent" value="create-job" />
+                <input
+                  id="new-job-name-modal"
+                  name="jobName"
+                  placeholder="Create new order"
+                  required
+                  aria-label="Create new order"
+                />
+                <button type="submit" className="project-clad-button">
+                  Create new order
+                </button>
+                <span
+                  className="project-clad-muted"
+                  data-projectclad-form-message
+                >
+                  {jobError || ""}
+                </span>
+              </Form>
+            </>
+          )}
+
+          <h3 className="project-clad-section-title" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>Share access</h3>
+          {canEdit ? (
+            <>
+              <div className="project-clad-share-access-form">
+                <Form
+                  id="projectclad-add-member-form"
+                  method="post"
+                  action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+                  className="project-clad-inline-form"
+                  data-projectclad-member-form
+                  data-projectclad-member-intent="add-member"
+                  data-projectclad-project-id={project.id}
+                  data-projectclad-ajax
+                  data-projectclad-intent="add-member"
+                >
+                  <input type="hidden" name="intent" value="add-member" />
+                  <label htmlFor="member-email-modal">Add project member</label>
+                  <input
+                    id="member-email-modal"
+                    name="email"
+                    type="email"
+                    placeholder="email@example.com"
+                    required
+                  />
+                  <label>Project Member Role</label>
+                  <select name="role" defaultValue="edit">
+                    <option value="edit">Edit</option>
+                    <option value="view">View only</option>
+                  </select>
+                  <button type="submit" className="project-clad-button">
+                    Add
+                  </button>
+                </Form>
+                <div
+                  className="project-clad-actions project-clad-share-buttons"
+                  style={{ flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}
+                >
+                  <Form
+                    method="post"
+                    action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+                    className="project-clad-inline-form"
+                    style={{ display: "inline" }}
+                    data-projectclad-ajax
+                    data-projectclad-intent="share-project"
+                    data-projectclad-project-id={project.id}
+                  >
+                    <input type="hidden" name="intent" value="share-project" />
+                    <input type="hidden" name="role" value="view" />
+                    <button
+                      type="submit"
+                      className="project-clad-button"
+                      data-projectclad-share-submit
+                    >
+                      Share
+                    </button>
+                  </Form>
+                  <span
+                    className="project-clad-muted"
+                    data-projectclad-member-message
+                  >
+                    {memberError || ""}
+                  </span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="project-clad-muted">
+              You have view-only access to this project.
+            </p>
+          )}
+
+          <h3 className="project-clad-section-title" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>Project members</h3>
+          {memberLookupError ? (
+            <p className="project-clad-muted">{memberLookupError}</p>
+          ) : project.members.length === 0 ? (
+            <p className="project-clad-muted">No members on this project.</p>
+          ) : (
+            <table className="project-clad-table project-clad-members-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th className="project-clad-table-right">Project Member Role</th>
+                  {isOwner && (
+                    <th className="project-clad-table-right">Actions</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {project.members.map((member) => {
+                  const fullName = [member.firstName, member.lastName]
+                    .filter(Boolean)
+                    .join(" ");
+                  return (
+                    <tr key={member.customerId}>
+                      <td>{fullName || "—"}</td>
+                      <td>{member.email || "—"}</td>
+                      <td className="project-clad-table-right">
+                        {member.role === "owner"
+                          ? "Owner"
+                          : member.role === "edit"
+                            ? "Edit"
+                            : "View only"}
+                      </td>
+                      {isOwner && (
+                        <td className="project-clad-table-right">
+                          {member.role === "owner" ? (
+                            "—"
+                          ) : (
+                            <Form
+                              method="post"
+                              action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+                              onSubmit={(event) => {
+                                if (!confirm("Remove this member?")) {
+                                  event.preventDefault();
+                                }
+                              }}
+                              data-projectclad-member-form
+                              data-projectclad-member-intent="remove-member"
+                              data-projectclad-project-id={project.id}
+                              data-projectclad-member-id={member.customerId}
+                              data-projectclad-ajax
+                              data-projectclad-intent="remove-member"
+                            >
+                              <input type="hidden" name="intent" value="remove-member" />
+                              <input
+                                type="hidden"
+                                name="memberCustomerId"
+                                value={member.customerId}
+                              />
+                              <button type="submit" className="project-clad-button">
+                                Remove
+                              </button>
+                            </Form>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
       <div
@@ -1935,108 +2112,6 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
             </div>
-            {canEdit && (
-              <Form
-                method="post"
-                action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
-                className="project-clad-inline-form project-clad-create-order-form"
-                data-projectclad-ajax
-                data-projectclad-intent="create-job"
-                data-projectclad-project-id={project.id}
-                style={{ marginTop: "1rem" }}
-              >
-                <input type="hidden" name="intent" value="create-job" />
-                <input
-                  id="new-job-name"
-                  name="jobName"
-                  placeholder="Create new order"
-                  required
-                  aria-label="Create new order"
-                />
-                <button type="submit" className="project-clad-button">
-                  Create new order
-                </button>
-                <span
-                  className="project-clad-muted"
-                  data-projectclad-form-message
-                >
-                  {jobError || ""}
-                </span>
-              </Form>
-            )}
-          </section>
-
-          <section className="project-clad-section">
-            <h2 className="project-clad-section-title">Share access</h2>
-            {canEdit ? (
-              <>
-                <div className="project-clad-share-access-form">
-                  <Form
-                    id="projectclad-add-member-form"
-                    method="post"
-                    action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
-                    className="project-clad-inline-form"
-                    data-projectclad-member-form
-                    data-projectclad-member-intent="add-member"
-                    data-projectclad-project-id={project.id}
-                    data-projectclad-ajax
-                    data-projectclad-intent="add-member"
-                  >
-                    <input type="hidden" name="intent" value="add-member" />
-                    <label htmlFor="member-email">Add project member</label>
-                    <input
-                      id="member-email"
-                      name="email"
-                      type="email"
-                      placeholder="email@example.com"
-                      required
-                    />
-                    <label>Project Member Role</label>
-                    <select name="role" defaultValue="edit">
-                      <option value="edit">Edit</option>
-                      <option value="view">View only</option>
-                    </select>
-                    <button type="submit" className="project-clad-button">
-                      Add
-                    </button>
-                  </Form>
-                  <div
-                    className="project-clad-actions project-clad-share-buttons"
-                    style={{ flexWrap: "wrap", gap: "0.5rem" }}
-                  >
-                    <Form
-                      method="post"
-                      action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
-                      className="project-clad-inline-form"
-                      style={{ display: "inline" }}
-                      data-projectclad-ajax
-                      data-projectclad-intent="share-project"
-                      data-projectclad-project-id={project.id}
-                    >
-                      <input type="hidden" name="intent" value="share-project" />
-                      <input type="hidden" name="role" value="view" />
-                      <button
-                        type="submit"
-                        className="project-clad-button"
-                        data-projectclad-share-submit
-                      >
-                        Share
-                      </button>
-                    </Form>
-                    <span
-                      className="project-clad-muted"
-                      data-projectclad-member-message
-                    >
-                      {memberError || ""}
-                    </span>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <p className="project-clad-muted">
-                You have view-only access to this project.
-              </p>
-            )}
           </section>
 
           <script
@@ -2470,82 +2545,6 @@ export default function ProjectDetailPage() {
               `,
             }}
           />
-
-          <section className="project-clad-section">
-            <h2 className="project-clad-section-title">Project members</h2>
-            {memberLookupError && (
-              <p className="project-clad-muted">{memberLookupError}</p>
-            )}
-            {project.members.length === 0 ? (
-              <p className="project-clad-muted">No members on this project.</p>
-            ) : (
-              <table className="project-clad-table project-clad-members-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th className="project-clad-table-right">Project Member Role</th>
-                    {isOwner && (
-                      <th className="project-clad-table-right">Actions</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {project.members.map((member) => {
-                    const fullName = [member.firstName, member.lastName]
-                      .filter(Boolean)
-                      .join(" ");
-                    return (
-                      <tr key={member.customerId}>
-                        <td>{fullName || "—"}</td>
-                        <td>{member.email || "—"}</td>
-                        <td className="project-clad-table-right">
-                          {member.role === "owner"
-                            ? "Owner"
-                            : member.role === "edit"
-                              ? "Edit"
-                              : "View only"}
-                        </td>
-                        {isOwner && (
-                          <td className="project-clad-table-right">
-                            {member.role === "owner" ? (
-                              "—"
-                            ) : (
-                              <Form
-                                method="post"
-                                action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
-                                onSubmit={(event) => {
-                                  if (!confirm("Remove this member?")) {
-                                    event.preventDefault();
-                                  }
-                                }}
-                                data-projectclad-member-form
-                                data-projectclad-member-intent="remove-member"
-                                data-projectclad-project-id={project.id}
-                                data-projectclad-member-id={member.customerId}
-                                data-projectclad-ajax
-                                data-projectclad-intent="remove-member"
-                              >
-                                <input type="hidden" name="intent" value="remove-member" />
-                                <input
-                                  type="hidden"
-                                  name="memberCustomerId"
-                                  value={member.customerId}
-                                />
-                                <button type="submit" className="project-clad-button">
-                                  Remove
-                                </button>
-                              </Form>
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </section>
 
           {isOwner && (
             <section className="project-clad-section">
