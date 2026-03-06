@@ -230,12 +230,18 @@
 }
 
 /* Order/project detail page: full-width content like before */
-.project-clad-page--detail .project-clad-container--full-width {
+.project-clad-page--detail .project-clad-container--full-width,
+.project-clad-page--detail .page-width.project-clad-container--full-width {
   max-width: none;
   width: 100%;
   padding-left: 1rem;
   padding-right: 1rem;
   box-sizing: border-box;
+}
+
+/* Orders section same width as Project subtotal row */
+.project-clad-page--detail .project-clad-section .project-clad-grid {
+  width: 100%;
 }
 
 /* Projects page: texture overlay on each card (projects list only, not order page cards) */
