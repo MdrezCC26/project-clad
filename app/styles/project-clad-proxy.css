@@ -515,6 +515,20 @@ body.project-clad-leaving .project-clad-page {
   background: #a00 !important;
 }
 
+.project-clad-button--danger {
+  background: #c00;
+  color: #fff;
+}
+
+.project-clad-button--danger:hover {
+  background: #900;
+}
+
+.project-clad-button--full {
+  width: 100%;
+  justify-content: center;
+}
+
 .project-clad-button {
   display: inline-flex;
   align-items: center;

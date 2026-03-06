@@ -1468,6 +1468,18 @@ export default function ProjectDetailPage() {
               </tbody>
             </table>
           )}
+
+          {isOwner && (
+            <div style={{ marginTop: "2rem" }}>
+              <button
+                type="button"
+                className="project-clad-button project-clad-button--danger project-clad-button--full"
+                data-projectclad-delete-project-open
+              >
+                Delete this project
+              </button>
+            </div>
+          )}
         </div>
       </div>
       <div
@@ -1492,6 +1504,48 @@ export default function ProjectDetailPage() {
               Close
             </button>
           </div>
+        </div>
+      </div>
+      <div
+        className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
+        data-projectclad-delete-project-modal
+        data-theme={storefrontTheme || "default"}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-project-modal-title"
+        style={{ display: "none" }}
+      >
+        <div
+          className="project-clad-card project-clad-modal project-clad-reject-modal"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h2 id="delete-project-modal-title">Delete this project</h2>
+          <p className="project-clad-muted" style={{ marginTop: "0.5rem" }}>
+            This will permanently delete this project and all of its orders. This cannot be undone.
+          </p>
+          <Form
+            method="post"
+            action="/apps/project-clad/projects"
+            style={{ marginTop: "1rem" }}
+          >
+            <input type="hidden" name="intent" value="delete-project" />
+            <input type="hidden" name="projectId" value={project.id} />
+            <div className="project-clad-actions project-clad-reject-modal-actions" style={{ marginTop: "1rem" }}>
+              <button
+                type="submit"
+                className="project-clad-button project-clad-button--danger project-clad-button--full project-clad-reject-modal-btn"
+              >
+                Yes, delete this project
+              </button>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                data-projectclad-delete-project-cancel
+              >
+                Cancel
+              </button>
+            </div>
+          </Form>
         </div>
       </div>
       <style dangerouslySetInnerHTML={{ __html: proxyStylesText }} />
@@ -2422,6 +2476,23 @@ export default function ProjectDetailPage() {
       const modal = document.querySelector('[data-projectclad-edit-project-modal]');
       if (modal instanceof HTMLElement) modal.style.display = 'none';
     }
+
+    const deleteProjectOpen = event.target?.closest?.('[data-projectclad-delete-project-open]');
+    if (deleteProjectOpen instanceof HTMLElement) {
+      event.preventDefault();
+      const modal = document.querySelector('[data-projectclad-delete-project-modal]');
+      if (modal instanceof HTMLElement) modal.style.display = 'flex';
+    }
+    const deleteProjectCancel = event.target?.closest?.('[data-projectclad-delete-project-cancel]');
+    if (deleteProjectCancel) {
+      const modal = document.querySelector('[data-projectclad-delete-project-modal]');
+      if (modal instanceof HTMLElement) modal.style.display = 'none';
+    }
+    const deleteProjectBackdrop = event.target?.closest?.('[data-projectclad-delete-project-modal]');
+    if (deleteProjectBackdrop && deleteProjectBackdrop === event.target) {
+      const modal = document.querySelector('[data-projectclad-delete-project-modal]');
+      if (modal instanceof HTMLElement) modal.style.display = 'none';
+    }
   }, true);
 
   document.addEventListener('submit', async (event) => {
@@ -2558,22 +2629,6 @@ export default function ProjectDetailPage() {
                   >
                     Edit project details
                   </button>
-                  <form
-                    method="post"
-                    action="/apps/project-clad/projects"
-                    style={{ display: "inline" }}
-                    onSubmit={(e) => {
-                      if (!confirm("Are you sure you want to delete this project?")) {
-                        e.preventDefault();
-                      }
-                    }}
-                  >
-                    <input type="hidden" name="intent" value="delete-project" />
-                    <input type="hidden" name="projectId" value={project.id} />
-                    <button type="submit" className="project-clad-button">
-                      Delete this project
-                    </button>
-                  </form>
                 </div>
               </div>
             </section>
