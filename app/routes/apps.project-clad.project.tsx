@@ -2604,7 +2604,7 @@ export default function ProjectDetailPage() {
     e.preventDefault();
     e.stopPropagation();
     document.body.classList.add('project-clad-leaving');
-    setTimeout(function() { window.location.href = href; }, 320);
+    setTimeout(function() { window.location.href = href; }, 180);
   }, true);
 })();
           `,

@@ -22,8 +22,8 @@
 /* Page transition: enter (fade + slide up) and exit (fade + slide up) */
 .project-clad-page {
   opacity: 0;
-  transform: translateY(14px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transform: translateY(8px);
+  transition: opacity 0.16s ease-out, transform 0.16s ease-out;
 }
 
 .project-clad-page.project-clad-enter-done {
@@ -33,7 +33,7 @@
 
 body.project-clad-leaving .project-clad-page {
   opacity: 0;
-  transform: translateY(-14px);
+  transform: translateY(-8px);
 }
 
 /* Base */
