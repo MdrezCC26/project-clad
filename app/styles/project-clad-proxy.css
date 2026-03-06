@@ -434,6 +434,20 @@ body.project-clad-leaving .project-clad-page {
   z-index: 1;
 }
 
+.project-clad-job-name-input {
+  display: none;
+  margin-top: 0.35rem;
+  max-width: 280px;
+}
+
+details.project-clad-edit-mode .project-clad-job-name-input {
+  display: block;
+}
+
+details.project-clad-edit-mode .project-clad-title {
+  display: none;
+}
+
 .project-clad-summary-action {
   font-weight: 600;
 }
