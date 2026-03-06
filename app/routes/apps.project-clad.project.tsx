@@ -1322,10 +1322,10 @@ export default function ProjectDetailPage() {
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
       <main
-        className="project-clad-page"
+        className="project-clad-page project-clad-page--detail"
         data-theme={storefrontTheme || "default"}
       >
-        <div className="page-width project-clad-container" data-projectclad-project-id={project.id}>
+        <div className="page-width project-clad-container project-clad-container--full-width" data-projectclad-project-id={project.id}>
           {logoDataUrl && (
             <div className="project-clad-logo">
               <a href="/" className="project-clad-logo__link">

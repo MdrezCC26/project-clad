@@ -229,6 +229,15 @@
   display: block;
 }
 
+/* Order/project detail page: full-width content like before */
+.project-clad-page--detail .project-clad-container--full-width {
+  max-width: none;
+  width: 100%;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  box-sizing: border-box;
+}
+
 /* Projects page: logo as faint background on each card, scaled so 5% top & 5% bottom are cropped */
 .project-clad-page--projects.project-clad-page--card-bg-logo .project-clad-card {
   position: relative;
