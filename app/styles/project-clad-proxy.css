@@ -414,7 +414,19 @@
 
 .project-clad-order-actions {
   gap: 1rem;
-  justify-content: flex-start;
+}
+
+.project-clad-order-actions .project-clad-normal-view {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+}
+
+.project-clad-order-actions-add-to-cart {
+  margin-left: auto;
 }
 
 .project-clad-project-settings-actions {

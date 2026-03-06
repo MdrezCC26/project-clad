@@ -1859,29 +1859,8 @@ export default function ProjectDetailPage() {
                       style={{ marginTop: "1rem", paddingTop: "1rem" }}
                     >
                       <div className="project-clad-normal-view">
-                        {!hideAddToCart && job.items.filter((i) => i.quantity > 0).length > 0 && (
-                          <div className="project-clad-actions" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
-                            <form method="post" action="/cart/add" style={{ display: "inline" }} onPointerDownCapture={(e) => e.stopPropagation()} data-projectclad-add-all-to-cart data-job-name={job.name} onSubmit={(e) => { e.preventDefault(); handleAddItemsClick(job, e.currentTarget as HTMLFormElement, "cart"); }}>
-                              {job.items.filter((i) => i.quantity > 0).map((item, index) => (
-                                <input key={`${job.id}-${item.variantId}`} type="hidden" name={`items[${index}][id]`} value={item.variantId} />
-                              ))}
-                              {job.items.filter((i) => i.quantity > 0).map((item, index) => (
-                                <input key={`${job.id}-${item.variantId}-qty`} type="hidden" name={`items[${index}][quantity]`} value={item.quantity} />
-                              ))}
-                              {job.items.filter((i) => i.quantity > 0).map((item, index) =>
-                                item.properties?.map((p, pi) => (
-                                  <input key={`${job.id}-${item.variantId}-p-${pi}`} type="hidden" name={`items[${index}][properties][${p.name}]`} value={p.value} />
-                                )),
-                              )}
-                              <input type="hidden" name="return_to" value="/cart" />
-                              <button type="submit" className="project-clad-button" data-projectclad-add-all-btn>
-                                Add all items to cart
-                              </button>
-                            </form>
-                          </div>
-                        )}
                         {canEdit && !job.isLocked && (
-                          <div className="project-clad-actions" style={{ flexWrap: "wrap", gap: "0.75rem" }}>
+                          <div className="project-clad-actions project-clad-order-actions-left" style={{ flexWrap: "wrap", gap: "0.75rem" }}>
                             <button
                               type="button"
                               className="project-clad-button"
@@ -1907,6 +1886,27 @@ export default function ProjectDetailPage() {
                                 Delete order
                               </button>
                             </Form>
+                          </div>
+                        )}
+                        {!hideAddToCart && job.items.filter((i) => i.quantity > 0).length > 0 && (
+                          <div className="project-clad-actions project-clad-order-actions-add-to-cart" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
+                            <form method="post" action="/cart/add" style={{ display: "inline" }} onPointerDownCapture={(e) => e.stopPropagation()} data-projectclad-add-all-to-cart data-job-name={job.name} onSubmit={(e) => { e.preventDefault(); handleAddItemsClick(job, e.currentTarget as HTMLFormElement, "cart"); }}>
+                              {job.items.filter((i) => i.quantity > 0).map((item, index) => (
+                                <input key={`${job.id}-${item.variantId}`} type="hidden" name={`items[${index}][id]`} value={item.variantId} />
+                              ))}
+                              {job.items.filter((i) => i.quantity > 0).map((item, index) => (
+                                <input key={`${job.id}-${item.variantId}-qty`} type="hidden" name={`items[${index}][quantity]`} value={item.quantity} />
+                              ))}
+                              {job.items.filter((i) => i.quantity > 0).map((item, index) =>
+                                item.properties?.map((p, pi) => (
+                                  <input key={`${job.id}-${item.variantId}-p-${pi}`} type="hidden" name={`items[${index}][properties][${p.name}]`} value={p.value} />
+                                )),
+                              )}
+                              <input type="hidden" name="return_to" value="/cart" />
+                              <button type="submit" className="project-clad-button" data-projectclad-add-all-btn>
+                                Add all items to cart
+                              </button>
+                            </form>
                           </div>
                         )}
                       </div>
