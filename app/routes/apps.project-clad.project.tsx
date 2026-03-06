@@ -1856,7 +1856,7 @@ export default function ProjectDetailPage() {
                       className="project-clad-actions project-clad-order-actions"
                       data-projectclad-order-section
                       data-job-id={job.id}
-                      style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #000" }}
+                      style={{ marginTop: "1rem", paddingTop: "1rem" }}
                     >
                       <div className="project-clad-normal-view">
                         {!hideAddToCart && job.items.filter((i) => i.quantity > 0).length > 0 && (
@@ -2550,7 +2550,7 @@ export default function ProjectDetailPage() {
             <section className="project-clad-section">
               <h2 className="project-clad-section-title">Project settings</h2>
               <div className="project-clad-card project-clad-card--no-border">
-                <div className="project-clad-actions" style={{ flexWrap: "wrap", gap: "1rem" }}>
+                <div className="project-clad-actions project-clad-project-settings-actions" style={{ flexWrap: "wrap", gap: "1rem" }}>
                   <button
                     type="button"
                     className="project-clad-button"

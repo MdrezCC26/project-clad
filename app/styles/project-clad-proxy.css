@@ -414,6 +414,11 @@
 
 .project-clad-order-actions {
   gap: 1rem;
+  justify-content: flex-start;
+}
+
+.project-clad-project-settings-actions {
+  justify-content: flex-start;
 }
 
 .project-clad-button--projects {
