@@ -340,12 +340,42 @@ body.project-clad-leaving .project-clad-page {
   flex-wrap: wrap;
 }
 
-/* Nav bar: standard text buttons (Home / Shop / Cart) */
+/* Nav bar: one oval with dividers, red on hover */
 .project-clad-page .project-clad-nav {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   margin-left: auto;
-  gap: 1rem;
+  background: #111;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.project-clad-page .project-clad-nav .project-clad-button {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  color: #fff;
+  border: none;
+  border-radius: 0;
+  padding: 0.6rem 1.25rem;
+  position: relative;
+  transition: background-color 0.25s ease;
+}
+
+.project-clad-page .project-clad-nav .project-clad-button:hover {
+  background: #c00;
+}
+
+.project-clad-page .project-clad-nav .project-clad-button:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 1px;
+  height: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .project-clad-nav .link {
