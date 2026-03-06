@@ -394,13 +394,13 @@ export default function ProjectsPage() {
                         <dt>Orders</dt>
                         <dd>{project.jobCount}</dd>
                       </div>
+                      <div className="project-clad-meta__company">
+                        <dt>Company name</dt>
+                        <dd>{project.companyName || "—"}</dd>
+                      </div>
                       <div>
                         <dt>PO number</dt>
                         <dd>{project.poNumber || "—"}</dd>
-                      </div>
-                      <div>
-                        <dt>Company name</dt>
-                        <dd>{project.companyName || "—"}</dd>
                       </div>
                     </dl>
                   </a>
