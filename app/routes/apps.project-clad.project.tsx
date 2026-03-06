@@ -2073,22 +2073,6 @@ export default function ProjectDetailPage() {
                             >
                               Edit order
                             </button>
-                            <Form
-                              method="post"
-                              action={`/apps/project-clad/project?id=${project.id}`}
-                              style={{ display: "inline" }}
-                              onSubmit={(e) => {
-                                if (!confirm("Are you sure you want to delete this order? This cannot be undone.")) {
-                                  e.preventDefault();
-                                }
-                              }}
-                            >
-                              <input type="hidden" name="intent" value="delete-job" />
-                              <input type="hidden" name="jobId" value={job.id} />
-                              <button type="submit" className="project-clad-button">
-                                Delete order
-                              </button>
-                            </Form>
                           </div>
                         )}
                         {!hideAddToCart && job.items.filter((i) => i.quantity > 0).length > 0 && (
