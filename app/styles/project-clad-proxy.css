@@ -340,45 +340,74 @@ body.project-clad-leaving .project-clad-page {
   flex-wrap: wrap;
 }
 
-/* Nav bar: connected black bar, red on hover, diagonal white dividers */
+/* Nav bar: image-sliced buttons (Home / Shop / Cart) */
 .project-clad-page .project-clad-nav {
   display: flex;
   align-items: stretch;
   margin-left: auto;
-  background: #111;
-  border-radius: 999px;
-  overflow: hidden;
-  box-shadow: 0 0 0 1px rgba(139, 90, 43, 0.25);
+  gap: 0;
 }
 
 .project-clad-page .project-clad-nav .project-clad-button {
-  flex: 1;
-  min-width: 0;
-  background: transparent !important;
-  color: #fff !important;
-  border: none;
-  border-radius: 0;
-  padding: 0.6rem 1.25rem;
   position: relative;
-  transition: background-color 0.25s ease, color 0.25s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 1.75rem;
+  border: none;
+  background: none;
+  border-radius: 0;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  overflow: hidden;
 }
 
-.project-clad-page .project-clad-nav .project-clad-button:hover {
-  background: #c00 !important;
-  color: #fff !important;
+.project-clad-nav-item {
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
 }
 
-.project-clad-page .project-clad-nav .project-clad-button:not(:last-child)::after {
+.project-clad-nav-item::before {
   content: "";
   position: absolute;
-  right: 0;
-  top: 50%;
-  width: 1px;
-  height: 50%;
-  background: rgba(255, 255, 255, 0.5);
-  transform: translateY(-50%) rotate(-15deg);
-  transform-origin: center;
-  pointer-events: none;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.project-clad-nav-item:hover::before {
+  opacity: 1;
+}
+
+/* Per-button art (paths assume images are placed under /apps/project-clad/nav, resolved relative to CSS) */
+.project-clad-nav-item--home {
+  background-image: url("../nav/home-black.png");
+}
+
+.project-clad-nav-item--home::before {
+  background-image: url("../nav/home-red.png");
+}
+
+.project-clad-nav-item--shop {
+  background-image: url("../nav/shop-black.png");
+}
+
+.project-clad-nav-item--shop::before {
+  background-image: url("../nav/shop-red.png");
+}
+
+.project-clad-nav-item--cart {
+  background-image: url("../nav/cart-black.png");
+}
+
+.project-clad-nav-item--cart::before {
+  background-image: url("../nav/cart-red.png");
 }
 
 .project-clad-nav .link {
