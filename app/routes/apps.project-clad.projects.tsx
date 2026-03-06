@@ -327,7 +327,7 @@ export default function ProjectsPage() {
             : undefined
         }
       >
-        <div className="page-width project-clad-container">
+        <div className="page-width project-clad-container project-clad-container--full-width">
           {logoDataUrl && (
             <div className="project-clad-logo">
               <a href="/apps/project-clad/projects" className="project-clad-logo__link">
