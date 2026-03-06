@@ -875,6 +875,25 @@ details.project-clad-edit-mode .project-clad-edit-view {
     align-items: stretch;
   }
 
+  /* Order actions: Add to cart at top, all 3 buttons centered with equal spacing */
+  .project-clad-order-actions .project-clad-normal-view {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+  }
+
+  .project-clad-order-actions-add-to-cart {
+    order: -1;
+    margin-left: 0;
+  }
+
+  .project-clad-order-actions-left {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
   /* Approve + Reject side by side, aligned and centered on mobile */
   .project-clad-approval-buttons {
     justify-content: center;
