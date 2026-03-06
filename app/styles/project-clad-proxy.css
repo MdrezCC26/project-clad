@@ -355,8 +355,8 @@ body.project-clad-leaving .project-clad-page {
   justify-content: center;
   padding: 0.45rem 1.75rem;
   border: none;
-  background: none;
-  border-radius: 0;
+  background-color: #000;
+  border-radius: 999px;
   color: #fff;
   text-transform: uppercase;
   letter-spacing: 0.08em;
