@@ -331,9 +331,15 @@ body.project-clad-leaving .project-clad-page {
   object-fit: contain;
 }
 
+@media (min-width: 480px) and (max-width: 899px) {
+  .project-clad-logo__img {
+    transform: translateX(4vw);
+  }
+}
+
 @media (min-width: 900px) {
   .project-clad-logo__img {
-    transform: translateX(80px);
+    transform: translateX(min(80px, 6vw));
   }
 }
 
