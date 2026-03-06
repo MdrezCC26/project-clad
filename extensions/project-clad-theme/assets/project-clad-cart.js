@@ -98,7 +98,6 @@
           }
           const shouldRequire = field.dataset.required === "true" && isActive;
           field.required = shouldRequire;
-          field.disabled = !isActive;
         });
     });
   };

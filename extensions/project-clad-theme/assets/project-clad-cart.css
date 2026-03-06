@@ -65,6 +65,10 @@
   touch-action: pan-y;
 }
 
+.projectclad-modal__content h2 {
+  text-transform: uppercase;
+}
+
 .projectclad-modal__close {
   position: absolute;
   top: 0.75rem;
@@ -78,6 +82,11 @@
 .projectclad-section {
   display: grid;
   gap: 0.5rem;
+}
+
+/* Only show fields for the selected save mode; hide others completely (no greyed-out state) */
+.projectclad-section[data-projectclad-section][hidden] {
+  display: none !important;
 }
 
 .projectclad-field-row {
@@ -102,6 +111,14 @@
   border: 1px solid #000;
   padding: 0.75rem;
   border-radius: 6px;
+}
+
+/* Spacing between form content (e.g. quantity mode) and save order buttons */
+.projectclad-modal-buttons {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
 .projectclad-duplicate-message {
