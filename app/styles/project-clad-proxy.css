@@ -385,29 +385,29 @@ body.project-clad-leaving .project-clad-page {
   opacity: 1;
 }
 
-/* Per-button art (paths assume images are placed under /apps/project-clad/nav, resolved relative to CSS) */
+/* Per-button art (hosted on Shopify CDN) */
 .project-clad-nav-item--home {
-  background-image: url("../nav/home-black.png");
+  background-image: url("https://cdn.shopify.com/s/files/1/0787/4497/7663/files/home-black.png?v=1772822488");
 }
 
 .project-clad-nav-item--home::before {
-  background-image: url("../nav/home-red.png");
+  background-image: url("https://cdn.shopify.com/s/files/1/0787/4497/7663/files/home-red.png?v=1772822488");
 }
 
 .project-clad-nav-item--shop {
-  background-image: url("../nav/shop-black.png");
+  background-image: url("https://cdn.shopify.com/s/files/1/0787/4497/7663/files/shop-black.png?v=1772822488");
 }
 
 .project-clad-nav-item--shop::before {
-  background-image: url("../nav/shop-red.png");
+  background-image: url("https://cdn.shopify.com/s/files/1/0787/4497/7663/files/shop-red.png?v=1772822488");
 }
 
 .project-clad-nav-item--cart {
-  background-image: url("../nav/cart-black.png");
+  background-image: url("https://cdn.shopify.com/s/files/1/0787/4497/7663/files/cart-black.png?v=1772822488");
 }
 
 .project-clad-nav-item--cart::before {
-  background-image: url("../nav/cart-red.png");
+  background-image: url("https://cdn.shopify.com/s/files/1/0787/4497/7663/files/cart-red.png?v=1772822488");
 }
 
 .project-clad-nav .link {
