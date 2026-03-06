@@ -239,9 +239,10 @@
   box-sizing: border-box;
 }
 
-/* Orders section same width as Project subtotal row */
+/* Order page: order cards full width (single column), no side-scroll */
 .project-clad-page--detail .project-clad-section .project-clad-grid {
   width: 100%;
+  grid-template-columns: 1fr;
 }
 
 /* Projects page: texture overlay on each card (projects list only, not order page cards) */
