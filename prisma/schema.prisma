@@ -39,14 +39,15 @@ model Session {
 }
 
 model Project {
-  id               String            @id @default(cuid())
-  shop             String
-  name             String
-  ownerCustomerId  String
-  poNumber         String?
-  companyName      String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id                String            @id @default(cuid())
+  shop              String
+  name              String
+  ownerCustomerId   String
+  poNumber          String?
+  companyName       String?
+  cardImageDataUrl  String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
   jobs             Job[]
   members          ProjectMember[]
   shareTokens      ProjectShareToken[]
