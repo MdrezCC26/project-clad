@@ -460,6 +460,36 @@ export default function ProjectsPage() {
         dangerouslySetInnerHTML={{
           __html: `
 (function() {
+  var main = document.querySelector('.project-clad-page');
+  if (main) {
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        main.classList.add('project-clad-enter-done');
+      });
+    });
+  }
+  document.addEventListener('click', function(e) {
+    var a = e.target.closest('a[href]');
+    if (!a || a.target === '_blank' || a.getAttribute('data-projectclad-no-transition')) return;
+    var href = a.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+    try {
+      var url = new URL(href, location.origin);
+      if (url.origin !== location.origin) return;
+    } catch (err) { return; }
+    e.preventDefault();
+    e.stopPropagation();
+    document.body.classList.add('project-clad-leaving');
+    setTimeout(function() { window.location.href = href; }, 320);
+  }, true);
+})();
+          `,
+        }}
+      />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+(function() {
   document.querySelectorAll('[data-projectclad-submit-approval]').forEach(function(form) {
     if (!(form instanceof HTMLFormElement)) return;
     form.addEventListener('submit', function(e) {

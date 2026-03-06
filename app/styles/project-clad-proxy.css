@@ -19,6 +19,23 @@
   - Form inputs                    fixed 16px to prevent mobile zoom (do not scale)
 */
 
+/* Page transition: enter (fade + slide up) and exit (fade + slide up) */
+.project-clad-page {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.project-clad-page.project-clad-enter-done {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+body.project-clad-leaving .project-clad-page {
+  opacity: 0;
+  transform: translateY(-14px);
+}
+
 /* Base */
 .project-clad-page {
   --pc-text-scale: 1.45;
