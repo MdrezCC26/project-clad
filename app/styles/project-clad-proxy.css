@@ -729,6 +729,24 @@ details.project-clad-edit-mode .project-clad-title {
   padding: 0;
 }
 
+/* Edit project modal: Edit project details, Share access, Project members same size and underlined */
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] #edit-project-modal-title,
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-section-title {
+  font-size: calc(1.1rem * var(--pc-text-scale));
+}
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] [data-projectclad-section-underline] {
+  text-decoration: underline !important;
+}
+
+/* Edit project modal: all buttons same size as Save/Cancel */
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-button {
+  padding-left: 1.5rem !important;
+  padding-right: 1.5rem !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+  min-height: 40px;
+}
+
 /* Edit-save modal: compact layout, cleaner formatting */
 .project-clad-edit-save-modal {
   padding: 1.25rem 1.5rem;

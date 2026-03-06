@@ -1260,7 +1260,7 @@ export default function ProjectDetailPage() {
           >
             ×
           </button>
-          <h2 id="edit-project-modal-title">Edit project details</h2>
+          <h2 id="edit-project-modal-title" data-projectclad-section-underline>Edit project details</h2>
           <Form
             method="post"
             action={`/apps/project-clad/project?id=${project.id}`}
@@ -1328,7 +1328,7 @@ export default function ProjectDetailPage() {
                   required
                   aria-label="Create new order"
                 />
-                <button type="submit" className="project-clad-button">
+                <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
                   Create new order
                 </button>
                 <span
@@ -1341,7 +1341,7 @@ export default function ProjectDetailPage() {
             </>
           )}
 
-          <h3 className="project-clad-section-title" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>Share access</h3>
+          <h3 className="project-clad-section-title" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }} data-projectclad-section-underline>Share access</h3>
           {canEdit ? (
             <>
               <div className="project-clad-share-access-form">
@@ -1370,7 +1370,7 @@ export default function ProjectDetailPage() {
                     <option value="edit">Edit</option>
                     <option value="view">View only</option>
                   </select>
-                  <button type="submit" className="project-clad-button">
+                  <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
                     Add
                   </button>
                 </Form>
@@ -1391,7 +1391,7 @@ export default function ProjectDetailPage() {
                     <input type="hidden" name="role" value="view" />
                     <button
                       type="submit"
-                      className="project-clad-button"
+                      className="project-clad-button project-clad-reject-modal-btn"
                       data-projectclad-share-submit
                     >
                       Share
@@ -1412,7 +1412,7 @@ export default function ProjectDetailPage() {
             </p>
           )}
 
-          <h3 className="project-clad-section-title" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>Project members</h3>
+          <h3 className="project-clad-section-title" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }} data-projectclad-section-underline>Project members</h3>
           {memberLookupError ? (
             <p className="project-clad-muted">{memberLookupError}</p>
           ) : project.members.length === 0 ? (
@@ -1471,7 +1471,7 @@ export default function ProjectDetailPage() {
                                 name="memberCustomerId"
                                 value={member.customerId}
                               />
-                              <button type="submit" className="project-clad-button">
+                              <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
                                 Remove
                               </button>
                             </Form>
@@ -1489,7 +1489,7 @@ export default function ProjectDetailPage() {
             <div style={{ marginTop: "2rem" }}>
               <button
                 type="button"
-                className="project-clad-button project-clad-button--danger project-clad-button--full"
+                className="project-clad-button project-clad-button--danger project-clad-button--full project-clad-reject-modal-btn"
                 data-projectclad-delete-project-open
               >
                 Delete this project
