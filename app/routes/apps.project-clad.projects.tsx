@@ -376,7 +376,10 @@ export default function ProjectsPage() {
           ) : (
             <section className="project-clad-grid">
               {projects.map((project) => (
-                <div key={project.id} className="project-clad-card">
+                <div
+                  key={project.id}
+                  className={`project-clad-card${project.approvalStatus.requested ? " project-clad-card--confirming" : ""}`}
+                >
                   <a
                     href={`https://${shop}/apps/project-clad/project?id=${project.id}`}
                     className="project-clad-card-link"
