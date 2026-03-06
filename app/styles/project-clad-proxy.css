@@ -249,9 +249,9 @@ body.project-clad-leaving .project-clad-page {
   box-sizing: border-box;
 }
 
-/* Order/project detail page: full-width content like before */
-.project-clad-page--detail .project-clad-container--full-width,
-.project-clad-page--detail .page-width.project-clad-container--full-width {
+/* All Project Clad pages: full-width container, equal padding, so logo/nav center correctly */
+.project-clad-page .project-clad-container--full-width,
+.project-clad-page .page-width.project-clad-container--full-width {
   max-width: none;
   width: 100%;
   padding-left: 1rem;
@@ -315,14 +315,8 @@ body.project-clad-leaving .project-clad-page {
   width: 100%;
 }
 
-@media (min-width: 900px) {
-  .project-clad-logo {
-    transform: translateX(40px);
-  }
-}
-
 .project-clad-logo__link {
-  display: block;
+  display: inline-block;
   text-decoration: none;
   line-height: 0;
 }
@@ -333,6 +327,12 @@ body.project-clad-leaving .project-clad-page {
   width: auto;
   height: auto;
   object-fit: contain;
+}
+
+@media (min-width: 900px) {
+  .project-clad-logo__img {
+    transform: translateX(20px);
+  }
 }
 
 .project-clad-header {
