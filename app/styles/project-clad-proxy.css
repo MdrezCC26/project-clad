@@ -308,17 +308,15 @@ body.project-clad-leaving .project-clad-page {
 }
 
 .project-clad-logo {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
+  justify-content: center;
   align-items: center;
   margin-bottom: 0.25rem;
   width: 100%;
 }
 
 .project-clad-logo__link {
-  grid-column: 2;
-  justify-self: center;
-  display: inline-block;
+  display: block;
   text-decoration: none;
   line-height: 0;
 }
