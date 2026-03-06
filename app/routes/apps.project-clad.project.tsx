@@ -2637,7 +2637,7 @@ export default function ProjectDetailPage() {
             }}
           />
 
-          {isOwner && (
+          {canEdit && (
             <section className="project-clad-section">
               <div className="project-clad-card project-clad-card--no-border">
                 <div className="project-clad-actions project-clad-project-settings-actions" style={{ flexWrap: "wrap", gap: "1rem" }}>
