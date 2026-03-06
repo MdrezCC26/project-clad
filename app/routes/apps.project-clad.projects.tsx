@@ -349,7 +349,6 @@ export default function ProjectsPage() {
           )}
           <header className="project-clad-header">
             <div className="project-clad-header-row">
-              <h1 className="main-page-title page-title">Projects</h1>
               <nav className="project-clad-nav">
                 {navButtons
                   .filter((_, i) => i !== 0)
