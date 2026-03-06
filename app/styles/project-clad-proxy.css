@@ -317,6 +317,8 @@ body.project-clad-leaving .project-clad-page {
 
 .project-clad-logo__link {
   display: inline-block;
+  width: fit-content;
+  max-width: 100%;
   text-decoration: none;
   line-height: 0;
 }
@@ -331,7 +333,7 @@ body.project-clad-leaving .project-clad-page {
 
 @media (min-width: 900px) {
   .project-clad-logo__img {
-    transform: translateX(20px);
+    transform: translateX(40px);
   }
 }
 
