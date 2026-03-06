@@ -1310,7 +1310,7 @@ export default function ProjectDetailPage() {
 
           {canEdit && (
             <>
-              <h3 className="project-clad-section-title" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>Create new order</h3>
+              <h3 className="project-clad-section-title" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }} data-projectclad-section-underline>Create new order</h3>
               <Form
                 method="post"
                 action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
