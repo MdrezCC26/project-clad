@@ -742,10 +742,11 @@ export default function ProjectDetailPage() {
                 ))}
               </nav>
             </div>
-            <p className="project-clad-muted">
-              Created {new Date(project.createdAt).toLocaleDateString()} • PO number{" "}
-              {project.poNumber || "—"} • Company name {project.companyName || "—"}
-            </p>
+            <div className="project-clad-header-meta">
+              <span>Created {new Date(project.createdAt).toLocaleDateString()}</span>
+              <span>PO number: {project.poNumber || "—"}</span>
+              <span>Company name: {project.companyName || "—"}</span>
+            </div>
           </header>
 
           <section className="project-clad-section">

@@ -508,9 +508,19 @@ details.project-clad-edit-mode .project-clad-title {
 }
 
 .project-clad-header .main-page-title {
-  font-size: calc(1.25rem * var(--pc-text-scale));
+  font-size: calc(1.6rem * var(--pc-text-scale));
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  text-decoration: underline;
+}
+
+.project-clad-header-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.5rem 0 0;
+  color: var(--pc-fg);
+  font-size: calc(0.95rem * var(--pc-text-scale));
 }
 
 .project-clad-meta {
