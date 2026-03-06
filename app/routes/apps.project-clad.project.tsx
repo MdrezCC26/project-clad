@@ -422,6 +422,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (payload.intent === "save-order-edit") {
       const jobId = String(payload.jobId || "");
+      const jobName =
+        typeof payload.jobName === "string" ? payload.jobName.trim() : "";
       const removeItemIds = Array.isArray(payload.removeItemIds)
         ? payload.removeItemIds.filter((id): id is string => typeof id === "string")
         : [];
@@ -463,6 +465,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             if (deleteJob) {
               await prisma.job.delete({ where: { id: jobId } });
             } else {
+              if (jobName && jobName !== job.name) {
+                await prisma.job.update({
+                  where: { id: jobId },
+                  data: { name: jobName },
+                });
+              }
               for (const { itemId, quantity } of itemUpdates) {
                 const item = job.items.find((i) => i.id === itemId);
                 if (item && quantity >= 0) {
@@ -1687,6 +1695,16 @@ export default function ProjectDetailPage() {
                               </span>
                             )}
                           </h3>
+                          <input
+                            type="text"
+                            defaultValue={job.name}
+                            data-projectclad-job-name-input
+                            data-job-id={job.id}
+                            data-original-job-name={job.name}
+                            placeholder="Order name"
+                            aria-label="Order name"
+                            className="project-clad-job-name-input"
+                          />
                           <p className="project-clad-muted">
                             Created {new Date(job.createdAt).toLocaleDateString()} •{" "}
                             {job.isLocked ? "Locked" : "Editable"}
@@ -2358,11 +2376,16 @@ export default function ProjectDetailPage() {
           itemUpdates.push({ itemId: itemId, quantity: qty });
         }
       });
+      let jobName = '';
+      const nameInput = details?.querySelector?.('[data-projectclad-job-name-input]');
+      if (nameInput instanceof HTMLInputElement) {
+        jobName = nameInput.value.trim();
+      }
       try {
         const res = await fetch('/apps/project-clad/project?id=' + encodeURIComponent(projectId), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ intent: 'save-order-edit', jobId, removeItemIds: [], itemUpdates: itemUpdates, deleteJob: deleteJob }),
+          body: JSON.stringify({ intent: 'save-order-edit', jobId, jobName: jobName, removeItemIds: [], itemUpdates: itemUpdates, deleteJob: deleteJob }),
           credentials: 'include',
         });
         const payload = await res.json().catch(() => ({}));
@@ -2393,6 +2416,11 @@ export default function ProjectDetailPage() {
             const orig = inp.getAttribute('data-original-qty');
             if (orig !== null) inp.value = orig;
           });
+          const nameInput = details.querySelector('[data-projectclad-job-name-input]');
+          if (nameInput instanceof HTMLInputElement) {
+            const origName = nameInput.getAttribute('data-original-job-name');
+            if (origName !== null) nameInput.value = origName;
+          }
         }
         const deleteBtn = details?.querySelector('[data-projectclad-delete-order-btn]');
         if (deleteBtn) {
