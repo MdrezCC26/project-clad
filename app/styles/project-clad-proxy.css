@@ -4,11 +4,10 @@
 
 /*
   TEXT SIZE GUIDE (storefront app)
-  Change --pc-text-scale below to scale body text, buttons, cards, etc. (e.g. 1.2 = 20% bigger).
-  NOT scaled: main page title ("PROJECTS"), section headings ("Orders").
+  Change --pc-text-scale below to scale all text (e.g. 1.2 = 20% bigger).
   What's what:
-  - Main page title ("PROJECTS")     .project-clad-header .main-page-title  (fixed, not scaled)
-  - Section headings ("Orders")     .project-clad-section-title  (fixed, not scaled)
+  - Main page title ("PROJECTS")     .project-clad-header .main-page-title
+  - Section headings ("Orders")     .project-clad-section-title
   - Card/order titles               .project-clad-title
   - Nav links (Store, Cart)        .project-clad-nav .link
   - Muted/secondary text           .project-clad-muted (inherits)
@@ -22,7 +21,7 @@
 
 /* Base */
 .project-clad-page {
-  --pc-text-scale: 1.2;
+  --pc-text-scale: 1.5;
   padding: 2.5rem 0;
   font-family: "Radio Canada", "Helvetica Neue", Arial, sans-serif;
   font-weight: 700;
@@ -369,7 +368,7 @@
 }
 
 .project-clad-header .main-page-title {
-  font-size: 1rem;
+  font-size: calc(1.25rem * var(--pc-text-scale));
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -396,7 +395,7 @@
 
 .project-clad-section-title {
   margin-bottom: 1rem;
-  font-size: 1.1rem;
+  font-size: calc(1.1rem * var(--pc-text-scale));
 }
 
 .project-clad-actions {
