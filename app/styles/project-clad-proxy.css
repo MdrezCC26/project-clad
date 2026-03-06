@@ -697,6 +697,24 @@ details.project-clad-edit-mode .project-clad-title {
   border-color: #e8e8e8;
 }
 
+/* Edit project modal: vertical, full-width fields, no horizontal scroll */
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-card {
+  overflow-x: hidden;
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-inline-form {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-inline-form input,
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-inline-form select,
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-inline-form textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 /* Edit-save modal: compact layout, cleaner formatting */
 .project-clad-edit-save-modal {
   padding: 1.25rem 1.5rem;
