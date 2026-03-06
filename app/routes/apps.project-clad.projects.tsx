@@ -360,7 +360,7 @@ export default function ProjectsPage() {
               </nav>
             </div>
             <p className="project-clad-muted">
-              Manage saved orders and share access with teammates.
+              Save and share orders.
             </p>
           </header>
           {variantLookupError && (
