@@ -150,7 +150,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       },
       {
         label: settings?.navButton2Label || "Store",
-        url: settings?.navButton2Url || "/",
+        url: settings?.navButton2Url || "/collections/main-products",
       },
       {
         label: settings?.navButton3Label || "Cart",

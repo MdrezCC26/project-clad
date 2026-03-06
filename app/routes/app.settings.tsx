@@ -81,7 +81,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const smtpStatus = getSmtpConfigStatus();
   const defaultNavButtons = [
     { label: "Projects", url: "/apps/project-clad/projects" },
-    { label: "Store", url: "/" },
+    { label: "Store", url: "/collections/main-products" },
     { label: "Cart", url: "/cart" },
   ];
   let mediaImages: Array<{ id: string; url: string; alt: string | null }> = [];

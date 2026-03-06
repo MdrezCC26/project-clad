@@ -223,7 +223,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const defaultNavButtons = [
     { label: "Projects", url: "/apps/project-clad/projects" },
-    { label: "Store", url: "/" },
+    { label: "Store", url: "/collections/main-products" },
     { label: "Cart", url: "/cart" },
   ];
   const navButtons = [
@@ -233,7 +233,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
     {
       label: settings?.navButton2Label || defaultNavButtons[1].label,
-      url: settings?.navButton2Url || defaultNavButtons[1].url,
+      url: settings?.navButton2Url || "/collections/main-products",
     },
     {
       label: settings?.navButton3Label || defaultNavButtons[2].label,

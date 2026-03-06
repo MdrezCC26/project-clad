@@ -240,7 +240,7 @@
   inset: 0;
   background-image: var(--project-clad-bg-logo);
   background-repeat: no-repeat;
-  background-position: center;
+  background-position: right center;
   background-size: auto 111.11%;
   opacity: 0.05;
   pointer-events: none;
