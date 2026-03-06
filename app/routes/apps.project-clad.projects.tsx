@@ -396,10 +396,6 @@ export default function ProjectsPage() {
                         <dd>{project.jobCount}</dd>
                       </div>
                       <div>
-                        <dt>Approved orders</dt>
-                        <dd>{project.approvedJobCount}</dd>
-                      </div>
-                      <div>
                         <dt>PO number</dt>
                         <dd>{project.poNumber || "—"}</dd>
                       </div>
