@@ -221,23 +221,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
   });
 
-  const defaultNavButtons = [
-    { label: "Projects", url: "/apps/project-clad/projects" },
-    { label: "Store", url: "/collections/main-products" },
-    { label: "Cart", url: "/cart" },
-  ];
   const navButtons = [
+    { label: "Home", url: "/" },
     {
-      label: settings?.navButton1Label || defaultNavButtons[0].label,
-      url: settings?.navButton1Url || defaultNavButtons[0].url,
-    },
-    {
-      label: settings?.navButton2Label || defaultNavButtons[1].label,
+      label: settings?.navButton2Label || "Shop",
       url: settings?.navButton2Url || "/collections/main-products",
     },
     {
-      label: settings?.navButton3Label || defaultNavButtons[2].label,
-      url: settings?.navButton3Url || defaultNavButtons[2].url,
+      label: settings?.navButton3Label || "Cart",
+      url: settings?.navButton3Url || "/cart",
     },
   ];
 
@@ -338,7 +330,7 @@ export default function ProjectsPage() {
         <div className="page-width project-clad-container">
           {logoDataUrl && (
             <div className="project-clad-logo">
-              <a href="/" className="project-clad-logo__link">
+              <a href="/apps/project-clad/projects" className="project-clad-logo__link">
                 <img
                   src={logoDataUrl}
                   alt="Logo"
@@ -350,13 +342,11 @@ export default function ProjectsPage() {
           <header className="project-clad-header">
             <div className="project-clad-header-row">
               <nav className="project-clad-nav">
-                {navButtons
-                  .filter((_, i) => i !== 0)
-                  .map((btn, i) => (
-                    <a key={i} href={btn.url} className="project-clad-button">
-                      {btn.label}
-                    </a>
-                  ))}
+                {navButtons.map((btn, i) => (
+                  <a key={i} href={btn.url} className="project-clad-button">
+                    {btn.label}
+                  </a>
+                ))}
               </nav>
             </div>
           </header>

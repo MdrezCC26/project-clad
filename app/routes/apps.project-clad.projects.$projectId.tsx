@@ -144,12 +144,9 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     storefrontTheme: settings?.storefrontTheme || "default",
     logoDataUrl: settings?.logoDataUrl || null,
     navButtons: [
+      { label: "Home", url: "/" },
       {
-        label: settings?.navButton1Label || "Projects",
-        url: settings?.navButton1Url || "/apps/project-clad/projects",
-      },
-      {
-        label: settings?.navButton2Label || "Store",
+        label: settings?.navButton2Label || "Shop",
         url: settings?.navButton2Url || "/collections/main-products",
       },
       {
@@ -725,7 +722,7 @@ export default function ProjectDetailPage() {
         <div className="page-width project-clad-container">
           {logoDataUrl && (
             <div className="project-clad-logo">
-              <a href="/" className="project-clad-logo__link">
+              <a href="/apps/project-clad/projects" className="project-clad-logo__link">
                 <img
                   src={logoDataUrl}
                   alt="Logo"
