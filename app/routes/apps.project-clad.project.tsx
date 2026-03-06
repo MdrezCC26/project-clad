@@ -2122,7 +2122,7 @@ export default function ProjectDetailPage() {
                           data-projectclad-delete-order-btn
                           data-job-id={job.id}
                         >
-                          Deleting
+                          Mark for deletion
                         </button>
                         <button
                           type="button"
@@ -2277,7 +2277,7 @@ export default function ProjectDetailPage() {
         const details = document.querySelector('details[data-job-id="' + jobId + '"]');
         if (details) {
           details.classList.add('project-clad-pending-delete');
-          deleteOrderBtn.textContent = 'Marked for deletion';
+          deleteOrderBtn.textContent = 'Deleting';
           deleteOrderBtn.disabled = true;
         }
       }
