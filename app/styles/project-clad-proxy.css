@@ -294,8 +294,8 @@
 }
 
 .project-clad-logo__img {
-  max-width: min(420px, 100%);
-  max-height: 168px;
+  max-width: min(560px, 100%);
+  max-height: 224px;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -376,6 +376,16 @@
 
 .project-clad-card-link:hover {
   background: rgba(0, 0, 0, 0.03);
+}
+
+/* Order cards: expand down only, not outward */
+.project-clad-details {
+  min-width: 0;
+}
+
+.project-clad-details .project-clad-stack {
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .project-clad-details > summary {
