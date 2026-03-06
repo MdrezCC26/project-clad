@@ -364,7 +364,7 @@ body.project-clad-leaving .project-clad-page {
 }
 
 .project-clad-card {
-  border: 3px solid #000;
+  border: 1px solid #000;
   border-radius: var(--card-corner-radius, 8px);
   padding: 1.5rem;
   background: var(--color-background, #fff);
