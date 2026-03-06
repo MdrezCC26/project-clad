@@ -340,11 +340,45 @@ body.project-clad-leaving .project-clad-page {
   flex-wrap: wrap;
 }
 
-.project-clad-nav {
+/* Nav bar: connected black bar, red on hover, diagonal white dividers */
+.project-clad-page .project-clad-nav {
   display: flex;
-  gap: 1rem;
-  align-items: center;
+  align-items: stretch;
   margin-left: auto;
+  background: #111;
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(139, 90, 43, 0.25);
+}
+
+.project-clad-page .project-clad-nav .project-clad-button {
+  flex: 1;
+  min-width: 0;
+  background: transparent !important;
+  color: #fff !important;
+  border: none;
+  border-radius: 0;
+  padding: 0.6rem 1.25rem;
+  position: relative;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.project-clad-page .project-clad-nav .project-clad-button:hover {
+  background: #c00 !important;
+  color: #fff !important;
+}
+
+.project-clad-page .project-clad-nav .project-clad-button:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 1px;
+  height: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transform: translateY(-50%) rotate(-15deg);
+  transform-origin: center;
+  pointer-events: none;
 }
 
 .project-clad-nav .link {
