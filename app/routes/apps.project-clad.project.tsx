@@ -1252,6 +1252,14 @@ export default function ProjectDetailPage() {
           className="project-clad-card project-clad-modal project-clad-reject-modal"
           onClick={(e) => e.stopPropagation()}
         >
+          <button
+            type="button"
+            className="project-clad-modal-close"
+            data-projectclad-edit-project-cancel
+            aria-label="Close"
+          >
+            ×
+          </button>
           <h2 id="edit-project-modal-title">Edit project details</h2>
           <Form
             method="post"

@@ -699,6 +699,7 @@ details.project-clad-edit-mode .project-clad-title {
 
 /* Edit project modal: vertical, full-width fields, no horizontal scroll */
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-card {
+  position: relative;
   overflow-x: hidden;
 }
 
@@ -713,6 +714,19 @@ details.project-clad-edit-mode .project-clad-title {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-modal-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
 }
 
 /* Edit-save modal: compact layout, cleaner formatting */
