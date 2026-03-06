@@ -342,11 +342,25 @@ export default function ProjectsPage() {
           <header className="project-clad-header">
             <div className="project-clad-header-row">
               <nav className="project-clad-nav">
-                {navButtons.map((btn, i) => (
-                  <a key={i} href={btn.url} className="project-clad-button">
-                    {btn.label}
-                  </a>
-                ))}
+                {navButtons.map((btn, i) => {
+                  const key = i === 0 ? "home" : i === 1 ? "shop" : "cart";
+                  const urls = {
+                    home: { black: "https://cdn.shopify.com/s/files/1/0787/4497/7663/files/home-black.png?v=1772822488", red: "https://cdn.shopify.com/s/files/1/0787/4497/7663/files/home-red.png?v=1772822488" },
+                    shop: { black: "https://cdn.shopify.com/s/files/1/0787/4497/7663/files/shop-black.png?v=1772822488", red: "https://cdn.shopify.com/s/files/1/0787/4497/7663/files/shop-red.png?v=1772822488" },
+                    cart: { black: "https://cdn.shopify.com/s/files/1/0787/4497/7663/files/cart-black.png?v=1772822488", red: "https://cdn.shopify.com/s/files/1/0787/4497/7663/files/cart-red.png?v=1772822488" },
+                  }[key];
+                  return (
+                    <a
+                      key={i}
+                      href={btn.url}
+                      className="project-clad-button project-clad-nav-item"
+                      aria-label={btn.label}
+                    >
+                      <img src={urls.black} alt="" className="project-clad-nav-img project-clad-nav-img--default" />
+                      <img src={urls.red} alt="" className="project-clad-nav-img project-clad-nav-img--hover" />
+                    </a>
+                  );
+                })}
               </nav>
             </div>
           </header>
