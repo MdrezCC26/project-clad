@@ -300,11 +300,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     logoDataUrl: settings?.logoDataUrl || null,
     navButtons: [
       {
-        label: settings?.navButton1Label || "Projects",
-        url: settings?.navButton1Url || "/apps/project-clad/projects",
+        label: "Home",
+        url: "/",
       },
       {
-        label: settings?.navButton2Label || "Store",
+        label: settings?.navButton2Label || "Shop",
         url: settings?.navButton2Url || "/collections/main-products",
       },
       {
@@ -1575,7 +1575,7 @@ export default function ProjectDetailPage() {
         <div className="page-width project-clad-container project-clad-container--full-width" data-projectclad-project-id={project.id}>
           {logoDataUrl && (
             <div className="project-clad-logo">
-              <a href="/" className="project-clad-logo__link">
+              <a href={getProjectsPath()} className="project-clad-logo__link">
                 <img
                   src={logoDataUrl}
                   alt="Logo"
@@ -1592,7 +1592,7 @@ export default function ProjectDetailPage() {
                   <a
                     key={i}
                     href={btn.url}
-                    className={`project-clad-button ${i === 0 ? "project-clad-button--projects" : ""}`}
+                    className="project-clad-button"
                   >
                     {btn.label}
                   </a>
