@@ -802,8 +802,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return redirect(getProjectPath(projectId));
     }
 
-    await prisma.project.updateMany({
-      where: { id: projectId, shop },
+    await prisma.project.update({
+      where: { id: projectId },
       data: { name, poNumber, companyName },
     });
 
