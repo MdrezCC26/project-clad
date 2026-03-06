@@ -1255,7 +1255,7 @@ export default function ProjectDetailPage() {
           <h2 id="edit-project-modal-title">Edit project details</h2>
           <Form
             method="post"
-            action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+            action={`/apps/project-clad/project?id=${project.id}`}
             className="project-clad-inline-form project-clad-pricing-form"
           >
             <input type="hidden" name="intent" value="update-project-details" />
