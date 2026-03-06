@@ -38,6 +38,7 @@ body.project-clad-leaving .project-clad-page {
 
 /* Base */
 .project-clad-page {
+  overflow-x: hidden;
   --pc-text-scale: 1.45;
   padding: 2.5rem 0;
   font-family: "Radio Canada", "Helvetica Neue", Arial, sans-serif;
@@ -244,6 +245,8 @@ body.project-clad-leaving .project-clad-page {
 
 .project-clad-container {
   display: block;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Order/project detail page: full-width content like before */
@@ -410,7 +413,9 @@ body.project-clad-leaving .project-clad-page {
 .project-clad-details .project-clad-stack {
   min-width: 0;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
+
 
 .project-clad-details > summary {
   list-style: none;
@@ -1096,7 +1101,39 @@ details.project-clad-edit-mode .project-clad-edit-view {
     width: 100%;
     height: auto;
     max-width: 300px;
+    min-width: 0;
     margin-bottom: 0.5rem;
+  }
+
+  .project-clad-table .project-clad-thumb,
+  .project-clad-table .project-clad-thumb--placeholder {
+    width: 100%;
+    min-width: 0;
+    max-width: 300px;
+  }
+
+  /* Prevent Add all items to cart button from being cut off by card */
+  .project-clad-order-actions {
+    width: 100%;
+    padding-bottom: 0.5rem;
+  }
+
+  .project-clad-order-actions-add-to-cart,
+  .project-clad-order-actions-add-to-cart form {
+    width: 100%;
+  }
+
+  .project-clad-order-actions-add-to-cart form {
+    display: flex;
+    justify-content: center;
+  }
+
+  .project-clad-order-actions-add-to-cart .project-clad-button {
+    width: 100%;
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
+    box-sizing: border-box;
   }
 
   .project-clad-table-right {
