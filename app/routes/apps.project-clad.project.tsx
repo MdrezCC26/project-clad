@@ -2122,7 +2122,7 @@ export default function ProjectDetailPage() {
                           data-projectclad-delete-order-btn
                           data-job-id={job.id}
                         >
-                          Mark for deletion
+                          Deleting
                         </button>
                         <button
                           type="button"
