@@ -269,7 +269,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return new Response("Project not found", { status: 404 });
   }
 
-  if (project.ownerCustomerId !== customerId) {
+  const memberRole = project.members.find(
+    (member) => member.customerId === customerId,
+  )?.role;
+  const isOwner = project.ownerCustomerId === customerId;
+  const canEdit = isOwner || memberRole === "edit";
+
+  let canAdminMembers = isOwner;
+  try {
+    const customerInfo = await getCustomersByIds(shop, [customerId]);
+    const viewerTags = customerInfo[customerId]?.tags ?? [];
+    const hasNATag = viewerTags.some(
+      (t) => String(t).trim().toUpperCase() === "NA",
+    );
+    canAdminMembers = isOwner || (canEdit && !hasNATag);
+  } catch {
+    // If customer lookup fails, fall back to owner-only admin.
+    canAdminMembers = isOwner;
+  }
+
+  if (!canAdminMembers) {
     throw new Response("Forbidden", { status: 403 });
   }
 
