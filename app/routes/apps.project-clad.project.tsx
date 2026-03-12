@@ -721,7 +721,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (intent === "add-member") {
     if (!canAdminMembers) {
       return Response.json(
-        { memberError: "Only the project owner can add members." },
+        { memberError: "Only project admins can add members." },
         { status: 200 },
       );
     }

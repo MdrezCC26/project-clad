@@ -189,9 +189,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   if (intent === "add-member") {
-    if (!isOwner) {
+    if (!canAdminMembers) {
       return Response.json(
-        { error: "Only the project owner can add members." },
+        { error: "Only project admins can add members." },
         { status: 403 },
       );
     }
