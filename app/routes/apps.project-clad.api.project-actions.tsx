@@ -57,6 +57,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   )?.role;
   const isOwner = project.ownerCustomerId === customerId;
   const canEdit = isOwner || memberRole === "edit";
+  let canAdminMembers = isOwner;
+
+  try {
+    const customerInfo = await getCustomersByIds(shop, [customerId]);
+    const viewerTags = customerInfo[customerId]?.tags ?? [];
+    const hasNATag = viewerTags.some(
+      (t) => String(t).trim().toUpperCase() === "NA",
+    );
+    canAdminMembers = isOwner || (canEdit && !hasNATag);
+  } catch {
+    // If customer lookup fails, fall back to owner-only admin.
+    canAdminMembers = isOwner;
+  }
 
   if (intent === "unlock-pricing") {
     const password = (url.searchParams.get("password") || "").trim();
@@ -227,7 +240,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   if (intent === "remove-member") {
-    if (!isOwner) {
+    if (!canAdminMembers) {
       return Response.json(
         { error: "Only the project owner can remove members." },
         { status: 403 },
