@@ -1451,16 +1451,22 @@ export default function ProjectDetailPage() {
                   const fullName = [member.firstName, member.lastName]
                     .filter(Boolean)
                     .join(" ");
+                  const roleLabel =
+                    member.role === "owner"
+                      ? "Owner"
+                      : member.role === "edit"
+                        ? "Edit"
+                        : "View only";
                   return (
                     <tr key={member.customerId}>
-                      <td>{fullName || "—"}</td>
-                      <td>{member.email || "—"}</td>
+                      <td>
+                        <strong>Name:</strong> {fullName || "—"}
+                      </td>
+                      <td>
+                        <strong>E-mail:</strong> {member.email || "—"}
+                      </td>
                       <td className="project-clad-table-right">
-                        {member.role === "owner"
-                          ? "Owner"
-                          : member.role === "edit"
-                            ? "Edit"
-                            : "View only"}
+                        <strong>Permission:</strong> {roleLabel}
                       </td>
                       {canAdminMembers && (
                         <td className="project-clad-table-right">

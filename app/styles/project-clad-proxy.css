@@ -1016,6 +1016,8 @@ details.project-clad-edit-mode .project-clad-title {
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-members-table tr {
   display: block;
   width: 100%;
+  border-bottom: 1px solid #000;
+  padding: 0.5rem 0;
 }
 
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-members-table td {
@@ -1023,6 +1025,7 @@ details.project-clad-edit-mode .project-clad-title {
   width: 100%;
   padding: 0.25rem 0;
   text-align: left;
+  border-bottom: none;
 }
 
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-members-table td.project-clad-table-right {
