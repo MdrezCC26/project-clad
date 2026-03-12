@@ -1002,6 +1002,33 @@ details.project-clad-edit-mode .project-clad-title {
   text-align: right;
 }
 
+/* Edit project modal: make Project members table stack vertically so actions don't get cut off */
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-members-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-members-table thead {
+  display: none;
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-members-table tbody,
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-members-table tr {
+  display: block;
+  width: 100%;
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-members-table td {
+  display: block;
+  width: 100%;
+  padding: 0.25rem 0;
+  text-align: left;
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-members-table td.project-clad-table-right {
+  text-align: left;
+}
+
 .project-clad-draggable {
   cursor: grab;
 }
