@@ -173,6 +173,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const hideAddToCart = viewerTags.some(
     (t) => String(t).trim().toUpperCase() === "NA",
   );
+  const hasNATag = hideAddToCart;
+  const canAdminMembers = isOwner || (canEdit && !hasNATag);
 
   const approvalRequests = await prisma.approvalRequest.findMany({
     where: { projectId },
@@ -276,6 +278,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     canViewPricing: !hideAddToCart || hasPricingAccess(request),
     canEdit,
     isOwner,
+    canAdminMembers,
     hideAddToCart,
     approvalRequests: approvalRequests.map((r) => {
       const approver = r.approvedByCustomerId
@@ -514,6 +517,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   )?.role;
   const isOwner = project.ownerCustomerId === customerId;
   const canEdit = isOwner || memberRole === "edit";
+  let canAdminMembers = isOwner;
+
+  try {
+    const customerInfo = await getCustomersByIds(shop, [customerId]);
+    const viewerTags = customerInfo[customerId]?.tags ?? [];
+    const hasNATag = viewerTags.some(
+      (t) => String(t).trim().toUpperCase() === "NA",
+    );
+    canAdminMembers = isOwner || (canEdit && !hasNATag);
+  } catch {
+    // If customer lookup fails, fall back to owner-only admin.
+    canAdminMembers = isOwner;
+  }
 
   if (intent === "create-job") {
     if (!canEdit) {
@@ -703,7 +719,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (intent === "add-member") {
-    if (!isOwner) {
+    if (!canAdminMembers) {
       return Response.json(
         { memberError: "Only the project owner can add members." },
         { status: 200 },
@@ -770,7 +786,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (intent === "remove-member") {
-    if (!isOwner) {
+    if (!canAdminMembers) {
       return redirect(getProjectPath(projectId));
     }
 
@@ -847,6 +863,7 @@ export default function ProjectDetailPage() {
     canViewPricing,
     canEdit,
     isOwner,
+    canAdminMembers,
     hideAddToCart,
     approvalRequests,
     memberLookupError,
@@ -1424,7 +1441,7 @@ export default function ProjectDetailPage() {
                   <th>Name</th>
                   <th>Email</th>
                   <th className="project-clad-table-right">Project Member Role</th>
-                  {isOwner && (
+                  {canAdminMembers && (
                     <th className="project-clad-table-right">Actions</th>
                   )}
                 </tr>
@@ -1445,7 +1462,7 @@ export default function ProjectDetailPage() {
                             ? "Edit"
                             : "View only"}
                       </td>
-                      {isOwner && (
+                      {canAdminMembers && (
                         <td className="project-clad-table-right">
                           {member.role === "owner" ? (
                             "—"
@@ -1485,7 +1502,7 @@ export default function ProjectDetailPage() {
             </table>
           )}
 
-          {isOwner && (
+          {canAdminMembers && (
             <div style={{ marginTop: "2rem" }}>
               <button
                 type="button"
