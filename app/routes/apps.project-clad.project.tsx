@@ -2052,7 +2052,7 @@ export default function ProjectDetailPage() {
                               data-price={job.subtotal.toFixed(2)}
                             >
                               {pricingUnlocked ? (
-                                job.subtotal.toFixed(2)
+                              formatPrice(job.subtotal.toFixed(2))
                               ) : (
                                 <button
                                   type="button"
@@ -2189,7 +2189,7 @@ export default function ProjectDetailPage() {
                   data-price={project.subtotal.toFixed(2)}
                 >
                   {pricingUnlocked ? (
-                    project.subtotal.toFixed(2)
+                    formatPrice(project.subtotal.toFixed(2))
                   ) : (
                     <button
                       type="button"
