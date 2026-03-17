@@ -62,6 +62,12 @@ type ProjectView = {
 
 const PRICING_COOKIE = "projectclad_pricing=1";
 
+const formatPrice = (value: string | number) => {
+  const num = Number(value || 0);
+  if (Number.isNaN(num)) return "$0.00";
+  return `$${num.toFixed(2)}`;
+};
+
 const hasPricingAccess = (request: Request) => {
   const cookie = request.headers.get("Cookie") || "";
   return cookie.split(";").some((value) => value.trim().startsWith(PRICING_COOKIE));
@@ -1982,7 +1988,7 @@ export default function ProjectDetailPage() {
                                   data-price={item.priceSnapshot}
                                 >
                                   {pricingUnlocked ? (
-                                    item.priceSnapshot
+                                    formatPrice(item.priceSnapshot)
                                   ) : (
                                     <button
                                       type="button"
