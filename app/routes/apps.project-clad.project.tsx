@@ -7,6 +7,7 @@ import {
   useSearchParams,
   useActionData,
   useLoaderData,
+  useLocation,
 } from "react-router";
 import { redirect } from "react-router";
 import prisma from "../db.server";
@@ -17,6 +18,7 @@ import {
   findCustomerIdByEmail,
   getCustomersByIds,
 } from "../utils/adminCustomers.server";
+import { hasAdminTag } from "../utils/customerTags.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
@@ -39,9 +41,41 @@ type JobView = {
   name: string;
   createdAt: string;
   isLocked: boolean;
+  workOrderStatus: string | null;
+  completedAt: string | null;
+  paidAt: string | null;
+  receiptSnapshot: unknown | null;
+  orderName: string | null;
   items: JobItemView[];
   subtotal: number;
 };
+
+type ActivityFeedItem = {
+  id: string;
+  type: string;
+  visibility: string;
+  payload: unknown;
+  createdAt: string;
+  actorLabel: string | null;
+};
+
+type CommentFeedItem = {
+  id: string;
+  body: string;
+  createdAt: string;
+  authorCustomerId: string;
+  authorLabel: string;
+  deletedAt: string | null;
+  deletedByLabel: string | null;
+};
+
+type ProjectTimelineItem =
+  | ({
+      kind: "activity";
+    } & ActivityFeedItem)
+  | ({
+      kind: "comment";
+    } & CommentFeedItem);
 
 type ProjectView = {
   id: string;
@@ -81,13 +115,130 @@ const getProjectId = (request: Request) => {
   return url.searchParams.get("id") || "";
 };
 
-const getProjectPath = (projectId: string) =>
-  `/apps/project-clad/project?id=${encodeURIComponent(projectId)}`;
+/**
+ * App proxy requests often arrive with a rewritten pathname (e.g. `/project`).
+ * A relative redirect to that path on the storefront host is a theme 404.
+ * Always send customers to the canonical storefront URL on their shop domain.
+ */
+const mergeAppProxySearchForRedirect = (request: Request, projectId: string) => {
+  const merged = new URLSearchParams();
+
+  const referer = request.headers.get("Referer");
+  if (referer) {
+    try {
+      for (const [k, v] of new URL(referer).searchParams) {
+        merged.set(k, v);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const reqUrl = new URL(request.url);
+  for (const [k, v] of reqUrl.searchParams) {
+    merged.set(k, v);
+  }
+
+  merged.set("id", projectId);
+  return merged.toString();
+};
+
+/** POST may hit `/project` on the app; redirects must target the customer’s storefront host + proxy path. */
+const getStorefrontOriginForAppProxyRedirect = (
+  request: Request,
+  shop: string,
+) => {
+  let appHost = "";
+  try {
+    const appUrl = process.env.SHOPIFY_APP_URL;
+    if (appUrl) appHost = new URL(appUrl).host;
+  } catch {
+    // ignore
+  }
+
+  const referer = request.headers.get("Referer");
+  if (referer) {
+    try {
+      const ref = new URL(referer);
+      const h = ref.host;
+      const isLocal =
+        h === "localhost" ||
+        h.startsWith("127.0.0.1") ||
+        h.endsWith(".localhost");
+      if (h && h !== appHost && !isLocal) {
+        return `${ref.protocol}//${h}`;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return `https://${shop}`;
+};
+
+const storefrontProjectActionPath = "/apps/project-clad/project";
+
+const escapeHtml = (s: string) =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+/** Plain 404 is easy to confuse with Shopify/network “page not found”. */
+const projectMissingHtmlResponse = (
+  request: Request,
+  shop: string,
+  projectId: string,
+) => {
+  const qs = new URLSearchParams(new URL(request.url).search);
+  qs.delete("id");
+  const listQs = qs.toString();
+  const origin = getStorefrontOriginForAppProxyRedirect(request, shop);
+  const backHref = `${origin}/apps/project-clad/projects${listQs ? `?${listQs}` : ""}`;
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Project not found · ProjectClad</title></head><body style="font-family:system-ui,sans-serif;max-width:36rem;margin:2rem auto;padding:0 1rem"><h1>Project not found</h1><p>No project with id <code style="word-break:break-all">${escapeHtml(projectId)}</code> exists in the app database for <strong>${escapeHtml(shop)}</strong>.</p><p>Common cause: the project was created against a <strong>local/dev database</strong> while the storefront uses <strong>production</strong> (for example Render). Create the project again on the live app or migrate data.</p><p><a href="${escapeHtml(backHref)}">Back to projects</a></p></body></html>`;
+  return new Response(html, {
+    status: 404,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "X-ProjectClad-Error": "project_not_found",
+    },
+  });
+};
+
+const redirectToProject = (request: Request, projectId: string, shop: string) => {
+  const q = mergeAppProxySearchForRedirect(request, projectId);
+  const origin = getStorefrontOriginForAppProxyRedirect(request, shop);
+  return redirect(`${origin}${storefrontProjectActionPath}?${q}`);
+};
 
 const getProjectsPath = () => "/apps/project-clad/projects";
 
+function formatActivityLine(ev: ActivityFeedItem): string {
+  const p =
+    ev.payload && typeof ev.payload === "object"
+      ? (ev.payload as Record<string, unknown>)
+      : {};
+  switch (ev.type) {
+    case "order_approved_work_queue":
+      return `Order “${String(p.jobName || "Order")}” was approved and added to the work queue.`;
+    case "work_order_status": {
+      const jobName = String(p.jobName || "").trim();
+      return `Work order status: ${String(p.from ?? "—")} → ${String(p.to ?? "—")}${jobName ? ` (${jobName})` : ""}`;
+    }
+    case "job_item_variant_swapped":
+      return `Product line updated: ${String(p.fromLabel || "")} → ${String(p.toLabel || "")}`;
+    case "order_paid":
+      return `Payment received${p.orderName ? ` (${String(p.orderName)})` : ""}.`;
+    default:
+      return ev.type.replace(/_/g, " ");
+  }
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { shop, customerId } = requireAppProxyCustomer(request);
+  const { shop, customerId: viewerCustomerId } =
+    requireAppProxyCustomer(request);
+  const customerId = viewerCustomerId as string;
   const themeStyles = await getThemeStyles(shop);
   const settings = await prisma.shopSettings.findUnique({
     where: { shop },
@@ -95,7 +246,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const projectId = getProjectId(request);
 
   if (!projectId) {
-    return redirect(getProjectsPath());
+    const listParams = new URLSearchParams(new URL(request.url).search);
+    listParams.delete("id");
+    const listQs = listParams.toString();
+    const origin = getStorefrontOriginForAppProxyRedirect(request, shop);
+    return redirect(
+      `${origin}/apps/project-clad/projects${listQs ? `?${listQs}` : ""}`,
+    );
   }
 
   const project = await prisma.project.findFirst({
@@ -110,7 +267,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 
   if (!project) {
-    throw new Response("Project not found", { status: 404 });
+    throw projectMissingHtmlResponse(request, shop, projectId);
   }
 
   const isMember =
@@ -177,14 +334,55 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const viewerTags = customerInfo[customerId]?.tags ?? [];
   const hideAddToCart = viewerTags.some(
-    (t) => String(t).trim().toUpperCase() === "NA",
+    (t: string) => String(t).trim().toUpperCase() === "NA",
   );
   const hasNATag = hideAddToCart;
   const canAdminMembers = isOwner || (canEdit && !hasNATag);
+  const viewerIsAdmin = hasAdminTag(viewerTags);
 
   const approvalRequests = await prisma.approvalRequest.findMany({
     where: { projectId },
   });
+
+  const activityWhere = viewerIsAdmin
+    ? {
+        projectId,
+        OR: [{ visibility: "member" }, { visibility: "admin" }],
+      }
+    : { projectId, visibility: "member" };
+
+  const [activityRows, commentRows] = await Promise.all([
+    prisma.projectActivityEvent.findMany({
+      where: activityWhere,
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    prisma.projectComment.findMany({
+      where: { projectId },
+      orderBy: { createdAt: "asc" },
+      take: 200,
+    }),
+  ]);
+
+  const actorIds = new Set<string>();
+  for (const ev of activityRows) {
+    if (ev.actorCustomerId) actorIds.add(ev.actorCustomerId);
+  }
+  for (const c of commentRows) {
+    actorIds.add(c.authorCustomerId);
+    if (c.deletedByCustomerId) actorIds.add(c.deletedByCustomerId);
+  }
+  const actorInfo =
+    actorIds.size > 0
+      ? await getCustomersByIds(shop, [...actorIds])
+      : {};
+
+  const labelForCustomer = (id: string) => {
+    const c = actorInfo[id];
+    if (!c) return id;
+    const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
+    return name || c.email || id;
+  };
 
   const payload: ProjectView = {
     id: project.id,
@@ -202,6 +400,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         name: job.name,
         createdAt: job.createdAt.toISOString(),
         isLocked: job.isLocked || Boolean(job.orderLink),
+        workOrderStatus: job.workOrderStatus ?? null,
+        completedAt: job.completedAt?.toISOString() ?? null,
+        paidAt: job.paidAt?.toISOString() ?? null,
+        receiptSnapshot: job.receiptSnapshot ?? null,
+        orderName: job.orderLink?.orderName ?? null,
         subtotal: jobSubtotal,
         items: job.items.map((item) => {
           const info = variantInfo[item.variantId];
@@ -301,6 +504,35 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         approvedBy: approvedByName,
       };
     }),
+    projectTimeline: (() => {
+      const activities: ProjectTimelineItem[] = activityRows.map((ev) => ({
+        kind: "activity",
+        id: ev.id,
+        type: ev.type,
+        visibility: ev.visibility,
+        payload: ev.payload,
+        createdAt: ev.createdAt.toISOString(),
+        actorLabel: ev.actorCustomerId
+          ? labelForCustomer(ev.actorCustomerId)
+          : null,
+      }));
+      const comments: ProjectTimelineItem[] = commentRows.map((c) => ({
+        kind: "comment",
+        id: c.id,
+        body: c.body,
+        createdAt: c.createdAt.toISOString(),
+        authorCustomerId: c.authorCustomerId,
+        authorLabel: labelForCustomer(c.authorCustomerId),
+        deletedAt: c.deletedAt?.toISOString() ?? null,
+        deletedByLabel: c.deletedByLabel,
+      }));
+      return [...activities, ...comments].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+    })(),
+    viewerIsAdmin,
+    currentCustomerId: customerId,
     memberLookupError,
     variantLookupError,
     themeStyles,
@@ -327,16 +559,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const contentType = request.headers.get("Content-Type") || "";
   const isJsonRequest = contentType.includes("application/json");
-  const { shop, customerId } = requireAppProxyCustomer(request, {
-    jsonOnFail: isJsonRequest,
-  });
-  const projectId = getProjectId(request);
+  const { shop, customerId: viewerCustomerId } = requireAppProxyCustomer(
+    request,
+    {
+      jsonOnFail: isJsonRequest,
+    },
+  );
+  const customerId = viewerCustomerId as string;
 
-  if (!projectId) {
-    return new Response("Project not found", { status: 404 });
-  }
+  if (isJsonRequest) {
+    const projectId = getProjectId(request);
+    if (!projectId) {
+      return new Response("Project not found", { status: 404 });
+    }
 
-  if (contentType.includes("application/json")) {
     const payload = (await request.json()) as {
       intent?: string;
       jobId?: string;
@@ -494,11 +730,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }
       }
 
-      return redirect(getProjectPath(projectId));
+      return redirectToProject(request, projectId, shop);
     }
+
+    return new Response("Unsupported JSON action", { status: 400 });
   }
 
   const formData = await request.formData();
+  const projectId =
+    getProjectId(request) || String(formData.get("id") || "");
+
+  if (!projectId) {
+    return new Response("Project not found", { status: 404 });
+  }
+
   const intent = String(formData.get("intent") || "");
 
   const project = await prisma.project.findFirst({
@@ -516,6 +761,57 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (!isMember) {
     throw new Response("Unauthorized", { status: 403 });
+  }
+
+  if (intent === "add-comment") {
+    const text = String(formData.get("body") || "").trim();
+    if (text && text.length <= 8000) {
+      await prisma.projectComment.create({
+        data: {
+          projectId,
+          authorCustomerId: customerId,
+          body: text,
+        },
+      });
+    }
+    return redirectToProject(request, projectId, shop);
+  }
+
+  if (intent === "delete-comment") {
+    const commentId = String(formData.get("commentId") || "");
+    if (commentId) {
+      const comment = await prisma.projectComment.findFirst({
+        where: { id: commentId, projectId },
+      });
+      if (
+        comment &&
+        !comment.deletedAt &&
+        comment.authorCustomerId === customerId
+      ) {
+        let deletedByLabel = customerId;
+        try {
+          const info = await getCustomersByIds(shop, [customerId]);
+          const c = info[customerId];
+          const name =
+            [c?.firstName, c?.lastName].filter(Boolean).join(" ").trim() ||
+            c?.email ||
+            customerId;
+          deletedByLabel = c?.email ? `${name} (${c.email})` : name;
+        } catch {
+          // keep customerId
+        }
+        await prisma.projectComment.update({
+          where: { id: commentId },
+          data: {
+            deletedAt: new Date(),
+            deletedByCustomerId: customerId,
+            deletedByLabel,
+            body: "",
+          },
+        });
+      }
+    }
+    return redirectToProject(request, projectId, shop);
   }
 
   const memberRole = project.members.find(
@@ -577,7 +873,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
 
-    return redirect(getProjectPath(projectId));
+    return redirectToProject(request, projectId, shop);
   }
 
   if (intent === "delete-job") {
@@ -587,7 +883,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const jobId = String(formData.get("jobId") || "");
     if (!jobId) {
-      return redirect(getProjectPath(projectId));
+      return redirectToProject(request, projectId, shop);
     }
 
     const job = await prisma.job.findFirst({
@@ -606,7 +902,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     await prisma.job.delete({ where: { id: jobId } });
 
-    return redirect(getProjectPath(projectId));
+    return redirectToProject(request, projectId, shop);
   }
 
   if (intent === "move-job") {
@@ -630,7 +926,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     }
 
-    return redirect(getProjectPath(projectId));
+    return redirectToProject(request, projectId, shop);
   }
 
   if (intent === "copy-job") {
@@ -665,7 +961,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     }
 
-    return redirect(getProjectPath(projectId));
+    return redirectToProject(request, projectId, shop);
   }
 
   if (intent === "delete-item") {
@@ -702,7 +998,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
     }
 
-    return redirect(getProjectPath(projectId));
+    return redirectToProject(request, projectId, shop);
   }
 
   if (intent === "share-project") {
@@ -788,17 +1084,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
 
-    return redirect(getProjectPath(projectId));
+    return redirectToProject(request, projectId, shop);
   }
 
   if (intent === "remove-member") {
     if (!canAdminMembers) {
-      return redirect(getProjectPath(projectId));
+      return redirectToProject(request, projectId, shop);
     }
 
     const memberCustomerId = String(formData.get("memberCustomerId") || "");
     if (!memberCustomerId || memberCustomerId === project.ownerCustomerId) {
-      return redirect(getProjectPath(projectId));
+      return redirectToProject(request, projectId, shop);
     }
 
     await prisma.projectMember.deleteMany({
@@ -808,7 +1104,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
 
-    return redirect(getProjectPath(projectId));
+    return redirectToProject(request, projectId, shop);
   }
 
   if (intent === "update-project-details") {
@@ -821,7 +1117,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const companyName = String(formData.get("companyName") || "").trim() || null;
 
     if (!name) {
-      return redirect(getProjectPath(projectId));
+      return redirectToProject(request, projectId, shop);
     }
 
     await prisma.project.update({
@@ -829,7 +1125,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       data: { name, poNumber, companyName },
     });
 
-    return redirect(getProjectPath(projectId));
+    return redirectToProject(request, projectId, shop);
   }
 
   if (intent === "unlock-pricing") {
@@ -839,7 +1135,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
 
     if (!settings?.pricingPasswordHash || !settings.pricingPasswordSalt) {
-      return redirect(getProjectPath(projectId));
+      return redirectToProject(request, projectId, shop);
     }
 
     if (
@@ -872,6 +1168,9 @@ export default function ProjectDetailPage() {
     canAdminMembers,
     hideAddToCart,
     approvalRequests,
+    projectTimeline,
+    viewerIsAdmin,
+    currentCustomerId,
     memberLookupError,
     variantLookupError,
     shop,
@@ -924,6 +1223,7 @@ export default function ProjectDetailPage() {
     actionData && typeof actionData === "object" && "memberError" in actionData
       ? (actionData.memberError as string)
       : null;
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const selectedJobId = searchParams.get("job");
   const approveMode = searchParams.get("approve") === "1";
@@ -1686,7 +1986,15 @@ export default function ProjectDetailPage() {
               <p className="project-clad-muted">No orders saved yet.</p>
             ) : (
               <div className="project-clad-grid">
-                {jobs.map((job) => (
+                {jobs.map((job) => {
+                  const workOrderShellClass =
+                    getJobApprovalInfo(job.id) &&
+                    job.workOrderStatus !== "complete"
+                      ? job.workOrderStatus === "in_progress"
+                        ? "project-clad-work-order--in_progress"
+                        : "project-clad-work-order--unread"
+                      : "";
+                  return (
                   <details
                     key={job.id}
                     id={`job-${job.id}`}
@@ -1698,6 +2006,7 @@ export default function ProjectDetailPage() {
                         "project-clad-details",
                         canEdit && "project-clad-draggable",
                         !hideAddToCart && getApprovalStatus(job.id, "") === "awaiting" && "project-clad-approval-pending",
+                        workOrderShellClass,
                       ]
                         .filter(Boolean)
                         .join(" ")
@@ -1749,6 +2058,20 @@ export default function ProjectDetailPage() {
                               ) : null;
                             })()}
                           </p>
+                          {getJobApprovalInfo(job.id) ? (
+                            <p
+                              className="project-clad-muted"
+                              style={{ marginTop: "0.35rem" }}
+                            >
+                              {job.workOrderStatus === "complete" &&
+                              job.completedAt
+                                ? `Order completed on ${new Date(job.completedAt).toLocaleDateString()}`
+                                : "Order in progress"}
+                              {job.paidAt
+                                ? ` · Paid on ${new Date(job.paidAt).toLocaleDateString()}`
+                                : ""}
+                            </p>
+                          ) : null}
                         </div>
                         {hideAddToCart && (() => {
                           const status = getApprovalStatus(job.id, "");
@@ -2068,6 +2391,107 @@ export default function ProjectDetailPage() {
                         </tfoot>
                         </table>
                       )}
+                    {job.paidAt && job.receiptSnapshot ? (
+                      <div
+                        className="project-clad-card project-clad-receipt"
+                        style={{ marginTop: "1rem" }}
+                      >
+                        <h4 className="project-clad-title" style={{ marginTop: 0 }}>
+                          Receipt
+                          {job.orderName ? ` (${job.orderName})` : ""}
+                        </h4>
+                        {(() => {
+                          const snap = job.receiptSnapshot;
+                          if (!snap || typeof snap !== "object") {
+                            return (
+                              <p className="project-clad-muted">
+                                Receipt details on file.
+                              </p>
+                            );
+                          }
+                          const r = snap as {
+                            lines?: Array<{
+                              title?: string;
+                              quantity?: number;
+                              unitPrice?: string;
+                              lineTotal?: string;
+                            }>;
+                            subtotal?: string | null;
+                            total?: string | null;
+                          };
+                          const lines = Array.isArray(r.lines) ? r.lines : [];
+                          if (lines.length === 0) {
+                            return (
+                              <p className="project-clad-muted">
+                                Paid {new Date(job.paidAt).toLocaleString()}
+                              </p>
+                            );
+                          }
+                          return (
+                            <table className="project-clad-table">
+                              <thead>
+                                <tr>
+                                  <th>Item</th>
+                                  <th className="project-clad-table-right">Qty</th>
+                                  <th className="project-clad-table-right">Unit</th>
+                                  <th className="project-clad-table-right">Line</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {lines.map((line, idx) => (
+                                  <tr key={idx}>
+                                    <td>{line.title || "—"}</td>
+                                    <td className="project-clad-table-right">
+                                      {line.quantity ?? "—"}
+                                    </td>
+                                    <td className="project-clad-table-right">
+                                      {pricingUnlocked
+                                        ? formatPrice(line.unitPrice || 0)
+                                        : "—"}
+                                    </td>
+                                    <td className="project-clad-table-right">
+                                      {pricingUnlocked
+                                        ? formatPrice(line.lineTotal || 0)
+                                        : "—"}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              {(r.subtotal || r.total) && (
+                                <tfoot>
+                                  {r.subtotal ? (
+                                    <tr>
+                                      <td colSpan={3} className="project-clad-table-right">
+                                        Subtotal
+                                      </td>
+                                      <td className="project-clad-table-right">
+                                        {pricingUnlocked
+                                          ? formatPrice(r.subtotal)
+                                          : "—"}
+                                      </td>
+                                    </tr>
+                                  ) : null}
+                                  {r.total ? (
+                                    <tr>
+                                      <td colSpan={3} className="project-clad-table-right">
+                                        <strong>Total</strong>
+                                      </td>
+                                      <td className="project-clad-table-right">
+                                        <strong>
+                                          {pricingUnlocked
+                                            ? formatPrice(r.total)
+                                            : "—"}
+                                        </strong>
+                                      </td>
+                                    </tr>
+                                  ) : null}
+                                </tfoot>
+                              )}
+                            </table>
+                          );
+                        })()}
+                      </div>
+                    ) : null}
                     {!hideAddToCart && getApprovalStatus(job.id, "") === "awaiting" && (
                       <div className="project-clad-approval-buttons" style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #000" }}>
                         <form
@@ -2172,7 +2596,8 @@ export default function ProjectDetailPage() {
                     )}
                     </div>
                   </details>
-                ))}
+                );
+                })}
               </div>
             )}
           </section>
@@ -2201,6 +2626,105 @@ export default function ProjectDetailPage() {
                   )}
                 </div>
               </div>
+            </div>
+          </section>
+
+          <section className="project-clad-section">
+            <h2 className="project-clad-section-title">Activity &amp; comments</h2>
+            <div className="project-clad-card">
+              <Form
+                method="post"
+                action={`${storefrontProjectActionPath}${location.search}`}
+                style={{ marginBottom: "1rem" }}
+              >
+                <input type="hidden" name="id" value={project.id} />
+                <input type="hidden" name="intent" value="add-comment" />
+                <label className="project-clad-muted" style={{ display: "block", marginBottom: "0.35rem" }}>
+                  Add a comment
+                </label>
+                <textarea
+                  name="body"
+                  className="project-clad-reject-textarea"
+                  rows={3}
+                  required
+                  style={{ width: "100%", maxWidth: "100%", fontSize: "16px" }}
+                />
+                <button type="submit" className="project-clad-button" style={{ marginTop: "0.5rem" }}>
+                  Post
+                </button>
+              </Form>
+              {projectTimeline.length === 0 ? (
+                <p className="project-clad-muted">No activity yet.</p>
+              ) : (
+                <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                  {projectTimeline.map((item) =>
+                    item.kind === "activity" ? (
+                      <li
+                        key={`a-${item.id}`}
+                        className="project-clad-activity-item"
+                        style={{
+                          padding: "0.75rem 0",
+                          borderBottom: "1px solid rgba(0,0,0,0.12)",
+                        }}
+                      >
+                        <div className="project-clad-muted" style={{ fontSize: "0.9em" }}>
+                          {new Date(item.createdAt).toLocaleString()}
+                          {item.actorLabel ? ` · ${item.actorLabel}` : ""}
+                          {item.visibility === "admin" && viewerIsAdmin ? (
+                            <span className="project-clad-activity-badge"> Internal</span>
+                          ) : null}
+                        </div>
+                        <div style={{ marginTop: "0.25rem" }}>
+                          {formatActivityLine(item)}
+                        </div>
+                      </li>
+                    ) : (
+                      <li
+                        key={`c-${item.id}`}
+                        style={{
+                          padding: "0.75rem 0",
+                          borderBottom: "1px solid rgba(0,0,0,0.12)",
+                        }}
+                      >
+                        {item.deletedAt ? (
+                          <p className="project-clad-muted" style={{ fontStyle: "italic", margin: 0 }}>
+                            Comment deleted
+                            {item.deletedByLabel ? ` by ${item.deletedByLabel}` : ""}.
+                          </p>
+                        ) : (
+                          <>
+                            <div className="project-clad-muted" style={{ fontSize: "0.9em" }}>
+                              {item.authorLabel} · {new Date(item.createdAt).toLocaleString()}
+                            </div>
+                            <p style={{ margin: "0.35rem 0 0", whiteSpace: "pre-wrap" }}>
+                              {item.body}
+                            </p>
+                            {item.authorCustomerId === currentCustomerId ? (
+                              <Form
+                                method="post"
+                                action={`${storefrontProjectActionPath}${location.search}`}
+                                onSubmit={(e) => {
+                                  if (!confirm("Delete this comment?")) {
+                                    e.preventDefault();
+                                  }
+                                }}
+                                style={{ marginTop: "0.5rem" }}
+                              >
+                                <input type="hidden" name="id" value={project.id} />
+                                <input type="hidden" name="intent" value="delete-comment" />
+                                <input type="hidden" name="commentId" value={item.id} />
+                                <button type="submit" className="project-clad-button">
+                                  Delete
+                                </button>
+                              </Form>
+                            ) : null}
+                          </>
+                        )}
+                      </li>
+                    ),
+                  )}
+                </ul>
+              )}
             </div>
           </section>
 
