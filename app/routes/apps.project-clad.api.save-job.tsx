@@ -47,6 +47,54 @@ const getNextJobSortOrder = async (projectId: string) => {
   return (result._max.sortOrder ?? 0) + 1;
 };
 
+type CustomPartParsed = {
+  shapeType: string;
+  l1: number;
+  l2: number;
+  l3?: number;
+  a1?: number;
+  gauge: number;
+};
+
+function parseCustomPart(
+  properties?: { name: string; value: string }[] | null,
+): CustomPartParsed | null {
+  if (!properties?.length) return null;
+  const get = (name: string) =>
+    properties.find((p) => p.name === name)?.value ?? "";
+  const shapeType = get("shape_type");
+  if (!["L", "Z", "U"].includes(shapeType)) return null;
+  const l1 = parseFloat(get("L1")) || 0;
+  const l2 = parseFloat(get("L2")) || 0;
+  if (!l1 || !l2) return null;
+  const gauge = parseInt(get("Gauge") || "0", 10) || 16;
+  const l3 = get("L3") ? parseFloat(get("L3")) : undefined;
+  const a1 = get("A1") ? parseFloat(get("A1")) : undefined;
+  return { shapeType, l1, l2, l3, a1, gauge };
+}
+
+async function enqueueDrawingJob(
+  jobItemId: string,
+  shop: string,
+  properties?: { name: string; value: string }[] | null,
+) {
+  const part = parseCustomPart(properties);
+  if (!part) return;
+  await prisma.drawingJob.create({
+    data: {
+      jobItemId,
+      shop,
+      status: "pending",
+      shapeType: part.shapeType,
+      l1: part.l1,
+      l2: part.l2,
+      l3: part.l3,
+      a1: part.a1,
+      gauge: part.gauge,
+    },
+  });
+}
+
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, customerId } = requireAppProxyCustomer(request, {
     jsonOnFail: true,
@@ -108,8 +156,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           },
         },
       },
-      include: { jobs: true },
+      include: { jobs: { include: { items: true } } },
     });
+
+    const jobItems = project.jobs[0]?.items ?? [];
+    for (let i = 0; i < jobItems.length; i++) {
+      await enqueueDrawingJob(
+        jobItems[i].id,
+        shop,
+        items[i]?.properties,
+      );
+    }
 
     return Response.json({
       projectId: project.id,
@@ -170,7 +227,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           })),
         },
       },
+      include: { items: true },
     });
+
+    for (let i = 0; i < job.items.length; i++) {
+      await enqueueDrawingJob(job.items[i].id, shop, items[i]?.properties);
+    }
 
     await prisma.project.update({
       where: { id: project.id },
@@ -272,12 +334,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           })),
         }),
       ]);
+      const createdItems = await prisma.jobItem.findMany({
+        where: { jobId: targetJobId },
+        orderBy: { sortOrder: "asc" },
+      });
+      for (let i = 0; i < createdItems.length; i++) {
+        await enqueueDrawingJob(
+          createdItems[i].id,
+          shop,
+          items[i]?.properties,
+        );
+      }
     } else {
       // In "add" mode, always create a new JobItem per cart line,
       // so multiple uploads for the same variant become separate rows.
       let nextSortOrder = await getNextSortOrder(targetJobId);
       for (const item of items) {
-        await prisma.jobItem.create({
+        const created = await prisma.jobItem.create({
           data: {
             jobId: targetJobId,
             variantId: item.variantId,
@@ -290,6 +363,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 : undefined,
           },
         });
+        await enqueueDrawingJob(created.id, shop, item.properties);
         nextSortOrder += 1;
       }
     }

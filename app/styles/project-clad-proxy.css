@@ -1261,3 +1261,35 @@ details.project-clad-edit-mode .project-clad-edit-view {
     font-weight: 700;
   }
 }
+
+/* Work order queue accents (after job approval) */
+.project-clad-page .project-clad-details.project-clad-work-order--unread,
+.project-clad-page .project-clad-card.project-clad-work-order--unread {
+  border-left: 4px solid #c9a227;
+}
+
+.project-clad-page .project-clad-details.project-clad-work-order--in_progress,
+.project-clad-page .project-clad-card.project-clad-work-order--in_progress {
+  border-left: 4px solid #2563eb;
+}
+
+.project-clad-page[data-theme="dark"] .project-clad-details.project-clad-work-order--unread,
+.project-clad-page[data-theme="dark"] .project-clad-card.project-clad-work-order--unread {
+  border-left-color: #e8c547;
+}
+
+.project-clad-page[data-theme="dark"] .project-clad-details.project-clad-work-order--in_progress,
+.project-clad-page[data-theme="dark"] .project-clad-card.project-clad-work-order--in_progress {
+  border-left-color: #60a5fa;
+}
+
+.project-clad-activity-badge {
+  font-size: 0.82em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.project-clad-receipt {
+  box-sizing: border-box;
+}

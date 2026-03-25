@@ -1,0 +1,118 @@
+{% comment %}
+  Only renders for products with tag "shape_type = L" (or Z, U later).
+  Add this block to the Product information section.
+{% endcomment %}
+{% assign shape_tag = nil %}
+{% for tag in product.tags %}
+  {% if tag == "shape_type = L" %}
+    {% assign shape_tag = "L" %}
+    {% break %}
+  {% elsif tag == "shape_type = Z" %}
+    {% assign shape_tag = "Z" %}
+    {% break %}
+  {% elsif tag == "shape_type = U" %}
+    {% assign shape_tag = "U" %}
+    {% break %}
+  {% endif %}
+{% endfor %}
+
+{% if shape_tag == "L" %}
+  {% assign variant_id = product.selected_or_first_available_variant.id %}
+  {% assign price_url = "https://" | append: request.host | append: "/apps/project-clad/api/price" %}
+
+  <div
+    class="projectclad-custom-part"
+    data-projectclad-custom-part
+    data-shape-type="L"
+    data-variant-id="{{ variant_id }}"
+    data-price-url="{{ price_url }}"
+  >
+    <div class="projectclad-custom-part__form">
+      <h3 class="projectclad-custom-part__title">Configure Custom L</h3>
+
+      <div class="projectclad-custom-part__fields">
+        <div class="projectclad-custom-part__field">
+          <label for="projectclad-L1">L1 (in)</label>
+          <input
+            id="projectclad-L1"
+            type="number"
+            min="0"
+            step="0.125"
+            value="1"
+            data-projectclad-l1
+          />
+        </div>
+        <div class="projectclad-custom-part__field">
+          <label for="projectclad-L2">L2 (in)</label>
+          <input
+            id="projectclad-L2"
+            type="number"
+            min="0"
+            step="0.125"
+            value="1"
+            data-projectclad-l2
+          />
+        </div>
+        <div class="projectclad-custom-part__field">
+          <label for="projectclad-A1">A1 (°)</label>
+          <input
+            id="projectclad-A1"
+            type="number"
+            min="0"
+            max="180"
+            step="1"
+            value="90"
+            data-projectclad-a1
+          />
+        </div>
+        <div class="projectclad-custom-part__field">
+          <label for="projectclad-gauge">Gauge</label>
+          <select id="projectclad-gauge" data-projectclad-gauge>
+            <option value="16">16</option>
+            <option value="18">18</option>
+            <option value="20">20</option>
+            <option value="24">24</option>
+            <option value="26">26</option>
+          </select>
+        </div>
+        <div class="projectclad-custom-part__field">
+          <label for="projectclad-quantity">Quantity</label>
+          <input
+            id="projectclad-quantity"
+            type="number"
+            min="1"
+            value="1"
+            data-projectclad-quantity
+          />
+        </div>
+      </div>
+
+      <p class="projectclad-custom-part__price" data-projectclad-price-display>
+        Price: <strong data-projectclad-price-value>—</strong>
+      </p>
+
+      <form action="/cart/add" method="post" data-projectclad-add-form>
+        <input type="hidden" name="id" value="{{ variant_id }}" />
+        <input type="hidden" name="quantity" data-projectclad-form-qty value="1" />
+        <input type="hidden" name="properties[L1]" data-projectclad-form-l1 value="" />
+        <input type="hidden" name="properties[L2]" data-projectclad-form-l2 value="" />
+        <input type="hidden" name="properties[A1]" data-projectclad-form-a1 value="" />
+        <input type="hidden" name="properties[Gauge]" data-projectclad-form-gauge value="" />
+        <input type="hidden" name="properties[shape_type]" value="L" />
+        <button type="submit" class="projectclad-button projectclad-button--primary" data-projectclad-add-btn>
+          Add to cart
+        </button>
+      </form>
+    </div>
+  </div>
+{% endif %}
+
+{% schema %}
+{
+  "name": "ProjectClad Custom Part",
+  "target": "section",
+  "stylesheet": "project-clad-custom-part.css",
+  "javascript": "project-clad-custom-part.js",
+  "settings": []
+}
+{% endschema %}

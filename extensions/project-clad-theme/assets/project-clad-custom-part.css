@@ -1,0 +1,48 @@
+.projectclad-custom-part {
+  margin: 1rem 0;
+}
+
+.projectclad-custom-part__form {
+  display: grid;
+  gap: 1rem;
+  max-width: 400px;
+}
+
+.projectclad-custom-part__title {
+  margin: 0;
+  font-size: 1rem;
+  text-transform: uppercase;
+}
+
+.projectclad-custom-part__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 0.75rem;
+}
+
+.projectclad-custom-part__field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.projectclad-custom-part__field label {
+  font-size: 0.875rem;
+}
+
+.projectclad-custom-part__field input,
+.projectclad-custom-part__field select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.5rem;
+  font-size: 16px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+}
+
+.projectclad-custom-part__price {
+  margin: 0;
+}
+
+.projectclad-custom-part__price strong {
+  font-size: 1.25rem;
+}

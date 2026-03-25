@@ -1,0 +1,13 @@
+query CartTransformRunInput {
+  cart {
+    lines {
+      id
+      quantity
+      l1: attribute(key: "L1") { value }
+      l2: attribute(key: "L2") { value }
+      l3: attribute(key: "L3") { value }
+      gauge: attribute(key: "Gauge") { value }
+      shapeType: attribute(key: "shape_type") { value }
+    }
+  }
+}

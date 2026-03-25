@@ -1,0 +1,13 @@
+---
+description: End replies with shell commands for the user’s next step when applicable
+alwaysApply: true
+---
+
+# Next-step commands
+
+When a task implies follow-up work (verify, migrate, deploy, commit), end the response with a short **“Commands to run next”** section.
+
+- Use **PowerShell-friendly** commands; paths absolute or `cd` into the repo root.
+- Prefer the **minimal set**: e.g. `react-router typegen` after route changes, `prisma migrate deploy` after migrations, `git status` / `git push` when wrapping up, `npm run deploy` after hosting is updated.
+- If there are **branching paths** (e.g. “only if you changed Prisma schema”), say so in one line before the commands.
+- Omit the section only when there is no sensible next command (pure explanation).

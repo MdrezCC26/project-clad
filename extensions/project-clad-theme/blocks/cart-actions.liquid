@@ -1,4 +1,11 @@
 {% assign view_projects_url = "https://" | append: request.host | append: "/apps/project-clad/projects" %}
+{% assign has_custom_parts = false %}
+{% for item in cart.items %}
+  {% if item.properties.shape_type == "L" or item.properties.shape_type == "Z" or item.properties.shape_type == "U" %}
+    {% assign has_custom_parts = true %}
+    {% break %}
+  {% endif %}
+{% endfor %}
 {% assign return_url_param = view_projects_url | url_encode %}
 {% assign login_url = "/account/login?return_url=" | append: return_url_param %}
 <div
@@ -8,6 +15,7 @@
   data-projectclad-projects-url="/apps/project-clad/api/projects"
   data-projectclad-save-url="/apps/project-clad/api/save-job"
   data-projectclad-view-projects-url="{% if customer %}{{ view_projects_url }}{% else %}{{ login_url }}{% endif %}"
+  data-projectclad-has-custom-parts="{{ has_custom_parts }}"
 >
   <div class="projectclad-cart-actions__buttons">
     <a
@@ -17,6 +25,9 @@
     >
       View Projects
     </a>
+    {% if has_custom_parts %}
+      <p class="projectclad-cart-notice">Your cart contains custom parts. Checkout is blocked until parts are created.</p>
+    {% endif %}
     {% if cart.item_count > 0 %}
       <button class="projectclad-button projectclad-button--primary" type="button" data-projectclad-save>
         Save Order

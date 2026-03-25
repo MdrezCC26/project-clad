@@ -32,6 +32,25 @@
 
   if (!saveButton || !modal || !form || !modeSelect) return;
 
+  const hasCustomParts =
+    root.getAttribute("data-projectclad-has-custom-parts") === "true";
+  if (hasCustomParts) {
+    const checkoutSelectors = [
+      'a[href="/checkout"]',
+      'a[href*="/checkout"]',
+      '[name="checkout"]',
+      '[data-checkout]',
+      'form[action="/checkout"]',
+      'form[action*="checkout"]',
+    ];
+    checkoutSelectors.forEach((sel) => {
+      document.querySelectorAll(sel).forEach((el) => {
+        if (el.closest("[data-projectclad]")) return;
+        el.style.display = "none";
+      });
+    });
+  }
+
   let cachedProjects = [];
   let cartRefreshTimer;
   let scrollY = 0;

@@ -208,3 +208,26 @@ warning: in the working copy of 'app/routes/apps.project-clad.projects.tsx', LF 
    } catch (error) {[m
      variantLookupError =[m
        error instanceof Error ? error.message : "Product lookup failed.";[m
+warning: in the working copy of 'app/routes/app.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/routes/apps.project-clad.api.project-actions.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/routes/apps.project-clad.api.save-job.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/routes/apps.project-clad.project.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/styles/project-clad-proxy.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'extensions/project-clad-theme/assets/project-clad-cart.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'extensions/project-clad-theme/blocks/cart-actions.liquid', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'package-lock.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'package.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'prisma/schema.prisma', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'shopify.app.toml', LF will be replaced by CRLF the next time Git touches it
+ app/routes/app.tsx                                 |   2 [32m+[m
+ .../apps.project-clad.api.project-actions.tsx      |  45 [32m+++[m
+ app/routes/apps.project-clad.api.save-job.tsx      |  78 [32m+++[m[31m-[m
+ app/routes/apps.project-clad.project.tsx           | 427 [32m++++++++++++++++++++[m[31m-[m
+ app/styles/project-clad-proxy.css                  |  32 [32m++[m
+ .../project-clad-theme/assets/project-clad-cart.js |  19 [32m+[m
+ .../project-clad-theme/blocks/cart-actions.liquid  |  11 [32m+[m
+ package-lock.json                                  |   8 [32m+[m
+ package.json                                       |   4 [32m+[m[31m-[m
+ prisma/schema.prisma                               | 108 [32m+++++[m[31m-[m
+ shopify.app.toml                                   |   6 [32m+[m[31m-[m
+ 11 files changed, 712 insertions(+), 28 deletions(-)

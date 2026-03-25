@@ -1,0 +1,22 @@
+api_version = "2026-01"
+
+[[extensions]]
+name = "t:name"
+handle = "projectclad-cart-transform"
+type = "function"
+uid = "91f1d819-04e9-f8e0-f8ea-1383f0348633865a5da1"
+description = "t:description"
+
+  [[extensions.targeting]]
+  target = "cart.transform.run"
+  input_query = "src/cart_transform_run.graphql"
+  export = "cart_transform_run"
+
+  [extensions.build]
+  command = "cargo build --target=wasm32-unknown-unknown --release"
+  path = "target/wasm32-unknown-unknown/release/projectclad-cart-transform.wasm"
+  watch = [ "src/**/*.rs" ]
+
+  [extensions.ui.paths]
+  create = "/"
+  details = "/"

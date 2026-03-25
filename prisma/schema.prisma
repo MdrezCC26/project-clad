@@ -52,38 +52,67 @@ model Project {
   members          ProjectMember[]
   shareTokens      ProjectShareToken[]
   approvalRequests ApprovalRequest[]
+  activityEvents   ProjectActivityEvent[]
+  comments         ProjectComment[]
 
   @@index([shop])
   @@index([ownerCustomerId])
 }
 
 model Job {
-  id        String      @id @default(cuid())
-  projectId String
-  name      String
-  createdAt DateTime    @default(now())
-  isLocked  Boolean     @default(false)
-  sortOrder Int         @default(0)
-  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  items     JobItem[]
-  orderLink JobOrderLink?
+  id                String      @id @default(cuid())
+  projectId         String
+  name              String
+  createdAt         DateTime    @default(now())
+  isLocked          Boolean     @default(false)
+  sortOrder         Int         @default(0)
+  /// unread | in_progress | complete — only meaningful after job-level approval
+  workOrderStatus   String?
+  completedAt       DateTime?
+  paidAt            DateTime?
+  receiptSnapshot   Json?
+  project           Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items             JobItem[]
+  orderLink         JobOrderLink?
 
   @@index([projectId])
   @@index([projectId, sortOrder])
 }
 
 model JobItem {
-  id            String   @id @default(cuid())
+  id            String       @id @default(cuid())
   jobId         String
   variantId     String
   quantity      Int
   priceSnapshot Decimal
-  sortOrder     Int      @default(0)
+  sortOrder     Int          @default(0)
   customData    Json?
-  job           Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job           Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  drawingJob    DrawingJob?
 
   @@index([jobId])
   @@index([jobId, sortOrder])
+}
+
+model DrawingJob {
+  id          String   @id @default(cuid())
+  jobItemId   String   @unique
+  shop        String
+  status      String   @default("pending") // pending | processing | completed | failed
+  shapeType   String   // L, Z, U
+  l1          Float
+  l2          Float
+  l3          Float?   // for Z, U
+  a1          Float?   // degrees
+  gauge       Int
+  partNumber  String?  // from local registry after creation
+  errorMsg    String?  // if failed
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+  jobItem     JobItem  @relation(fields: [jobItemId], references: [id], onDelete: Cascade)
+
+  @@index([shop, status])
+  @@index([status])
 }
 
 model ProjectMember {
@@ -109,11 +138,41 @@ model ProjectShareToken {
 }
 
 model JobOrderLink {
-  id        String   @id @default(cuid())
-  jobId     String   @unique
-  orderId   String   @unique
-  createdAt DateTime @default(now())
-  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  jobId      String   @unique
+  orderId    String   @unique
+  orderName  String?
+  createdAt  DateTime @default(now())
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model ProjectActivityEvent {
+  id               String    @id @default(cuid())
+  projectId        String
+  jobId            String?
+  type             String
+  payload          Json?
+  visibility       String
+  actorCustomerId  String?
+  createdAt        DateTime  @default(now())
+  project          Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+model ProjectComment {
+  id                    String    @id @default(cuid())
+  projectId             String
+  authorCustomerId      String
+  body                  String
+  createdAt             DateTime  @default(now())
+  deletedAt             DateTime?
+  deletedByCustomerId   String?
+  deletedByLabel        String?
+  project               Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }
 
 model ApprovalRequest {
@@ -128,6 +187,21 @@ model ApprovalRequest {
 
   @@unique([projectId, jobId, itemId])
   @@index([projectId])
+}
+
+model GaugeConfig {
+  id                String   @id @default(cuid())
+  shop              String
+  gauge             Int      // 16, 18, 20, 24, 26
+  value             Decimal  // price rate: value × girth × 10
+  /// Master rate last used when scaling Shopify variant prices (proportional updates).
+  valueAtLastCatalogSync Decimal?
+  thicknessInches   Decimal  // T1 for Inventor (e.g. 0.0598 for 16 ga)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([shop, gauge])
+  @@index([shop])
 }
 
 model ShopSettings {

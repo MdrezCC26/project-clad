@@ -10,6 +10,7 @@ import { getVariantInfo } from "../utils/storefront.server";
 import { getAdminVariantInfo } from "../utils/adminVariants.server";
 import { isEmailConfigured, sendEmail } from "../utils/email.server";
 import { verifyPassword } from "../utils/passwords.server";
+import { logProjectActivity } from "../utils/projectActivity.server";
 
 const PRICING_COOKIE = "projectclad_pricing=1";
 
@@ -453,6 +454,50 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       where: { id: existing.id },
       data: { approvedAt: new Date(), approvedByCustomerId: customerId },
     });
+
+    const initWorkOrdersAfterApproval = async () => {
+      const initJob = async (jid: string) => {
+        const job = await prisma.job.findFirst({
+          where: { id: jid, projectId },
+        });
+        if (!job || job.workOrderStatus) return;
+        await prisma.job.update({
+          where: { id: jid },
+          data: { workOrderStatus: "unread" },
+        });
+        await logProjectActivity({
+          projectId,
+          jobId: jid,
+          type: "order_approved_work_queue",
+          visibility: "member",
+          actorCustomerId: customerId,
+          payload: { jobName: job.name, workOrderStatus: "unread" },
+        });
+      };
+
+      if (jobId && !itemId) {
+        await initJob(jobId);
+      } else if (!jobId && !itemId) {
+        const jobs = await prisma.job.findMany({ where: { projectId } });
+        for (const j of jobs) {
+          if (j.workOrderStatus) continue;
+          await prisma.job.update({
+            where: { id: j.id },
+            data: { workOrderStatus: "unread" },
+          });
+          await logProjectActivity({
+            projectId,
+            jobId: j.id,
+            type: "order_approved_work_queue",
+            visibility: "member",
+            actorCustomerId: customerId,
+            payload: { jobName: j.name, workOrderStatus: "unread" },
+          });
+        }
+      }
+    };
+
+    await initWorkOrdersAfterApproval();
 
     if (isEmailConfigured()) {
       const approver = customerInfo[customerId];
