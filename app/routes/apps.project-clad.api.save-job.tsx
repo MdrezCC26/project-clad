@@ -108,13 +108,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return Response.json({ error: "Cart has no items." }, { status: 400 });
   }
 
-  if (!companyName) {
-    return Response.json(
-      { error: "Company name is required." },
-      { status: 400 },
-    );
-  }
-
   if (payload.mode === "newProject") {
     if (!payload.projectName || !payload.jobName) {
       return Response.json(
