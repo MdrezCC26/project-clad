@@ -29,6 +29,9 @@
   const jobSelect = root.querySelector("[data-projectclad-job]");
   const poNumberInput = root.querySelector("[data-projectclad-po]");
   const companyNameInput = root.querySelector("[data-projectclad-company]");
+  const orderNumberInputs = root.querySelectorAll(
+    "[data-projectclad-order-number]",
+  );
 
   if (!saveButton || !modal || !form || !modeSelect) return;
 
@@ -95,6 +98,13 @@
     } catch {
       // ignore cart fetch errors
     }
+  };
+
+  const buildOrderDisplayName = (baseName, orderNumber) => {
+    const name = (baseName || "").trim();
+    const number = (orderNumber || "").trim();
+    if (!number) return name;
+    return `${name} (#${number})`;
   };
 
   const markRequiredFields = () => {
@@ -186,10 +196,18 @@
     }
     const projectNameInput = root.querySelector("[data-projectclad-project-name]");
     const jobNameInputs = root.querySelectorAll("[data-projectclad-job-name]");
+    const orderNumberInputs = root.querySelectorAll(
+      "[data-projectclad-order-number]",
+    );
     if (projectNameInput instanceof HTMLInputElement) {
       projectNameInput.value = "";
     }
     jobNameInputs.forEach((input) => {
+      if (input instanceof HTMLInputElement) {
+        input.value = "";
+      }
+    });
+    orderNumberInputs.forEach((input) => {
       if (input instanceof HTMLInputElement) {
         input.value = "";
       }
@@ -468,6 +486,9 @@
     const jobName = Array.from(jobNameInputs).find(
       (input) => input instanceof HTMLInputElement && input.value.trim().length,
     );
+    const orderNumberInput = Array.from(orderNumberInputs).find(
+      (input) => input instanceof HTMLInputElement && input.value.trim().length,
+    );
     const poNumber =
       poNumberInput instanceof HTMLInputElement
         ? poNumberInput.value.trim()
@@ -475,6 +496,10 @@
     const companyName =
       companyNameInput instanceof HTMLInputElement
         ? companyNameInput.value.trim()
+        : "";
+    const orderNumber =
+      orderNumberInput instanceof HTMLInputElement
+        ? orderNumberInput.value.trim()
         : "";
 
     const selectedProject =
@@ -491,7 +516,9 @@
       companyName: companyName || undefined,
       projectName: projectName || undefined,
       jobName:
-        jobName instanceof HTMLInputElement ? jobName.value.trim() : undefined,
+        jobName instanceof HTMLInputElement
+          ? buildOrderDisplayName(jobName.value, orderNumber)
+          : undefined,
       projectId: selectedProject || undefined,
       jobId: selectedJob || undefined,
       quantityMode:

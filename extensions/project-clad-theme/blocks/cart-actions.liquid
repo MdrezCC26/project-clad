@@ -75,15 +75,31 @@
         </div>
 
           <div class="projectclad-section" data-projectclad-section="newProject">
-            <label for="projectclad-job-name">Order name</label>
-            <input id="projectclad-job-name" type="text" data-projectclad-job-name required />
+            <div class="projectclad-field-row">
+              <div class="projectclad-field">
+                <label for="projectclad-job-name">Order name</label>
+                <input id="projectclad-job-name" type="text" data-projectclad-job-name required />
+              </div>
+              <div class="projectclad-field">
+                <label for="projectclad-order-number">Order number</label>
+                <input id="projectclad-order-number" type="text" data-projectclad-order-number placeholder="Optional" />
+              </div>
+            </div>
           </div>
 
           <div class="projectclad-section" data-projectclad-section="existingProject" hidden>
             <label for="projectclad-project-select">Project</label>
             <select id="projectclad-project-select" data-projectclad-project required></select>
-            <label for="projectclad-job-name-existing">Order name</label>
-            <input id="projectclad-job-name-existing" type="text" data-projectclad-job-name required />
+            <div class="projectclad-field-row">
+              <div class="projectclad-field">
+                <label for="projectclad-job-name-existing">Order name</label>
+                <input id="projectclad-job-name-existing" type="text" data-projectclad-job-name required />
+              </div>
+              <div class="projectclad-field">
+                <label for="projectclad-order-number-existing">Order number</label>
+                <input id="projectclad-order-number-existing" type="text" data-projectclad-order-number placeholder="Optional" />
+              </div>
+            </div>
           </div>
 
           <div class="projectclad-section" data-projectclad-section="existingJob" hidden>
