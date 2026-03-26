@@ -115,34 +115,6 @@ const getProjectId = (request: Request) => {
   return url.searchParams.get("id") || "";
 };
 
-/**
- * App proxy requests often arrive with a rewritten pathname (e.g. `/project`).
- * A relative redirect to that path on the storefront host is a theme 404.
- * Always send customers to the canonical storefront URL on their shop domain.
- */
-const mergeAppProxySearchForRedirect = (request: Request, projectId: string) => {
-  const merged = new URLSearchParams();
-
-  const referer = request.headers.get("Referer");
-  if (referer) {
-    try {
-      for (const [k, v] of new URL(referer).searchParams) {
-        merged.set(k, v);
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  const reqUrl = new URL(request.url);
-  for (const [k, v] of reqUrl.searchParams) {
-    merged.set(k, v);
-  }
-
-  merged.set("id", projectId);
-  return merged.toString();
-};
-
 /** POST may hit `/project` on the app; redirects must target the customer’s storefront host + proxy path. */
 const getStorefrontOriginForAppProxyRedirect = (
   request: Request,
@@ -207,9 +179,10 @@ const projectMissingHtmlResponse = (
 };
 
 const redirectToProject = (request: Request, projectId: string, shop: string) => {
-  const q = mergeAppProxySearchForRedirect(request, projectId);
   const origin = getStorefrontOriginForAppProxyRedirect(request, shop);
-  return redirect(`${origin}${storefrontProjectActionPath}?${q}`);
+  return redirect(
+    `${origin}${storefrontProjectActionPath}?id=${encodeURIComponent(projectId)}`,
+  );
 };
 
 const getProjectsPath = () => "/apps/project-clad/projects";
@@ -2634,7 +2607,7 @@ export default function ProjectDetailPage() {
             <div className="project-clad-card">
               <Form
                 method="post"
-                action={`${storefrontProjectActionPath}${location.search}`}
+                action={`${storefrontProjectActionPath}?id=${encodeURIComponent(project.id)}`}
                 style={{ marginBottom: "1rem" }}
               >
                 <input type="hidden" name="id" value={project.id} />
@@ -2702,7 +2675,7 @@ export default function ProjectDetailPage() {
                             {item.authorCustomerId === currentCustomerId ? (
                               <Form
                                 method="post"
-                                action={`${storefrontProjectActionPath}${location.search}`}
+                                action={`${storefrontProjectActionPath}?id=${encodeURIComponent(project.id)}`}
                                 onSubmit={(e) => {
                                   if (!confirm("Delete this comment?")) {
                                     e.preventDefault();
