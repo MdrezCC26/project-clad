@@ -27,8 +27,8 @@
     root.querySelectorAll("[data-projectclad-project]"),
   );
   const jobSelect = root.querySelector("[data-projectclad-job]");
-  const poNumberInput = root.querySelector("[data-projectclad-po]");
-  const companyNameInput = root.querySelector("[data-projectclad-company]");
+  const poNumberInputs = root.querySelectorAll("[data-projectclad-po]");
+  const companyNameInputs = root.querySelectorAll("[data-projectclad-company]");
   const orderNumberInputs = root.querySelectorAll(
     "[data-projectclad-order-number]",
   );
@@ -107,6 +107,12 @@
     return `${name} (#${number})`;
   };
 
+  const getVisibleInput = (selector) => {
+    const all = Array.from(root.querySelectorAll(selector));
+    const visible = all.find((el) => !el.closest("[hidden]"));
+    return visible instanceof HTMLInputElement ? visible : null;
+  };
+
   const markRequiredFields = () => {
     root.querySelectorAll("[required]").forEach((field) => {
       if (field instanceof HTMLElement) {
@@ -155,19 +161,15 @@
   };
 
   const setProjectDetails = (projectId) => {
-    if (
-      !projectId ||
-      !poNumberInput ||
-      !(poNumberInput instanceof HTMLInputElement)
-    ) {
+    if (!projectId) {
       return;
     }
     const project = cachedProjects.find((item) => item.id === projectId);
     if (!project) return;
-    poNumberInput.value = project.poNumber || "";
-    if (companyNameInput instanceof HTMLInputElement) {
-      companyNameInput.value = project.companyName || "";
-    }
+    const poInput = getVisibleInput("[data-projectclad-po]");
+    const companyInput = getVisibleInput("[data-projectclad-company]");
+    if (poInput) poInput.value = project.poNumber || "";
+    if (companyInput) companyInput.value = project.companyName || "";
   };
 
   const fillJobOptions = (projectId) => {
@@ -188,12 +190,12 @@
   };
 
   const resetModal = () => {
-    if (poNumberInput instanceof HTMLInputElement) {
-      poNumberInput.value = "";
-    }
-    if (companyNameInput instanceof HTMLInputElement) {
-      companyNameInput.value = "";
-    }
+    poNumberInputs.forEach((input) => {
+      if (input instanceof HTMLInputElement) input.value = "";
+    });
+    companyNameInputs.forEach((input) => {
+      if (input instanceof HTMLInputElement) input.value = "";
+    });
     const projectNameInput = root.querySelector("[data-projectclad-project-name]");
     const jobNameInputs = root.querySelectorAll("[data-projectclad-job-name]");
     const orderNumberInputs = root.querySelectorAll(
@@ -335,12 +337,10 @@
   modeSelect.addEventListener("change", () => {
     toggleSection(modeSelect.value);
     if (modeSelect.value === "newProject") {
-      if (poNumberInput instanceof HTMLInputElement) {
-        poNumberInput.value = "";
-      }
-      if (companyNameInput instanceof HTMLInputElement) {
-        companyNameInput.value = "";
-      }
+      const poInput = getVisibleInput("[data-projectclad-po]");
+      const companyInput = getVisibleInput("[data-projectclad-company]");
+      if (poInput) poInput.value = "";
+      if (companyInput) companyInput.value = "";
       return;
     }
     const activeProject =
@@ -486,17 +486,14 @@
     const jobName = Array.from(jobNameInputs).find(
       (input) => input instanceof HTMLInputElement && input.value.trim().length,
     );
+    const poInput = getVisibleInput("[data-projectclad-po]");
+    const companyInput = getVisibleInput("[data-projectclad-company]");
     const orderNumberInput = Array.from(orderNumberInputs).find(
       (input) => input instanceof HTMLInputElement && input.value.trim().length,
     );
-    const poNumber =
-      poNumberInput instanceof HTMLInputElement
-        ? poNumberInput.value.trim()
-        : "";
+    const poNumber = poInput instanceof HTMLInputElement ? poInput.value.trim() : "";
     const companyName =
-      companyNameInput instanceof HTMLInputElement
-        ? companyNameInput.value.trim()
-        : "";
+      companyInput instanceof HTMLInputElement ? companyInput.value.trim() : "";
     const orderNumber =
       orderNumberInput instanceof HTMLInputElement
         ? orderNumberInput.value.trim()

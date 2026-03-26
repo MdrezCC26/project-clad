@@ -58,30 +58,29 @@
             <input id="projectclad-project-name" type="text" data-projectclad-project-name required />
           </div>
 
-        <div class="projectclad-field-row">
-          <div class="projectclad-field">
-            <label for="projectclad-po-number">PO number</label>
-            <input id="projectclad-po-number" type="text" data-projectclad-po />
-          </div>
-          <div class="projectclad-field">
-            <label for="projectclad-company-name">Company name *</label>
-            <input
-              id="projectclad-company-name"
-              type="text"
-              data-projectclad-company
-              required
-            />
-          </div>
-        </div>
-
           <div class="projectclad-section" data-projectclad-section="newProject">
+            <div class="projectclad-field-row">
+              <div class="projectclad-field">
+                <label for="projectclad-po-number-new">PO number</label>
+                <input id="projectclad-po-number-new" type="text" data-projectclad-po />
+              </div>
+              <div class="projectclad-field">
+                <label for="projectclad-company-name-new">Company name *</label>
+                <input
+                  id="projectclad-company-name-new"
+                  type="text"
+                  data-projectclad-company
+                  required
+                />
+              </div>
+            </div>
             <div class="projectclad-field-row">
               <div class="projectclad-field">
                 <label for="projectclad-job-name">Order name *</label>
                 <input id="projectclad-job-name" type="text" data-projectclad-job-name required />
               </div>
               <div class="projectclad-field">
-                <label for="projectclad-order-number">Order number</label>
+                <label for="projectclad-order-number">Job number</label>
                 <input id="projectclad-order-number" type="text" data-projectclad-order-number />
               </div>
             </div>
@@ -92,11 +91,26 @@
             <select id="projectclad-project-select" data-projectclad-project required></select>
             <div class="projectclad-field-row">
               <div class="projectclad-field">
+                <label for="projectclad-po-number-existing">PO number</label>
+                <input id="projectclad-po-number-existing" type="text" data-projectclad-po />
+              </div>
+              <div class="projectclad-field">
+                <label for="projectclad-company-name-existing">Company name *</label>
+                <input
+                  id="projectclad-company-name-existing"
+                  type="text"
+                  data-projectclad-company
+                  required
+                />
+              </div>
+            </div>
+            <div class="projectclad-field-row">
+              <div class="projectclad-field">
                 <label for="projectclad-job-name-existing">Order name *</label>
                 <input id="projectclad-job-name-existing" type="text" data-projectclad-job-name required />
               </div>
               <div class="projectclad-field">
-                <label for="projectclad-order-number-existing">Order number</label>
+                <label for="projectclad-order-number-existing">Job number</label>
                 <input id="projectclad-order-number-existing" type="text" data-projectclad-order-number />
               </div>
             </div>
@@ -105,6 +119,21 @@
           <div class="projectclad-section" data-projectclad-section="existingJob" hidden>
             <label for="projectclad-project-select-job">Project *</label>
             <select id="projectclad-project-select-job" data-projectclad-project required></select>
+            <div class="projectclad-field-row">
+              <div class="projectclad-field">
+                <label for="projectclad-po-number-job">PO number</label>
+                <input id="projectclad-po-number-job" type="text" data-projectclad-po />
+              </div>
+              <div class="projectclad-field">
+                <label for="projectclad-company-name-job">Company name *</label>
+                <input
+                  id="projectclad-company-name-job"
+                  type="text"
+                  data-projectclad-company
+                  required
+                />
+              </div>
+            </div>
             <label for="projectclad-job-select">Order *</label>
             <select id="projectclad-job-select" data-projectclad-job required></select>
             <fieldset class="projectclad-fieldset">
