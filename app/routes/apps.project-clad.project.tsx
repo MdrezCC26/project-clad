@@ -2626,11 +2626,19 @@ export default function ProjectDetailPage() {
                   Post
                 </button>
               </Form>
-              {projectTimeline.length === 0 ? (
-                <p className="project-clad-muted">No activity yet.</p>
-              ) : (
-                <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                  {projectTimeline.map((item) =>
+              <div
+                style={{
+                  maxHeight: "24rem",
+                  minHeight: "14rem",
+                  overflowY: "auto",
+                  paddingRight: "0.25rem",
+                }}
+              >
+                {projectTimeline.length === 0 ? (
+                  <p className="project-clad-muted">No activity yet.</p>
+                ) : (
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                    {projectTimeline.map((item) =>
                     item.kind === "activity" ? (
                       <li
                         key={`a-${item.id}`}
@@ -2673,31 +2681,33 @@ export default function ProjectDetailPage() {
                               {item.body}
                             </p>
                             {item.authorCustomerId === currentCustomerId ? (
-                              <Form
-                                method="post"
-                                action={`${storefrontProjectActionPath}?id=${encodeURIComponent(project.id)}`}
-                                onSubmit={(e) => {
-                                  if (!confirm("Delete this comment?")) {
-                                    e.preventDefault();
-                                  }
-                                }}
-                                style={{ marginTop: "0.5rem" }}
-                              >
-                                <input type="hidden" name="id" value={project.id} />
-                                <input type="hidden" name="intent" value="delete-comment" />
-                                <input type="hidden" name="commentId" value={item.id} />
-                                <button type="submit" className="project-clad-button">
-                                  Delete
-                                </button>
-                              </Form>
+                              <div className="project-clad-edit-view" style={{ marginTop: "0.5rem", display: "none" }}>
+                                <Form
+                                  method="post"
+                                  action={`${storefrontProjectActionPath}?id=${encodeURIComponent(project.id)}`}
+                                  onSubmit={(e) => {
+                                    if (!confirm("Delete this comment?")) {
+                                      e.preventDefault();
+                                    }
+                                  }}
+                                >
+                                  <input type="hidden" name="id" value={project.id} />
+                                  <input type="hidden" name="intent" value="delete-comment" />
+                                  <input type="hidden" name="commentId" value={item.id} />
+                                  <button type="submit" className="project-clad-button">
+                                    Delete
+                                  </button>
+                                </Form>
+                              </div>
                             ) : null}
                           </>
                         )}
                       </li>
                     ),
-                  )}
-                </ul>
-              )}
+                    )}
+                  </ul>
+                )}
+              </div>
             </div>
           </section>
 
