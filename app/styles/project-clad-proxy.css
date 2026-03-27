@@ -529,6 +529,10 @@ details.project-clad-edit-mode .project-clad-title {
   font-size: calc(0.95rem * var(--pc-text-scale));
 }
 
+.project-clad-header-meta__project-ref {
+  font-size: calc(1.6rem * var(--pc-text-scale));
+}
+
 .project-clad-meta {
   display: grid;
   grid-template-columns: 1fr auto;
