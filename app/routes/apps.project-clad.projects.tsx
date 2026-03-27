@@ -394,6 +394,9 @@ export default function ProjectsPage() {
                       <div>
                         <h2 className="project-clad-title">{project.name}</h2>
                         <p className="project-clad-muted">
+                          Project #: {project.poNumber || "—"}
+                        </p>
+                        <p className="project-clad-muted">
                           Created {new Date(project.createdAt).toLocaleDateString()}
                         </p>
                       </div>
@@ -406,10 +409,6 @@ export default function ProjectsPage() {
                       <div className="project-clad-meta__company">
                         <dt>Company name</dt>
                         <dd>{project.companyName || "—"}</dd>
-                      </div>
-                      <div>
-                        <dt>PO number</dt>
-                        <dd>{project.poNumber || "—"}</dd>
                       </div>
                     </dl>
                   </a>
