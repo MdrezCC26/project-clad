@@ -1572,7 +1572,7 @@ export default function ProjectDetailPage() {
               required
               className="project-clad-pricing-password-input"
             />
-            <label htmlFor="edit-project-po">PO number</label>
+            <label htmlFor="edit-project-po">Project #</label>
             <input
               id="edit-project-po"
               name="poNumber"
@@ -1898,8 +1898,8 @@ export default function ProjectDetailPage() {
               </nav>
             </div>
             <div className="project-clad-header-meta">
+              <span>Project #: {project.poNumber || "—"}</span>
               <span>Created {new Date(project.createdAt).toLocaleDateString()}</span>
-              <span>PO Number: {project.poNumber || "—"}</span>
               <span>Company name: {project.companyName || "—"}</span>
             </div>
           </header>
