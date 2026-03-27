@@ -51,6 +51,7 @@ body.project-clad-leaving .project-clad-page {
   --pc-button-letter-spacing: 0.02em;
   --pc-button-min-width: 0px;
   --pc-button-line-height: 1.25;
+  --pc-section-heading-size: calc(1.1rem * var(--pc-text-scale));
   --pc-bg: #fff;
   --pc-fg: #111;
   --pc-muted: #444;
@@ -529,8 +530,18 @@ details.project-clad-edit-mode .project-clad-title {
   font-size: calc(0.95rem * var(--pc-text-scale));
 }
 
-.project-clad-header-meta__project-ref {
-  font-size: calc(1.6rem * var(--pc-text-scale));
+/*
+ * "Orders" (h2) and project # line: same size as each other, not the main title (.main-page-title is 1.6rem).
+ * Theme CSS loads after this file and can shrink h2 but not our span — !important keeps both on --pc-section-heading-size.
+ */
+.project-clad-page h2.project-clad-section-title,
+.project-clad-page .project-clad-header-meta__project-ref {
+  font-size: var(--pc-section-heading-size) !important;
+  font-weight: 700;
+}
+
+.project-clad-page .project-clad-header-meta__project-ref-label {
+  text-transform: uppercase;
 }
 
 .project-clad-meta {
@@ -559,7 +570,7 @@ details.project-clad-edit-mode .project-clad-title {
 
 .project-clad-section-title {
   margin-bottom: 1rem;
-  font-size: calc(1.1rem * var(--pc-text-scale));
+  font-size: var(--pc-section-heading-size);
 }
 
 .project-clad-actions {
