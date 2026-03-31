@@ -1899,7 +1899,10 @@ export default function ProjectDetailPage() {
             </div>
             <div className="project-clad-header-meta">
               <span className="project-clad-header-meta__project-ref">
-                PROJECT #: {project.poNumber || "—"}
+                <span className="project-clad-header-meta__project-ref-label">
+                  Project #:
+                </span>{" "}
+                {project.poNumber || "—"}
               </span>
               <span>Created {new Date(project.createdAt).toLocaleDateString()}</span>
               <span>Company name: {project.companyName || "—"}</span>
@@ -2530,16 +2533,24 @@ export default function ProjectDetailPage() {
                           <div className="project-clad-actions project-clad-order-actions-add-to-cart" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
                             <form method="post" action="/cart/add" style={{ display: "inline" }} onPointerDownCapture={(e) => e.stopPropagation()} data-projectclad-add-all-to-cart data-job-name={job.name} onSubmit={(e) => { e.preventDefault(); handleAddItemsClick(job, e.currentTarget as HTMLFormElement, "cart"); }}>
                               {job.items.filter((i) => i.quantity > 0).map((item, index) => (
-                                <input key={`${job.id}-${item.variantId}`} type="hidden" name={`items[${index}][id]`} value={item.variantId} />
+                                <input key={`${job.id}-${item.id}-id-${index}`} type="hidden" name={`items[${index}][id]`} value={item.variantId} />
                               ))}
                               {job.items.filter((i) => i.quantity > 0).map((item, index) => (
-                                <input key={`${job.id}-${item.variantId}-qty`} type="hidden" name={`items[${index}][quantity]`} value={item.quantity} />
+                                <input key={`${job.id}-${item.id}-qty-${index}`} type="hidden" name={`items[${index}][quantity]`} value={item.quantity} />
                               ))}
                               {job.items.filter((i) => i.quantity > 0).map((item, index) =>
                                 item.properties?.map((p, pi) => (
-                                  <input key={`${job.id}-${item.variantId}-p-${pi}`} type="hidden" name={`items[${index}][properties][${p.name}]`} value={p.value} />
+                                  <input key={`${job.id}-${item.id}-p-${pi}-${index}`} type="hidden" name={`items[${index}][properties][${p.name}]`} value={p.value} />
                                 )),
                               )}
+                              {job.items.filter((i) => i.quantity > 0).map((item, index) => (
+                                <input
+                                  key={`${job.id}-${item.id}-price-${index}`}
+                                  type="hidden"
+                                  name={`items[${index}][properties][_projectclad_price_snapshot]`}
+                                  value={item.priceSnapshot}
+                                />
+                              ))}
                               <input type="hidden" name="return_to" value="/cart" />
                               <button type="submit" className="project-clad-button" data-projectclad-add-all-btn>
                                 Add all items to cart
