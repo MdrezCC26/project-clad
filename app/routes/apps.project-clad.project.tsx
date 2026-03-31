@@ -1287,10 +1287,6 @@ export default function ProjectDetailPage() {
       const cart = (await response.json()) as { item_count?: number };
       if ((cart.item_count || 0) > 0) {
         setCartPrompt({ items: job.items, jobName: job.name, destination });
-      } else if (form) {
-        const returnTo = form.querySelector<HTMLInputElement>('input[name="return_to"]');
-        if (returnTo) returnTo.value = destination === "checkout" ? "/checkout" : "/cart";
-        form.submit();
       } else {
         await addItemsToCart(job.items, "add");
         window.location.href = destination === "checkout" ? "/checkout" : "/cart";
@@ -2732,26 +2728,6 @@ export default function ProjectDetailPage() {
   window.__pcShareCopyInitialized = true;
   const actionsEndpoint = '/apps/project-clad/api/project-actions';
 
-  document.addEventListener('click', async (event) => {
-    const btn = event.target?.closest?.('button[data-projectclad-add-all-btn]');
-    if (!btn) return;
-    const form = btn.closest('form[data-projectclad-add-all-to-cart]');
-    if (!(form instanceof HTMLFormElement)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
-    try {
-      const res = await fetch('/cart.js', { headers: { Accept: 'application/json' } });
-      const cart = res.ok ? await res.json() : {};
-      if ((cart.item_count || 0) > 0) {
-        const jobName = form.getAttribute('data-job-name') || 'this order';
-        if (!confirm('Your cart already has items. Add all items from "' + jobName + '" to your existing cart?')) return;
-      }
-      form.submit();
-    } catch (e) {
-      form.submit();
-    }
-  }, true);
   const memberMessage = document.querySelector('[data-projectclad-member-message]');
   const setMemberMessage = (text) => {
     if (memberMessage) {
