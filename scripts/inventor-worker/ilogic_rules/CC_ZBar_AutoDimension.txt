@@ -1,0 +1,50 @@
+' Z-bar: D7 (top flange length 1.5), D1 (overall height 0.75), D8 (90° interior corner).
+' On each .ipt: iLogic-name the MODEL EDGES (after extrude) listed below — names must match exactly.
+'
+' Batch (cscript batch_part_drawings.vbs): RunExternalRule from outside Inventor often fails; DrawingView.GetIntent
+' is not available from VBScript COM. Name edges as below, then run this rule on the .idw inside Inventor.
+'
+' D7 — top flange horizontal: left limit (at riser) -> right end of top flange
+'   CC_D7_LEFT   = edge at inner corner of top flange / riser (vertical face meets top flange)
+'   CC_D7_RIGHT  = far right end edge of top flange (short edge, cap of flange)
+'
+' D1 — vertical overall: top of bottom flange -> bottom of top flange  
+'   CC_D1_BOTTOM = top horizontal edge of bottom flange (long edge)
+'   CC_D1_TOP    = bottom horizontal edge of top flange (long edge, underside)
+'
+' D8 — 90° at interior corner (bottom flange top vs riser inner vertical)
+'   CC_D8_H      = edge along bottom flange top (into the corner)
+'   CC_D8_V      = inner vertical edge of riser (meeting that corner)
+'
+' Tip: Open the .ipt, rotate to see edges clearly, right-click edge -> name. Test on z1600750 first.
+
+Sub Main
+    Dim sh = ThisDrawing.Sheets.Item(1)
+    If sh.DrawingViews.Count < 1 Then
+        Logger.Info("CC_ZBar_AutoDimension: no views on sheet 1.")
+        Exit Sub
+    End If
+    Dim v = sh.DrawingViews.Item(1)
+
+    Dim genDims = sh.DrawingDimensions.GeneralDimensions
+
+    Dim iD7a = v.GetIntent("CC_D7_LEFT")
+    Dim iD7b = v.GetIntent("CC_D7_RIGHT")
+    Dim iD1a = v.GetIntent("CC_D1_BOTTOM")
+    Dim iD1b = v.GetIntent("CC_D1_TOP")
+    Dim iD8h = v.GetIntent("CC_D8_H")
+    Dim iD8v = v.GetIntent("CC_D8_V")
+
+    ThisDrawing.BeginManage()
+    Try
+        ' D7 — top flange length (text below view center)
+        genDims.AddLinear("CC_DIM_D7", v.SheetPoint(0.55, -0.14), iD7a, iD7b)
+        ' D1 — overall height (text to left of view)
+        genDims.AddLinear("CC_DIM_D1", v.SheetPoint(-0.14, 0.45), iD1a, iD1b)
+        ' D8 — 90° interior corner (nudge SheetPoint toward the corner in normalized coords)
+        genDims.AddAngular("CC_DIM_D8", v.SheetPoint(0.08, 0.12), iD8h, iD8v)
+    Catch ex As Exception
+        Logger.Info("CC_ZBar_AutoDimension: " & ex.Message)
+    End Try
+    ThisDrawing.EndManage()
+End Sub
