@@ -9,6 +9,7 @@
 ' Inventor 2025: add nodim to skip iLogic/COM auto-dim (quiet batch). Add verbose for per-part AUTO-DIM lines.
 '   cscript //nologo batch_part_drawings.vbs overwrite nodim
 ' Z-bar .ipt grid from a seed: cscript //nologo batch_generate_z_parts.vbs (then run this script for drawings).
+' Z-bar parts named Z{gg}{ttttt}: before first drawing save, script sets part+drawing Summary Title + User Gauge (same as batch_generate / on-open rule).
 ' Diagnose (one part, verbose, may show Inventor dialogs): cscript //nologo batch_part_drawings.vbs diag
 ' Diagnose a specific file: cscript //nologo batch_part_drawings.vbs diag "C:\path\part.ipt"
 ' Note: After part diagnostics, "Creating new drawing..." can sit 1-3+ minutes (heavy templates).
@@ -36,7 +37,7 @@
 ' String[]). The script copies ilogic_rules\<name>.txt next to the .ipt when missing so iLogic finds it via the project
 ' workspace; the temp copy is deleted after the run if this script created it.
 ' Inventor 2025: iLogic RunExternalRule/RunRule often fails from cscript (Err 5). The script also tries RunExternalRuleWithArguments,
-' Sub-style calls, and for rule name CC_ZBar_AutoDimension a COM fallback: DrawingView.GetIntent + GeneralDimensions (no iLogic API).
+' Sub-style calls, and for rule name CC_ZBar_AutoDimension a COM fallback: DrawingView.GetIntent + GeneralDimensions (usually fails from cscript; same D17/D18/D19 edge names as the rule file).
 ' The drawing is saved once before iLogic (unsaved drawings often yield RunExternalRule Err 5). A second save runs only
 ' if auto-dim reports success; after a failed RunExternalRule, Inventor often cannot Save again (Err 5 / E_FAIL).
 ' Implement dimensions inside that rule (named edges, DrawingCurves, model params). Leave blank to skip.
@@ -76,6 +77,7 @@ AUTO_DIMENSION_ILOGIC_RULE = "CC_ZBar_AutoDimension"
 Const kDrawingDocumentObject = 12292
 Const kFrontView = 12320
 Const kHiddenLineDrawingViewStyle = 16400
+' Z-bar edge names: see ilogic_rules\CC_ZBar_AutoDimension.txt (4 linears + 2 angulars; 8 unique intents).
 
 Dim gLoggedBaseViewError
 gLoggedBaseViewError = False
@@ -1718,7 +1720,7 @@ Function TryRunAutoDimensionILogic(inv, drawDoc, fso, ruleCfg, partPathForLog)
 End Function
 
 ' Native Inventor API: GeneralDimensions.AddLinear(textPoint, intent1, intent2) — point first, not iLogic's string key overload.
-' Matches ilogic_rules\CC_ZBar_AutoDimension.txt (named model edges on the .ipt; DrawingView.GetIntent is iLogic-style).
+' Matches ilogic_rules\CC_ZBar_AutoDimension.txt (D17/D18/D19 edge names; DrawingView.GetIntent is iLogic-only from cscript).
 Function TryAddZBarLinearPair(genDims, pt, iA, iB, tag)
   On Error Resume Next
   TryAddZBarLinearPair = False
@@ -1744,8 +1746,9 @@ Function TryAddZBarAngularPair(genDims, pt, iA, iB, tag)
 End Function
 
 Function TryAddZBarAutoDimensionsCom(inv, drawDoc, partPathForLog)
-  Dim sh, v, genDims, iD7a, iD7b, iD1a, iD1b, iD8h, iD8v
-  Dim ptD7, ptD1, ptD8, app, tg
+  Dim sh, v, genDims
+  Dim iD17O, iD17I, iD18O, iD18I, iD19O, iD19I, iD20O, iD20I
+  Dim ptL1, ptL2, ptL3, ptL4, ptA1, ptA2, app, tg
   On Error Resume Next
   TryAddZBarAutoDimensionsCom = False
   If gAutoDimComGetIntentUnavailable And Not AUTO_DIMENSION_VERBOSE Then Exit Function
@@ -1778,49 +1781,61 @@ Function TryAddZBarAutoDimensionsCom(inv, drawDoc, partPathForLog)
   End If
 
   Err.Clear
-  Set iD7a = v.GetIntent("CC_D7_LEFT")
-  If Err.Number <> 0 Or iD7a Is Nothing Then
+  Set iD17O = v.GetIntent("D17O")
+  If Err.Number <> 0 Or iD17O Is Nothing Then
     If Err.Number = 424 Or Err.Number = 438 Then
       If Not AUTO_DIMENSION_VERBOSE Then gAutoDimComGetIntentUnavailable = True
       If AUTO_DIMENSION_VERBOSE Then
-        WScript.Echo "AUTO-DIM COM: GetIntent(CC_D7_LEFT) iLogic-only Err " & Err.Number & " - " & partPathForLog
+        WScript.Echo "AUTO-DIM COM: GetIntent(D17O) iLogic-only Err " & Err.Number & " - " & partPathForLog
       ElseIf Not gAutoDimOnceQuietCom Then
         WScript.Echo "AUTO-DIM COM: DrawingView.GetIntent is iLogic-only (Err " & Err.Number & " from VBScript). Z-bar COM fallback cannot run. Dimension inside Inventor, or set AUTO_DIMENSION_ILOGIC_RULE=\"\" or use nodim on the command line."
         gAutoDimOnceQuietCom = True
       End If
     Else
-      WScript.Echo "AUTO-DIM COM: GetIntent(CC_D7_LEFT) failed " & Err.Number & " - check edge name CC_D7_LEFT on .ipt (" & partPathForLog & ")"
+      WScript.Echo "AUTO-DIM COM: GetIntent(D17O) failed " & Err.Number & " - name edges on .ipt (" & partPathForLog & ")"
     End If
     Exit Function
   End If
   Err.Clear
-  Set iD7b = v.GetIntent("CC_D7_RIGHT")
-  If Err.Number <> 0 Or iD7b Is Nothing Then
-    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: GetIntent(CC_D7_RIGHT) failed " & Err.Number
+  Set iD17I = v.GetIntent("D17I")
+  If Err.Number <> 0 Or iD17I Is Nothing Then
+    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: GetIntent(D17I) failed " & Err.Number
     Exit Function
   End If
   Err.Clear
-  Set iD1a = v.GetIntent("CC_D1_BOTTOM")
-  If Err.Number <> 0 Or iD1a Is Nothing Then
-    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: GetIntent(CC_D1_BOTTOM) failed " & Err.Number
+  Set iD18O = v.GetIntent("D18O")
+  If Err.Number <> 0 Or iD18O Is Nothing Then
+    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: GetIntent(D18O) failed " & Err.Number
     Exit Function
   End If
   Err.Clear
-  Set iD1b = v.GetIntent("CC_D1_TOP")
-  If Err.Number <> 0 Or iD1b Is Nothing Then
-    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: GetIntent(CC_D1_TOP) failed " & Err.Number
+  Set iD18I = v.GetIntent("D18I")
+  If Err.Number <> 0 Or iD18I Is Nothing Then
+    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: GetIntent(D18I) failed " & Err.Number
     Exit Function
   End If
   Err.Clear
-  Set iD8h = v.GetIntent("CC_D8_H")
-  If Err.Number <> 0 Or iD8h Is Nothing Then
-    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: GetIntent(CC_D8_H) failed " & Err.Number
+  Set iD19O = v.GetIntent("D19O")
+  If Err.Number <> 0 Or iD19O Is Nothing Then
+    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: GetIntent(D19O) failed " & Err.Number
     Exit Function
   End If
   Err.Clear
-  Set iD8v = v.GetIntent("CC_D8_V")
-  If Err.Number <> 0 Or iD8v Is Nothing Then
-    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: GetIntent(CC_D8_V) failed " & Err.Number
+  Set iD19I = v.GetIntent("D19I")
+  If Err.Number <> 0 Or iD19I Is Nothing Then
+    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: GetIntent(D19I) failed " & Err.Number
+    Exit Function
+  End If
+  Err.Clear
+  Set iD20O = v.GetIntent("D20O")
+  If Err.Number <> 0 Or iD20O Is Nothing Then
+    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: GetIntent(D20O) failed " & Err.Number
+    Exit Function
+  End If
+  Err.Clear
+  Set iD20I = v.GetIntent("D20I")
+  If Err.Number <> 0 Or iD20I Is Nothing Then
+    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: GetIntent(D20I) failed " & Err.Number
     Exit Function
   End If
 
@@ -1831,47 +1846,74 @@ Function TryAddZBarAutoDimensionsCom(inv, drawDoc, partPathForLog)
   If Not app Is Nothing Then Set tg = app.TransientGeometry
 
   Err.Clear
-  Set ptD7 = v.SheetPoint(0.55, -0.14)
-  If Err.Number <> 0 Or ptD7 Is Nothing Then
+  Set ptL1 = v.SheetPoint(0.55, -0.14)
+  If Err.Number <> 0 Or ptL1 Is Nothing Then
     Err.Clear
-    If Not tg Is Nothing Then Set ptD7 = tg.CreatePoint2d(0.55, -0.14)
+    If Not tg Is Nothing Then Set ptL1 = tg.CreatePoint2d(0.55, -0.14)
   End If
-  If ptD7 Is Nothing Then
-    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: could not get text point for D7 (SheetPoint / CreatePoint2d)"
-    Exit Function
-  End If
-  If Not TryAddZBarLinearPair(genDims, ptD7, iD7a, iD7b, "D7") Then
-    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: AddLinear D7 failed (tried pt,intent,intent and swaps)"
+  If ptL1 Is Nothing Then Exit Function
+  If Not TryAddZBarLinearPair(genDims, ptL1, iD17O, iD19O, "LIN1") Then
+    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: AddLinear LIN1 failed"
     Exit Function
   End If
 
   Err.Clear
-  Set ptD1 = v.SheetPoint(-0.14, 0.45)
-  If Err.Number <> 0 Or ptD1 Is Nothing Then
+  Set ptL2 = v.SheetPoint(-0.14, 0.45)
+  If Err.Number <> 0 Or ptL2 Is Nothing Then
     Err.Clear
-    If Not tg Is Nothing Then Set ptD1 = tg.CreatePoint2d(-0.14, 0.45)
+    If Not tg Is Nothing Then Set ptL2 = tg.CreatePoint2d(-0.14, 0.45)
   End If
-  If ptD1 Is Nothing Then
-    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: text point D1 failed"
-    Exit Function
-  End If
-  If Not TryAddZBarLinearPair(genDims, ptD1, iD1a, iD1b, "D1") Then
-    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: AddLinear D1 failed"
+  If ptL2 Is Nothing Then Exit Function
+  If Not TryAddZBarLinearPair(genDims, ptL2, iD17I, iD19I, "LIN2") Then
+    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: AddLinear LIN2 failed"
     Exit Function
   End If
 
   Err.Clear
-  Set ptD8 = v.SheetPoint(0.08, 0.12)
-  If Err.Number <> 0 Or ptD8 Is Nothing Then
+  Set ptL3 = v.SheetPoint(0.52, -0.24)
+  If Err.Number <> 0 Or ptL3 Is Nothing Then
     Err.Clear
-    If Not tg Is Nothing Then Set ptD8 = tg.CreatePoint2d(0.08, 0.12)
+    If Not tg Is Nothing Then Set ptL3 = tg.CreatePoint2d(0.52, -0.24)
   End If
-  If ptD8 Is Nothing Then
-    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: text point D8 failed"
+  If ptL3 Is Nothing Then Exit Function
+  If Not TryAddZBarLinearPair(genDims, ptL3, iD20I, iD18I, "LIN3") Then
+    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: AddLinear LIN3 failed"
     Exit Function
   End If
-  If Not TryAddZBarAngularPair(genDims, ptD8, iD8h, iD8v, "D8") Then
-    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: AddAngular D8 failed"
+
+  Err.Clear
+  Set ptL4 = v.SheetPoint(0.58, 0.42)
+  If Err.Number <> 0 Or ptL4 Is Nothing Then
+    Err.Clear
+    If Not tg Is Nothing Then Set ptL4 = tg.CreatePoint2d(0.58, 0.42)
+  End If
+  If ptL4 Is Nothing Then Exit Function
+  If Not TryAddZBarLinearPair(genDims, ptL4, iD18O, iD20O, "LIN4") Then
+    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: AddLinear LIN4 failed"
+    Exit Function
+  End If
+
+  Err.Clear
+  Set ptA1 = v.SheetPoint(0.08, 0.12)
+  If Err.Number <> 0 Or ptA1 Is Nothing Then
+    Err.Clear
+    If Not tg Is Nothing Then Set ptA1 = tg.CreatePoint2d(0.08, 0.12)
+  End If
+  If ptA1 Is Nothing Then Exit Function
+  If Not TryAddZBarAngularPair(genDims, ptA1, iD17O, iD18O, "ANG1") Then
+    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: AddAngular ANG1 failed"
+    Exit Function
+  End If
+
+  Err.Clear
+  Set ptA2 = v.SheetPoint(-0.06, 0.20)
+  If Err.Number <> 0 Or ptA2 Is Nothing Then
+    Err.Clear
+    If Not tg Is Nothing Then Set ptA2 = tg.CreatePoint2d(-0.06, 0.20)
+  End If
+  If ptA2 Is Nothing Then Exit Function
+  If Not TryAddZBarAngularPair(genDims, ptA2, iD18I, iD19I, "ANG2") Then
+    If AUTO_DIMENSION_VERBOSE Then WScript.Echo "AUTO-DIM COM: AddAngular ANG2 failed"
     Exit Function
   End If
 
@@ -1881,6 +1923,96 @@ Function TryAddZBarAutoDimensionsCom(inv, drawDoc, partPathForLog)
   WScript.Echo "AUTO-DIM COM: Z-bar dimensions added for " & partPathForLog & " (second save writes .idw)."
 End Function
 
+' --- Z-bar title/gauge for batch (match batch_generate_z_parts.vbs + CC_Drawing_OnOpen_Auto) ---
+Const kZBarIpropGauge = "Gauge"
+Const kZBarParamGauge = "Gauge"
+
+Function ZBarTitleFromThouVbs(thou)
+  Dim v, s, dotPos
+  v = thou / 1000.0
+  s = Replace(CStr(Round(v, 6)), ",", ".")
+  dotPos = InStr(s, ".")
+  If dotPos > 0 Then
+    Do While Len(s) > dotPos And Right(s, 1) = "0"
+      s = Left(s, Len(s) - 1)
+    Loop
+    If Right(s, 1) = "." Then s = Left(s, Len(s) - 1)
+  End If
+  ZBarTitleFromThouVbs = "Z BAR " & s
+End Function
+
+Function ZBarParseBaseNameVbs(baseNm, ByRef gNum, ByRef thou)
+  ZBarParseBaseNameVbs = False
+  If Len(baseNm) < 8 Then Exit Function
+  If UCase(Left(baseNm, 1)) <> "Z" Then Exit Function
+  On Error Resume Next
+  gNum = CInt(Mid(baseNm, 2, 2))
+  thou = CInt(Mid(baseNm, 4, 5))
+  If Err.Number <> 0 Then
+    Err.Clear
+    Exit Function
+  End If
+  ZBarParseBaseNameVbs = True
+End Function
+
+Function TryGetGaugeLabelFromPartVbs(partDoc, defaultGaugeStr)
+  Dim up, ex
+  On Error Resume Next
+  TryGetGaugeLabelFromPartVbs = defaultGaugeStr
+  Set up = partDoc.ComponentDefinition.Parameters.UserParameters.Item(kZBarParamGauge)
+  If Err.Number <> 0 Then Exit Function
+  Err.Clear
+  ex = Trim(CStr(up.Expression))
+  If Len(ex) >= 2 And Left(ex, 1) = """" And Right(ex, 1) = """" Then
+    TryGetGaugeLabelFromPartVbs = Mid(ex, 2, Len(ex) - 2)
+  ElseIf Len(ex) > 0 Then
+    TryGetGaugeLabelFromPartVbs = ex
+  End If
+End Function
+
+Sub TrySetSummaryTitleVbs(doc, titleText)
+  Dim ps
+  On Error Resume Next
+  Set ps = doc.PropertySets.Item("Inventor Document Summary")
+  If Err.Number = 0 Then
+    ps.Item("Title").Value = titleText
+    Err.Clear
+    Exit Sub
+  End If
+  Err.Clear
+  Set ps = doc.PropertySets.Item("Inventor Summary Information")
+  If Err.Number = 0 Then ps.Item("Title").Value = titleText
+  Err.Clear
+End Sub
+
+Sub TrySetUserDefinedGaugeVbs(doc, propValue)
+  Dim ps, it
+  On Error Resume Next
+  Set ps = doc.PropertySets.Item("Inventor User Defined Properties")
+  If Err.Number <> 0 Then
+    Err.Clear
+    Exit Sub
+  End If
+  Set it = ps.Item(kZBarIpropGauge)
+  If Err.Number = 0 Then
+    it.Value = propValue
+    Err.Clear
+    Exit Sub
+  End If
+  Err.Clear
+  ps.Add propValue, kZBarIpropGauge
+  If Err.Number <> 0 Then
+    Err.Clear
+    ps.Add kZBarIpropGauge, propValue
+  End If
+  Err.Clear
+End Sub
+
+Sub ApplyZBarTitleGaugeVbs(doc, titleText, gaugeLabel)
+  TrySetSummaryTitleVbs doc, titleText
+  TrySetUserDefinedGaugeVbs doc, gaugeLabel
+End Sub
+
 Sub ProcessPart(inv, partPath, drawTpl, outPath, fso)
   Dim partDoc, drawDoc
   Dim placed, lastErrNum, lastErrDesc
@@ -1888,6 +2020,7 @@ Sub ProcessPart(inv, partPath, drawTpl, outPath, fso)
   Dim docErrNum, docErrDesc
   Dim savedPath, saveErrNum, saveErrDesc
   Dim dimOk, ruleWanted
+  Dim bnZ, gNumZ, thouZ, titleZ, gaugeZ
 
   On Error Resume Next
   Set partDoc = inv.Documents.Open(partPath, False)
@@ -1902,6 +2035,18 @@ Sub ProcessPart(inv, partPath, drawTpl, outPath, fso)
   hasFp = PartHasFlatPattern(partDoc)
   If hasFp Then
     partDoc.ComponentDefinition.FlatPattern.Update
+    Err.Clear
+  End If
+
+  bnZ = fso.GetBaseName(partPath)
+  If ZBarParseBaseNameVbs(bnZ, gNumZ, thouZ) Then
+    titleZ = ZBarTitleFromThouVbs(thouZ)
+    gaugeZ = TryGetGaugeLabelFromPartVbs(partDoc, CStr(gNumZ))
+    ApplyZBarTitleGaugeVbs partDoc, titleZ, gaugeZ
+    Err.Clear
+    partDoc.Update2 True
+    Err.Clear
+    partDoc.Save
     Err.Clear
   End If
 
@@ -1985,6 +2130,16 @@ Sub ProcessPart(inv, partPath, drawTpl, outPath, fso)
   Err.Clear
   drawDoc.Update2 True
   Err.Clear
+  If ZBarParseBaseNameVbs(bnZ, gNumZ, thouZ) Then
+    titleZ = ZBarTitleFromThouVbs(thouZ)
+    gaugeZ = TryGetGaugeLabelFromPartVbs(partDoc, CStr(gNumZ))
+    ApplyZBarTitleGaugeVbs drawDoc, titleZ, gaugeZ
+    Err.Clear
+    ApplyZBarTitleGaugeVbs partDoc, titleZ, gaugeZ
+    Err.Clear
+    drawDoc.Update2 True
+    Err.Clear
+  End If
   ' Save before iLogic: RunExternalRule often fails (Err 5) on an unsaved drawing with no resolved document path.
   If Not SaveDrawingDocument(inv, drawDoc, outPath, fso, savedPath, saveErrNum, saveErrDesc) Then
     WScript.Echo "SKIP save drawing (before auto-dim): " & outPath & " - " & saveErrNum & " " & saveErrDesc
