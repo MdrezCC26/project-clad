@@ -1,28 +1,23 @@
-Imports Microsoft.VisualBasic
-Imports System
-
+' Embedded in .idw: do NOT add Option/Imports here — Inventor prepends its own; yours would not be first and fail to compile.
 ' CC_ZBar_AutoDimension — Z-bar .ipt needs Named Entities: D17O, D17I, D18O, D18I, D19O, D19I, D20O, D20I.
-' Run from an .idw; click the drawing first. First sheet view must show the Z-bar.
-'
-' Uses managed sheet GeneralDimensions + GetIntent (same stack). View resolved by name to match native view 1.
-' Troubleshooting: Manage → iLogic → Log. Set kShowSuccessMsgBox = True inside Sub Main for one "done" popup.
+' Simple rule (reverted from experimental changes): oDraw.ActiveSheet for view 1, ThisDrawing.ActiveSheet for GetIntent + GeneralDimensions.
+' Open .idw, click in the drawing, run rule. Log: Manage → iLogic → Log.
+' Set kShowSuccessMsgBox = True for a done popup.
 
 Sub Main
     Const kShowSuccessMsgBox As Boolean = False
     Logger.Info("CC_ZBar_AutoDimension: start")
 
-    Dim oDraw As DrawingDocument = Nothing
+    Dim oDraw As Object = Nothing
     If ThisDrawing IsNot Nothing AndAlso ThisDrawing.Document IsNot Nothing Then
-        If TypeOf ThisDrawing.Document Is DrawingDocument Then
-            oDraw = CType(ThisDrawing.Document, DrawingDocument)
-        End If
+        oDraw = ThisDrawing.Document
     End If
     If oDraw Is Nothing Then
         Logger.Info("CC_ZBar_AutoDimension: need an open .idw (drawing), not a part.")
         Exit Sub
     End If
 
-    Dim sh As Sheet = oDraw.ActiveSheet
+    Dim sh As Object = oDraw.ActiveSheet
     If sh Is Nothing AndAlso oDraw.Sheets.Count >= 1 Then sh = oDraw.Sheets.Item(1)
     If sh Is Nothing Then
         Logger.Info("CC_ZBar_AutoDimension: no sheet.")
@@ -33,24 +28,33 @@ Sub Main
         Exit Sub
     End If
 
-    Dim msh As Object = ThisDrawing.ActiveSheet
+    Dim msh As Object = Nothing
+    If ThisDrawing IsNot Nothing AndAlso ThisDrawing.ActiveSheet IsNot Nothing Then
+        msh = ThisDrawing.ActiveSheet
+    End If
     If msh Is Nothing Then
         Logger.Info("CC_ZBar_AutoDimension: ActiveSheet Nothing — click in the drawing window.")
         Exit Sub
     End If
 
-    Dim vNat As DrawingView = sh.DrawingViews.Item(1)
-    Dim vName As String = vNat.Name
+    Dim vNat As Object = sh.DrawingViews.Item(1)
+    Dim vName As String = ""
+    Try
+        vName = CStr(vNat.Name)
+    Catch
+        vName = "?"
+    End Try
+
     Dim dvs As Object = msh.DrawingViews
     Dim v As Object = Nothing
     Try
-        v = CallByName(dvs, "ItemByName", CallType.Get, vName)
+        v = Microsoft.VisualBasic.CallByName(dvs, "ItemByName", Microsoft.VisualBasic.CallType.Get, vName)
     Catch
     End Try
     If v Is Nothing Then
         Try
-            v = CallByName(dvs, "Item", CallType.Get, 1)
-        Catch ex As Exception
+            v = Microsoft.VisualBasic.CallByName(dvs, "Item", Microsoft.VisualBasic.CallType.Get, 1)
+        Catch ex As System.Exception
             Logger.Info("CC_ZBar_AutoDimension: DrawingViews access: " & ex.Message)
             Exit Sub
         End Try
@@ -65,9 +69,9 @@ Sub Main
         genDims = msh.DrawingDimensions.GeneralDimensions
     Catch
         Try
-            Dim dd As Object = CallByName(msh, "DrawingDimensions", CallType.Get)
-            genDims = CallByName(dd, "GeneralDimensions", CallType.Get)
-        Catch ex As Exception
+            Dim dd As Object = Microsoft.VisualBasic.CallByName(msh, "DrawingDimensions", Microsoft.VisualBasic.CallType.Get)
+            genDims = Microsoft.VisualBasic.CallByName(dd, "GeneralDimensions", Microsoft.VisualBasic.CallType.Get)
+        Catch ex As System.Exception
             Logger.Info("CC_ZBar_AutoDimension: GeneralDimensions: " & ex.Message)
             Exit Sub
         End Try
@@ -77,14 +81,46 @@ Sub Main
         Exit Sub
     End If
 
-    Dim iD17O = v.GetIntent("D17O")
-    Dim iD17I = v.GetIntent("D17I")
-    Dim iD18O = v.GetIntent("D18O")
-    Dim iD18I = v.GetIntent("D18I")
-    Dim iD19O = v.GetIntent("D19O")
-    Dim iD19I = v.GetIntent("D19I")
-    Dim iD20O = v.GetIntent("D20O")
-    Dim iD20I = v.GetIntent("D20I")
+    Dim iD17O As Object = Nothing
+    Dim iD17I As Object = Nothing
+    Dim iD18O As Object = Nothing
+    Dim iD18I As Object = Nothing
+    Dim iD19O As Object = Nothing
+    Dim iD19I As Object = Nothing
+    Dim iD20O As Object = Nothing
+    Dim iD20I As Object = Nothing
+    Try
+        iD17O = v.GetIntent("D17O")
+    Catch
+    End Try
+    Try
+        iD17I = v.GetIntent("D17I")
+    Catch
+    End Try
+    Try
+        iD18O = v.GetIntent("D18O")
+    Catch
+    End Try
+    Try
+        iD18I = v.GetIntent("D18I")
+    Catch
+    End Try
+    Try
+        iD19O = v.GetIntent("D19O")
+    Catch
+    End Try
+    Try
+        iD19I = v.GetIntent("D19I")
+    Catch
+    End Try
+    Try
+        iD20O = v.GetIntent("D20O")
+    Catch
+    End Try
+    Try
+        iD20I = v.GetIntent("D20I")
+    Catch
+    End Try
 
     If iD17O Is Nothing Then Logger.Info("CC_ZBar_AutoDimension: GetIntent(D17O)=Nothing — name edge on .ipt; view=" & vName) : Exit Sub
     If iD17I Is Nothing Then Logger.Info("CC_ZBar_AutoDimension: GetIntent(D17I)=Nothing") : Exit Sub
@@ -95,13 +131,13 @@ Sub Main
     If iD20O Is Nothing Then Logger.Info("CC_ZBar_AutoDimension: GetIntent(D20O)=Nothing") : Exit Sub
     If iD20I Is Nothing Then Logger.Info("CC_ZBar_AutoDimension: GetIntent(D20I)=Nothing") : Exit Sub
 
-    Dim pt1 = v.SheetPoint(0.55, -0.14)
-    Dim pt2 = v.SheetPoint(-0.14, 0.45)
-    Dim pt3 = v.SheetPoint(0.52, -0.24)
-    Dim pt4 = v.SheetPoint(0.58, 0.42)
-    Dim ptA1 = v.SheetPoint(0.08, 0.12)
-    Dim ptA2 = v.SheetPoint(-0.06, 0.20)
-    Dim suf As String = "_" & DateTime.Now.Ticks.ToString().Substring(8)
+    Dim pt1 As Object = v.SheetPoint(0.55, -0.14)
+    Dim pt2 As Object = v.SheetPoint(-0.14, 0.45)
+    Dim pt3 As Object = v.SheetPoint(0.52, -0.24)
+    Dim pt4 As Object = v.SheetPoint(0.58, 0.42)
+    Dim ptA1 As Object = v.SheetPoint(0.08, 0.12)
+    Dim ptA2 As Object = v.SheetPoint(-0.06, 0.2)
+    Dim suf As String = "_" & System.DateTime.Now.Ticks.ToString().Substring(8)
 
     Dim placed As String = ""
     Try
@@ -112,7 +148,7 @@ Sub Main
         genDims.AddAngular("CC_DIM_Z_ANG1" & suf, ptA1, iD17O, iD18O)
         genDims.AddAngular("CC_DIM_Z_ANG2" & suf, ptA2, iD18I, iD19I)
         placed = "named"
-    Catch ex As Exception
+    Catch ex As System.Exception
         Try
             genDims.AddLinear(pt1, iD17O, iD19O)
             genDims.AddLinear(pt2, iD17I, iD19I)
@@ -121,7 +157,7 @@ Sub Main
             genDims.AddAngular(ptA1, iD17O, iD18O)
             genDims.AddAngular(ptA2, iD18I, iD19I)
             placed = "fallback"
-        Catch ex2 As Exception
+        Catch ex2 As System.Exception
             Logger.Info("CC_ZBar_AutoDimension: Add* failed — " & ex.Message & " | " & ex2.Message)
             Exit Sub
         End Try
@@ -134,6 +170,6 @@ Sub Main
 
     Logger.Info("CC_ZBar_AutoDimension: OK (" & placed & ") view=" & vName)
     If kShowSuccessMsgBox Then
-        MsgBox("Placed 4 linear + 2 angular on view """ & vName & """. Zoom (Z) if needed.", MsgBoxStyle.Information, "CC ZBar")
+        MsgBox("Placed 4 linear + 2 angular on view """ & vName & """. Zoom (Z) if needed.", Microsoft.VisualBasic.MsgBoxStyle.Information, "CC ZBar")
     End If
 End Sub

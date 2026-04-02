@@ -749,8 +749,13 @@ export default function ProjectDetailPage() {
               </nav>
             </div>
             <div className="project-clad-header-meta">
+              <span className="project-clad-header-meta__project-ref">
+                <span className="project-clad-header-meta__project-ref-label">
+                  Project #:
+                </span>{" "}
+                {project.poNumber || "—"}
+              </span>
               <span>Created {new Date(project.createdAt).toLocaleDateString()}</span>
-              <span>PO number: {project.poNumber || "—"}</span>
               <span>Company name: {project.companyName || "—"}</span>
             </div>
           </header>
