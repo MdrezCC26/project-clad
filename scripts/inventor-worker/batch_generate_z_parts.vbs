@@ -1,7 +1,7 @@
 ' Generate Z-bar .ipt variants from one seed part.
 ' Part name: Z{gauge}{d18_thousandths}  e.g. Z1600750 = gauge 16, d18_length = 0.750 in
 ' Sets: d18_length; Gauge_dec (thickness in); optional text param Gauge = "16" / "22" (number only).
-' iProperties: Summary Title = "Z BAR 0.75"; custom Gauge = "16" (same number-only text).
+' iProperties: Summary Title = "Z BAR 0.75" (Inventor Document Summary or Inventor Summary Information); custom Gauge = "16".
 '
 ' Edit SEED_IPT, OUTPUT_FOLDER, INVENTOR_PROJECT below.
 ' Then: cscript //nologo batch_generate_z_parts.vbs
@@ -90,16 +90,19 @@ Function SetUserParamTextLiteral(partDoc, paramName, literalText, ByRef errNum, 
   SetUserParamTextLiteral = True
 End Function
 
-' Summary "Title" (iProperties dialog Summary tab).
+' Summary "Title" (iProperties dialog Summary tab). Some builds use Inventor Summary Information.
 Sub TrySetDocumentSummaryTitle(doc, titleText)
   Dim ps
   On Error Resume Next
   Set ps = doc.PropertySets.Item("Inventor Document Summary")
-  If Err.Number <> 0 Then
+  If Err.Number = 0 Then
+    ps.Item("Title").Value = titleText
     Err.Clear
     Exit Sub
   End If
-  ps.Item("Title").Value = titleText
+  Err.Clear
+  Set ps = doc.PropertySets.Item("Inventor Summary Information")
+  If Err.Number = 0 Then ps.Item("Title").Value = titleText
   Err.Clear
 End Sub
 
@@ -288,8 +291,8 @@ Sub MainGenerate
             doc.Close False
             failed = failed + 1
           Else
-            Err.Clear
             If Not SetUserParamTextLiteral(doc, PARAM_GAUGE_TEXT, gaugeLbl, errN, errD) Then
+              WScript.Echo "WARN user param """ & PARAM_GAUGE_TEXT & """ not set for " & baseName & ": " & errN & " " & errD
               Err.Clear
             End If
             ApplyTitleAndGaugeIProperties doc, titleTxt, gaugeLbl
