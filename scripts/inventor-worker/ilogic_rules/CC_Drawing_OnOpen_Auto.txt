@@ -1,0 +1,286 @@
+Imports Microsoft.VisualBasic
+Imports System
+
+' CC_Drawing_OnOpen_Auto — On first open: sync Title + Gauge (part + drawing), place Z-bar dims, set CC_AutoLayoutDone.
+' TEMPLATE: paste into CC2026.idw, then enable "run when document opens" for this rule (iLogic rule options).
+' If CC_AutoLayoutDone = Yes on the drawing, rule skips (no duplicate dimensions). Clear that property to re-run.
+' Part file base name must be Z{gg}{ttttt} e.g. Z1600750. Named edges D17O…D20I on .ipt.
+' iLogic: do not mix On Error with Try/Catch; use strict call syntax Add(...).
+
+Sub Main
+    Const FLAG_PROP As String = "CC_AutoLayoutDone"
+    Const IPROP_GAUGE As String = "Gauge"
+    Const PARAM_GAUGE_TXT As String = "Gauge"
+
+    Dim oDraw As DrawingDocument = Nothing
+    If ThisDrawing IsNot Nothing AndAlso ThisDrawing.Document IsNot Nothing Then
+        If TypeOf ThisDrawing.Document Is DrawingDocument Then
+            oDraw = CType(ThisDrawing.Document, DrawingDocument)
+        End If
+    End If
+    If oDraw Is Nothing Then Exit Sub
+
+    Dim flagVal As String = ""
+    Try
+        Dim psF = oDraw.PropertySets.Item("Inventor User Defined Properties")
+        Dim itF = psF.Item(FLAG_PROP)
+        If itF IsNot Nothing Then flagVal = Trim(itF.Value.ToString())
+    Catch
+    End Try
+    If flagVal = "Yes" Then
+        Logger.Info("CC_Drawing_OnOpen_Auto: skip (CC_AutoLayoutDone=Yes). Clear property to re-run.")
+        Exit Sub
+    End If
+
+    Dim sh As Sheet = oDraw.ActiveSheet
+    If sh Is Nothing AndAlso oDraw.Sheets.Count >= 1 Then sh = oDraw.Sheets.Item(1)
+    If sh Is Nothing OrElse sh.DrawingViews.Count < 1 Then Exit Sub
+
+    Dim vNat As DrawingView = sh.DrawingViews.Item(1)
+    Dim partDoc As PartDocument = Nothing
+    Try
+        Dim rd As Object = vNat.ReferencedDocument
+        If rd IsNot Nothing AndAlso TypeOf rd Is PartDocument Then partDoc = CType(rd, PartDocument)
+    Catch
+    End Try
+    If partDoc Is Nothing Then
+        Logger.Info("CC_Drawing_OnOpen_Auto: no resolved part on view 1.")
+        Exit Sub
+    End If
+
+    Dim fn As String = ""
+    Try
+        fn = partDoc.FullFileName
+    Catch
+    End Try
+    If Len(fn) = 0 Then Exit Sub
+    Dim slash As Integer = InStrRev(fn, "\")
+    Dim baseName As String = Mid(fn, slash + 1)
+    Dim dot As Integer = InStrRev(baseName, ".")
+    If dot > 0 Then baseName = Left(baseName, dot - 1)
+
+    If Len(baseName) < 8 OrElse Left(baseName, 1) <> "Z" Then
+        Logger.Info("CC_Drawing_OnOpen_Auto: not Z######## name: " & baseName)
+        Exit Sub
+    End If
+
+    Dim gNum As Integer = 0
+    Dim thou As Integer = 0
+    Try
+        gNum = CInt(Mid(baseName, 2, 2))
+        thou = CInt(Mid(baseName, 4, 5))
+    Catch
+        Logger.Info("CC_Drawing_OnOpen_Auto: parse gauge/thou failed: " & baseName)
+        Exit Sub
+    End Try
+
+    Dim vDec As Double = thou / 1000.0
+    Dim s As String = Replace(CStr(Round(vDec, 6)), ",", ".")
+    Dim dotPos As Integer = InStr(s, ".")
+    If dotPos > 0 Then
+        Do While Len(s) > dotPos AndAlso Right(s, 1) = "0"
+            s = Left(s, Len(s) - 1)
+        Loop
+        If Right(s, 1) = "." Then s = Left(s, Len(s) - 1)
+    End If
+    Dim titleTxt As String = "Z BAR " & s
+    Dim gaugeLbl As String = CStr(gNum)
+
+    Try
+        Dim upG = partDoc.ComponentDefinition.Parameters.UserParameters.Item(PARAM_GAUGE_TXT)
+        If upG IsNot Nothing Then
+            Dim ex As String = Trim(CStr(upG.Expression))
+            If Len(ex) >= 2 AndAlso Left(ex, 1) = """" AndAlso Right(ex, 1) = """" Then
+                gaugeLbl = Mid(ex, 2, Len(ex) - 2)
+            ElseIf Len(ex) > 0 Then
+                gaugeLbl = ex
+            End If
+        End If
+    Catch
+    End Try
+
+    Try
+        Dim ps As Object = partDoc.PropertySets.Item("Inventor Document Summary")
+        ps.Item("Title").Value = titleTxt
+    Catch
+        Try
+            Dim ps2 As Object = partDoc.PropertySets.Item("Inventor Summary Information")
+            ps2.Item("Title").Value = titleTxt
+        Catch
+        End Try
+    End Try
+    Try
+        Dim psD As Object = oDraw.PropertySets.Item("Inventor Document Summary")
+        psD.Item("Title").Value = titleTxt
+    Catch
+        Try
+            Dim psD2 As Object = oDraw.PropertySets.Item("Inventor Summary Information")
+            psD2.Item("Title").Value = titleTxt
+        Catch
+        End Try
+    End Try
+
+    Try
+        Dim psUd1 As Object = partDoc.PropertySets.Item("Inventor User Defined Properties")
+        Dim itUd1 As Object = Nothing
+        Try
+            itUd1 = psUd1.Item(IPROP_GAUGE)
+        Catch
+        End Try
+        If itUd1 Is Nothing Then
+            Try
+                psUd1.Add(gaugeLbl, IPROP_GAUGE)
+            Catch
+                Try
+                    psUd1.Add(IPROP_GAUGE, gaugeLbl)
+                Catch
+                End Try
+            End Try
+        Else
+            itUd1.Value = gaugeLbl
+        End If
+    Catch
+    End Try
+
+    Try
+        Dim psUd2 As Object = oDraw.PropertySets.Item("Inventor User Defined Properties")
+        Dim itUd2 As Object = Nothing
+        Try
+            itUd2 = psUd2.Item(IPROP_GAUGE)
+        Catch
+        End Try
+        If itUd2 Is Nothing Then
+            Try
+                psUd2.Add(gaugeLbl, IPROP_GAUGE)
+            Catch
+                Try
+                    psUd2.Add(IPROP_GAUGE, gaugeLbl)
+                Catch
+                End Try
+            End Try
+        Else
+            itUd2.Value = gaugeLbl
+        End If
+    Catch
+    End Try
+
+    Try
+        partDoc.Update2(True)
+    Catch
+    End Try
+    Try
+        oDraw.Update2(True)
+    Catch
+    End Try
+
+    Dim msh As Object = ThisDrawing.ActiveSheet
+    If msh Is Nothing Then Exit Sub
+    Dim vName As String = vNat.Name
+    Dim dvs As Object = msh.DrawingViews
+    Dim v As Object = Nothing
+    Try
+        v = CallByName(dvs, "ItemByName", CallType.Get, vName)
+    Catch
+    End Try
+    If v Is Nothing Then
+        Try
+            v = CallByName(dvs, "Item", CallType.Get, 1)
+        Catch ex As Exception
+            Logger.Info("CC_Drawing_OnOpen_Auto: view: " & ex.Message)
+            Exit Sub
+        End Try
+    End If
+    If v Is Nothing Then Exit Sub
+
+    Dim genDims As Object = Nothing
+    Try
+        genDims = msh.DrawingDimensions.GeneralDimensions
+    Catch
+        Try
+            Dim dd As Object = CallByName(msh, "DrawingDimensions", CallType.Get)
+            genDims = CallByName(dd, "GeneralDimensions", CallType.Get)
+        Catch
+        End Try
+    End Try
+    If genDims Is Nothing Then Exit Sub
+
+    Dim iD17O = v.GetIntent("D17O")
+    Dim iD17I = v.GetIntent("D17I")
+    Dim iD18O = v.GetIntent("D18O")
+    Dim iD18I = v.GetIntent("D18I")
+    Dim iD19O = v.GetIntent("D19O")
+    Dim iD19I = v.GetIntent("D19I")
+    Dim iD20O = v.GetIntent("D20O")
+    Dim iD20I = v.GetIntent("D20I")
+    If iD17O Is Nothing OrElse iD17I Is Nothing OrElse iD18O Is Nothing OrElse iD18I Is Nothing OrElse
+        iD19O Is Nothing OrElse iD19I Is Nothing OrElse iD20O Is Nothing OrElse iD20I Is Nothing Then
+        Logger.Info("CC_Drawing_OnOpen_Auto: named edges missing on part — title/gauge updated; dims skipped.")
+        Exit Sub
+    End If
+
+    Dim pt1 = v.SheetPoint(0.55, -0.14)
+    Dim pt2 = v.SheetPoint(-0.14, 0.45)
+    Dim pt3 = v.SheetPoint(0.52, -0.24)
+    Dim pt4 = v.SheetPoint(0.58, 0.42)
+    Dim ptA1 = v.SheetPoint(0.08, 0.12)
+    Dim ptA2 = v.SheetPoint(-0.06, 0.20)
+    Dim suf As String = "_" & DateTime.Now.Ticks.ToString().Substring(8)
+    Dim dimsOk As Boolean = False
+    Try
+        genDims.AddLinear("CC_DIM_Z_LIN1" & suf, pt1, iD17O, iD19O)
+        genDims.AddLinear("CC_DIM_Z_LIN2" & suf, pt2, iD17I, iD19I)
+        genDims.AddLinear("CC_DIM_Z_LIN3" & suf, pt3, iD20I, iD18I)
+        genDims.AddLinear("CC_DIM_Z_LIN4" & suf, pt4, iD18O, iD20O)
+        genDims.AddAngular("CC_DIM_Z_ANG1" & suf, ptA1, iD17O, iD18O)
+        genDims.AddAngular("CC_DIM_Z_ANG2" & suf, ptA2, iD18I, iD19I)
+        dimsOk = True
+    Catch ex As Exception
+        Try
+            genDims.AddLinear(pt1, iD17O, iD19O)
+            genDims.AddLinear(pt2, iD17I, iD19I)
+            genDims.AddLinear(pt3, iD20I, iD18I)
+            genDims.AddLinear(pt4, iD18O, iD20O)
+            genDims.AddAngular(ptA1, iD17O, iD18O)
+            genDims.AddAngular(ptA2, iD18I, iD19I)
+            dimsOk = True
+        Catch ex2 As Exception
+            Logger.Info("CC_Drawing_OnOpen_Auto: Add*: " & ex.Message & " | " & ex2.Message)
+        End Try
+    End Try
+
+    If dimsOk Then
+        Try
+            Dim psUd3 As Object = oDraw.PropertySets.Item("Inventor User Defined Properties")
+            Dim itUd3 As Object = Nothing
+            Try
+                itUd3 = psUd3.Item(FLAG_PROP)
+            Catch
+            End Try
+            If itUd3 Is Nothing Then
+                Try
+                    psUd3.Add("Yes", FLAG_PROP)
+                Catch
+                    Try
+                        psUd3.Add(FLAG_PROP, "Yes")
+                    Catch
+                    End Try
+                End Try
+            Else
+                itUd3.Value = "Yes"
+            End If
+        Catch
+        End Try
+        Logger.Info("CC_Drawing_OnOpen_Auto: OK — dims + flag for " & baseName)
+    Else
+        Logger.Info("CC_Drawing_OnOpen_Auto: title/gauge OK; dimensions failed for " & baseName)
+    End If
+
+    Try
+        oDraw.Update2(True)
+    Catch
+    End Try
+    Try
+        partDoc.Update2(True)
+    Catch
+    End Try
+End Sub
