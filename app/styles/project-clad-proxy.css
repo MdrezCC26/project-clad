@@ -114,6 +114,25 @@ body.project-clad-leaving .project-clad-page {
 /* Projects page: texture overlay on each card (projects list only, not order page cards) */
 .project-clad-page--projects .project-clad-card {
   position: relative;
+  border: none;
+  border-radius: 18px;
+  background: var(--pc-card-bg, #fff);
+  box-shadow: var(--pc-btn-neu-shadow);
+  transition: var(--pc-btn-neu-transition);
+}
+
+.project-clad-page--projects .project-clad-card:hover {
+  box-shadow: var(--pc-btn-neu-shadow-hover);
+  filter: brightness(1.02);
+  transform: none;
+}
+
+.project-clad-page--projects .project-clad-card-link {
+  border-radius: 18px;
+}
+
+.project-clad-page--projects .project-clad-card-link:hover {
+  background: rgba(0, 0, 0, 0.03);
 }
 
 .project-clad-page--projects .project-clad-card::after {
