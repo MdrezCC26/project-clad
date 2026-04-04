@@ -3,6 +3,9 @@
 ' Simple rule (reverted from experimental changes): oDraw.ActiveSheet for view 1, ThisDrawing.ActiveSheet for GetIntent + GeneralDimensions.
 ' Open .idw, click in the drawing, run rule. Log: Manage → iLogic → Log.
 ' Set kShowSuccessMsgBox = True for a done popup.
+'
+' LIN3 (D20I–D18I) and LIN4 (D18O–D20O) both span the D18↔D20 leg — same nominal length as d18_length often; remove one AddLinear if you want a single dim there.
+' After Open: use EITHER this rule OR CC_Drawing_OnOpen_Auto for dimensions — not both (or every dim is placed twice).
 
 Sub Main
     Const kShowSuccessMsgBox As Boolean = False

@@ -2,9 +2,13 @@
 ' Part name: Z{gauge}{d18_thousandths}  e.g. Z1600750 = gauge 16, d18_length = 0.750 in
 ' Sets: d18_length; Gauge_dec (thickness in); optional text param Gauge = "16" / "22" (number only).
 ' iProperties: Summary Title = "Z BAR 0.75" (Inventor Document Summary or Inventor Summary Information); custom Gauge = "16".
+' Design Tracking "Part Number" = file base name (e.g. Z2005750) so drawings/title blocks match SaveAs name, not the seed part number.
 '
 ' Edit SEED_IPT, OUTPUT_FOLDER, INVENTOR_PROJECT below.
 ' Then: cscript //nologo batch_generate_z_parts.vbs
+' Rebuild every Z*.ipt even if files already exist (full regen):
+'   cscript //nologo batch_generate_z_parts.vbs regen
+'   (same as: regen | overwrite | all)
 ' After parts exist, run batch_part_drawings.vbs for drawings.
 '
 ' Requires: seed .ipt with d18_length, Gauge_dec (optional text parameter Gauge).
@@ -90,6 +94,35 @@ Function SetUserParamTextLiteral(partDoc, paramName, literalText, ByRef errNum, 
   SetUserParamTextLiteral = True
 End Function
 
+' Gauge on seed may be Text (quoted) or Number/Unitless (bare number). Err 5 on .Expression = wrong type.
+Function SetGaugeUserParameterBestEffort(partDoc, paramName, gaugeLbl, ByRef errNum, ByRef errDesc)
+  Dim err2, desc2, nVal
+  On Error Resume Next
+  SetGaugeUserParameterBestEffort = False
+  errNum = 0
+  errDesc = ""
+  If SetUserParamTextLiteral(partDoc, paramName, gaugeLbl, errNum, errDesc) Then
+    SetGaugeUserParameterBestEffort = True
+    Exit Function
+  End If
+  Err.Clear
+  If IsNumeric(gaugeLbl) Then
+    nVal = CLng(CDbl(gaugeLbl))
+    If SetUserParamExpression(partDoc, paramName, CStr(nVal), err2, desc2) Then
+      SetGaugeUserParameterBestEffort = True
+      Exit Function
+    End If
+    Err.Clear
+    If SetUserParamExpression(partDoc, paramName, CStr(nVal) & " ul", err2, desc2) Then
+      SetGaugeUserParameterBestEffort = True
+      Exit Function
+    End If
+    errNum = err2
+    errDesc = desc2
+  End If
+  Err.Clear
+End Function
+
 ' Summary "Title" (iProperties dialog Summary tab). Some builds use Inventor Summary Information.
 Sub TrySetDocumentSummaryTitle(doc, titleText)
   Dim ps
@@ -106,33 +139,71 @@ Sub TrySetDocumentSummaryTitle(doc, titleText)
   Err.Clear
 End Sub
 
-' Custom iProperty (e.g. for drawing title block "Gauge" field).
-Sub TrySetUserDefinedProperty(doc, propName, propValue)
+' Project tab "Part Number" — Design Tracking Properties (see Autodesk iProperties docs).
+Sub TrySetDesignTrackingPartNumber(doc, ByVal partNumberText, ByVal logTag)
   Dim ps, it
   On Error Resume Next
+  partNumberText = Trim(CStr(partNumberText))
+  If Len(partNumberText) = 0 Then Exit Sub
+  Set ps = doc.PropertySets.Item("Design Tracking Properties")
+  If Err.Number <> 0 Then
+    WScript.Echo "WARN Part Number: no Design Tracking set for " & logTag & " (" & Err.Number & ")"
+    Err.Clear
+    Exit Sub
+  End If
+  Set it = ps.Item("Part Number")
+  If Err.Number <> 0 Then
+    WScript.Echo "WARN Part Number: property missing for " & logTag & " (" & Err.Number & ")"
+    Err.Clear
+    Exit Sub
+  End If
+  it.Value = partNumberText
+  If Err.Number <> 0 Then
+    WScript.Echo "WARN Part Number: could not write """ & partNumberText & """ on " & logTag & " (" & Err.Number & " " & Err.Description & ")"
+    Err.Clear
+  End If
+End Sub
+
+' Custom iProperty (e.g. for drawing title block "Gauge" field).
+Sub TrySetUserDefinedProperty(doc, propName, propValue, ByVal logTag)
+  Dim ps, it, v, e1, e2
+  On Error Resume Next
+  v = CStr(propValue)
   Set ps = doc.PropertySets.Item("Inventor User Defined Properties")
   If Err.Number <> 0 Then
+    WScript.Echo "WARN iProperty: no User Defined set for " & logTag & " (" & Err.Number & ")"
     Err.Clear
     Exit Sub
   End If
   Set it = ps.Item(propName)
   If Err.Number = 0 Then
-    it.Value = propValue
+    it.Value = v
+    If Err.Number = 0 Then
+      Err.Clear
+      Exit Sub
+    End If
+    WScript.Echo "WARN iProperty: could not write """ & propName & """ on " & logTag & " (" & Err.Number & " " & Err.Description & ")"
     Err.Clear
     Exit Sub
   End If
   Err.Clear
-  ps.Add propValue, propName
-  If Err.Number <> 0 Then
-    Err.Clear
-    ps.Add propName, propValue
-  End If
+  e1 = 0
+  e2 = 0
+  ps.Add v, propName
+  e1 = Err.Number
+  If e1 = 0 Then Exit Sub
   Err.Clear
+  ps.Add propName, v
+  e2 = Err.Number
+  If e2 = 0 Then Exit Sub
+  Err.Clear
+  WScript.Echo "WARN iProperty: Add """ & propName & """ failed for " & logTag & " (tried value,name then name,value; " & e1 & " / " & e2 & ")"
 End Sub
 
-Sub ApplyTitleAndGaugeIProperties(doc, titleText, gaugeLabel)
+Sub ApplyTitleAndGaugeIProperties(doc, titleText, gaugeLabel, ByVal logTag)
   TrySetDocumentSummaryTitle doc, titleText
-  TrySetUserDefinedProperty doc, IPROP_GAUGE_NAME, gaugeLabel
+  TrySetUserDefinedProperty doc, IPROP_GAUGE_NAME, gaugeLabel, logTag
+  TrySetDesignTrackingPartNumber doc, logTag, logTag
 End Sub
 
 Function FirstIpjInFolder(fso, folderPath)
@@ -291,11 +362,11 @@ Sub MainGenerate
             doc.Close False
             failed = failed + 1
           Else
-            If Not SetUserParamTextLiteral(doc, PARAM_GAUGE_TEXT, gaugeLbl, errN, errD) Then
+            If Not SetGaugeUserParameterBestEffort(doc, PARAM_GAUGE_TEXT, gaugeLbl, errN, errD) Then
               WScript.Echo "WARN user param """ & PARAM_GAUGE_TEXT & """ not set for " & baseName & ": " & errN & " " & errD
               Err.Clear
             End If
-            ApplyTitleAndGaugeIProperties doc, titleTxt, gaugeLbl
+            ApplyTitleAndGaugeIProperties doc, titleTxt, gaugeLbl, baseName
             Err.Clear
             doc.Update2 True
             If Err.Number <> 0 Then
@@ -321,6 +392,8 @@ Sub MainGenerate
 
   RestoreInventorUi inv
   WScript.Echo "DONE  written=" & written & " skipped=" & skipped & " failed=" & failed
+  WScript.Echo "NEXT: This script only creates .ipt files. To create .idw next to each part, run:"
+  WScript.Echo "      cscript //nologo batch_part_drawings.vbs overwrite"
 End Sub
 
 Function JoinGaugeList()
@@ -332,5 +405,19 @@ Function JoinGaugeList()
   Next
   JoinGaugeList = s
 End Function
+
+Dim parseArgI, parseArgS, regenAllZ
+regenAllZ = False
+For parseArgI = 0 To WScript.Arguments.Count - 1
+  parseArgS = LCase(Trim(WScript.Arguments(parseArgI)))
+  If parseArgS = "regen" Or parseArgS = "/regen" Or parseArgS = "-regen" Then regenAllZ = True
+  If parseArgS = "overwrite" Or parseArgS = "/overwrite" Or parseArgS = "-overwrite" Then regenAllZ = True
+  If parseArgS = "all" Or parseArgS = "/all" Or parseArgS = "-all" Then regenAllZ = True
+Next
+If regenAllZ Then
+  SKIP_EXISTING_PARTS = False
+  OVERWRITE_EXISTING_PARTS = True
+  WScript.Echo "REGEN: SKIP_EXISTING_PARTS=False, OVERWRITE_EXISTING_PARTS=True (rebuilding all Z*.ipt in OUTPUT_FOLDER)."
+End If
 
 MainGenerate

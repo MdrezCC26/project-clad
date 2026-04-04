@@ -110,7 +110,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return {
     hasPricingPassword: Boolean(settings?.pricingPasswordHash),
-    storefrontTheme: settings?.storefrontTheme || "default",
     hasLogo: Boolean(settings?.logoDataUrl),
     hasBackgroundLogo: Boolean(settings?.backgroundLogoDataUrl),
     mediaImages,
@@ -180,18 +179,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (intent === "reset-sessions") {
     await prisma.session.deleteMany({ where: { shop: session.shop } });
     return { ok: true, sessionsCleared: true };
-  }
-
-  if (intent === "save-theme") {
-    const theme = String(formData.get("storefrontTheme") || "default").trim();
-    const validThemes = ["default", "dark", "warm", "ocean"];
-    const storefrontTheme = validThemes.includes(theme) ? theme : "default";
-    await prisma.shopSettings.upsert({
-      where: { shop: session.shop },
-      update: { storefrontTheme },
-      create: { shop: session.shop, storefrontTheme },
-    });
-    return { ok: true, themeSaved: true };
   }
 
   if (intent === "save-logo-from-media") {
@@ -619,7 +606,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 export default function Settings() {
   const {
     hasPricingPassword,
-    storefrontTheme,
     hasLogo,
     hasBackgroundLogo,
     mediaImages,
@@ -752,58 +738,6 @@ export default function Settings() {
             Sessions cleared. Reopen the app to reauthorize.
           </s-paragraph>
         )}
-      </s-section>
-      <s-section heading="Storefront theme">
-        <s-paragraph>
-          Choose the look and feel for the customer-facing Projects and Orders
-          pages.
-        </s-paragraph>
-        <Form method="post">
-          <input type="hidden" name="intent" value="save-theme" />
-          <s-stack direction="block" gap="base">
-            <div
-              style={{
-                display: "grid",
-                gap: "0.75rem",
-                gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-              }}
-            >
-              {[
-                { value: "default", label: "Default", desc: "Light, clean" },
-                { value: "dark", label: "Dark", desc: "Dark mode" },
-                { value: "warm", label: "Warm", desc: "Amber tones" },
-                { value: "ocean", label: "Ocean", desc: "Blues & teals" },
-              ].map(({ value, label, desc }) => (
-                <label
-                  key={value}
-                  style={{
-                    display: "block",
-                    padding: "1rem",
-                    border:
-                      storefrontTheme === value
-                        ? "2px solid var(--color-border-strong)"
-                        : "1px solid var(--color-border)",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="storefrontTheme"
-                    value={value}
-                    defaultChecked={storefrontTheme === value}
-                    style={{ marginRight: "0.5rem" }}
-                  />
-                  <strong>{label}</strong>
-                  <div style={{ fontSize: "0.85rem", opacity: 0.8 }}>
-                    {desc}
-                  </div>
-                </label>
-              ))}
-            </div>
-            <button type="submit">Save theme</button>
-          </s-stack>
-        </Form>
       </s-section>
       <s-section heading="Storefront logo">
         <s-paragraph>

@@ -239,7 +239,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shop,
     variantLookupError,
     hideAddToCart,
-    storefrontTheme: settings?.storefrontTheme || "default",
     navButtons,
     logoDataUrl: settings?.logoDataUrl || null,
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
@@ -324,7 +323,6 @@ export default function ProjectsPage() {
     shop,
     variantLookupError,
     hideAddToCart,
-    storefrontTheme,
     navButtons,
     logoDataUrl,
     backgroundLogoDataUrl,
@@ -339,7 +337,6 @@ export default function ProjectsPage() {
       ))}
       <main
         className={`project-clad-page project-clad-page--projects${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
-        data-theme={storefrontTheme || "default"}
         style={
           backgroundLogoDataUrl
             ? { ["--project-clad-bg-logo" as string]: `url(${backgroundLogoDataUrl})` }

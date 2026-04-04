@@ -1,46 +1,30 @@
-Imports Microsoft.VisualBasic
-Imports System
-
+' Embedded in .idw: do NOT add Option/Imports here — Inventor prepends its own; yours would not be first and fail to compile.
 ' CC_Drawing_OnOpen_Auto — On first open: sync Title + Gauge (part + drawing), place Z-bar dims, set CC_AutoLayoutDone.
-' TEMPLATE: paste into CC2026.idw, then enable "run when document opens" for this rule (iLogic rule options).
-' If CC_AutoLayoutDone = Yes on the drawing, rule skips (no duplicate dimensions). Clear that property to re-run.
-' Part file base name must be Z{gg}{ttttt} e.g. Z1600750. Named edges D17O…D20I on .ipt.
-' iLogic: do not mix On Error with Try/Catch; use strict call syntax Add(...).
+' Reverted to simple flow (matches repo commit eacf1ab) + Object types for embedded rules in CC2026.idw.
+' Inventor 2025+: Event Triggers → Drawings → After Open Document. Title/gauge always; dimensions skipped when CC_AutoLayoutDone = Yes (re-read before dims so order vs ZBar rule is safe).
+' Part base name Z{gg}{ttttt} e.g. Z1600750. Named edges D17O…D20I on .ipt.
+' LIN3/LIN4 both measure the D18–D20 leg (inner vs outer); same length as d18_length often — delete one AddLinear in both rules if you only want one of those dimensions.
 
 Sub Main
     Const FLAG_PROP As String = "CC_AutoLayoutDone"
     Const IPROP_GAUGE As String = "Gauge"
     Const PARAM_GAUGE_TXT As String = "Gauge"
 
-    Dim oDraw As DrawingDocument = Nothing
+    Dim oDraw As Object = Nothing
     If ThisDrawing IsNot Nothing AndAlso ThisDrawing.Document IsNot Nothing Then
-        If TypeOf ThisDrawing.Document Is DrawingDocument Then
-            oDraw = CType(ThisDrawing.Document, DrawingDocument)
-        End If
+        oDraw = ThisDrawing.Document
     End If
     If oDraw Is Nothing Then Exit Sub
 
-    Dim flagVal As String = ""
-    Try
-        Dim psF = oDraw.PropertySets.Item("Inventor User Defined Properties")
-        Dim itF = psF.Item(FLAG_PROP)
-        If itF IsNot Nothing Then flagVal = Trim(itF.Value.ToString())
-    Catch
-    End Try
-    If flagVal = "Yes" Then
-        Logger.Info("CC_Drawing_OnOpen_Auto: skip (CC_AutoLayoutDone=Yes). Clear property to re-run.")
-        Exit Sub
-    End If
-
-    Dim sh As Sheet = oDraw.ActiveSheet
+    Dim sh As Object = oDraw.ActiveSheet
     If sh Is Nothing AndAlso oDraw.Sheets.Count >= 1 Then sh = oDraw.Sheets.Item(1)
     If sh Is Nothing OrElse sh.DrawingViews.Count < 1 Then Exit Sub
 
-    Dim vNat As DrawingView = sh.DrawingViews.Item(1)
-    Dim partDoc As PartDocument = Nothing
+    Dim vNat As Object = sh.DrawingViews.Item(1)
+    Dim partDoc As Object = Nothing
     Try
         Dim rd As Object = vNat.ReferencedDocument
-        If rd IsNot Nothing AndAlso TypeOf rd Is PartDocument Then partDoc = CType(rd, PartDocument)
+        If rd IsNot Nothing Then partDoc = rd
     Catch
     End Try
     If partDoc Is Nothing Then
@@ -53,7 +37,14 @@ Sub Main
         fn = partDoc.FullFileName
     Catch
     End Try
+    If Len(fn) = 0 Then
+        Try
+            fn = partDoc.FullDocumentName
+        Catch
+        End Try
+    End If
     If Len(fn) = 0 Then Exit Sub
+
     Dim slash As Integer = InStrRev(fn, "\")
     Dim baseName As String = Mid(fn, slash + 1)
     Dim dot As Integer = InStrRev(baseName, ".")
@@ -173,19 +164,44 @@ Sub Main
     Catch
     End Try
 
-    Dim msh As Object = ThisDrawing.ActiveSheet
+    Dim skipDims As Boolean = False
+    Try
+        Dim psSkip = oDraw.PropertySets.Item("Inventor User Defined Properties")
+        Dim itSkip = psSkip.Item(FLAG_PROP)
+        If itSkip IsNot Nothing Then
+            Dim fv As String = Trim(itSkip.Value.ToString())
+            skipDims = String.Equals(fv, "Yes", System.StringComparison.OrdinalIgnoreCase)
+        End If
+    Catch
+    End Try
+    If skipDims Then
+        Logger.Info("CC_Drawing_OnOpen_Auto: skip dimensions (CC_AutoLayoutDone=Yes). Clear property to re-dimension.")
+        Exit Sub
+    End If
+
+    Dim msh As Object = Nothing
+    If ThisDrawing IsNot Nothing AndAlso ThisDrawing.ActiveSheet IsNot Nothing Then
+        msh = ThisDrawing.ActiveSheet
+    End If
     If msh Is Nothing Then Exit Sub
-    Dim vName As String = vNat.Name
+
+    Dim vName As String = ""
+    Try
+        vName = CStr(vNat.Name)
+    Catch
+        vName = "?"
+    End Try
+
     Dim dvs As Object = msh.DrawingViews
     Dim v As Object = Nothing
     Try
-        v = CallByName(dvs, "ItemByName", CallType.Get, vName)
+        v = Microsoft.VisualBasic.CallByName(dvs, "ItemByName", Microsoft.VisualBasic.CallType.Get, vName)
     Catch
     End Try
     If v Is Nothing Then
         Try
-            v = CallByName(dvs, "Item", CallType.Get, 1)
-        Catch ex As Exception
+            v = Microsoft.VisualBasic.CallByName(dvs, "Item", Microsoft.VisualBasic.CallType.Get, 1)
+        Catch ex As System.Exception
             Logger.Info("CC_Drawing_OnOpen_Auto: view: " & ex.Message)
             Exit Sub
         End Try
@@ -197,34 +213,67 @@ Sub Main
         genDims = msh.DrawingDimensions.GeneralDimensions
     Catch
         Try
-            Dim dd As Object = CallByName(msh, "DrawingDimensions", CallType.Get)
-            genDims = CallByName(dd, "GeneralDimensions", CallType.Get)
+            Dim dd As Object = Microsoft.VisualBasic.CallByName(msh, "DrawingDimensions", Microsoft.VisualBasic.CallType.Get)
+            genDims = Microsoft.VisualBasic.CallByName(dd, "GeneralDimensions", Microsoft.VisualBasic.CallType.Get)
         Catch
         End Try
     End Try
     If genDims Is Nothing Then Exit Sub
 
-    Dim iD17O = v.GetIntent("D17O")
-    Dim iD17I = v.GetIntent("D17I")
-    Dim iD18O = v.GetIntent("D18O")
-    Dim iD18I = v.GetIntent("D18I")
-    Dim iD19O = v.GetIntent("D19O")
-    Dim iD19I = v.GetIntent("D19I")
-    Dim iD20O = v.GetIntent("D20O")
-    Dim iD20I = v.GetIntent("D20I")
+    Dim iD17O As Object = Nothing
+    Dim iD17I As Object = Nothing
+    Dim iD18O As Object = Nothing
+    Dim iD18I As Object = Nothing
+    Dim iD19O As Object = Nothing
+    Dim iD19I As Object = Nothing
+    Dim iD20O As Object = Nothing
+    Dim iD20I As Object = Nothing
+    Try
+        iD17O = v.GetIntent("D17O")
+    Catch
+    End Try
+    Try
+        iD17I = v.GetIntent("D17I")
+    Catch
+    End Try
+    Try
+        iD18O = v.GetIntent("D18O")
+    Catch
+    End Try
+    Try
+        iD18I = v.GetIntent("D18I")
+    Catch
+    End Try
+    Try
+        iD19O = v.GetIntent("D19O")
+    Catch
+    End Try
+    Try
+        iD19I = v.GetIntent("D19I")
+    Catch
+    End Try
+    Try
+        iD20O = v.GetIntent("D20O")
+    Catch
+    End Try
+    Try
+        iD20I = v.GetIntent("D20I")
+    Catch
+    End Try
+
     If iD17O Is Nothing OrElse iD17I Is Nothing OrElse iD18O Is Nothing OrElse iD18I Is Nothing OrElse
         iD19O Is Nothing OrElse iD19I Is Nothing OrElse iD20O Is Nothing OrElse iD20I Is Nothing Then
         Logger.Info("CC_Drawing_OnOpen_Auto: named edges missing on part — title/gauge updated; dims skipped.")
         Exit Sub
     End If
 
-    Dim pt1 = v.SheetPoint(0.55, -0.14)
-    Dim pt2 = v.SheetPoint(-0.14, 0.45)
-    Dim pt3 = v.SheetPoint(0.52, -0.24)
-    Dim pt4 = v.SheetPoint(0.58, 0.42)
-    Dim ptA1 = v.SheetPoint(0.08, 0.12)
-    Dim ptA2 = v.SheetPoint(-0.06, 0.20)
-    Dim suf As String = "_" & DateTime.Now.Ticks.ToString().Substring(8)
+    Dim pt1 As Object = v.SheetPoint(0.55, -0.14)
+    Dim pt2 As Object = v.SheetPoint(-0.14, 0.45)
+    Dim pt3 As Object = v.SheetPoint(0.52, -0.24)
+    Dim pt4 As Object = v.SheetPoint(0.58, 0.42)
+    Dim ptA1 As Object = v.SheetPoint(0.08, 0.12)
+    Dim ptA2 As Object = v.SheetPoint(-0.06, 0.2)
+    Dim suf As String = "_" & System.DateTime.Now.Ticks.ToString().Substring(8)
     Dim dimsOk As Boolean = False
     Try
         genDims.AddLinear("CC_DIM_Z_LIN1" & suf, pt1, iD17O, iD19O)
@@ -234,7 +283,7 @@ Sub Main
         genDims.AddAngular("CC_DIM_Z_ANG1" & suf, ptA1, iD17O, iD18O)
         genDims.AddAngular("CC_DIM_Z_ANG2" & suf, ptA2, iD18I, iD19I)
         dimsOk = True
-    Catch ex As Exception
+    Catch ex As System.Exception
         Try
             genDims.AddLinear(pt1, iD17O, iD19O)
             genDims.AddLinear(pt2, iD17I, iD19I)
@@ -243,7 +292,7 @@ Sub Main
             genDims.AddAngular(ptA1, iD17O, iD18O)
             genDims.AddAngular(ptA2, iD18I, iD19I)
             dimsOk = True
-        Catch ex2 As Exception
+        Catch ex2 As System.Exception
             Logger.Info("CC_Drawing_OnOpen_Auto: Add*: " & ex.Message & " | " & ex2.Message)
         End Try
     End Try

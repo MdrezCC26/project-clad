@@ -8,6 +8,22 @@
 '   (or /overwrite). Otherwise set OVERWRITE_EXISTING_DRAWINGS = True in this file.
 ' Inventor 2025: add nodim to skip iLogic/COM auto-dim (quiet batch). Add verbose for per-part AUTO-DIM lines.
 '   cscript //nologo batch_part_drawings.vbs overwrite nodim
+' dimonly = open existing drawing next to each .ipt and run AUTO_DIMENSION_ILOGIC_RULE only (no new sheets/views).
+'   cscript //nologo batch_part_drawings.vbs dimonly
+'   (optional: verbose  showui). Requires *.idw (or OUTPUT_DRAWING_EXT) beside each part; template path not used.
+' Z-bar only — limit to certain gauges (skip e.g. Z16 if already dimensioned manually):
+'   cscript //nologo batch_part_drawings.vbs dimonly onlygauge=18,20,22
+'   (parses Z{gg}##### from the file base name; skips non-Z or wrong length names when filter is set).
+'
+' Inventor 2025: dimonly iLogic/COM from cscript usually FAILS (Err 5 / GetIntent Err 424). Use dimopen instead:
+'   cscript //nologo batch_part_drawings.vbs dimopen onlygauge=18,20,22 showui
+'   Wire iLogic Event Triggers (Drawing) -> After Open Document -> CC_ZBar_AutoDimension (embedded in template).
+'   Script only Opens each .idw (non-silent), waits briefly, Update2, Save — rule runs inside Inventor during Open.
+' Ribbon/menu missing after batch or after closing cscript: Inventor was left in automation mode. Run:
+'   cscript //nologo scripts\inventor-worker\inventor_restore_ui.vbs
+'   (or fully quit Inventor in Task Manager, then start Inventor again). Ctrl+F1 toggles the ribbon.
+' Optional showui: keep normal Inventor UI during the batch (slower; dialogs may appear):
+'   cscript //nologo batch_part_drawings.vbs overwrite showui
 ' Z-bar .ipt grid from a seed: cscript //nologo batch_generate_z_parts.vbs (then run this script for drawings).
 ' Z-bar parts named Z{gg}{ttttt}: before first drawing save, script sets part+drawing Summary Title + User Gauge (same as batch_generate / on-open rule).
 ' Diagnose (one part, verbose, may show Inventor dialogs): cscript //nologo batch_part_drawings.vbs diag
@@ -18,18 +34,19 @@
 ' Edit PARTS_FOLDER, optional VARIANTS_FOLDER, and DRAWING_TEMPLATE below.
 ' PARTS_FOLDER = Inventor project folder (e.g. Z Bars with ProjectName.ipj). VARIANTS_FOLDER = folder with ALL .ipt (if moved out of Z Bars); leave "" to scan PARTS_FOLDER only.
 ' If views always fail: set INVENTOR_PROJECT to your .ipj (or leave blank to auto-use first .ipj in scan folder, then PARTS_FOLDER).
-' CC2026.dwg = Inventor DWG drawing template.
-' If AddBaseView still fails: in Inventor open CC2026.dwg and Save Copy As CC2026.idw
-' in the same folder - the script will use that .idw to place views and still save .dwg.
+' DRAWING_TEMPLATE: prefer a path to your drawing template .idw (e.g. CC2026.idw). The script uses it directly for new drawings.
+' If you point at a .dwg template, the script uses a same-folder companion .idw (BaseName.idw) when it exists for Documents.Add.
 ' If the template has a Base View but diag shows 0 views: Inventor Documents.Add can drop views;
 ' the script falls back to CopyFile + Documents.Open on the same template.
 ' Run without "diag" to batch-save *.<drawExt> next to each .ipt (recursive under PARTS_FOLDER). "diag" never SaveAs.
 ' Saving to .dwg/.pdf/.dxf is a translation: use SaveAs(..., True) first (Save Copy As). Plain SaveAs False often returns E_FAIL (-2147467259).
 ' Fallback: DWG translator SaveCopyAs; then .idw next to the part if DWG still fails.
 ' Recursive scan skips subfolders named OldVersions by default (drawings next to real .ipt, not backups).
+' OldVersions\*.ipt are Inventor revision backups (e.g. Z1600875.0001.ipt), not production names (Z1600875.ipt).
+' If the batch reports .ipt count = 1 but Explorer shows many files, they are almost certainly under OldVersions —
+' re-run batch_generate_z_parts.vbs so each variant exists as Z########.ipt in the project folder root.
 ' Set ALLOW_SCAN_OLDVERSIONS = True if your .ipt files only exist under OldVersions (not recommended long-term).
-' If the template is .dwg but files end up as .idw, set OUTPUT_DRAWING_EXT = "idw" so the batch targets .idw
-' and "skip if exists" matches your real files (otherwise the script looks for .dwg, never skips, and overwrites .idw).
+' OUTPUT_DRAWING_EXT: "" = same extension as the template. Set "idw" or "dwg" to force output type (e.g. .dwg template but save .idw).
 ' Set OVERWRITE_EXISTING_DRAWINGS = True only when you want to replace drawings (e.g. full regen; wipes manual dims).
 ' Auto-dimension (same family, small variations): set AUTO_DIMENSION_ILOGIC_RULE to an iLogic rule NAME embedded in the
 ' template .idw, OR to a base filename (no path) for scripts\inventor-worker\ilogic_rules\<name>.txt (RunExternalRule).
@@ -55,12 +72,13 @@ VARIANTS_FOLDER = ""
 ' True = recurse into OldVersions (usually a bad idea). Backup .ipt files named Part.0007.ipt are always skipped.
 Dim ALLOW_SCAN_OLDVERSIONS
 ALLOW_SCAN_OLDVERSIONS = False
-DRAWING_TEMPLATE = "C:\Users\Public\Documents\Autodesk\Inventor 2025\Templates\en-US\CC2026.dwg"
-INVENTOR_PROJECT = ""
+' .idw-only template is fine: no companion .dwg in this folder is required (unlike pointing DRAWING_TEMPLATE at a .dwg file).
+DRAWING_TEMPLATE = "C:\Users\Public\Documents\Autodesk\Inventor 2025\Templates\en-US\CC2026.idw"
+INVENTOR_PROJECT = "C:\Users\Micha\Desktop\Canadian Cladding\DRAWINGS & MODELS\Z Bars\Z Bars.ipj"
 
-' "" = same extension as template. Set "idw" when DWG save fails so Save goes straight to *.idw (fewer errors in log).
+' "" = same extension as template (recommended when template is .idw). Use "idw" to force *.idw even if template were .dwg.
 Dim OUTPUT_DRAWING_EXT
-OUTPUT_DRAWING_EXT = "idw"
+OUTPUT_DRAWING_EXT = ""
 ' True = replace existing drawing files. False = skip parts that already have an output drawing (protects dimensions).
 Dim OVERWRITE_EXISTING_DRAWINGS
 OVERWRITE_EXISTING_DRAWINGS = True
@@ -99,6 +117,28 @@ gOverwriteFromCmdLine = False
 
 Dim gBatchNoAutoDim
 gBatchNoAutoDim = False
+
+' True = do not use SilentOperation / UserInteractionDisabled (ribbon stays on; use if UI looks "blank").
+Dim gBatchShowUi
+gBatchShowUi = False
+
+' True = only run iLogic/COM auto-dim on drawings that already exist (see header dimonly).
+Dim gDimOnlyMode
+gDimOnlyMode = False
+
+' True = same scan as dimonly but do NOT call RunRule/GetIntent from script; rely on iLogic After Open (see header).
+Dim gDimOpenMode
+gDimOpenMode = False
+
+Dim gDimOnlyOk, gDimOnlySkipNoDrawing, gDimOnlyOpenFail, gDimOnlySkipGaugeFilter
+gDimOnlyOk = 0
+gDimOnlySkipNoDrawing = 0
+gDimOnlyOpenFail = 0
+gDimOnlySkipGaugeFilter = 0
+
+' When non-empty, dimonly processes only Z-bar parts Z{gg}##### whose 2-digit gauge gg is listed (comma-separated).
+Dim gDimOnlyGaugeCsv
+gDimOnlyGaugeCsv = ""
 
 Dim gAutoDimILogicUnavailable
 gAutoDimILogicUnavailable = False
@@ -336,6 +376,21 @@ Sub RestoreInventorUi(inv)
   inv.Visible = True
   inv.SilentOperation = False
   inv.UserInterfaceManager.UserInteractionDisabled = False
+  Err.Clear
+End Sub
+
+' Batch normally sets silent automation for speed; skip that when gBatchShowUi is True.
+Sub SetInventorSilentAutomation(inv, wantSilent)
+  On Error Resume Next
+  If inv Is Nothing Then Exit Sub
+  If gBatchShowUi Then Exit Sub
+  If wantSilent Then
+    inv.SilentOperation = True
+    inv.UserInterfaceManager.UserInteractionDisabled = True
+  Else
+    inv.SilentOperation = False
+    inv.UserInterfaceManager.UserInteractionDisabled = False
+  End If
   Err.Clear
 End Sub
 
@@ -811,7 +866,7 @@ Function DiagPrepareAndPlaceViews(inv, drawDoc, partDoc, hasFlat, tag, ByRef las
   EchoDrawingViewSnapshot drawDoc, tag, "STEP: Views AFTER link + ReplaceReference + Update2 (if this dropped to 0, fix template references): "
   EchoDrawingSheetDiagnostics drawDoc
   If DrawingTotalViewCount(drawDoc) = 0 Then
-    WScript.Echo tag & "HINT: 0 views on new drawing. Batch uses the path shown as DIAG: Template (companion CC2026.idw). Open THAT .idw, place Base View, File > Save (same path). Saving only CC2026.dwg does not update the .idw the script uses."
+    WScript.Echo tag & "HINT: 0 views on new drawing. Open the template .idw the batch uses (see DIAG: Template line), place/save Base View on disk. If template is .dwg, the companion .idw must be updated — saving only .dwg does not refresh that .idw."
     WScript.Echo tag & "HINT: VBScript often gets 438 on ReferencedDocumentDescriptors.Add / AddFlatPatternView (late binding). Placeholder view + ReplaceReference still needs views present here."
   End If
 
@@ -853,8 +908,10 @@ Sub RunDiagnostics(inv, partPath, tplPrimary, tplFolder, fso, tplAlternateDwg)
   WScript.Echo "DIAG: Template: " & tplPrimary
 
   On Error Resume Next
-  inv.SilentOperation = True
-  inv.UserInterfaceManager.UserInteractionDisabled = True
+  If Not gBatchShowUi Then
+    inv.SilentOperation = True
+    inv.UserInterfaceManager.UserInteractionDisabled = True
+  End If
   Err.Clear
 
   Err.Clear
@@ -1214,9 +1271,21 @@ Function SaveDrawingViaDwgTranslator(inv, drawDoc, dwgFullPath, fso)
   Next
 End Function
 
+' Compare full file paths for same target (Inventor vs FSO path separators).
+Function PathsSameForSave(docPath, desiredPath)
+  On Error Resume Next
+  PathsSameForSave = False
+  docPath = Trim(CStr(docPath))
+  desiredPath = Trim(CStr(desiredPath))
+  If Len(docPath) = 0 Or Len(desiredPath) = 0 Then Exit Function
+  PathsSameForSave = (LCase(Replace(docPath, "/", "\")) = LCase(Replace(desiredPath, "/", "\")))
+End Function
+
 ' Writes desiredOutPath when possible. For translated types (.dwg, .pdf, .dxf), tries Save Copy As (True) first.
+' IMPORTANT: Do not DeleteFile before SaveAs when the drawing was opened from desiredOutPath — if SaveAs fails,
+'            the original file is already gone (e.g. Z1600750.idw disappears + database errors).
 Function SaveDrawingDocument(inv, drawDoc, desiredOutPath, fso, ByRef savedOutPath, ByRef errNum, ByRef errDesc)
-  Dim ext, idwAlt
+  Dim ext, idwAlt, docFull, sameTarget
   On Error Resume Next
   SaveDrawingDocument = False
   savedOutPath = ""
@@ -1224,9 +1293,33 @@ Function SaveDrawingDocument(inv, drawDoc, desiredOutPath, fso, ByRef savedOutPa
   errDesc = ""
   ext = LCase(fso.GetExtensionName(desiredOutPath))
 
-  If fso.FileExists(desiredOutPath) Then
-    fso.DeleteFile desiredOutPath, True
+  sameTarget = False
+  docFull = drawDoc.FullFileName
+  If Err.Number = 0 Then
+    sameTarget = PathsSameForSave(docFull, desiredOutPath)
+  End If
+  Err.Clear
+
+  ' In-place: Save overwrites safely. Never pre-delete the on-disk file for this case.
+  If sameTarget Then
+    drawDoc.Update2 True
     Err.Clear
+    drawDoc.Save
+    If Err.Number = 0 Then
+      savedOutPath = desiredOutPath
+      SaveDrawingDocument = True
+      Exit Function
+    End If
+    errNum = Err.Number
+    errDesc = Err.Description
+    Err.Clear
+  End If
+
+  If fso.FileExists(desiredOutPath) Then
+    If Not sameTarget Then
+      fso.DeleteFile desiredOutPath, True
+      Err.Clear
+    End If
   End If
 
   drawDoc.Update2 True
@@ -1986,26 +2079,38 @@ Sub TrySetSummaryTitleVbs(doc, titleText)
 End Sub
 
 Sub TrySetUserDefinedGaugeVbs(doc, propValue)
-  Dim ps, it
+  Dim ps, it, v, e1, e2
   On Error Resume Next
+  v = CStr(propValue)
   Set ps = doc.PropertySets.Item("Inventor User Defined Properties")
   If Err.Number <> 0 Then
+    WScript.Echo "WARN iProperty: no User Defined set on document (" & Err.Number & ")"
     Err.Clear
     Exit Sub
   End If
   Set it = ps.Item(kZBarIpropGauge)
   If Err.Number = 0 Then
-    it.Value = propValue
+    it.Value = v
+    If Err.Number = 0 Then
+      Err.Clear
+      Exit Sub
+    End If
+    WScript.Echo "WARN iProperty: could not write Gauge (" & Err.Number & " " & Err.Description & ")"
     Err.Clear
     Exit Sub
   End If
   Err.Clear
-  ps.Add propValue, kZBarIpropGauge
-  If Err.Number <> 0 Then
-    Err.Clear
-    ps.Add kZBarIpropGauge, propValue
-  End If
+  e1 = 0
+  e2 = 0
+  ps.Add v, kZBarIpropGauge
+  e1 = Err.Number
+  If e1 = 0 Then Exit Sub
   Err.Clear
+  ps.Add kZBarIpropGauge, v
+  e2 = Err.Number
+  If e2 = 0 Then Exit Sub
+  Err.Clear
+  WScript.Echo "WARN iProperty: Add Gauge failed (tried value,name then name,value; err " & e1 & " / " & e2 & ")"
 End Sub
 
 Sub ApplyZBarTitleGaugeVbs(doc, titleText, gaugeLabel)
@@ -2052,10 +2157,7 @@ Sub ProcessPart(inv, partPath, drawTpl, outPath, fso)
 
   WScript.Sleep 200
 
-  inv.SilentOperation = True
-  Err.Clear
-  inv.UserInterfaceManager.UserInteractionDisabled = True
-  Err.Clear
+  SetInventorSilentAutomation inv, True
 
   fn = partDoc.FullFileName
   If Err.Number <> 0 Or Len(fn) = 0 Then
@@ -2153,9 +2255,7 @@ Sub ProcessPart(inv, partPath, drawTpl, outPath, fso)
   Err.Clear
   drawDoc.Update2 True
   Err.Clear
-  inv.SilentOperation = False
-  inv.UserInterfaceManager.UserInteractionDisabled = False
-  Err.Clear
+  SetInventorSilentAutomation inv, False
   ruleWanted = (Len(Trim(AUTO_DIMENSION_ILOGIC_RULE)) > 0) And Not gBatchNoAutoDim
   dimOk = False
   If ruleWanted Then
@@ -2168,9 +2268,7 @@ Sub ProcessPart(inv, partPath, drawTpl, outPath, fso)
     End If
   End If
   Err.Clear
-  inv.SilentOperation = True
-  inv.UserInterfaceManager.UserInteractionDisabled = True
-  Err.Clear
+  SetInventorSilentAutomation inv, True
 
   ' Failed RunExternalRule (Err 5) can leave the drawing unable to Save/SaveAs again. First save is already on disk;
   ' only save a second time when a rule was configured and reported success (dimensions changed).
@@ -2206,14 +2304,117 @@ Sub ProcessPart(inv, partPath, drawTpl, outPath, fso)
   WScript.Echo "OK   " & savedPath
 End Sub
 
+' Open existing saved drawing; run AUTO_DIMENSION_ILOGIC_RULE + COM fallback; save if dims succeeded.
+' gDimOpenMode: do not call iLogic from script — turn off silent automation, Open (After Open runs rule), Save.
+Sub ProcessPartDimOnly(inv, partPath, drawPath, fso)
+  Dim drawDoc, savedPath, saveErrNum, saveErrDesc, dimOk, ruleWanted
+  Dim msOpenWait
+  On Error Resume Next
+  If Not fso.FileExists(drawPath) Then
+    gDimOnlySkipNoDrawing = gDimOnlySkipNoDrawing + 1
+    WScript.Echo "SKIP dimonly (no drawing): " & drawPath
+    Exit Sub
+  End If
+
+  If gDimOpenMode Then
+    msOpenWait = 1500
+    SetInventorSilentAutomation inv, False
+    Set drawDoc = inv.Documents.Open(drawPath, False)
+    If Err.Number <> 0 Or drawDoc Is Nothing Then
+      WScript.Echo "SKIP dimopen open: " & drawPath & " - " & Err.Number & " " & Err.Description
+      Err.Clear
+      gDimOnlyOpenFail = gDimOnlyOpenFail + 1
+      SetInventorSilentAutomation inv, True
+      Exit Sub
+    End If
+    drawDoc.Activate
+    Err.Clear
+    WScript.Sleep msOpenWait
+    Err.Clear
+    drawDoc.Update2 True
+    Err.Clear
+    savedPath = drawPath
+    If Not SaveDrawingDocument(inv, drawDoc, drawPath, fso, savedPath, saveErrNum, saveErrDesc) Then
+      Err.Clear
+      drawDoc.Save
+      Err.Clear
+    End If
+    gDimOnlyOk = gDimOnlyOk + 1
+    WScript.Echo "DIMOPEN OK " & drawPath
+    drawDoc.Close False
+    Err.Clear
+    SetInventorSilentAutomation inv, True
+    Exit Sub
+  End If
+
+  Set drawDoc = inv.Documents.Open(drawPath, False)
+  If Err.Number <> 0 Or drawDoc Is Nothing Then
+    WScript.Echo "SKIP dimonly open: " & drawPath & " - " & Err.Number & " " & Err.Description
+    Err.Clear
+    gDimOnlyOpenFail = gDimOnlyOpenFail + 1
+    Exit Sub
+  End If
+  drawDoc.Activate
+  Err.Clear
+  drawDoc.Update2 True
+  Err.Clear
+  savedPath = drawPath
+  SetInventorSilentAutomation inv, False
+  ruleWanted = (Len(Trim(AUTO_DIMENSION_ILOGIC_RULE)) > 0) And Not gBatchNoAutoDim
+  If Not ruleWanted Then
+    WScript.Echo "SKIP dimonly (set AUTO_DIMENSION_ILOGIC_RULE; do not use nodim): " & drawPath
+    drawDoc.Close False
+    Err.Clear
+    Exit Sub
+  End If
+  dimOk = TryRunAutoDimensionILogic(inv, drawDoc, fso, AUTO_DIMENSION_ILOGIC_RULE, partPath)
+  If Not dimOk Then
+    If StrComp(Trim(AUTO_DIMENSION_ILOGIC_RULE), "CC_ZBar_AutoDimension", vbTextCompare) = 0 Then
+      Err.Clear
+      dimOk = TryAddZBarAutoDimensionsCom(inv, drawDoc, partPath)
+    End If
+  End If
+  Err.Clear
+  SetInventorSilentAutomation inv, True
+  If dimOk Then
+    drawDoc.Activate
+    Err.Clear
+    drawDoc.Update2 True
+    Err.Clear
+    If Not SaveDrawingDocument(inv, drawDoc, drawPath, fso, savedPath, saveErrNum, saveErrDesc) Then
+      Err.Clear
+      drawDoc.Save
+      Err.Clear
+    End If
+    gDimOnlyOk = gDimOnlyOk + 1
+    WScript.Echo "DIMOK " & drawPath
+  Else
+    WScript.Echo "SKIP dimonly (iLogic/COM did not report success): " & drawPath
+  End If
+  drawDoc.Close False
+  Err.Clear
+End Sub
+
 Dim fso, folder, f, baseName, outPath, drawExt
 Dim tplCreate, companion
 Dim partsScanFolder
+Dim earlyArgI, earlyArgS
 
-If Not FileExists(DRAWING_TEMPLATE) Then
-  WScript.Echo "Template not found: " & DRAWING_TEMPLATE
-  WScript.Echo "If your file uses another extension or name, update DRAWING_TEMPLATE in this script."
-  WScript.Quit 1
+For earlyArgI = 0 To WScript.Arguments.Count - 1
+  earlyArgS = LCase(Trim(WScript.Arguments(earlyArgI)))
+  If earlyArgS = "dimonly" Or earlyArgS = "/dimonly" Or earlyArgS = "-dimonly" Or earlyArgS = "autodimonly" Or earlyArgS = "/autodimonly" Then gDimOnlyMode = True
+  If earlyArgS = "dimopen" Or earlyArgS = "/dimopen" Or earlyArgS = "-dimopen" Then
+    gDimOpenMode = True
+    gDimOnlyMode = True
+  End If
+Next
+
+If Not gDimOnlyMode Then
+  If Not FileExists(DRAWING_TEMPLATE) Then
+    WScript.Echo "Template not found: " & DRAWING_TEMPLATE
+    WScript.Echo "If your file uses another extension or name, update DRAWING_TEMPLATE in this script."
+    WScript.Quit 1
+  End If
 End If
 
 Set fso = CreateObject("Scripting.FileSystemObject")
@@ -2227,19 +2428,25 @@ If Len(Trim(VARIANTS_FOLDER)) > 0 And Not fso.FolderExists(PARTS_FOLDER) Then
   WScript.Echo "WARN: PARTS_FOLDER missing (set to folder with .ipj if needed): " & PARTS_FOLDER
 End If
 
-drawExt = LCase(fso.GetExtensionName(DRAWING_TEMPLATE))
-If drawExt <> "dwg" And drawExt <> "idw" Then drawExt = "idw"
+If gDimOnlyMode Then
+  drawExt = LCase(Trim(OUTPUT_DRAWING_EXT))
+  If drawExt <> "dwg" And drawExt <> "idw" Then drawExt = "idw"
+  tplCreate = DRAWING_TEMPLATE
+Else
+  drawExt = LCase(fso.GetExtensionName(DRAWING_TEMPLATE))
+  If drawExt <> "dwg" And drawExt <> "idw" Then drawExt = "idw"
 
-tplCreate = DRAWING_TEMPLATE
-If drawExt = "dwg" Then
-  gDwgTemplatePath = DRAWING_TEMPLATE
-  companion = fso.BuildPath(fso.GetParentFolderName(DRAWING_TEMPLATE), fso.GetBaseName(DRAWING_TEMPLATE) & ".idw")
-  If fso.FileExists(companion) Then
-    tplCreate = companion
-    WScript.Echo "Using companion .idw for new drawings: " & companion
-  Else
-    WScript.Echo "NOTE: If views still fail, create: " & companion
-    WScript.Echo "      (In Inventor: open CC2026.dwg, Save Copy As, type CC2026.idw, same folder.)"
+  tplCreate = DRAWING_TEMPLATE
+  If drawExt = "dwg" Then
+    gDwgTemplatePath = DRAWING_TEMPLATE
+    companion = fso.BuildPath(fso.GetParentFolderName(DRAWING_TEMPLATE), fso.GetBaseName(DRAWING_TEMPLATE) & ".idw")
+    If fso.FileExists(companion) Then
+      tplCreate = companion
+      WScript.Echo "Using companion .idw for new drawings: " & companion
+    Else
+      WScript.Echo "NOTE: If views still fail, create: " & companion
+      WScript.Echo "      (In Inventor: open " & fso.GetFileName(DRAWING_TEMPLATE) & ", Save Copy As " & fso.GetBaseName(DRAWING_TEMPLATE) & ".idw, same folder.)"
+    End If
   End If
 End If
 
@@ -2253,18 +2460,6 @@ If batchOutExt <> drawExt Then
   WScript.Echo "OUTPUT_DRAWING_EXT: files will be *." & batchOutExt & " (template is ." & drawExt & ")"
 End If
 
-Dim inv
-On Error Resume Next
-Set inv = CreateObject("Inventor.Application")
-If Err.Number <> 0 Then Fail("CreateObject(Inventor.Application)")
-' Hidden Inventor frequently returns E_FAIL (0x80004005) from AddBaseView - graphics must resolve.
-inv.Visible = True
-RestoreInventorUi inv
-inv.SilentOperation = True
-Err.Clear
-inv.UserInterfaceManager.UserInteractionDisabled = True
-Err.Clear
-
 Dim parseArgI, parseArgS
 For parseArgI = 0 To WScript.Arguments.Count - 1
   parseArgS = LCase(Trim(WScript.Arguments(parseArgI)))
@@ -2275,7 +2470,25 @@ For parseArgI = 0 To WScript.Arguments.Count - 1
   End If
   If parseArgS = "nodim" Or parseArgS = "/nodim" Or parseArgS = "-nodim" Then gBatchNoAutoDim = True
   If parseArgS = "verbose" Or parseArgS = "/verbose" Or parseArgS = "-verbose" Then AUTO_DIMENSION_VERBOSE = True
+  If parseArgS = "showui" Or parseArgS = "/showui" Or parseArgS = "-showui" Or parseArgS = "interactive" Or parseArgS = "/interactive" Then gBatchShowUi = True
+  If parseArgS = "dimonly" Or parseArgS = "/dimonly" Or parseArgS = "-dimonly" Or parseArgS = "autodimonly" Or parseArgS = "/autodimonly" Then gDimOnlyMode = True
+  If parseArgS = "dimopen" Or parseArgS = "/dimopen" Or parseArgS = "-dimopen" Then
+    gDimOpenMode = True
+    gDimOnlyMode = True
+  End If
+  If LCase(Left(Trim(WScript.Arguments(parseArgI)), 11)) = "onlygauge=" Then
+    gDimOnlyGaugeCsv = Mid(Trim(WScript.Arguments(parseArgI)), 12)
+  End If
 Next
+
+Dim inv
+On Error Resume Next
+Set inv = CreateObject("Inventor.Application")
+If Err.Number <> 0 Then Fail("CreateObject(Inventor.Application)")
+' Hidden Inventor frequently returns E_FAIL (0x80004005) from AddBaseView - graphics must resolve.
+inv.Visible = True
+RestoreInventorUi inv
+SetInventorSilentAutomation inv, True
 
 If Len(Trim(INVENTOR_PROJECT)) = 0 Then
   INVENTOR_PROJECT = FirstIpjInFolder(fso, partsScanFolder)
@@ -2296,8 +2509,21 @@ End If
 If gBatchNoAutoDim Then
   WScript.Echo "Batch: nodim - iLogic/COM auto-dimension skipped for this run."
 End If
+If gBatchShowUi Then
+  WScript.Echo "Batch: showui - Inventor ribbon/menus stay enabled (slower; dialogs may appear)."
+End If
 If AUTO_DIMENSION_VERBOSE Then
   WScript.Echo "Batch: verbose - AUTO-DIM line per .ipt enabled."
+End If
+If gDimOnlyMode And gBatchNoAutoDim And Not gDimOpenMode Then
+  WScript.Echo "WARN: dimonly with nodim does nothing useful; omit nodim."
+End If
+If gDimOnlyMode Then
+  If gDimOpenMode Then
+    WScript.Echo "Batch: dimopen - open/save *." & batchOutExt & " (iLogic After Open runs CC_ZBar_AutoDimension)."
+  Else
+    WScript.Echo "Batch: dimonly - open existing *." & batchOutExt & " beside each .ipt; run AUTO_DIMENSION_ILOGIC_RULE only."
+  End If
 End If
 
 If gDiagMode Then
@@ -2369,6 +2595,34 @@ Function CountIptRecursive(fso, folderPath)
   CountIptRecursive = n
 End Function
 
+Function CountIptInOldVersionsOnly(fso, scanRoot)
+  Dim p, folder, f, n
+  On Error Resume Next
+  n = 0
+  p = fso.BuildPath(scanRoot, "OldVersions")
+  If Not fso.FolderExists(p) Then
+    CountIptInOldVersionsOnly = 0
+    Exit Function
+  End If
+  Set folder = fso.GetFolder(p)
+  For Each f In folder.Files
+    If LCase(fso.GetExtensionName(f.Name)) = "ipt" Then n = n + 1
+  Next
+  CountIptInOldVersionsOnly = n
+End Function
+
+Sub EchoOldVersionsVersusRootHint(fso, scanRoot, productionCount)
+  Dim ovCount, p
+  ovCount = CountIptInOldVersionsOnly(fso, scanRoot)
+  If ovCount < 15 Then Exit Sub
+  If productionCount > 5 Then Exit Sub
+  p = fso.BuildPath(scanRoot, "OldVersions")
+  WScript.Echo "WARN: Only " & productionCount & " production .ipt under the scan folder, but " & ovCount & " under OldVersions\"
+  WScript.Echo "      (" & p & ")."
+  WScript.Echo "      Drawing batch ignores OldVersions by design. You need current parts as Z########.ipt next to the .ipj (not Z########.0001.ipt in OldVersions)."
+  WScript.Echo "      Re-run batch_generate_z_parts.vbs from the repo (set SKIP_EXISTING_PARTS=False so missing root files are created)."
+End Sub
+
 ' Skip if a drawing already exists: same folder as the .ipt, same base name.
 ' When batch output is .dwg, also skip if a sibling .idw exists (DWG often falls back to .idw; avoids wiping dimensioned idw).
 Function DrawingAlreadyExists(fso, iptParent, baseName, batchOutExt)
@@ -2382,6 +2636,39 @@ Function DrawingAlreadyExists(fso, iptParent, baseName, batchOutExt)
   Else
     If fso.FileExists(fso.BuildPath(iptParent, baseName & "." & batchOutExt)) Then DrawingAlreadyExists = True
   End If
+End Function
+
+' Z########.ipt / .idw: gauge = 2 digits after Z (e.g. Z2005750 -> 20). Returns -1 if not that pattern.
+Function ZBarGaugeFromBaseName(baseName)
+  On Error Resume Next
+  ZBarGaugeFromBaseName = -1
+  baseName = Trim(CStr(baseName))
+  If Len(baseName) < 8 Then Exit Function
+  If UCase(Left(baseName, 1)) <> "Z" Then Exit Function
+  ZBarGaugeFromBaseName = CInt(Mid(baseName, 2, 2))
+  If Err.Number <> 0 Then ZBarGaugeFromBaseName = -1
+End Function
+
+' gDimOnlyGaugeCsv = "18,20,22" — returns True if list empty (no filter) or g is in list.
+Function GaugeInDimOnlyList(ByVal g, ByVal csvList)
+  Dim parts, i, t, gg
+  On Error Resume Next
+  GaugeInDimOnlyList = True
+  csvList = Trim(CStr(csvList))
+  If Len(csvList) = 0 Then Exit Function
+  GaugeInDimOnlyList = False
+  parts = Split(Replace(csvList, " ", ""), ",")
+  For i = 0 To UBound(parts)
+    Err.Clear
+    t = Trim(parts(i))
+    If Len(t) > 0 Then
+      gg = CInt(t)
+      If Err.Number = 0 And gg = g Then
+        GaugeInDimOnlyList = True
+        Exit Function
+      End If
+    End If
+  Next
 End Function
 
 Sub BatchProcessFolderRecursive(inv, folderPath, fso, drawTpl, batchOutExt)
@@ -2422,6 +2709,43 @@ Sub BatchProcessFolderRecursive(inv, folderPath, fso, drawTpl, batchOutExt)
   Next
 End Sub
 
+Sub BatchProcessFolderRecursiveDimOnly(inv, folderPath, fso, batchOutExt)
+  Dim folder, f, sf, baseName, outPath, parentFolder, gz
+  On Error Resume Next
+  Set folder = fso.GetFolder(folderPath)
+  For Each f In folder.Files
+    If LCase(fso.GetExtensionName(f.Name)) = "ipt" Then
+      baseName = fso.GetBaseName(f.Path)
+      If IsInventorOldVersionStyleIptBaseName(baseName) Then
+        gBatchSkipBackupIpt = gBatchSkipBackupIpt + 1
+        WScript.Echo "SKIP Inventor backup .ipt (not production; name ends with .####): " & f.Path
+      ElseIf (Not ALLOW_SCAN_OLDVERSIONS) And IsOldVersionsFolderName(fso.GetFileName(fso.GetParentFolderName(f.Path))) Then
+        gBatchSkipOldVersionsIpt = gBatchSkipOldVersionsIpt + 1
+        WScript.Echo "SKIP .ipt under OldVersions (set ALLOW_SCAN_OLDVERSIONS=True or move .ipt): " & f.Path
+      Else
+        parentFolder = fso.GetParentFolderName(f.Path)
+        outPath = fso.BuildPath(parentFolder, baseName & "." & batchOutExt)
+        If Len(Trim(gDimOnlyGaugeCsv)) > 0 Then
+          gz = ZBarGaugeFromBaseName(baseName)
+          If gz < 0 Or Not GaugeInDimOnlyList(gz, gDimOnlyGaugeCsv) Then
+            gDimOnlySkipGaugeFilter = gDimOnlySkipGaugeFilter + 1
+            WScript.Echo "SKIP dimonly (onlygauge): " & f.Path
+          Else
+            ProcessPartDimOnly inv, f.Path, outPath, fso
+          End If
+        Else
+          ProcessPartDimOnly inv, f.Path, outPath, fso
+        End If
+      End If
+    End If
+  Next
+  For Each sf In folder.SubFolders
+    If ALLOW_SCAN_OLDVERSIONS Or Not IsOldVersionsFolderName(sf.Name) Then
+      BatchProcessFolderRecursiveDimOnly inv, sf.Path, fso, batchOutExt
+    End If
+  Next
+End Sub
+
 iptCount = CountIptRecursive(fso, partsScanFolder)
 WScript.Echo "Batch: scan folder (recursive)=" & partsScanFolder
 WScript.Echo "Batch: .ipt count (all subfolders)=" & iptCount & "  output *." & batchOutExt & " next to each .ipt"
@@ -2434,14 +2758,36 @@ End If
 If iptCount <= 1 Then
   WScript.Echo "HINT: Count above = total production .ipt under scan folder (recursive). Script visits ALL of them, not just the first."
   WScript.Echo "      If you expected many parts, set VARIANTS_FOLDER (in double quotes) to the folder that contains all Z*.ipt files."
+  WScript.Echo "      If Explorer shows many .ipt files only under OldVersions\, those are backups - regenerate Z########.ipt in the folder root (batch_generate_z_parts.vbs)."
 End If
-If Not OVERWRITE_EXISTING_DRAWINGS Then
-  WScript.Echo "Batch: SKIP exists = that part already has a drawing next to it. Run with: cscript //nologo batch_part_drawings.vbs overwrite"
-  WScript.Echo "       Or set OVERWRITE_EXISTING_DRAWINGS=True in this script (replaces *.idw / *.dwg for batch output ext)."
+EchoOldVersionsVersusRootHint fso, partsScanFolder, iptCount
+If Not gDimOnlyMode Then
+  If Not OVERWRITE_EXISTING_DRAWINGS Then
+    WScript.Echo "Batch: SKIP exists = that part already has a drawing next to it. Run with: cscript //nologo batch_part_drawings.vbs overwrite"
+    WScript.Echo "       Or set OVERWRITE_EXISTING_DRAWINGS=True in this script (replaces *.idw / *.dwg for batch output ext)."
+  End If
 End If
-WScript.Echo "Batch: starting pass over each .ipt..."
-BatchProcessFolderRecursive inv, partsScanFolder, fso, tplCreate, batchOutExt
-
-RestoreInventorUi inv
-WScript.Echo "Batch summary: OK drawings=" & gBatchDrawingOk & "  SKIP exists=" & gBatchSkipExists & "  SKIP backup.ipt=" & gBatchSkipBackupIpt & "  SKIP OldVersions folder .ipt=" & gBatchSkipOldVersionsIpt
-WScript.Echo "DONE"
+If gDimOnlyMode Then
+  If gDimOpenMode Then
+    WScript.Echo "Batch dimopen: starting pass (existing *." & batchOutExt & " only)..."
+  Else
+    WScript.Echo "Batch dimonly: starting pass (existing *." & batchOutExt & " only)..."
+  End If
+  If Len(Trim(gDimOnlyGaugeCsv)) > 0 Then
+    WScript.Echo "dimonly/dimopen filter: onlygauge=" & Trim(gDimOnlyGaugeCsv) & " (Z-bar Z{gg}##### only)"
+  End If
+  If Not gDimOpenMode Then
+    WScript.Echo "NOTE: Inventor 2025 from cscript usually cannot run RunExternalRule (Err 5) or DrawingView.GetIntent (Err 424)."
+    WScript.Echo "      If every file shows SKIP dimonly, use: dimopen + iLogic After Open, or run CC_ZBar_AutoDimension manually."
+  End If
+  BatchProcessFolderRecursiveDimOnly inv, partsScanFolder, fso, batchOutExt
+  RestoreInventorUi inv
+  WScript.Echo "Dimonly summary: DIMOK=" & gDimOnlyOk & "  SKIP no drawing=" & gDimOnlySkipNoDrawing & "  SKIP open fail=" & gDimOnlyOpenFail & "  SKIP onlygauge=" & gDimOnlySkipGaugeFilter & "  SKIP backup.ipt=" & gBatchSkipBackupIpt & "  SKIP OldVersions .ipt=" & gBatchSkipOldVersionsIpt
+  WScript.Echo "DONE"
+Else
+  WScript.Echo "Batch: starting pass over each .ipt..."
+  BatchProcessFolderRecursive inv, partsScanFolder, fso, tplCreate, batchOutExt
+  RestoreInventorUi inv
+  WScript.Echo "Batch summary: OK drawings=" & gBatchDrawingOk & "  SKIP exists=" & gBatchSkipExists & "  SKIP backup.ipt=" & gBatchSkipBackupIpt & "  SKIP OldVersions folder .ipt=" & gBatchSkipOldVersionsIpt
+  WScript.Echo "DONE"
+End If

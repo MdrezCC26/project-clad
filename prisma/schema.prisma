@@ -211,7 +211,6 @@ model ShopSettings {
   backgroundLogoDataUrl  String?
   pricingPasswordHash  String?
   pricingPasswordSalt  String?
-  storefrontTheme      String?  @default("default")
   navButton1Label      String?
   navButton1Url        String?
   navButton2Label      String?

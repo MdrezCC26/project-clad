@@ -1,6 +1,4 @@
 @import url("https://fonts.googleapis.com/css2?family=Radio+Canada:wght@400;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&display=swap");
 
 /*
   TEXT SIZE GUIDE (storefront app)
@@ -62,186 +60,33 @@ body.project-clad-leaving .project-clad-page {
   --pc-input-border: #000;
   --pc-warning-bg: #fff9e6;
   --pc-thumb-placeholder: rgba(0, 0, 0, 0.08);
-}
-
-/* Theme: Default (light, clean) */
-.project-clad-page[data-theme="default"] {
-  --pc-bg: #fff;
-  --pc-fg: #111;
-  --pc-muted: #444;
-  --pc-card-bg: #fff;
-  --pc-card-border: #000;
-  --pc-button-bg: #111;
-  --pc-button-fg: #fff;
-  --pc-input-border: #000;
-  --pc-warning-bg: #fff9e6;
-  --pc-thumb-placeholder: rgba(0, 0, 0, 0.08);
-}
-
-/* Theme: Dark */
-.project-clad-page[data-theme="dark"] {
-  font-family: "DM Sans", "Helvetica Neue", Arial, sans-serif;
-  --pc-bg: #1a1a1a;
-  --pc-fg: #e8e8e8;
-  --pc-muted: #a0a0a0;
-  --pc-card-bg: #252525;
-  --pc-card-border: rgba(255, 255, 255, 0.12);
-  --pc-button-bg: #e8e8e8;
-  --pc-button-fg: #1a1a1a;
-  --pc-input-border: rgba(255, 255, 255, 0.25);
-  --pc-warning-bg: #3d3520;
-  --pc-thumb-placeholder: rgba(255, 255, 255, 0.08);
-}
-
-.project-clad-page[data-theme="dark"] {
-  background: var(--pc-bg);
-  color: var(--pc-fg);
-}
-
-.project-clad-page[data-theme="dark"] .project-clad-card {
-  background: var(--pc-card-bg);
-  border-color: var(--pc-card-border);
-}
-
-.project-clad-page[data-theme="dark"] .project-clad-card-link:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.project-clad-page[data-theme="dark"] .project-clad-muted {
-  color: var(--pc-muted);
-}
-
-.project-clad-page[data-theme="dark"] .project-clad-button {
-  background: var(--pc-button-bg);
-  color: var(--pc-button-fg);
-}
-
-.project-clad-page[data-theme="dark"] .project-clad-button:hover {
-  background: #fff;
-  color: #1a1a1a;
-}
-
-.project-clad-page[data-theme="dark"] .project-clad-button:focus-visible {
-  outline-color: var(--pc-button-bg);
-}
-
-.project-clad-page[data-theme="dark"] .project-clad-nav .link {
-  color: var(--pc-fg);
-}
-
-.project-clad-page[data-theme="dark"] .project-clad-share-input,
-.project-clad-page[data-theme="dark"] .project-clad-inline-form input,
-.project-clad-page[data-theme="dark"] .project-clad-inline-form select {
-  background: #333;
-  border-color: var(--pc-input-border);
-  color: var(--pc-fg);
-}
-
-.project-clad-page[data-theme="dark"] .project-clad-thumb--placeholder {
-  background: var(--pc-thumb-placeholder);
-}
-
-.project-clad-page[data-theme="dark"] .project-clad-warning {
-  background: var(--pc-warning-bg);
-  border-color: rgba(235, 200, 120, 0.4);
-}
-
-.project-clad-page[data-theme="dark"] .project-clad-table th,
-.project-clad-page[data-theme="dark"] .project-clad-table td {
-  border-bottom-color: var(--pc-card-border);
-}
-
-/* Theme: Warm (amber tones) */
-.project-clad-page[data-theme="warm"] {
-  font-family: "Source Serif 4", Georgia, serif;
-  font-weight: 600;
-  --pc-bg: #fef9f0;
-  --pc-fg: #2d2115;
-  --pc-muted: #6b5344;
-  --pc-card-bg: #fffbf5;
-  --pc-card-border: rgba(184, 134, 62, 0.35);
-  --pc-button-bg: #c17f3a;
-  --pc-button-fg: #fff;
-  --pc-input-border: rgba(184, 134, 62, 0.4);
-  --pc-warning-bg: #fef4e0;
-  --pc-thumb-placeholder: rgba(184, 134, 62, 0.12);
-}
-
-.project-clad-page[data-theme="warm"] {
-  background: var(--pc-bg);
-  color: var(--pc-fg);
-}
-
-.project-clad-page[data-theme="warm"] .project-clad-card {
-  background: var(--pc-card-bg);
-  border-color: var(--pc-card-border);
-}
-
-.project-clad-page[data-theme="warm"] .project-clad-muted {
-  color: var(--pc-muted);
-}
-
-.project-clad-page[data-theme="warm"] .project-clad-button {
-  background: var(--pc-button-bg);
-}
-
-.project-clad-page[data-theme="warm"] .project-clad-button:hover {
-  background: #a66a2f;
-}
-
-.project-clad-page[data-theme="warm"] .project-clad-nav .link {
-  color: var(--pc-fg);
-}
-
-.project-clad-page[data-theme="warm"] .project-clad-table th,
-.project-clad-page[data-theme="warm"] .project-clad-table td {
-  border-bottom-color: var(--pc-card-border);
-}
-
-/* Theme: Ocean (blues & teals) */
-.project-clad-page[data-theme="ocean"] {
-  font-family: "DM Sans", "Helvetica Neue", Arial, sans-serif;
-  --pc-bg: #f0f7fa;
-  --pc-fg: #0d3b4a;
-  --pc-muted: #4a6b73;
-  --pc-card-bg: #fff;
-  --pc-card-border: rgba(13, 59, 74, 0.15);
-  --pc-button-bg: #0d5c73;
-  --pc-button-fg: #fff;
-  --pc-input-border: rgba(13, 59, 74, 0.25);
-  --pc-warning-bg: #e8f4f8;
-  --pc-thumb-placeholder: rgba(13, 92, 115, 0.1);
-}
-
-.project-clad-page[data-theme="ocean"] {
-  background: var(--pc-bg);
-  color: var(--pc-fg);
-}
-
-.project-clad-page[data-theme="ocean"] .project-clad-card {
-  background: var(--pc-card-bg);
-  border-color: var(--pc-card-border);
-}
-
-.project-clad-page[data-theme="ocean"] .project-clad-muted {
-  color: var(--pc-muted);
-}
-
-.project-clad-page[data-theme="ocean"] .project-clad-button {
-  background: var(--pc-button-bg);
-}
-
-.project-clad-page[data-theme="ocean"] .project-clad-button:hover {
-  background: #094558;
-}
-
-.project-clad-page[data-theme="ocean"] .project-clad-nav .link {
-  color: var(--pc-fg);
-}
-
-.project-clad-page[data-theme="ocean"] .project-clad-table th,
-.project-clad-page[data-theme="ocean"] .project-clad-table td {
-  border-bottom-color: var(--pc-card-border);
+  /*
+   * Neumorphic buttons — adapted from Uiverse.io by Pradeepsaranbishnoi (jolly-robin-0)
+   * https://uiverse.io/Pradeepsaranbishnoi/jolly-robin-0
+   */
+  --pc-btn-neu-transition: all 300ms cubic-bezier(0.23, 1, 0.32, 1);
+  --pc-btn-neu-bg: #eaeaea;
+  --pc-btn-neu-fg: rgba(0, 0, 0, 0.9);
+  --pc-btn-neu-shadow:
+    0 15px 25px -4px rgba(0, 0, 0, 0.5),
+    inset 0 -3px 4px -1px rgba(0, 0, 0, 0.2),
+    0 -10px 15px -1px rgba(255, 255, 255, 0.6),
+    inset 0 3px 4px -1px rgba(255, 255, 255, 0.2),
+    inset 0 0 5px 1px rgba(255, 255, 255, 0.8),
+    inset 0 20px 30px 0 rgba(255, 255, 255, 0.2);
+  --pc-btn-neu-shadow-hover:
+    0 18px 28px -4px rgba(0, 0, 0, 0.48),
+    inset 0 -2px 4px -1px rgba(0, 0, 0, 0.18),
+    0 -11px 16px -1px rgba(255, 255, 255, 0.65),
+    inset 0 4px 5px -1px rgba(255, 255, 255, 0.28),
+    inset 0 0 6px 1px rgba(255, 255, 255, 0.85),
+    inset 0 22px 32px 0 rgba(255, 255, 255, 0.25);
+  --pc-btn-neu-shadow-active:
+    0 12px 25px -4px rgba(0, 0, 0, 0.4),
+    inset 0 -8px 30px 1px rgba(255, 255, 255, 0.9),
+    0 -10px 15px -1px rgba(255, 255, 255, 0.6),
+    inset 0 8px 25px 0 rgba(0, 0, 0, 0.4),
+    inset 0 0 10px 1px rgba(255, 255, 255, 0.6);
 }
 
 .project-clad-container {
@@ -360,43 +205,23 @@ body.project-clad-leaving .project-clad-page {
   grid-column: 1;
 }
 
-/* Nav bar: one oval with dividers, red on hover, centered */
+/* Nav: separate neumorphic pills (matches standalone .project-clad-button) */
 .project-clad-page .project-clad-nav {
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
   grid-column: 2;
   justify-self: center;
-  background: #111;
-  border-radius: 999px;
-  overflow: hidden;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
 }
 
 .project-clad-page .project-clad-nav .project-clad-button {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
-  background: transparent;
-  color: #fff;
-  border: none;
-  border-radius: 0;
-  padding: 0.6rem 1.25rem;
-  position: relative;
-  transition: background-color 0.25s ease;
-}
-
-.project-clad-page .project-clad-nav .project-clad-button:hover {
-  background: #c00;
-}
-
-.project-clad-page .project-clad-nav .project-clad-button:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  top: 50%;
-  width: 1px;
-  height: 50%;
-  background: rgba(255, 255, 255, 0.4);
-  transform: translateY(-50%);
-  pointer-events: none;
 }
 
 .project-clad-nav .link {
@@ -602,21 +427,67 @@ details.project-clad-edit-mode .project-clad-title {
 }
 
 .project-clad-button--projects {
-  background: #c00 !important;
+  background: #c62828 !important;
   color: #fff !important;
+  box-shadow:
+    0 15px 25px -4px rgba(0, 0, 0, 0.5),
+    inset 0 -3px 4px -1px rgba(0, 0, 0, 0.35),
+    0 -10px 15px -1px rgba(255, 120, 120, 0.22),
+    inset 0 3px 4px -1px rgba(255, 255, 255, 0.18),
+    inset 0 0 5px 1px rgba(255, 200, 200, 0.35),
+    inset 0 18px 28px 0 rgba(255, 255, 255, 0.12) !important;
 }
 
 .project-clad-button--projects:hover {
-  background: #a00 !important;
+  background: #b71c1c !important;
+  box-shadow:
+    0 18px 28px -4px rgba(0, 0, 0, 0.48),
+    inset 0 -2px 4px -1px rgba(0, 0, 0, 0.3),
+    0 -11px 16px -1px rgba(255, 140, 140, 0.25),
+    inset 0 4px 5px -1px rgba(255, 255, 255, 0.22),
+    inset 0 0 6px 1px rgba(255, 210, 210, 0.4),
+    inset 0 20px 30px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+.project-clad-button--projects:active {
+  filter: blur(0.5px);
+  box-shadow:
+    0 12px 25px -4px rgba(0, 0, 0, 0.45),
+    inset 0 8px 22px 0 rgba(0, 0, 0, 0.35),
+    inset 0 -8px 26px 1px rgba(255, 255, 255, 0.12),
+    inset 0 0 10px 1px rgba(255, 200, 200, 0.25) !important;
 }
 
 .project-clad-button--danger {
-  background: #c00;
+  background: #c62828;
   color: #fff;
+  box-shadow:
+    0 15px 25px -4px rgba(0, 0, 0, 0.5),
+    inset 0 -3px 4px -1px rgba(0, 0, 0, 0.35),
+    0 -10px 15px -1px rgba(255, 120, 120, 0.22),
+    inset 0 3px 4px -1px rgba(255, 255, 255, 0.18),
+    inset 0 0 5px 1px rgba(255, 200, 200, 0.35),
+    inset 0 18px 28px 0 rgba(255, 255, 255, 0.12);
 }
 
 .project-clad-button--danger:hover {
-  background: #900;
+  background: #b71c1c;
+  box-shadow:
+    0 18px 28px -4px rgba(0, 0, 0, 0.48),
+    inset 0 -2px 4px -1px rgba(0, 0, 0, 0.3),
+    0 -11px 16px -1px rgba(255, 140, 140, 0.25),
+    inset 0 4px 5px -1px rgba(255, 255, 255, 0.22),
+    inset 0 0 6px 1px rgba(255, 210, 210, 0.4),
+    inset 0 20px 30px 0 rgba(255, 255, 255, 0.14);
+}
+
+.project-clad-button--danger:active {
+  filter: blur(0.5px);
+  box-shadow:
+    0 12px 25px -4px rgba(0, 0, 0, 0.45),
+    inset 0 8px 22px 0 rgba(0, 0, 0, 0.35),
+    inset 0 -8px 26px 1px rgba(255, 255, 255, 0.12),
+    inset 0 0 10px 1px rgba(255, 200, 200, 0.25);
 }
 
 .project-clad-button--full {
@@ -628,8 +499,8 @@ details.project-clad-edit-mode .project-clad-title {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #111;
-  color: #fff;
+  background: var(--pc-btn-neu-bg);
+  color: var(--pc-btn-neu-fg);
   border: none;
   border-radius: 999px;
   padding: var(--pc-button-padding-y) var(--pc-button-padding-x);
@@ -649,15 +520,23 @@ details.project-clad-edit-mode .project-clad-title {
   pointer-events: auto;
   white-space: nowrap;
   box-sizing: border-box;
+  box-shadow: var(--pc-btn-neu-shadow);
+  transition: var(--pc-btn-neu-transition);
 }
 
 .project-clad-button:hover {
-  background: #000;
+  box-shadow: var(--pc-btn-neu-shadow-hover);
+  filter: brightness(1.02);
+}
+
+.project-clad-button:active {
+  filter: blur(0.5px);
+  box-shadow: var(--pc-btn-neu-shadow-active);
 }
 
 .project-clad-button:focus-visible {
-  outline: 2px solid #111;
-  outline-offset: 2px;
+  outline: 2px solid rgba(0, 0, 0, 0.35);
+  outline-offset: 3px;
 }
 
 .project-clad-hidden-link {
@@ -723,19 +602,9 @@ details.project-clad-edit-mode .project-clad-title {
 }
 
 /* Reject modal - font, textarea, button styling */
-.project-clad-reject-modal-backdrop[data-theme="default"] .project-clad-reject-modal {
+.project-clad-reject-modal-backdrop .project-clad-reject-modal {
   font-family: "Radio Canada", "Helvetica Neue", Arial, sans-serif;
   font-weight: 700;
-}
-
-.project-clad-reject-modal-backdrop[data-theme="dark"] .project-clad-reject-modal {
-  font-family: "DM Sans", "Helvetica Neue", Arial, sans-serif;
-  font-weight: 700;
-}
-
-.project-clad-reject-modal-backdrop[data-theme="warm"] .project-clad-reject-modal {
-  font-family: "Source Serif 4", Georgia, serif;
-  font-weight: 600;
 }
 
 /* Prevent iOS zoom on focus - 16px minimum */
@@ -748,12 +617,6 @@ details.project-clad-edit-mode .project-clad-title {
   border-radius: 6px;
   border: 1px solid #000;
   box-sizing: border-box;
-}
-
-.project-clad-reject-modal-backdrop[data-theme="dark"] .project-clad-reject-textarea {
-  background: #333;
-  border-color: rgba(255, 255, 255, 0.25);
-  color: var(--pc-fg);
 }
 
 /* Button padding - space between text and edge */
@@ -770,12 +633,6 @@ details.project-clad-edit-mode .project-clad-title {
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] select,
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] textarea {
   border-color: #000;
-}
-
-.project-clad-modal-backdrop[data-projectclad-edit-project-modal][data-theme="dark"] input,
-.project-clad-modal-backdrop[data-projectclad-edit-project-modal][data-theme="dark"] select,
-.project-clad-modal-backdrop[data-projectclad-edit-project-modal][data-theme="dark"] textarea {
-  border-color: #e8e8e8;
 }
 
 /* Edit project modal: vertical, full-width fields, no horizontal scroll */
@@ -1286,16 +1143,6 @@ details.project-clad-edit-mode .project-clad-edit-view {
 .project-clad-page .project-clad-details.project-clad-work-order--in_progress,
 .project-clad-page .project-clad-card.project-clad-work-order--in_progress {
   border-left: 4px solid #2563eb;
-}
-
-.project-clad-page[data-theme="dark"] .project-clad-details.project-clad-work-order--unread,
-.project-clad-page[data-theme="dark"] .project-clad-card.project-clad-work-order--unread {
-  border-left-color: #e8c547;
-}
-
-.project-clad-page[data-theme="dark"] .project-clad-details.project-clad-work-order--in_progress,
-.project-clad-page[data-theme="dark"] .project-clad-card.project-clad-work-order--in_progress {
-  border-left-color: #60a5fa;
 }
 
 .project-clad-activity-badge {

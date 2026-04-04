@@ -510,7 +510,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     variantLookupError,
     themeStyles,
     shop,
-    storefrontTheme: settings?.storefrontTheme || "default",
     logoDataUrl: settings?.logoDataUrl || null,
     navButtons: [
       {
@@ -1396,7 +1395,7 @@ export default function ProjectDetailPage() {
     dragJobId.current = null;
   };
 
-  const { themeStyles, storefrontTheme } = useLoaderData<typeof loader>();
+  const { themeStyles } = useLoaderData<typeof loader>();
   const inlineStyles = themeStyles?.styles || [];
 
   return (
@@ -1449,7 +1448,6 @@ export default function ProjectDetailPage() {
       <div
         className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
         data-projectclad-reject-modal
-        data-theme={storefrontTheme || "default"}
         role="dialog"
         aria-modal="true"
         aria-labelledby="reject-modal-title"
@@ -1487,7 +1485,6 @@ export default function ProjectDetailPage() {
       <div
         className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
         data-projectclad-pricing-modal-backdrop
-        data-theme={storefrontTheme || "default"}
         role="dialog"
         aria-modal="true"
         aria-labelledby="pricing-modal-title"
@@ -1534,7 +1531,6 @@ export default function ProjectDetailPage() {
       <div
         className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
         data-projectclad-edit-project-modal
-        data-theme={storefrontTheme || "default"}
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-project-modal-title"
@@ -1799,7 +1795,6 @@ export default function ProjectDetailPage() {
       <div
         className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
         data-projectclad-edit-save-modal
-        data-theme={storefrontTheme || "default"}
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-save-title-js"
@@ -1823,7 +1818,6 @@ export default function ProjectDetailPage() {
       <div
         className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
         data-projectclad-delete-project-modal
-        data-theme={storefrontTheme || "default"}
         role="dialog"
         aria-modal="true"
         aria-labelledby="delete-project-modal-title"
@@ -1868,7 +1862,6 @@ export default function ProjectDetailPage() {
       ))}
       <main
         className="project-clad-page project-clad-page--detail"
-        data-theme={storefrontTheme || "default"}
       >
         <div className="page-width project-clad-container project-clad-container--full-width" data-projectclad-project-id={project.id}>
           {logoDataUrl && (

@@ -1,35 +1,66 @@
 # Inventor PDF → PNG Converter
 
-Watches the PDF folder for new files, converts them to 300 DPI PNG, and saves to a separate output folder with smart naming (`Part# - Part Name.png`).
+Converts drawing PDFs to 300 DPI PNG. Default folders are **Z Bars**:
+
+- PDF in: `...\DRAWINGS & MODELS\Z Bars\PDF`
+- PNG out: `...\DRAWINGS & MODELS\Z Bars\PNG`
+
+Naming: `Part# - Part Name.png` when the PDF text contains `PART NAME: ...`, otherwise `Part#.png`.
 
 ## Setup
 
 1. **Install Python 3.10+** from [python.org](https://www.python.org/downloads/) (check "Add Python to PATH").
-2. Open a terminal in this folder and run:
+2. In this folder:
 
-   ```bash
-   pip install -r requirements.txt
+   ```powershell
+   python -m pip install -r requirements.txt
    ```
-
-   Or if `pip` isn't in your PATH: `python -m pip install -r requirements.txt`
 
 ## Run
 
-```bash
+**Watch folder** (leave running while Inventor saves PDFs):
+
+```powershell
 python converter.py
 ```
 
-Keep the terminal open while you export PDFs from Inventor. Press `Ctrl+C` to stop.
+On startup, watch mode **first converts every PDF already in the folder** (then skips any whose PNG is newer — so restarts are quick). Files that were there *before* you started the watcher are included; that was the usual reason no PNGs appeared.
 
-## Config
+- Only want *new* files after start? `python converter.py --no-initial-scan`
+- **One-shot** (convert all PDFs, replace PNGs, then exit): `python converter.py batch`
 
-Edit `converter.py` to change:
+The watcher also reacts to **modified** events (Inventor overwriting a PDF).
 
-- `WATCH_FOLDER` – folder to monitor for PDFs
-- `OUTPUT_FOLDER` – where PNGs are saved
-- `DPI` – image resolution (default 300)
-- `PROCESS_DELAY_SEC` – delay before converting (lets Inventor finish writing)
+**Custom folders:**
+
+```powershell
+python converter.py watch --pdf-dir "D:\In\PDF" --png-dir "D:\Out\PNG"
+python converter.py batch --pdf-dir "D:\In\PDF" --png-dir "D:\Out\PNG"
+```
+
+**Environment variables** (optional): `Z_BARS_PDF_DIR`, `Z_BARS_PNG_DIR`, `Z_BARS_PNG_DPI`, `Z_BARS_PDF_CONVERT_DELAY`.
+
+## Desktop shortcut (Z Bars)
+
+From this folder (note **`.ps1`**, not `.ps10`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\create_z_bars_desktop_shortcut.ps1
+```
+
+Creates **Z Bars PDF to PNG.lnk** on your Desktop (same idea as **PDF TO PNG** — `pythonw.exe` + `converter.py`).
+
+## Z Bars: batch export drawings → PDF
+
+From the repo, Inventor must be closed or the script will attach to the running session:
+
+```powershell
+cd "c:\Users\Micha\shopify-apps\project-clad\scripts\inventor-worker"
+cscript //nologo batch_export_drawings_pdf.vbs
+```
+
+Add `overwrite` to replace existing PDFs in `Z Bars\PDF`. Add `showui` if you need the full Inventor UI during export.
 
 ## Run at Startup (Optional)
 
-Create a shortcut to `pythonw.exe` with this folder as the working directory and `converter.py` as the argument, then add it to your Windows Startup folder to run in the background.
+Put the Desktop shortcut (or `pythonw.exe` + `converter.py`) in your Windows Startup folder so PNG conversion runs in the background.

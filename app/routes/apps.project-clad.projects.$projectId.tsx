@@ -147,7 +147,6 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     canViewPricing: !hideAddToCart || hasPricingAccess(request),
     canEdit,
     themeStyles,
-    storefrontTheme: settings?.storefrontTheme || "default",
     logoDataUrl: settings?.logoDataUrl || null,
     navButtons: [
       { label: "Home", url: "/" },
@@ -669,7 +668,7 @@ export default function ProjectDetailPage() {
   };
 
 
-  const { themeStyles, storefrontTheme, navButtons, logoDataUrl } =
+  const { themeStyles, navButtons, logoDataUrl } =
     useLoaderData<typeof loader>();
   const inlineStyles = themeStyles?.styles || [];
 
@@ -678,7 +677,6 @@ export default function ProjectDetailPage() {
       <div
         className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
         data-projectclad-pricing-modal-backdrop
-        data-theme={storefrontTheme || "default"}
         role="dialog"
         aria-modal="true"
         aria-labelledby="pricing-modal-title"
@@ -723,7 +721,6 @@ export default function ProjectDetailPage() {
       ))}
       <main
         className="project-clad-page"
-        data-theme={storefrontTheme || "default"}
       >
         <div className="page-width project-clad-container project-clad-container--full-width">
           {logoDataUrl && (

@@ -1,0 +1,51 @@
+' Embedded in .idw: do NOT add Option/Imports here — Inventor prepends its own; yours would not be first and fail to compile.
+' CC_Drawing_OnOpen_SyncWeight — When the drawing opens, temporarily Activate() the model from sheet 1 / view 1 and run the same
+' weight sync as your part rule: Parameter("Weight_lb") = iProperties.Mass (requires User Parameter Weight_lb on the .ipt).
+' Uses Document.Activate() — do not assign ThisApplication.ActiveDocument (read-only in some Inventor/iLogic builds).
+' Wire: Manage → iLogic → Event Triggers → Drawings → After Open Document → this rule.
+' Skips if view 1 is not a resolved part (e.g. assembly base view, broken reference).
+
+Sub Main
+    Const kPartDocumentObject As Integer = 12290
+
+    Dim oDraw As Object = Nothing
+    If ThisDrawing IsNot Nothing AndAlso ThisDrawing.Document IsNot Nothing Then
+        oDraw = ThisDrawing.Document
+    End If
+    If oDraw Is Nothing Then Exit Sub
+
+    Dim sh As Object = oDraw.ActiveSheet
+    If sh Is Nothing AndAlso oDraw.Sheets.Count >= 1 Then sh = oDraw.Sheets.Item(1)
+    If sh Is Nothing OrElse sh.DrawingViews.Count < 1 Then Exit Sub
+
+    Dim vNat As Object = sh.DrawingViews.Item(1)
+    Dim partDoc As Object = Nothing
+    Try
+        Dim rd As Object = vNat.ReferencedDocument
+        If rd IsNot Nothing Then partDoc = rd
+    Catch
+    End Try
+    If partDoc Is Nothing Then Exit Sub
+
+    Dim docType As Integer = 0
+    Try
+        docType = partDoc.DocumentType
+    Catch
+        Exit Sub
+    End Try
+    If docType <> kPartDocumentObject Then Exit Sub
+
+    Try
+        partDoc.Activate()
+        InventorVb.DocumentUpdate()
+        Parameter("Weight_lb") = iProperties.Mass
+        InventorVb.DocumentUpdate()
+    Catch ex As System.Exception
+        Logger.Info("CC_Drawing_OnOpen_SyncWeight: " & ex.Message)
+    Finally
+        Try
+            oDraw.Activate()
+        Catch
+        End Try
+    End Try
+End Sub

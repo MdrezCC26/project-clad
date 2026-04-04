@@ -1,5 +1,7 @@
-' Restore Inventor ribbon/UI after batch_part_drawings.vbs or if automation left the UI blank.
-' Run while Inventor is open: cscript //nologo inventor_restore_ui.vbs
+' Restore Inventor ribbon/menus after batch_part_drawings.vbs (SilentOperation + UserInteractionDisabled).
+' Run while Inventor is open from the inventor-worker folder:
+'   cscript //nologo inventor_restore_ui.vbs
+' If Inventor was started by a batch script, this attaches to that same session and clears the flags.
 Option Explicit
 
 Dim inv

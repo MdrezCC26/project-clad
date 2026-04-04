@@ -1,0 +1,416 @@
+{% comment %}
+  Drop-in section: copy to your theme's sections/ folder.
+  - Picks a collection and shows products in a horizontal carousel.
+  - Search box: matches dimension metafield and/or part number (SKU or metafield), then scrolls that slide into view.
+
+  Metafield format setting: "namespace.key" (e.g. custom.dimension, custom.part_number).
+{% endcomment %}
+
+{% liquid
+  assign collection = section.settings.collection
+  assign limit = section.settings.max_products | default: 48
+  assign dim_mf = section.settings.dimension_metafield | strip | split: '.'
+  assign part_mf = section.settings.part_number_metafield | strip | split: '.'
+
+  assign dim_ns = dim_mf[0]
+  assign dim_key = dim_mf[1]
+  assign part_ns = part_mf[0]
+  assign part_key = part_mf[1]
+%}
+
+<div class="dim-carousel" id="dim-carousel-{{ section.id }}" data-dim-carousel>
+  {% if section.settings.heading != blank %}
+    <h2 class="dim-carousel__heading">{{ section.settings.heading | escape }}</h2>
+  {% endif %}
+
+  <div class="dim-carousel__search">
+    <label class="visually-hidden" for="dim-carousel-search-{{ section.id }}">
+      {{ section.settings.search_label | default: 'Search by dimension or part number' | escape }}
+    </label>
+    <input
+      type="search"
+      id="dim-carousel-search-{{ section.id }}"
+      class="dim-carousel__input"
+      placeholder="{{ section.settings.search_placeholder | escape }}"
+      autocomplete="off"
+      data-dim-carousel-input
+    />
+    <button type="button" class="dim-carousel__btn" data-dim-carousel-submit>
+      {{ section.settings.search_button_label | default: 'Find' | escape }}
+    </button>
+  </div>
+  <p class="dim-carousel__hint" data-dim-carousel-feedback hidden></p>
+
+  {% if collection == blank %}
+    <p class="dim-carousel__empty">Select a collection in the section settings.</p>
+  {% elsif collection.products_count == 0 %}
+    <p class="dim-carousel__empty">This collection has no products.</p>
+  {% else %}
+    <div class="dim-carousel__viewport" data-dim-carousel-viewport>
+      <div class="dim-carousel__track" data-dim-carousel-track>
+        {% for product in collection.products limit: limit %}
+          {% liquid
+            assign v = product.selected_or_first_available_variant
+            assign dim_raw = ''
+            if dim_ns != blank and dim_key != blank
+              assign dim_raw = product.metafields[dim_ns][dim_key].value | default: ''
+            endif
+            assign part_raw = ''
+            if section.settings.part_number_source == 'sku'
+              assign part_raw = v.sku | default: ''
+            elsif section.settings.part_number_source == 'barcode'
+              assign part_raw = v.barcode | default: ''
+            elsif section.settings.part_number_source == 'metafield' and part_ns != blank and part_key != blank
+              assign part_raw = product.metafields[part_ns][part_key].value | default: ''
+            endif
+          %}
+          <article
+            class="dim-carousel__slide"
+            data-dim-carousel-slide
+            data-dimension="{{ dim_raw | strip | escape }}"
+            data-part-number="{{ part_raw | strip | escape }}"
+            data-product-title="{{ product.title | escape }}"
+          >
+            <a class="dim-carousel__card" href="{{ product.url }}">
+              {% if product.featured_image %}
+                <div class="dim-carousel__media">
+                  {{
+                    product.featured_image
+                    | image_url: width: 600
+                    | image_tag: loading: 'lazy', widths: '200,300,400,600', sizes: '(max-width: 749px) 45vw, 280px', class: 'dim-carousel__img'
+                  }}
+                </div>
+              {% endif %}
+              <div class="dim-carousel__meta">
+                <span class="dim-carousel__title">{{ product.title | escape }}</span>
+                {% if dim_raw != blank %}
+                  <span class="dim-carousel__dim">{{ dim_raw | escape }}</span>
+                {% endif %}
+                {% if part_raw != blank %}
+                  <span class="dim-carousel__part">#{{ part_raw | escape }}</span>
+                {% endif %}
+              </div>
+            </a>
+          </article>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="dim-carousel__nav">
+      <button type="button" class="dim-carousel__btn dim-carousel__btn--ghost" data-dim-carousel-prev aria-label="Previous">
+        ‹
+      </button>
+      <button type="button" class="dim-carousel__btn dim-carousel__btn--ghost" data-dim-carousel-next aria-label="Next">
+        ›
+      </button>
+    </div>
+  {% endif %}
+</div>
+
+{% stylesheet %}
+  .dim-carousel {
+    --dim-gap: 1rem;
+    --dim-slide: min(280px, 72vw);
+    padding: 1.5rem 0;
+  }
+  .dim-carousel__heading {
+    margin: 0 0 1rem;
+  }
+  .dim-carousel__search {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+  .dim-carousel__input {
+    flex: 1 1 200px;
+    min-width: 0;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+  }
+  .dim-carousel__btn {
+    padding: 0.6rem 1rem;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    background: #111;
+    color: #fff;
+    cursor: pointer;
+  }
+  .dim-carousel__btn--ghost {
+    background: transparent;
+    color: inherit;
+    min-width: 2.5rem;
+  }
+  .dim-carousel__hint {
+    margin: 0 0 1rem;
+    font-size: 0.9rem;
+    color: #555;
+  }
+  .dim-carousel__hint[data-state='error'] {
+    color: #b00020;
+  }
+  .dim-carousel__empty {
+    margin: 0;
+    color: #666;
+  }
+  .dim-carousel__viewport {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -1rem;
+    padding: 0 1rem 0.5rem;
+  }
+  .dim-carousel__track {
+    display: flex;
+    gap: var(--dim-gap);
+    width: max-content;
+    padding-bottom: 0.25rem;
+  }
+  .dim-carousel__slide {
+    flex: 0 0 var(--dim-slide);
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+  }
+  .dim-carousel__card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+    height: 100%;
+  }
+  .dim-carousel__media {
+    aspect-ratio: 1;
+    background: #f4f4f4;
+  }
+  .dim-carousel__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .dim-carousel__meta {
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+  }
+  .dim-carousel__title {
+    font-weight: 600;
+  }
+  .dim-carousel__dim,
+  .dim-carousel__part {
+    color: #555;
+    font-size: 0.8125rem;
+  }
+  .dim-carousel__nav {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+  .dim-carousel__slide--highlight {
+    outline: 2px solid #111;
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+  .visually-hidden {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+{% endstylesheet %}
+
+{% javascript %}
+  (function () {
+    function norm(s) {
+      return String(s || '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function digitsOnly(s) {
+      return String(s || '').replace(/\D/g, '');
+    }
+
+    function init(root) {
+      if (!root || root.dataset.dimCarouselBound === '1') return;
+      root.dataset.dimCarouselBound = '1';
+
+      var viewport = root.querySelector('[data-dim-carousel-viewport]');
+      var input = root.querySelector('[data-dim-carousel-input]');
+      var submit = root.querySelector('[data-dim-carousel-submit]');
+      var feedback = root.querySelector('[data-dim-carousel-feedback]');
+      var slides = function () {
+        return Array.prototype.slice.call(root.querySelectorAll('[data-dim-carousel-slide]'));
+      };
+      var prev = root.querySelector('[data-dim-carousel-prev]');
+      var next = root.querySelector('[data-dim-carousel-next]');
+
+      function setFeedback(msg, state) {
+        if (!feedback) return;
+        if (!msg) {
+          feedback.hidden = true;
+          feedback.textContent = '';
+          feedback.removeAttribute('data-state');
+          return;
+        }
+        feedback.hidden = false;
+        feedback.textContent = msg;
+        if (state) feedback.setAttribute('data-state', state);
+        else feedback.removeAttribute('data-state');
+      }
+
+      function findSlide(query) {
+        var q = norm(query);
+        if (!q) return null;
+        var qDigits = digitsOnly(q);
+        var list = slides();
+
+        for (var i = 0; i < list.length; i++) {
+          var el = list[i];
+          var dim = norm(el.getAttribute('data-dimension') || '');
+          var part = norm(el.getAttribute('data-part-number') || '');
+          if (dim && (dim === q || dim.indexOf(q) !== -1 || q.indexOf(dim) !== -1)) return el;
+          if (part && (part === q || part.indexOf(q) !== -1 || q.indexOf(part) !== -1)) return el;
+          if (qDigits && digitsOnly(part) && digitsOnly(part).indexOf(qDigits) !== -1) return el;
+        }
+        return null;
+      }
+
+      function scrollToSlide(el) {
+        if (!el || !viewport) return;
+        var left = el.offsetLeft - (viewport.clientWidth - el.offsetWidth) / 2;
+        viewport.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+        el.classList.add('dim-carousel__slide--highlight');
+        window.setTimeout(function () {
+          el.classList.remove('dim-carousel__slide--highlight');
+        }, 1200);
+      }
+
+      function go() {
+        if (!input) return;
+        var el = findSlide(input.value);
+        if (el) {
+          setFeedback('');
+          scrollToSlide(el);
+        } else {
+          setFeedback('No matching dimension or part number.', 'error');
+        }
+      }
+
+      if (submit) submit.addEventListener('click', go);
+      if (input) {
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            go();
+          }
+        });
+      }
+
+      function step(dir) {
+        if (!viewport) return;
+        var w = viewport.clientWidth * 0.85;
+        viewport.scrollBy({ left: dir * w, behavior: 'smooth' });
+      }
+      if (prev) prev.addEventListener('click', function () { step(-1); });
+      if (next) next.addEventListener('click', function () { step(1); });
+    }
+
+    document.querySelectorAll('[data-dim-carousel]').forEach(init);
+    document.addEventListener('shopify:section:load', function (ev) {
+      var r = ev.target && ev.target.querySelector && ev.target.querySelector('[data-dim-carousel]');
+      if (r) init(r);
+    });
+  })();
+{% endjavascript %}
+
+{% schema %}
+{
+  "name": "Collection dimension carousel",
+  "tag": "section",
+  "class": "section-collection-dimension-carousel",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Parts"
+    },
+    {
+      "type": "collection",
+      "id": "collection",
+      "label": "Collection"
+    },
+    {
+      "type": "range",
+      "id": "max_products",
+      "min": 4,
+      "max": 50,
+      "step": 1,
+      "default": 24,
+      "label": "Maximum products"
+    },
+    {
+      "type": "text",
+      "id": "dimension_metafield",
+      "label": "Dimension metafield (namespace.key)",
+      "default": "custom.dimension",
+      "info": "Product metafield used for search and display, e.g. custom.dimension"
+    },
+    {
+      "type": "select",
+      "id": "part_number_source",
+      "label": "Part number source",
+      "default": "sku",
+      "options": [
+        { "value": "sku", "label": "Variant SKU" },
+        { "value": "barcode", "label": "Variant barcode" },
+        { "value": "metafield", "label": "Product metafield" }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "part_number_metafield",
+      "label": "Part number metafield (namespace.key)",
+      "default": "custom.part_number",
+      "info": "Used when source is Product metafield"
+    },
+    {
+      "type": "text",
+      "id": "search_label",
+      "label": "Search label (screen readers)",
+      "default": "Search by dimension or part number"
+    },
+    {
+      "type": "text",
+      "id": "search_placeholder",
+      "label": "Search placeholder",
+      "default": "e.g. 24×48 or part #"
+    },
+    {
+      "type": "text",
+      "id": "search_button_label",
+      "label": "Search button label",
+      "default": "Find"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Collection dimension carousel"
+    }
+  ]
+}
+{% endschema %}

@@ -16,7 +16,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
   return {
     themeStyles,
-    storefrontTheme: settings?.storefrontTheme || "default",
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
     logoDataUrl: settings?.logoDataUrl || null,
   };
@@ -34,7 +33,6 @@ export default function StorefrontWorkOrdersInfo() {
       ))}
       <main
         className={`project-clad-page project-clad-page--projects${data.backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
-        data-theme={data.storefrontTheme || "default"}
         style={
           data.backgroundLogoDataUrl
             ? {
