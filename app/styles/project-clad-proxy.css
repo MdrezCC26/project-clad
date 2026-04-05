@@ -39,6 +39,21 @@ body.project-clad-leaving .project-clad-page {
   transform: translateY(-8px);
 }
 
+/* Staff mode: full-store project list (centered, red glow) */
+.project-clad-staff-banner {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 0.75rem;
+  text-align: center;
+  font-weight: 600;
+  color: #ff3b30;
+  text-shadow:
+    0 0 8px rgba(255, 60, 60, 1),
+    0 0 18px rgba(255, 0, 0, 0.75),
+    0 0 28px rgba(220, 0, 0, 0.5);
+}
+
 /*
  * Design tokens live here for both the page and modal backdrops. Modals are siblings of <main>,
  * not descendants of .project-clad-page — if tokens were only on .project-clad-page, var(--pc-*)
