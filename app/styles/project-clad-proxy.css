@@ -1,20 +1,25 @@
-@import url("https://fonts.googleapis.com/css2?family=Radio+Canada:wght@400;700&display=swap");
+/*
+ * Typography: Helvetica stack (system fonts). macOS/iOS: Helvetica / Helvetica Neue; Windows:
+ * Arial substitutes where Helvetica is missing. font-weight: 400 vs 600/700 uses real faces.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Bakbak+One&display=swap");
 
 /*
   TEXT SIZE GUIDE (storefront app)
-  Change --pc-text-scale below to scale all text (e.g. 1.2 = 20% bigger).
+  Change --pc-text-scale on .project-clad-page to scale most text (e.g. 1.2 = 20% bigger).
   What's what:
   - Main page title ("PROJECTS")     .project-clad-header .main-page-title
-  - Section headings ("Orders")     .project-clad-section-title
-  - Card/order titles               .project-clad-title
+  - Section headings ("Orders")     .project-clad-section-title (accent: .project-clad-neon-title → Bakbak One)
+  - Card/order titles               .project-clad-title (list tiles: full tile Bakbak via .project-clad-card-link + .project-clad-actions)
   - Nav links (Store, Cart)        .project-clad-nav .link
   - Muted/secondary text           .project-clad-muted (inherits)
   - Meta labels (Orders, PO#)      .project-clad-meta dt
-  - Buttons                        --pc-button-font-size
+  - Buttons                        Bakbak One; grey = CodePen caesura neu (QWNjvOX); red = gradient neu
   - Table header "Product"         .project-clad-orders-table th:first-child::before
   - Edit-save modal title          .project-clad-edit-save-modal h2
   - Approval/confirmation messages  .project-clad-approval-msg
-  - Form inputs                    fixed 16px to prevent mobile zoom (do not scale)
+  - Form inputs                    caesura inset + pill; 16px min (no iOS zoom)
 */
 
 /* Page transition: enter (fade + slide up) and exit (fade + slide up) */
@@ -34,14 +39,15 @@ body.project-clad-leaving .project-clad-page {
   transform: translateY(-8px);
 }
 
-/* Base */
-.project-clad-page {
-  overflow-x: hidden;
-  --pc-text-scale: 1.45;
-  padding: 2.5rem 0;
-  font-family: "Radio Canada", "Helvetica Neue", Arial, sans-serif;
-  font-weight: 700;
-  font-size: calc(1rem * var(--pc-text-scale));
+/*
+ * Design tokens live here for both the page and modal backdrops. Modals are siblings of <main>,
+ * not descendants of .project-clad-page — if tokens were only on .project-clad-page, var(--pc-*)
+ * in modal CSS would be invalid, dropping neu backgrounds and falling back to theme vars (often
+ * semi-transparent).
+ */
+.project-clad-page,
+.project-clad-modal-backdrop {
+  --pc-text-scale: 1.53;
   --pc-button-min-height: 40px;
   --pc-button-padding-y: 0.5rem;
   --pc-button-padding-x: 1.25rem;
@@ -61,32 +67,249 @@ body.project-clad-leaving .project-clad-page {
   --pc-warning-bg: #fff9e6;
   --pc-thumb-placeholder: rgba(0, 0, 0, 0.08);
   /*
-   * Neumorphic buttons — adapted from Uiverse.io by Pradeepsaranbishnoi (jolly-robin-0)
-   * https://uiverse.io/Pradeepsaranbishnoi/jolly-robin-0
+   * Unified soft neu (tiles, order rows, grey buttons): same geometry site-wide.
+   * Outer pair follows classic symmetric neu (e.g. creativist.studio/css-neumorphism-generator):
+   *   box-shadow: 20px 20px 42px #bbbbbb, -20px -20px 42px #ffffff;
+   * Plus thin inset rims for extra 3D read.
    */
-  --pc-btn-neu-transition: all 300ms cubic-bezier(0.23, 1, 0.32, 1);
-  --pc-btn-neu-bg: #eaeaea;
-  --pc-btn-neu-fg: rgba(0, 0, 0, 0.9);
-  --pc-btn-neu-shadow:
-    0 15px 25px -4px rgba(0, 0, 0, 0.5),
-    inset 0 -3px 4px -1px rgba(0, 0, 0, 0.2),
-    0 -10px 15px -1px rgba(255, 255, 255, 0.6),
-    inset 0 3px 4px -1px rgba(255, 255, 255, 0.2),
-    inset 0 0 5px 1px rgba(255, 255, 255, 0.8),
-    inset 0 20px 30px 0 rgba(255, 255, 255, 0.2);
-  --pc-btn-neu-shadow-hover:
-    0 18px 28px -4px rgba(0, 0, 0, 0.48),
-    inset 0 -2px 4px -1px rgba(0, 0, 0, 0.18),
-    0 -11px 16px -1px rgba(255, 255, 255, 0.65),
-    inset 0 4px 5px -1px rgba(255, 255, 255, 0.28),
-    inset 0 0 6px 1px rgba(255, 255, 255, 0.85),
-    inset 0 22px 32px 0 rgba(255, 255, 255, 0.25);
-  --pc-btn-neu-shadow-active:
-    0 12px 25px -4px rgba(0, 0, 0, 0.4),
-    inset 0 -8px 30px 1px rgba(255, 255, 255, 0.9),
-    0 -10px 15px -1px rgba(255, 255, 255, 0.6),
-    inset 0 8px 25px 0 rgba(0, 0, 0, 0.4),
-    inset 0 0 10px 1px rgba(255, 255, 255, 0.6);
+  /* Cool-neutral greys — finder + neu tiles (slightly cool off-white, not beige) */
+  --pc-neu-warm-base: #f4f5f6;
+  --pc-neu-face: #e6e8eb;
+  --pc-neu-face-gradient: linear-gradient(
+    163deg,
+    #f4f5f6 0%,
+    #eeeff2 24%,
+    #e8eaed 52%,
+    #dfe1e5 100%
+  );
+  --pc-neu-face-pressed-gradient: linear-gradient(
+    163deg,
+    #d5d7db 0%,
+    #cbced3 45%,
+    #c1c4ca 100%
+  );
+  /*
+   * Collapsed order rows + project meta chip in the orders tray use --pc-shell-radius.
+   * Everything else that should match (project list tiles, buttons, nested neu cards, text fields)
+   * uses --pc-neu-radius — keep it tied to the shell so one knob controls that family.
+   */
+  --pc-shell-radius: 24px;
+  --pc-neu-radius: var(--pc-shell-radius);
+  /* Modal / standalone list cards (not the neu chip family above) */
+  --pc-card-radius: 16px;
+  --pc-neu-raise:
+    0 1px 0 rgba(255, 255, 255, 0.58) inset,
+    0 -1px 1px rgba(0, 0, 0, 0.065) inset,
+    20px 20px 42px #bbbbbb,
+    -20px -20px 42px #ffffff;
+  --pc-neu-raise-hover:
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 -1px 1px rgba(0, 0, 0, 0.07) inset,
+    22px 22px 48px #b0b0b0,
+    -22px -22px 48px #ffffff;
+  --pc-neu-press:
+    inset 0 2px 4px rgba(0, 0, 0, 0.07),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.32),
+    inset 20px 20px 42px #bbbbbb,
+    inset -20px -20px 42px #ffffff;
+  /* CodePen caesura / QWNjvOX — https://codepen.io/caesura/pen/QWNjvOX */
+  --pc-caesura-bg: #ebecf0;
+  --pc-caesura-fg: #6c7587;
+  --pc-caesura-dark: #484f60;
+  --pc-caesura-light: #ffffff;
+  --pc-caesura-drop:
+    8px 8px 12px -2px rgba(72, 79, 96, 0.4),
+    -6px -6px 12px -1px rgba(255, 255, 255, 1);
+  --pc-caesura-inset:
+    inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
+    inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5);
+  --pc-caesura-border: 3px solid transparent;
+  --pc-caesura-border-hover: rgba(255, 255, 255, 0.5);
+  /* Grey button hover: white rim (caesura); red type + soft glow below */
+  --pc-caesura-hover-red-text: rgba(211, 47, 47, 0.78);
+  --pc-caesura-hover-red-text-glow:
+    0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 6px rgba(211, 47, 47, 0.22),
+    0 0 14px rgba(211, 47, 47, 0.12);
+  --pc-caesura-transition:
+    box-shadow 250ms ease-in-out, border-color 250ms ease-in-out, color 250ms ease-in-out,
+    filter 250ms ease-in-out, background 250ms ease-in-out;
+  --pc-btn-neu-transition: var(--pc-caesura-transition);
+  /* Pressed-state micro-blur (red buttons only; grey caesura buttons use flat press) */
+  --pc-btn-active-blur: 0.6px;
+  --pc-btn-neu-bg: #e8eaed;
+  --pc-btn-neu-fg: var(--pc-caesura-dark);
+  /* Subtle warm/cool fringe like chromatic aberration on grey neu labels (ADD MEMBER, etc.) */
+  --pc-btn-neu-label-shadow:
+    -0.45px 0 0 rgba(255, 118, 64, 0.26),
+    0.45px 0 0 rgba(72, 168, 255, 0.24);
+  --pc-btn-neu-shadow: var(--pc-caesura-drop);
+  --pc-btn-neu-shadow-hover: none;
+  --pc-btn-neu-shadow-active: var(--pc-caesura-inset);
+  /* Red buttons: symmetric neu geometry; dark = rgba, light = warm tint */
+  --pc-btn-neu-red-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.32) inset,
+    0 -1px 1px rgba(0, 0, 0, 0.18) inset,
+    20px 20px 42px rgba(0, 0, 0, 0.32),
+    -20px -20px 42px rgba(255, 180, 180, 0.42);
+  --pc-btn-neu-red-shadow-hover:
+    0 1px 0 rgba(255, 255, 255, 0.38) inset,
+    0 -1px 1px rgba(0, 0, 0, 0.2) inset,
+    22px 22px 48px rgba(0, 0, 0, 0.36),
+    -22px -22px 48px rgba(255, 195, 195, 0.46);
+  --pc-btn-neu-red-shadow-active:
+    inset 0 2px 4px rgba(0, 0, 0, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+    inset 20px 20px 42px rgba(0, 0, 0, 0.34),
+    inset -20px -20px 42px rgba(255, 210, 210, 0.28);
+  /* Nav pills + hovers: red label; --pc-pill-text-glow-shadow stays off */
+  --pc-pill-text-glow-hover: #d32f2f;
+  --pc-pill-text-glow-shadow: none;
+  /* Tray section titles: black depth only (fill stays --pc-pill-text-glow-hover) */
+  --pc-section-heading-text-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.5),
+    0 2px 5px rgba(0, 0, 0, 0.52),
+    0 6px 18px rgba(0, 0, 0, 0.22);
+  /* Bakbak accent headings + neu button hover label: depth + soft red halo */
+  --pc-accent-heading-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4),
+    0 2px 6px rgba(0, 0, 0, 0.14),
+    0 0 10px rgba(211, 47, 47, 0.38),
+    0 0 22px rgba(211, 47, 47, 0.18);
+  /* Same stack, less red halo (e.g. More drawer chip on grey neu) */
+  --pc-accent-heading-shadow-soft:
+    0 1px 0 rgba(255, 255, 255, 0.36),
+    0 2px 5px rgba(0, 0, 0, 0.12),
+    0 0 6px rgba(211, 47, 47, 0.22),
+    0 0 14px rgba(211, 47, 47, 0.09);
+  /* Red neu buttons (danger / projects): white label glow on hover — same “glow weight” as accent shadow */
+  --pc-red-button-hover-label-glow:
+    0 0 10px rgba(255, 235, 235, 0.55),
+    0 0 22px rgba(255, 200, 200, 0.28);
+  /* Sunk / letterpress text on gray neu surfaces (#594844 ink) */
+  --pc-text-deboss-neu:
+    0 1px 0 rgba(255, 255, 255, 0.48),
+    0 -1px 1px rgba(57, 48, 44, 0.18),
+    0 2px 4px rgba(57, 48, 44, 0.07);
+  /* Sunk text on red button faces (light label) */
+  --pc-text-deboss-on-red:
+    0 -1px 0 rgba(0, 0, 0, 0.52),
+    0 1px 0 rgba(255, 255, 255, 0.14);
+  /* Projects list cards: gentle machined depth (softer than hard CNC — easier on the eyes) */
+  --pc-text-machined-into:
+    0 1px 0 rgba(255, 255, 255, 0.52),
+    0 2px 4px rgba(255, 255, 255, 0.14),
+    0 -1px 2px rgba(57, 48, 44, 0.2),
+    0 1px 4px rgba(45, 38, 35, 0.1);
+}
+
+/* Base */
+.project-clad-page {
+  overflow-x: hidden;
+  padding: 2.5rem 0;
+  font-family: Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: calc(1rem * var(--pc-text-scale));
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.project-clad-modal-backdrop {
+  font-family: Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/*
+ * Inlined theme CSS often sets font-family on p, a, .link, etc., which beats inheriting from
+ * .project-clad-page alone — re-assert the stack (Helvetica over theme body fonts).
+ */
+.project-clad-page,
+.project-clad-page *,
+.project-clad-modal-backdrop,
+.project-clad-modal-backdrop * {
+  font-family: Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+/* Keep natural casing in fields (passwords, names, emails, etc.) */
+.project-clad-page input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]),
+.project-clad-page textarea,
+.project-clad-page select {
+  text-transform: none;
+}
+
+/*
+ * Inputs + selects — CodePen caesura (QWNjvOX): inset well by default; focus drops shadow for light rim.
+ * Modals are outside .project-clad-page; repeat selectors for backdrop.
+ */
+.project-clad-page
+  input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="image"]):not(
+    .project-clad-neu-finder-input__field
+  ),
+.project-clad-page textarea:not(.project-clad-neu-finder-input__field),
+.project-clad-page select,
+.project-clad-modal-backdrop
+  input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="image"]):not(
+    .project-clad-neu-finder-input__field
+  ),
+.project-clad-modal-backdrop textarea:not(.project-clad-neu-finder-input__field),
+.project-clad-reject-modal-backdrop textarea,
+.project-clad-modal-backdrop select {
+  border: var(--pc-caesura-border) !important;
+  background-color: var(--pc-caesura-bg) !important;
+  color: var(--pc-caesura-fg) !important;
+  box-shadow: var(--pc-caesura-inset) !important;
+  transition: var(--pc-caesura-transition) !important;
+  outline: none;
+}
+
+.project-clad-page
+  input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="image"]):not(
+    .project-clad-neu-finder-input__field
+  ),
+.project-clad-page select,
+.project-clad-modal-backdrop
+  input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="image"]):not(
+    .project-clad-neu-finder-input__field
+  ),
+.project-clad-modal-backdrop select {
+  border-radius: 9999px !important;
+}
+
+.project-clad-page textarea:not(.project-clad-neu-finder-input__field),
+.project-clad-modal-backdrop textarea:not(.project-clad-neu-finder-input__field),
+.project-clad-reject-modal-backdrop textarea {
+  border-radius: var(--pc-card-radius) !important;
+}
+
+.project-clad-page input:focus-visible,
+.project-clad-page textarea:focus-visible,
+.project-clad-page select:focus-visible,
+.project-clad-modal-backdrop input:focus-visible,
+.project-clad-modal-backdrop textarea:focus-visible,
+.project-clad-modal-backdrop select:focus-visible,
+.project-clad-reject-modal-backdrop textarea:focus-visible {
+  box-shadow: none !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+}
+
+.project-clad-page input::placeholder,
+.project-clad-page textarea::placeholder,
+.project-clad-modal-backdrop input::placeholder,
+.project-clad-modal-backdrop textarea::placeholder,
+.project-clad-reject-modal-backdrop textarea::placeholder {
+  color: var(--pc-caesura-fg) !important;
+  opacity: 1;
+}
+
+.project-clad-orders-table input,
+.project-clad-orders-table select,
+.project-clad-table.project-clad-members-table input,
+.project-clad-table.project-clad-members-table select {
+  border-radius: var(--pc-neu-radius) !important;
 }
 
 .project-clad-container {
@@ -111,28 +334,1419 @@ body.project-clad-leaving .project-clad-page {
   grid-template-columns: 1fr;
 }
 
+/*
+ * Projects list (and work-orders info page): soft grey gradient canvas (same angle as neu cards).
+ */
+html:has(.project-clad-page--projects),
+html:has(.project-clad-page--projects) body {
+  background: linear-gradient(168deg, #eef0f2 0%, #e4e6ea 40%, #dcdee3 100%);
+}
+
+html:has(.project-clad-page--projects) body {
+  margin: 0;
+}
+
+.project-clad-page--projects {
+  background: linear-gradient(168deg, #eef0f2 0%, #e4e6ea 40%, #dcdee3 100%);
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.project-clad-page--projects .project-clad-grid {
+  isolation: isolate;
+}
+
+/*
+ * Project detail: single light direction on fills; raised/inset neu uses classic #bbbbbb / #fff
+ * pairs (neumorphism generator style) at larger scale for shell-radius trays + chips.
+ */
+.project-clad-page--projects.project-clad-page--detail {
+  --pc-detail-lit-deg: 152deg;
+  /* Large chips / trays: same #bbbbbb / #fff neu pair (--pc-shell-radius corners) */
+  --pc-detail-raise-1: 22px 22px 48px #bbbbbb;
+  --pc-detail-raise-2: -22px -22px 48px #ffffff;
+  --pc-detail-raise-hover-1: 24px 24px 54px #aeaeae;
+  --pc-detail-raise-hover-2: -24px -24px 54px #ffffff;
+  --pc-detail-inset-1: inset 22px 22px 52px #c4c6cb;
+  --pc-detail-inset-2: inset -20px -20px 48px #ffffff;
+}
+
 /* Projects page: texture overlay on each card (projects list only, not order page cards) */
 .project-clad-page--projects .project-clad-card {
   position: relative;
+  z-index: 0;
   border: none;
-  border-radius: 18px;
-  background: var(--pc-card-bg, #fff);
+  border-radius: var(--pc-card-radius);
+  background: linear-gradient(168deg, #eef0f2 0%, var(--pc-btn-neu-bg) 38%, #dcdee3 100%);
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -4px 10px rgba(0, 0, 0, 0.08) inset,
+    1px 0 0 rgba(255, 255, 255, 0.28),
+    -1px 0 1px rgba(0, 0, 0, 0.05),
+    0 3px 0 rgba(255, 255, 255, 0.42),
+    0 24px 50px rgba(0, 0, 0, 0.14),
+    0 10px 24px rgba(0, 0, 0, 0.1),
+    0 46px 82px -18px rgba(0, 0, 0, 0.2);
+  transform: scale(1);
+  transform-origin: center center;
+  transition: box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1), filter 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.project-clad-page--projects:not(.project-clad-page--detail) .project-clad-card:hover {
+  z-index: 2;
+  transform: scale(1.006);
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 1) inset,
+    0 -4px 12px rgba(0, 0, 0, 0.09) inset,
+    1px 0 0 rgba(255, 255, 255, 0.35),
+    -1px 0 1px rgba(0, 0, 0, 0.06),
+    0 4px 0 rgba(255, 255, 255, 0.5),
+    0 30px 62px rgba(0, 0, 0, 0.16),
+    0 14px 32px rgba(0, 0, 0, 0.11),
+    0 56px 94px -16px rgba(0, 0, 0, 0.22);
+  filter: brightness(1.015);
+}
+
+/* Projects list tiles: same caesura neu as grey .project-clad-button (drop / white rim + red type / inset press) */
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card:not(.project-clad-card--ghost):not(.project-clad-modal):not(
+    .project-clad-warning
+  ):not(.project-clad-approval-pending):not(.project-clad-card--confirming) {
+  border-radius: var(--pc-neu-radius);
+  border: var(--pc-caesura-border);
+  background: var(--pc-caesura-bg);
+  background-image: none;
   box-shadow: var(--pc-btn-neu-shadow);
+  transition: var(--pc-btn-neu-transition);
+  transform: scale(1);
+  filter: none;
+}
+
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card:not(.project-clad-card--ghost):not(.project-clad-modal):not(
+    .project-clad-warning
+  ):not(.project-clad-approval-pending):not(.project-clad-card--confirming):hover {
+  z-index: 2;
+  transform: scale(1);
+  filter: none;
+  box-shadow: var(--pc-btn-neu-shadow-hover);
+  border-color: var(--pc-caesura-border-hover);
+}
+
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card:not(.project-clad-card--ghost):not(.project-clad-modal):not(
+    .project-clad-warning
+  ):not(.project-clad-approval-pending):not(.project-clad-card--confirming):hover
+  .project-clad-card-link
+  .project-clad-title,
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card:not(.project-clad-card--ghost):not(.project-clad-modal):not(
+    .project-clad-warning
+  ):not(.project-clad-approval-pending):not(.project-clad-card--confirming):hover
+  .project-clad-card-link
+  .project-clad-muted {
+  color: var(--pc-caesura-hover-red-text);
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+}
+
+/* Pressed: inset caesura (mousedown / tap on tile link) */
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card:not(.project-clad-card--ghost):not(.project-clad-modal):not(
+    .project-clad-warning
+  ):not(.project-clad-approval-pending):not(.project-clad-card--confirming):active,
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card:not(.project-clad-card--ghost):not(.project-clad-modal):not(
+    .project-clad-warning
+  ):not(.project-clad-approval-pending):not(.project-clad-card--confirming):has(
+    .project-clad-card-link:active
+  ) {
+  z-index: 2;
+  transform: scale(1);
+  filter: none;
+  border-radius: var(--pc-neu-radius);
+  border-color: transparent;
+  background: var(--pc-caesura-bg);
+  background-image: none;
+  box-shadow: var(--pc-btn-neu-shadow-active);
+}
+
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card:not(.project-clad-card--ghost):not(.project-clad-modal):not(
+    .project-clad-warning
+  ):not(.project-clad-approval-pending):not(.project-clad-card--confirming):active
+  .project-clad-card-link
+  .project-clad-title,
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card:not(.project-clad-card--ghost):not(.project-clad-modal):not(
+    .project-clad-warning
+  ):not(.project-clad-approval-pending):not(.project-clad-card--confirming):active
+  .project-clad-card-link
+  .project-clad-muted,
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card:not(.project-clad-card--ghost):not(.project-clad-modal):not(
+    .project-clad-warning
+  ):not(.project-clad-approval-pending):not(.project-clad-card--confirming):has(
+    .project-clad-card-link:active
+  )
+  .project-clad-card-link
+  .project-clad-title,
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card:not(.project-clad-card--ghost):not(.project-clad-modal):not(
+    .project-clad-warning
+  ):not(.project-clad-approval-pending):not(.project-clad-card--confirming):has(
+    .project-clad-card-link:active
+  )
+  .project-clad-card-link
+  .project-clad-muted {
+  color: var(--pc-btn-neu-fg);
+  text-shadow: none;
+}
+
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card:not(.project-clad-card--ghost):not(.project-clad-modal):not(
+    .project-clad-warning
+  ):not(.project-clad-approval-pending):not(.project-clad-card--confirming)
+  .project-clad-card-link {
+  border-radius: var(--pc-neu-radius);
+}
+
+/* Project detail: orders shell — flat on page canvas (no sunken tray); inner chips/inputs + order rows keep neu */
+.project-clad-page--projects.project-clad-page--detail .project-clad-card.project-clad-orders-shell {
+  overflow: visible;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+  transform: none;
+  transition:
+    box-shadow 0.2s cubic-bezier(0.23, 1, 0.32, 1),
+    transform 0.2s cubic-bezier(0.23, 1, 0.32, 1),
+    filter 0.2s ease,
+    background 0.2s ease;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-card.project-clad-orders-shell:hover,
+.project-clad-page--projects.project-clad-page--detail .project-clad-card.project-clad-orders-shell:active {
+  transform: none;
+  filter: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+/* Detail trays: no list-card fractal noise so well + chips read as clean depth */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-card.project-clad-orders-shell::after {
+  opacity: 0;
+}
+
+/* Nested order cards (e.g. receipt): raised neu */
+.project-clad-page--projects.project-clad-page--detail .project-clad-orders-shell .project-clad-card {
+  border-radius: var(--pc-neu-radius);
+  background: var(--pc-neu-face-gradient);
+  box-shadow: var(--pc-neu-raise);
+  transition: box-shadow 0.2s cubic-bezier(0.23, 1, 0.32, 1), transform 0.2s cubic-bezier(0.23, 1, 0.32, 1),
+    filter 0.2s ease;
+}
+
+/*
+ * Detail: nested cards in orders — neu hover (no scale). Orders shell wrapper is flat above.
+ */
+.project-clad-page--projects.project-clad-page--detail .project-clad-orders-shell .project-clad-card:hover,
+.project-clad-page--projects.project-clad-page--detail details.project-clad-card.project-clad-details:hover,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-details
+  .project-clad-card:hover {
+  z-index: 2;
+  transform: scale(1);
+  filter: brightness(1.01);
+  box-shadow: var(--pc-neu-raise-hover);
+}
+
+.project-clad-orders-shell__list {
+  gap: 0.65rem;
+}
+
+.project-clad-orders-shell__footer {
+  margin-top: 0.65rem;
+  padding-top: 0.45rem;
+  border-top: none;
+}
+
+/* Project subtotal: equal rail above/below between last order tile and More tile */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-orders-shell__footer {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
+}
+
+/*
+ * Project detail — Orders card: one body color (dark grey). Elsewhere titles use neu brown
+ * or prices use --pc-fg (#111); unify here without affecting button labels.
+ */
+.project-clad-page--projects.project-clad-page--detail .project-clad-orders-shell {
+  color: var(--pc-muted);
+  min-width: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-title:not(.project-clad-neon-title),
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  h2.project-clad-section-title:not(.project-clad-neon-title) {
+  color: var(--pc-muted);
+  opacity: 1;
+}
+
+/*
+ * Orders / Project subtotal / Activity — Bakbak One + accent red, soft red glow + light depth.
+ */
+.project-clad-page--projects.project-clad-page--detail h2.project-clad-neon-title {
+  position: relative;
+  z-index: 200;
+  isolation: isolate;
+  margin-top: 0.35rem;
+  margin-bottom: 1rem;
+  padding: 0.15rem 0;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: clamp(1.1rem, 4vw, 1.72rem) !important;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  color: var(--pc-pill-text-glow-hover) !important;
+  text-shadow: var(--pc-accent-heading-shadow);
+  text-transform: uppercase;
+  opacity: 1 !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  > h2.project-clad-neon-title {
+  margin-top: 0.5rem;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-muted {
+  color: var(--pc-muted);
+  opacity: 1;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-summary-action,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-order-summary-qty__sub-amount {
+  color: var(--pc-muted);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-table th,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-table td {
+  color: var(--pc-muted);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-table
+  a {
+  color: var(--pc-muted);
+}
+
+/* Nested neu cards in an order (e.g. receipt) inherit same grey instead of --pc-btn-neu-fg */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-card
+  .project-clad-title:not(.project-clad-neon-title),
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-card
+  .project-clad-muted {
+  color: var(--pc-muted);
+  opacity: 1;
+}
+
+/* More drawer (activity / comments / settings): same muted copy color as orders */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-comments-drawer {
+  color: var(--pc-muted);
+  min-width: 0;
+  /* Shorter than Orders title so one line fits without textarea scroll (16px floor for iOS) */
+  --pc-composer-field-font: max(16px, clamp(0.92rem, 2.5vw, 1.12rem));
+  --pc-composer-match-collapsed-order-h: calc(0.82rem * 2 + 1.15 * var(--pc-composer-field-font));
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-comments-drawer
+  .project-clad-muted {
+  color: var(--pc-muted);
+  opacity: 1;
+}
+
+.project-clad-activity-feed__form {
+  margin-bottom: 0.35rem;
+}
+
+.project-clad-activity-feed__composer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.project-clad-activity-feed__composer .project-clad-neu-finder-input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
+}
+
+.project-clad-activity-feed__composer .project-clad-button {
+  flex-shrink: 0;
+}
+
+.project-clad-activity-feed__form
+  .project-clad-neu-finder-input__field::placeholder {
+  color: var(--pc-caesura-fg);
+  opacity: 0.75;
+}
+
+.project-clad-activity-feed__textarea {
+  resize: none;
+  overflow-y: auto;
+  appearance: none;
+  -webkit-appearance: none;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.project-clad-activity-feed__textarea::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/*
+ * Comment + add-member email: single caesura inset shell (CodePen QWNjvOX “Input” / search oval).
+ * Inner field is borderless — chrome lives on .project-clad-neu-finder-input only.
+ */
+.project-clad-neu-finder-input {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  border: var(--pc-caesura-border);
+  border-radius: 9999px;
+  background-color: var(--pc-caesura-bg);
+  padding: 0 0.25rem;
+  box-shadow: var(--pc-caesura-inset);
+  transition: var(--pc-caesura-transition);
+}
+
+.project-clad-neu-finder-input:focus-within {
+  box-shadow: none;
+  border-color: var(--pc-caesura-border-hover);
+}
+
+.project-clad-neu-finder-input__well {
+  box-sizing: border-box;
+  border-radius: inherit;
+  padding: 0.55rem 0.85rem;
+  box-shadow: none;
+  background: transparent;
+}
+
+.project-clad-neu-finder-input__field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  outline: none;
+  box-shadow: none !important;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--pc-caesura-fg) !important;
+  line-height: 1.35;
+}
+
+.project-clad-neu-finder-input__field:focus,
+.project-clad-neu-finder-input__field:focus-visible {
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__composer
+  .project-clad-neu-finder-input {
+  margin-top: 0;
+  padding: 0 0.2rem;
+  display: flex;
+  align-items: center;
+  align-self: center;
+  min-height: var(--pc-composer-match-collapsed-order-h);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__composer
+  .project-clad-neu-finder-input__well {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  padding: 0.15rem 0.65rem;
+}
+
+/* Slightly smaller than Orders so placeholder fits one line without scrolling */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__composer
+  .project-clad-neu-finder-input__field {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: var(--pc-composer-field-font) !important;
+  letter-spacing: 0.02em;
+  line-height: 1.18;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__composer
+  .project-clad-neu-finder-input__field::placeholder {
+  color: var(--pc-btn-neu-fg) !important;
+  opacity: 0.92;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__composer
+  .project-clad-neu-finder-input__field:placeholder-shown {
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+}
+
+/* Focused bar: “COMMENT HERE:” matches Orders-style red + glow */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__composer
+  .project-clad-neu-finder-input:focus-within
+  .project-clad-neu-finder-input__field::placeholder {
+  color: var(--pc-pill-text-glow-hover) !important;
+  opacity: 1;
+  text-shadow: var(--pc-accent-heading-shadow);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__composer
+  .project-clad-neu-finder-input:focus-within
+  .project-clad-neu-finder-input__field:placeholder-shown {
+  color: var(--pc-pill-text-glow-hover) !important;
+  text-shadow: var(--pc-accent-heading-shadow);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__composer
+  .project-clad-activity-feed__textarea:placeholder-shown {
+  overflow-y: hidden;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__composer
+  .project-clad-button {
+  align-self: center;
+  min-height: var(--pc-composer-match-collapsed-order-h);
+  padding-top: 0;
+  padding-bottom: 0;
+  box-sizing: border-box;
+}
+
+/* ~3 timeline rows visible (meta + line of body); rest scrolls (scrollbar hidden, still mouse/touch scroll) */
+.project-clad-activity-feed__scroll {
+  max-height: 9.5rem;
+  min-height: 5rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0;
+  min-width: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.project-clad-activity-feed__scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * Project detail — activity list: smooth scroll + edge fade + Bakbak (beats theme / .project-clad-muted).
+ */
+.project-clad-page--projects.project-clad-page--detail .project-clad-activity-feed__scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  /* Room so the last line stays fully opaque and isn’t clipped when scrolled to the end */
+  padding: 0.08rem 0 1.1rem;
+  scroll-padding-bottom: 1.1rem;
+  font-size: max(16px, calc(0.85rem * var(--pc-text-scale)));
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.025em;
+  text-transform: none;
+  /* Fade only the top edge (more content above); bottom stays solid so text never “vanishes” */
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 6%, #000 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 6%, #000 100%);
+  mask-size: 100% 100%;
+  -webkit-mask-size: 100% 100%;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__scroll
+  .project-clad-activity-feed__comment-line,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__scroll
+  .project-clad-activity-feed__comment-line * {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.025em;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__scroll
+  .project-clad-activity-feed__comment-line,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__scroll
+  .project-clad-activity-feed__comment-line * {
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  opacity: 1 !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__scroll
+  > p.project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-activity-feed__scroll
+  .project-clad-activity-feed__comment-item
+  p.project-clad-muted {
+  margin: 0;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.025em;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-clad-page--projects.project-clad-page--detail .project-clad-activity-feed__scroll {
+    scroll-behavior: auto;
+  }
+}
+
+.project-clad-activity-feed__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.project-clad-activity-feed__comment-item {
+  padding: 0.18rem 0;
+  box-sizing: border-box;
+}
+
+/* Activity + comments: one line — NAME - time/date: message (message truncates; full text in title) */
+.project-clad-activity-feed__comment-line {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  margin: 0;
+  min-width: 0;
+  gap: 0;
+}
+
+.project-clad-activity-feed__comment-line-name {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.project-clad-activity-feed__comment-line-msg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * Bakbak One: full project list tile (link + actions), order/receipt titles, meta chip, activity.
+ * Descendants need explicit Bakbak — .project-clad-page * { Helvetica !important } beats inheriting from the <a>.
+ */
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-grid
+  > .project-clad-card
+  .project-clad-card-link,
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-grid
+  > .project-clad-card
+  .project-clad-card-link
+  *,
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-grid
+  > .project-clad-card
+  > .project-clad-actions,
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-grid
+  > .project-clad-card
+  > .project-clad-actions
+  *,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-details
+  .project-clad-title:not(.project-clad-neon-title) {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.025em;
+}
+
+/* Meta chip pill: labels + values same weight/size (theme h1/strong otherwise wins) */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip__inner,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip__inner * {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: calc(0.9rem * var(--pc-text-scale)) !important;
+  letter-spacing: 0.025em;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-comments-drawer
+  .project-clad-neu-finder-input__field {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.025em;
+  text-transform: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-comments-drawer
+  .project-clad-activity-feed__comment-line-name {
+  font-weight: 400 !important;
+}
+
+.project-clad-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * Project meta chip: grey caesura neu (drop / inset / hover) — radius matches order rows + shell chips.
+ */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  margin: 0 0 1.35rem;
+  overflow: visible;
+  isolation: isolate;
+  cursor: pointer;
+  pointer-events: auto;
+  box-sizing: border-box;
+  border: var(--pc-caesura-border);
+  border-radius: var(--pc-shell-radius);
+  background: var(--pc-caesura-bg);
+  background-image: none;
+  color: var(--pc-btn-neu-fg);
+  box-shadow: var(--pc-btn-neu-shadow);
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  transform: scale(1);
+  filter: none;
   transition: var(--pc-btn-neu-transition);
 }
 
-.project-clad-page--projects .project-clad-card:hover {
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip
+  .project-clad-project-meta-chip__inner,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip
+  .project-clad-project-meta-chip__inner * {
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  button.project-clad-project-meta-chip {
+  display: block;
+  width: 100%;
+  text-align: inherit;
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip__inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 0.55rem;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  /* Match collapsed order row summary: details.project-clad-order-row:not([open]) > summary */
+  padding: 0.82rem 0.95rem;
+  overflow-x: visible;
+  line-height: 1.35;
+  overflow-wrap: break-word;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip__title {
+  margin: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  line-height: inherit;
+  text-decoration: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip__title
+  .project-clad-project-meta-chip__name-text {
+  text-transform: none;
+  text-decoration: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip__dot {
+  flex: 0 0 auto;
+  opacity: 0.45;
+  user-select: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip__part {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip__label {
+  text-transform: uppercase;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.35);
+  outline-offset: 3px;
+  z-index: 2;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip:hover {
+  z-index: 2;
   box-shadow: var(--pc-btn-neu-shadow-hover);
-  filter: brightness(1.02);
+  border-color: var(--pc-caesura-border-hover);
+  color: var(--pc-caesura-hover-red-text);
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+  filter: none;
+  transform: scale(1);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip:hover
+  .project-clad-project-meta-chip__inner,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip:hover
+  .project-clad-project-meta-chip__inner * {
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip:active {
+  z-index: 2;
+  box-shadow: var(--pc-btn-neu-shadow-active);
+  border-color: transparent;
+  background: var(--pc-caesura-bg);
+  background-image: none;
+  text-shadow: none;
+  filter: none;
+  transform: scale(1);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip:active
+  .project-clad-project-meta-chip__inner,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip:active
+  .project-clad-project-meta-chip__inner * {
+  text-shadow: none !important;
+}
+
+/*
+ * Order rows (<details>): caesura neu — collapsed raised, hover rim + red type, active = inset press;
+ * open = same pressed/inset read as grey .project-clad-button:active (whole panel “sunk”).
+ */
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details {
+  position: relative;
+  z-index: 0;
+  min-width: 0;
+  border: var(--pc-caesura-border);
+  border-radius: var(--pc-shell-radius);
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  transition: var(--pc-btn-neu-transition);
+}
+
+/* More drawer: spacing from subtotal comes from .project-clad-orders-shell__footer margin-bottom */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  details.project-clad-order-row.project-clad-comments-drawer {
+  margin-top: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]) {
+  background: var(--pc-caesura-bg);
+  background-image: none;
+  box-shadow: var(--pc-btn-neu-shadow);
+  transform: scale(1);
+  filter: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):hover {
+  z-index: 1;
+  transform: scale(1);
+  filter: none;
+  box-shadow: var(--pc-btn-neu-shadow-hover);
+  border-color: var(--pc-caesura-border-hover);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):active,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):has(
+    summary.project-clad-summary:active
+  ) {
+  z-index: 1;
+  transform: scale(1);
+  filter: none;
+  background: var(--pc-caesura-bg);
+  background-image: none;
+  border-color: transparent;
+  box-shadow: var(--pc-btn-neu-shadow-active);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):active
+  summary
+  .project-clad-title,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):active
+  summary
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):active
+  summary
+  .project-clad-order-summary-qty__sub-amount,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):active
+  summary
+  .project-clad-hidden-link,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):has(
+    summary.project-clad-summary:active
+  )
+  summary
+  .project-clad-title,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):has(
+    summary.project-clad-summary:active
+  )
+  summary
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):has(
+    summary.project-clad-summary:active
+  )
+  summary
+  .project-clad-order-summary-qty__sub-amount,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):has(
+    summary.project-clad-summary:active
+  )
+  summary
+  .project-clad-hidden-link {
+  text-shadow: none !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details[open] {
   transform: none;
+  filter: none;
+  background: var(--pc-caesura-bg);
+  background-image: none;
+  box-shadow: var(--pc-btn-neu-shadow-active);
+  border-color: transparent;
+  border-radius: var(--pc-shell-radius);
+}
+
+/* Collapsed header copy: caesura label color (not orders-shell muted grey) */
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open])
+  summary
+  .project-clad-title,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open])
+  summary
+  .project-clad-muted {
+  color: var(--pc-btn-neu-fg);
+  text-shadow: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open])
+  summary
+  .project-clad-order-summary-qty__sub-amount {
+  color: var(--pc-btn-neu-fg);
+}
+
+/* Open order: header title + subtotal in red (no halo) */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  details.project-clad-order-row.project-clad-details[open]
+  .project-clad-order-summary-head-row
+  .project-clad-title,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  details.project-clad-order-row.project-clad-details[open]
+  .project-clad-order-summary-head-row
+  .project-clad-title
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  details.project-clad-order-row.project-clad-details[open]
+  .project-clad-order-summary-head-row__subtotal
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  details.project-clad-order-row.project-clad-details[open]
+  .project-clad-order-summary-head-row__subtotal
+  .project-clad-order-summary-qty__sub-amount,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  details.project-clad-order-row.project-clad-details[open]
+  .project-clad-order-summary-head-row__subtotal
+  .project-clad-hidden-link {
+  color: var(--pc-pill-text-glow-hover);
+  text-shadow: var(--pc-pill-text-glow-shadow);
+  opacity: 1;
+}
+
+/*
+ * ::details-content: height open/close — avoid !important on closed height/padding so the
+ * browser can interpolate back to 0 (same duration/easing as open). Still depends on
+ * interpolate-size + capable engines; symmetric accordion in all cases needs JS heights.
+ */
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details::details-content {
+  overflow: hidden;
+  box-sizing: border-box;
+  transition:
+    height 0.22s cubic-bezier(0.23, 1, 0.32, 1),
+    padding 0.22s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open])::details-content {
+  height: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details[open]::details-content {
+  padding: 0 2rem 1.75rem 2rem;
+  /* Let neu button shadows extend past the content box (base ::details-content uses overflow: hidden). */
+  overflow: visible;
+}
+
+@supports (interpolate-size: allow-keywords) {
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-shell,
+  .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row.project-clad-details {
+    interpolate-size: allow-keywords;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row.project-clad-details[open]::details-content {
+    height: auto;
+  }
+}
+
+/* Room for neu button shadows without a large empty strip under the actions */
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details[open]
+  .project-clad-order-actions[data-projectclad-order-section] {
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+/* Order header: top-align text block vs. total qty; avoids empty “column” look when right was blank */
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row .project-clad-summary-row {
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row > summary.project-clad-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+  margin: -0.1rem 0 0;
+  box-sizing: border-box;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row:not([open]) > summary.project-clad-summary {
+  /* Symmetric vertical padding so the single header row sits centered in the chip */
+  padding: 0.82rem 0.95rem 0.82rem 0.95rem;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row[open] > summary.project-clad-summary {
+  /* Extra top air when expanded (collapsed chip keeps 0.82rem symmetric). */
+  padding: 1.05rem 2rem 0.45rem 2rem;
+}
+
+/* More drawer: neon h2 + glow sits visually higher than order h3 — extra summary padding */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-comments-drawer:not([open])
+  > summary.project-clad-summary {
+  padding: 0.95rem 0.95rem 0.95rem 0.95rem;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-comments-drawer[open]
+  > summary.project-clad-summary {
+  padding: 1.2rem 2rem 0.5rem 2rem;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row:not([open])
+  .project-clad-summary-row
+  > div:first-child
+  > p.project-clad-muted:last-of-type {
+  margin-bottom: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row > summary .project-clad-title {
+  margin: 0 0 0.12rem;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row > summary .project-clad-muted {
+  margin-top: 0.15rem;
+}
+
+/* Collapsed header: order name (+ optional approval) and subtotal on one row */
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-head-row {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-head-row
+  .project-clad-title {
+  margin-bottom: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-head-row
+  .project-clad-order-summary-padded {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-head-row__subtotal {
+  flex: 0 0 auto;
+  margin-left: auto;
+  text-align: right;
+  text-transform: none;
+  letter-spacing: 0.025em;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+}
+
+.project-clad-order-empty-with-totals__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1.25rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #000;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-padded {
+  min-width: 0;
+}
+
+.project-clad-order-summary-qty__qty-line {
+  white-space: nowrap;
+  margin: 0;
+}
+
+.project-clad-order-summary-qty--left {
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.project-clad-order-summary-qty__sub-amount {
+  font-weight: 400;
+  color: var(--pc-fg, #111);
+  text-transform: none;
+}
+
+/* Detail / edge cases: pressed when link active (list tiles use :not(detail) block above) */
+.project-clad-page--projects.project-clad-page--detail .project-clad-card:has(.project-clad-card-link:active) {
+  z-index: 2;
+  transform: scale(0.996);
+  background: var(--pc-neu-face-pressed-gradient);
+  border-radius: var(--pc-neu-radius);
+  box-shadow: var(--pc-neu-press);
+  filter: brightness(0.995);
+}
+
+/* Project list tiles: flat label like grey caesura buttons (detail page cards keep theme elsewhere) */
+.project-clad-page--projects:not(.project-clad-page--detail) .project-clad-card .project-clad-title,
+.project-clad-page--projects:not(.project-clad-page--detail) .project-clad-card .project-clad-muted {
+  color: var(--pc-btn-neu-fg);
+  opacity: 1;
+  text-shadow: none;
+  transition: color 0.25s ease, text-shadow 0.25s ease;
+}
+
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card
+  .project-clad-actions
+  .project-clad-muted {
+  color: var(--pc-btn-neu-fg);
+  opacity: 1;
+  text-shadow: none;
+}
+
+/* Projects list tile: title + project # + created (left); company + orders (right, orders row aligns with created) */
+.project-clad-page--projects .project-clad-projects-tile-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 1rem;
+  row-gap: 0.35rem;
+  align-items: start;
+}
+
+.project-clad-page--projects .project-clad-projects-tile-head .project-clad-title {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+}
+
+.project-clad-page--projects .project-clad-projects-tile-company {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+  text-align: right;
+  max-width: min(14rem, 42vw);
+  word-break: break-word;
+}
+
+.project-clad-page--projects .project-clad-projects-tile-po {
+  grid-column: 1;
+  grid-row: 2;
+  margin: 0;
+}
+
+.project-clad-page--projects .project-clad-projects-tile-created {
+  grid-column: 1;
+  grid-row: 3;
+  margin: 0;
+}
+
+.project-clad-page--projects .project-clad-projects-tile-orders {
+  grid-column: 2;
+  grid-row: 3;
+  margin: 0;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .project-clad-page--projects .project-clad-card-link {
-  border-radius: 18px;
+  position: relative;
+  border-radius: var(--pc-neu-radius);
+  -webkit-tap-highlight-color: transparent;
 }
 
-.project-clad-page--projects .project-clad-card-link:hover {
-  background: rgba(0, 0, 0, 0.03);
+.project-clad-page--projects:not(.project-clad-page--detail) .project-clad-card-link:hover {
+  background: transparent;
+}
+
+/* Typography on hover comes from parent tile (:hover) to match button rim + red label */
+.project-clad-page--projects.project-clad-page--detail .project-clad-card-link:hover .project-clad-title,
+.project-clad-page--projects.project-clad-page--detail .project-clad-card-link:hover .project-clad-muted {
+  color: var(--pc-pill-text-glow-hover);
+  text-shadow: var(--pc-pill-text-glow-shadow);
+}
+
+/* Cursor-follow soft shadow (coords from projectCladCursorGlowScript) */
+.project-clad-page--projects .project-clad-card-link::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  background: radial-gradient(
+    circle 200px at var(--pc-glow-x, 50%) var(--pc-glow-y, 50%),
+    rgba(0, 0, 0, 0.07),
+    rgba(0, 0, 0, 0.025) 38%,
+    transparent 68%
+  );
+}
+
+.project-clad-page--projects .project-clad-card-link.project-clad--glow-hover::before {
+  opacity: 1;
+}
+
+.project-clad-page--projects.project-clad-page--detail details.project-clad-card.project-clad-details > summary,
+.project-clad-page--projects.project-clad-page--detail details.project-clad-order-row.project-clad-details > summary {
+  position: relative;
+}
+
+/* Collapsed order header: red text glow (project list tiles) — no radial cursor shadow */
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-card.project-clad-details:not([open]):hover
+  summary
+  .project-clad-title,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-card.project-clad-details:not([open]):hover
+  summary
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):hover
+  summary
+  .project-clad-title,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):hover
+  summary
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):hover
+  summary
+  .project-clad-order-summary-qty__sub-amount,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details:not([open]):hover
+  summary
+  .project-clad-hidden-link {
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+}
+
+/* More drawer summary: same neon heading as Project subtotal (overrides order-row header rules above). */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-comments-drawer
+  summary
+  h2.project-clad-neon-title {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding: 0.15rem 0;
+  color: var(--pc-pill-text-glow-hover) !important;
+  text-shadow: var(--pc-accent-heading-shadow-soft) !important;
+  opacity: 1 !important;
+}
+
+.project-clad-page--projects .project-clad-card-link > * {
+  position: relative;
+  z-index: 1;
 }
 
 .project-clad-page--projects .project-clad-card::after {
@@ -170,6 +1784,82 @@ body.project-clad-leaving .project-clad-page {
 .project-clad-page--projects.project-clad-page--card-bg-logo .project-clad-card > * {
   position: relative;
   z-index: 2;
+}
+
+/* No watermark on orders shell, order rows, nested order cards (e.g. receipt), or activity card */
+.project-clad-page--projects.project-clad-page--card-bg-logo
+  .project-clad-card.project-clad-orders-shell::before,
+.project-clad-page--projects.project-clad-page--card-bg-logo
+  details.project-clad-card.project-clad-details::before,
+.project-clad-page--projects.project-clad-page--card-bg-logo
+  details.project-clad-order-row.project-clad-details::before,
+.project-clad-page--projects.project-clad-page--card-bg-logo
+  details.project-clad-details .project-clad-card::before {
+  display: none;
+}
+
+/* Toolbar-style rows: no neu tile or hover lift (only the button / price should feel interactive) */
+.project-clad-page--projects .project-clad-card.project-clad-card--ghost {
+  border: none;
+  border-radius: 0;
+  padding: 0.35rem 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.project-clad-page--projects .project-clad-card.project-clad-card--ghost::before,
+.project-clad-page--projects .project-clad-card.project-clad-card--ghost::after {
+  display: none;
+}
+
+.project-clad-page--projects .project-clad-card.project-clad-card--ghost:hover {
+  z-index: 0;
+  transform: none;
+  filter: none;
+  box-shadow: none;
+}
+
+.project-clad-page--projects .project-clad-card.project-clad-card--ghost .project-clad-title,
+.project-clad-page--projects .project-clad-card.project-clad-card--ghost .project-clad-muted {
+  color: var(--pc-fg, #111);
+  opacity: 1;
+  text-shadow: none;
+}
+
+/* Order / projects themed cards: keep warning + approval states readable over neu base */
+.project-clad-page--projects .project-clad-card.project-clad-warning {
+  background: linear-gradient(168deg, #fffbf0 0%, #fff4d6 42%, #ffecc4 100%);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.75) inset,
+    0 -3px 8px rgba(0, 0, 0, 0.06) inset,
+    0 14px 32px rgba(0, 0, 0, 0.12),
+    0 6px 14px rgba(0, 0, 0, 0.08);
+}
+
+.project-clad-page--projects .project-clad-card.project-clad-warning:hover {
+  filter: brightness(1.02);
+}
+
+.project-clad-page--projects .project-clad-card.project-clad-approval-pending,
+.project-clad-page--projects .project-clad-card.project-clad-card--confirming,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending {
+  border: 3px solid #c00;
+  outline: 2px solid #c00;
+  outline-offset: 2px;
+}
+
+.project-clad-page--projects .project-clad-card.project-clad-approval-pending:hover,
+.project-clad-page--projects .project-clad-card.project-clad-card--confirming:hover,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:hover {
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -4px 10px rgba(0, 0, 0, 0.08) inset,
+    0 24px 48px rgba(0, 0, 0, 0.16),
+    0 0 0 1px rgba(192, 0, 0, 0.25);
 }
 
 .project-clad-logo {
@@ -241,6 +1931,322 @@ body.project-clad-leaving .project-clad-page {
 .project-clad-page .project-clad-nav .project-clad-button {
   flex: 0 1 auto;
   min-width: 0;
+  z-index: 0;
+}
+
+/* Project detail (desktop): quick add member — grid column 1, popover under button */
+.project-clad-page--projects.project-clad-page--detail .project-clad-header-slot--left {
+  display: none;
+  position: relative;
+  grid-column: 1;
+  justify-self: start;
+  align-self: center;
+  min-width: 0;
+}
+
+@media (min-width: 641px) {
+  .project-clad-page--projects.project-clad-page--detail .project-clad-header-slot--left {
+    display: block;
+  }
+}
+
+.project-clad-add-member-popover {
+  --pc-add-member-control-h: 2.75rem;
+  display: none;
+  flex-direction: column;
+  gap: 0.65rem;
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 60;
+  width: min(22rem, calc(100vw - 2rem));
+  box-sizing: border-box;
+  padding: 1rem 1.1rem;
+  border-radius: var(--pc-card-radius);
+  background: linear-gradient(168deg, #eef0f2 0%, var(--pc-btn-neu-bg) 38%, #dcdee3 100%);
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -4px 10px rgba(0, 0, 0, 0.08) inset,
+    1px 0 0 rgba(255, 255, 255, 0.28),
+    -1px 0 1px rgba(0, 0, 0, 0.05),
+    0 24px 50px rgba(0, 0, 0, 0.14),
+    0 10px 24px rgba(0, 0, 0, 0.1);
+  border: none;
+  text-align: left;
+}
+
+/* Popover: Bakbak everywhere (beats .project-clad-page * Helvetica) */
+.project-clad-page--projects.project-clad-page--detail .project-clad-add-member-popover,
+.project-clad-page--projects.project-clad-page--detail .project-clad-add-member-popover * {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+}
+
+/*
+ * Labels + helper = orders-shell grey.
+ * Exclude role dropdown options — they are <label>s too; popover label color + !important was
+ * beating .project-clad-member-role-select__option:has(input:checked) { color: #fff } (grey on blue).
+ */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-add-member-popover
+  label:not(.project-clad-member-role-select__option),
+.project-clad-page--projects.project-clad-page--detail .project-clad-add-member-popover .project-clad-muted {
+  color: var(--pc-muted) !important;
+  opacity: 1 !important;
+  font-size: calc(0.82rem * var(--pc-text-scale));
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-add-member-popover
+  .project-clad-neu-finder-input__field {
+  color: var(--pc-muted) !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-add-member-popover
+  .project-clad-neu-finder-input__field::placeholder {
+  color: var(--pc-muted) !important;
+  opacity: 0.72;
+}
+
+.project-clad-add-member-popover .project-clad-inline-form {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.project-clad-add-member-popover .project-clad-neu-finder-input {
+  margin-top: 0.15rem;
+  height: var(--pc-add-member-control-h);
+  min-height: var(--pc-add-member-control-h);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+}
+
+.project-clad-add-member-popover .project-clad-neu-finder-input__well {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  box-sizing: border-box;
+}
+
+.project-clad-add-member-popover .project-clad-neu-finder-input__field {
+  line-height: 1.2;
+}
+
+.project-clad-add-member-popover .project-clad-member-role-select {
+  min-width: 0;
+  width: 100%;
+  align-self: stretch;
+}
+
+/*
+ * Member role: pressed caesura pill + options in flowing ::details-content (order-row expand).
+ */
+.project-clad-member-role-select {
+  --pc-role-select-blue: #1a73e8;
+  --pc-role-select-row: #eceff1;
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.project-clad-member-role-select:not([open]) {
+  overflow: hidden;
+  border-radius: 9999px;
+}
+
+.project-clad-member-role-select[open] {
+  z-index: 80;
+  overflow: visible;
+}
+
+.project-clad-member-role-select__trigger {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--pc-add-member-control-h, 2.75rem);
+  padding: 0 0.85rem 0 1rem;
+  box-sizing: border-box;
+  border-radius: 9999px;
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+  background: var(--pc-caesura-bg);
+  color: var(--pc-btn-neu-fg);
+  cursor: pointer;
+  font-size: max(15px, calc(0.88rem * var(--pc-text-scale)));
+  font-weight: 600 !important;
+  user-select: none;
+  box-shadow: var(--pc-btn-neu-shadow-active);
+  text-shadow: none;
+  transition: var(--pc-btn-neu-transition);
+}
+
+.project-clad-member-role-select:not([open]):hover > .project-clad-member-role-select__trigger {
+  box-shadow: var(--pc-btn-neu-shadow-hover);
+  border-color: var(--pc-caesura-border-hover);
+}
+
+.project-clad-member-role-select__trigger::-webkit-details-marker {
+  display: none;
+}
+
+.project-clad-member-role-select__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+}
+
+.project-clad-member-role-select__chevron {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.72;
+  transition: transform 0.15s ease;
+}
+
+.project-clad-member-role-select[open] > .project-clad-member-role-select__trigger {
+  position: relative;
+  z-index: 2;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  /* One continuous edge with the list below (soft, not pure black). */
+  border-bottom-color: rgba(60, 64, 67, 0.28);
+}
+
+.project-clad-member-role-select[open] .project-clad-member-role-select__chevron {
+  transform: rotate(180deg);
+}
+
+.project-clad-member-role-select__list {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(60, 64, 67, 0.28);
+  border-top: none;
+  border-radius: 0 0 0.85rem 0.85rem;
+  background: var(--pc-caesura-bg);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.project-clad-member-role-select::details-content {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  transition:
+    height 0.22s cubic-bezier(0.23, 1, 0.32, 1),
+    padding 0.22s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.project-clad-member-role-select:not([open])::details-content {
+  height: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+
+.project-clad-member-role-select[open]::details-content {
+  padding: 0;
+  /* Keep hidden so open height animation + list corners stay contained; list uses overflow:hidden */
+  overflow: hidden;
+}
+
+@supports (interpolate-size: allow-keywords) {
+  .project-clad-member-role-select {
+    interpolate-size: allow-keywords;
+  }
+
+  .project-clad-member-role-select[open]::details-content {
+    height: auto;
+  }
+}
+
+.project-clad-member-role-select__option {
+  display: block;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  font-size: max(15px, calc(0.88rem * var(--pc-text-scale)));
+  font-weight: 600 !important;
+  color: #3c4043;
+  background: var(--pc-role-select-row);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.project-clad-member-role-select__option:hover {
+  filter: brightness(0.98);
+}
+
+.project-clad-member-role-select__option:has(input:checked) {
+  background: var(--pc-role-select-blue);
+  color: #fff !important;
+}
+
+.project-clad-member-role-select__option:has(input:checked) .project-clad-member-role-select__option-text {
+  color: #fff !important;
+}
+
+.project-clad-member-role-select__option:has(input:checked):hover {
+  filter: brightness(1.05);
+}
+
+.project-clad-member-role-select__option:has(input:checked):hover .project-clad-member-role-select__option-text {
+  color: #fff !important;
+}
+
+.project-clad-member-role-select__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.project-clad-member-role-select__option-text {
+  display: block;
+  padding: 0.58rem 1rem;
+  pointer-events: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-share-access-form .project-clad-member-role-select {
+  --pc-add-member-control-h: 2.75rem;
+}
+
+/* Popover’s global Bakbak * { weight 400 } — restore semibold on role UI */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-add-member-popover
+  .project-clad-member-role-select__trigger,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-add-member-popover
+  .project-clad-member-role-select__option {
+  font-weight: 600 !important;
+}
+
+.project-clad-add-member-popover .project-clad-button {
+  align-self: flex-start;
+  margin-top: 0.25rem;
 }
 
 .project-clad-nav .link {
@@ -264,7 +2270,7 @@ body.project-clad-leaving .project-clad-page {
 
 .project-clad-card {
   border: 1px solid #000;
-  border-radius: var(--card-corner-radius, 8px);
+  border-radius: var(--card-corner-radius, 16px);
   padding: 1.5rem;
   background: var(--color-background, #fff);
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
@@ -294,7 +2300,7 @@ body.project-clad-leaving .project-clad-page {
   cursor: pointer;
   margin: -1.5rem;
   padding: 1.5rem;
-  border-radius: var(--card-corner-radius, 8px);
+  border-radius: var(--card-corner-radius, 16px);
 }
 
 .project-clad-card-link:hover {
@@ -310,6 +2316,26 @@ body.project-clad-leaving .project-clad-page {
   min-width: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Wide table scrolls here so parent .project-clad-stack can stay overflow:visible (neu button shadows). */
+.project-clad-table-x-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Order detail: products use responsive thumbs — no horizontal scroll inside the order card */
+.project-clad-page--projects.project-clad-page--detail .project-clad-table-x-scroll {
+  overflow-x: visible;
+  max-width: 100%;
+}
+
+/* Order rows: stack wraps table + receipt + actions — avoid overflow-x:auto (it forces overflow-y:auto and clips shadows). */
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details .project-clad-stack {
+  overflow-x: visible;
+  overflow-y: visible;
 }
 
 
@@ -335,18 +2361,29 @@ body.project-clad-leaving .project-clad-page {
   z-index: 1;
 }
 
+/*
+ * Order name: <h3> for display, <input> for edit. Theme styles often force inputs visible
+ * (!important), so both were stacking and looked like misaligned “double” text.
+ */
 .project-clad-job-name-input {
-  display: none;
+  display: none !important;
   margin-top: 0.35rem;
-  max-width: 280px;
+  width: 100%;
+  max-width: min(280px, 100%);
+  box-sizing: border-box;
+  border-radius: var(--pc-neu-radius);
 }
 
 details.project-clad-edit-mode .project-clad-job-name-input {
-  display: block;
+  display: block !important;
 }
 
-details.project-clad-edit-mode .project-clad-title {
-  display: none;
+/* Only hide the order title in the summary (not other .project-clad-title on the page). */
+details.project-clad-edit-mode
+  .project-clad-order-summary-head-row
+  > .project-clad-order-summary-padded
+  > .project-clad-title {
+  display: none !important;
 }
 
 .project-clad-summary-action {
@@ -446,67 +2483,41 @@ details.project-clad-edit-mode .project-clad-title {
 }
 
 .project-clad-button--projects {
-  background: #c62828 !important;
+  background: linear-gradient(168deg, #e53935 0%, #c62828 46%, #b71c1c 100%) !important;
   color: #fff !important;
-  box-shadow:
-    0 15px 25px -4px rgba(0, 0, 0, 0.5),
-    inset 0 -3px 4px -1px rgba(0, 0, 0, 0.35),
-    0 -10px 15px -1px rgba(255, 120, 120, 0.22),
-    inset 0 3px 4px -1px rgba(255, 255, 255, 0.18),
-    inset 0 0 5px 1px rgba(255, 200, 200, 0.35),
-    inset 0 18px 28px 0 rgba(255, 255, 255, 0.12) !important;
+  box-shadow: var(--pc-btn-neu-red-shadow) !important;
 }
 
 .project-clad-button--projects:hover {
-  background: #b71c1c !important;
-  box-shadow:
-    0 18px 28px -4px rgba(0, 0, 0, 0.48),
-    inset 0 -2px 4px -1px rgba(0, 0, 0, 0.3),
-    0 -11px 16px -1px rgba(255, 140, 140, 0.25),
-    inset 0 4px 5px -1px rgba(255, 255, 255, 0.22),
-    inset 0 0 6px 1px rgba(255, 210, 210, 0.4),
-    inset 0 20px 30px 0 rgba(255, 255, 255, 0.14) !important;
+  background: linear-gradient(168deg, #ef5350 0%, #c62828 42%, #b71c1c 100%) !important;
+  box-shadow: var(--pc-btn-neu-red-shadow-hover) !important;
 }
 
 .project-clad-button--projects:active {
-  filter: blur(0.5px);
-  box-shadow:
-    0 12px 25px -4px rgba(0, 0, 0, 0.45),
-    inset 0 8px 22px 0 rgba(0, 0, 0, 0.35),
-    inset 0 -8px 26px 1px rgba(255, 255, 255, 0.12),
-    inset 0 0 10px 1px rgba(255, 200, 200, 0.25) !important;
+  background: linear-gradient(168deg, #b71c1c 0%, #a31818 100%) !important;
+  box-shadow: var(--pc-btn-neu-red-shadow-active) !important;
+  border-color: transparent !important;
+  filter: blur(var(--pc-btn-active-blur)) !important;
+  transform: scale(0.99) !important;
 }
 
 .project-clad-button--danger {
-  background: #c62828;
+  background: linear-gradient(168deg, #e53935 0%, #c62828 46%, #b71c1c 100%);
   color: #fff;
-  box-shadow:
-    0 15px 25px -4px rgba(0, 0, 0, 0.5),
-    inset 0 -3px 4px -1px rgba(0, 0, 0, 0.35),
-    0 -10px 15px -1px rgba(255, 120, 120, 0.22),
-    inset 0 3px 4px -1px rgba(255, 255, 255, 0.18),
-    inset 0 0 5px 1px rgba(255, 200, 200, 0.35),
-    inset 0 18px 28px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: var(--pc-btn-neu-red-shadow);
 }
 
 .project-clad-button--danger:hover {
-  background: #b71c1c;
-  box-shadow:
-    0 18px 28px -4px rgba(0, 0, 0, 0.48),
-    inset 0 -2px 4px -1px rgba(0, 0, 0, 0.3),
-    0 -11px 16px -1px rgba(255, 140, 140, 0.25),
-    inset 0 4px 5px -1px rgba(255, 255, 255, 0.22),
-    inset 0 0 6px 1px rgba(255, 210, 210, 0.4),
-    inset 0 20px 30px 0 rgba(255, 255, 255, 0.14);
+  background: linear-gradient(168deg, #ef5350 0%, #c62828 42%, #b71c1c 100%);
+  box-shadow: var(--pc-btn-neu-red-shadow-hover);
 }
 
 .project-clad-button--danger:active {
-  filter: blur(0.5px);
-  box-shadow:
-    0 12px 25px -4px rgba(0, 0, 0, 0.45),
-    inset 0 8px 22px 0 rgba(0, 0, 0, 0.35),
-    inset 0 -8px 26px 1px rgba(255, 255, 255, 0.12),
-    inset 0 0 10px 1px rgba(255, 200, 200, 0.25);
+  background: linear-gradient(168deg, #b71c1c 0%, #a31818 100%);
+  box-shadow: var(--pc-btn-neu-red-shadow-active);
+  border-color: transparent;
+  filter: blur(var(--pc-btn-active-blur));
+  transform: scale(0.99);
 }
 
 .project-clad-button--full {
@@ -515,18 +2526,20 @@ details.project-clad-edit-mode .project-clad-title {
 }
 
 .project-clad-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--pc-btn-neu-bg);
+  background: var(--pc-caesura-bg);
   color: var(--pc-btn-neu-fg);
-  border: none;
-  border-radius: 999px;
-  padding: var(--pc-button-padding-y) var(--pc-button-padding-x);
-  font-family: inherit;
-  font-weight: 700;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  border: var(--pc-caesura-border);
+  border-radius: 9999px;
+  padding: var(--pc-button-padding-y) calc(var(--pc-button-padding-x) + 0.35rem);
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
   font-size: var(--pc-button-font-size);
-  letter-spacing: var(--pc-button-letter-spacing);
+  letter-spacing: 0.03em;
   line-height: var(--pc-button-line-height);
   cursor: pointer;
   min-height: var(--pc-button-min-height);
@@ -540,17 +2553,107 @@ details.project-clad-edit-mode .project-clad-title {
   white-space: nowrap;
   box-sizing: border-box;
   box-shadow: var(--pc-btn-neu-shadow);
+  text-shadow: none;
   transition: var(--pc-btn-neu-transition);
+  transform: scale(1);
+  transform-origin: center center;
+}
+
+/* Grey caesura buttons: no red radial overlay (CodePen is flat); red buttons keep ::before for glow script */
+.project-clad-button:not(.project-clad-button--danger):not(.project-clad-button--projects)::before {
+  display: none;
+}
+
+/* Cursor-follow soft shadow (coords from projectCladCursorGlowScript); inset:0 avoids clipping neu outer shadow */
+.project-clad-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  background: radial-gradient(
+    circle 130px at var(--pc-glow-x, 50%) var(--pc-glow-y, 50%),
+    rgba(211, 47, 47, 0.14),
+    rgba(211, 47, 47, 0.045) 34%,
+    transparent 64%
+  );
+}
+
+.project-clad-button.project-clad--glow-hover::before {
+  opacity: 1;
+}
+
+.project-clad-button:disabled::before {
+  display: none;
 }
 
 .project-clad-button:hover {
-  box-shadow: var(--pc-btn-neu-shadow-hover);
-  filter: brightness(1.02);
+  filter: none;
+  transform: scale(1);
+}
+
+/* Grey caesura buttons: hover = flat + white rim; red label + soft red glow */
+.project-clad-page
+  .project-clad-button:not(:disabled):not(.project-clad-button--danger):not(.project-clad-button--projects):hover,
+.project-clad-modal-backdrop
+  .project-clad-button:not(:disabled):not(.project-clad-button--danger):not(.project-clad-button--projects):hover {
+  z-index: 1;
+  box-shadow: none;
+  border-color: var(--pc-caesura-border-hover);
+  color: var(--pc-caesura-hover-red-text);
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+}
+
+/* Add member open: light neu face + white rim + red label + glow (not filled red) */
+.project-clad-page--projects.project-clad-page--detail
+  [data-projectclad-add-member-popover-toggle][aria-expanded="true"],
+.project-clad-page--projects.project-clad-page--detail
+  [data-projectclad-add-member-popover-toggle][aria-expanded="true"]:hover {
+  z-index: 2;
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: none !important;
+  border: 2px solid rgba(255, 255, 255, 0.92) !important;
+  color: var(--pc-pill-text-glow-hover) !important;
+  text-shadow: var(--pc-accent-heading-shadow) !important;
+  filter: none !important;
+  transform: scale(1) !important;
 }
 
 .project-clad-button:active {
-  filter: blur(0.5px);
   box-shadow: var(--pc-btn-neu-shadow-active);
+  border-color: transparent;
+  transform: scale(1);
+  text-shadow: none;
+  filter: none;
+}
+
+/* White label on red: sunk lettering; hover adds soft light glow (matches neu button glow “weight”) */
+.project-clad-button--danger,
+.project-clad-button--danger:hover {
+  text-shadow: var(--pc-text-deboss-on-red);
+}
+
+.project-clad-button--danger:hover:not(:disabled) {
+  text-shadow: var(--pc-text-deboss-on-red), var(--pc-red-button-hover-label-glow);
+}
+
+.project-clad-button--projects,
+.project-clad-button--projects:hover {
+  text-shadow: var(--pc-text-deboss-on-red) !important;
+}
+
+.project-clad-button--projects:hover:not(:disabled) {
+  text-shadow: var(--pc-text-deboss-on-red), var(--pc-red-button-hover-label-glow) !important;
+}
+
+.project-clad-button--danger:active,
+.project-clad-button--projects:active {
+  text-shadow:
+    0 -1px 0 rgba(0, 0, 0, 0.62),
+    0 1px 0 rgba(255, 255, 255, 0.1) !important;
 }
 
 .project-clad-button:focus-visible {
@@ -587,9 +2690,7 @@ details.project-clad-edit-mode .project-clad-title {
 .project-clad-share-input {
   flex: 1 1 260px;
   min-width: 220px;
-  padding: 0.45rem 0.75rem;
-  border-radius: 6px;
-  border: 1px solid #000;
+  padding: 0.45rem 1rem;
   font-weight: 600;
 }
 
@@ -622,19 +2723,17 @@ details.project-clad-edit-mode .project-clad-title {
 
 /* Reject modal - font, textarea, button styling */
 .project-clad-reject-modal-backdrop .project-clad-reject-modal {
-  font-family: "Radio Canada", "Helvetica Neue", Arial, sans-serif;
-  font-weight: 700;
+  font-family: Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
 }
 
-/* Prevent iOS zoom on focus - 16px minimum */
+/* Prevent iOS zoom on focus - 16px minimum (chrome from global caesura textarea rules) */
 .project-clad-reject-textarea {
   font-size: 16px !important;
   width: 100%;
   margin-top: 0.5rem;
   margin-bottom: 1rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: 6px;
-  border: 1px solid #000;
+  padding: 0.55rem 0.85rem;
   box-sizing: border-box;
 }
 
@@ -647,19 +2746,80 @@ details.project-clad-edit-mode .project-clad-title {
   min-height: 40px;
 }
 
-/* Edit project modal - black text box outlines */
-.project-clad-modal-backdrop[data-projectclad-edit-project-modal] input,
-.project-clad-modal-backdrop[data-projectclad-edit-project-modal] select,
-.project-clad-modal-backdrop[data-projectclad-edit-project-modal] textarea {
-  border-color: #000;
+/* Edit project modal: neu panel (match projects / order cards), no hover lift */
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-card.project-clad-modal {
+  position: relative;
+  overflow-x: hidden;
+  z-index: 0;
+  border: none;
+  border-radius: var(--pc-card-radius);
+  background: linear-gradient(168deg, #eef0f2 0%, var(--pc-btn-neu-bg) 38%, #dcdee3 100%);
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -4px 10px rgba(0, 0, 0, 0.08) inset,
+    1px 0 0 rgba(255, 255, 255, 0.28),
+    -1px 0 1px rgba(0, 0, 0, 0.05),
+    0 3px 0 rgba(255, 255, 255, 0.42),
+    0 24px 50px rgba(0, 0, 0, 0.14),
+    0 10px 24px rgba(0, 0, 0, 0.1),
+    0 46px 82px -18px rgba(0, 0, 0, 0.2);
+  transform: scale(1);
+  transform-origin: center center;
+  transition: box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1), filter 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-card.project-clad-modal:hover {
+  z-index: 0;
+  transform: scale(1);
+  filter: none;
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -4px 10px rgba(0, 0, 0, 0.08) inset,
+    1px 0 0 rgba(255, 255, 255, 0.28),
+    -1px 0 1px rgba(0, 0, 0, 0.05),
+    0 3px 0 rgba(255, 255, 255, 0.42),
+    0 24px 50px rgba(0, 0, 0, 0.14),
+    0 10px 24px rgba(0, 0, 0, 0.1),
+    0 46px 82px -18px rgba(0, 0, 0, 0.2);
+}
+
+/* Save-changes confirm: same neu shell, keeps .project-clad-edit-save-modal max-width */
+.project-clad-modal-backdrop[data-projectclad-edit-save-modal] .project-clad-card.project-clad-modal {
+  z-index: 0;
+  border: none;
+  border-radius: var(--pc-card-radius);
+  background: linear-gradient(168deg, #eef0f2 0%, var(--pc-btn-neu-bg) 38%, #dcdee3 100%);
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -4px 10px rgba(0, 0, 0, 0.08) inset,
+    1px 0 0 rgba(255, 255, 255, 0.28),
+    -1px 0 1px rgba(0, 0, 0, 0.05),
+    0 3px 0 rgba(255, 255, 255, 0.42),
+    0 24px 50px rgba(0, 0, 0, 0.14),
+    0 10px 24px rgba(0, 0, 0, 0.1),
+    0 46px 82px -18px rgba(0, 0, 0, 0.2);
+  transform: scale(1);
+  transition: box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1), filter 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-save-modal] .project-clad-card.project-clad-modal:hover {
+  z-index: 0;
+  transform: scale(1);
+  filter: none;
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -4px 10px rgba(0, 0, 0, 0.08) inset,
+    1px 0 0 rgba(255, 255, 255, 0.28),
+    -1px 0 1px rgba(0, 0, 0, 0.05),
+    0 3px 0 rgba(255, 255, 255, 0.42),
+    0 24px 50px rgba(0, 0, 0, 0.14),
+    0 10px 24px rgba(0, 0, 0, 0.1),
+    0 46px 82px -18px rgba(0, 0, 0, 0.2);
 }
 
 /* Edit project modal: vertical, full-width fields, no horizontal scroll */
-.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-card {
-  position: relative;
-  overflow-x: hidden;
-}
-
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-inline-form {
   flex-direction: column;
   align-items: stretch;
@@ -677,13 +2837,20 @@ details.project-clad-edit-mode .project-clad-title {
   position: absolute;
   top: 0.75rem;
   right: 0.75rem;
+  z-index: 2;
   background: transparent;
   border: none;
-  color: inherit;
+  color: var(--pc-btn-neu-fg);
   font-size: 1.4rem;
   line-height: 1;
   cursor: pointer;
   padding: 0;
+  transition: color 0.25s ease, text-shadow 0.25s ease;
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-modal-close:hover {
+  color: var(--pc-pill-text-glow-hover);
+  text-shadow: var(--pc-accent-heading-shadow);
 }
 
 /* Edit project modal: section headings (Edit project details, Create new order, Share access, Project members) same size and underlined */
@@ -819,10 +2986,14 @@ details.project-clad-edit-mode .project-clad-title {
 
 .project-clad-inline-form input,
 .project-clad-inline-form select {
-  padding: 0.55rem 0.75rem;
-  border-radius: 6px;
-  border: 1px solid #000;
+  padding: 0.55rem 1rem;
   min-width: 180px;
+}
+
+/* Visually hidden role radios — must not inherit 180px min-width (breaks <details> dropdown layout). */
+.project-clad-inline-form .project-clad-member-role-select__input {
+  min-width: 0 !important;
+  padding: 0 !important;
 }
 
 .project-clad-pricing-form {
@@ -856,6 +3027,20 @@ details.project-clad-edit-mode .project-clad-title {
   vertical-align: middle;
 }
 
+/* Line items: thumb scales with viewport so the table stays within the card (no horizontal scroll). */
+.project-clad-orders-table {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  --pc-order-thumb-size: clamp(96px, 26vw, 288px);
+}
+
+/* width:100% + horizontal padding must use border-box or row borders overflow the card (split view). */
+.project-clad-orders-table th,
+.project-clad-orders-table td {
+  box-sizing: border-box;
+}
+
 .project-clad-orders-table th:first-child {
   font-size: 0;
 }
@@ -864,8 +3049,9 @@ details.project-clad-edit-mode .project-clad-title {
   content: "Product";
   font-size: calc(1rem * var(--pc-text-scale));
   display: block;
-  width: 288px;
-  min-width: 288px;
+  width: var(--pc-order-thumb-size);
+  min-width: 0;
+  max-width: 100%;
   text-align: left;
 }
 
@@ -879,6 +3065,22 @@ details.project-clad-edit-mode .project-clad-title {
   gap: 0.75rem;
 }
 
+.project-clad-orders-table .project-clad-item-link {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.project-clad-orders-table td:first-child,
+.project-clad-orders-table th:first-child {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.project-clad-orders-table td:first-child {
+  overflow-wrap: anywhere;
+}
+
 .project-clad-table .project-clad-thumb,
 .project-clad-table .project-clad-thumb--placeholder {
   flex-shrink: 0;
@@ -889,8 +3091,67 @@ details.project-clad-edit-mode .project-clad-title {
   object-fit: contain;
 }
 
+.project-clad-orders-table .project-clad-thumb,
+.project-clad-orders-table .project-clad-thumb--placeholder {
+  flex-shrink: 1;
+  width: var(--pc-order-thumb-size);
+  height: var(--pc-order-thumb-size);
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
 .project-clad-table-right {
   text-align: right;
+}
+
+/* Orders table: Actions is 4th column when shown — center with Add to cart / row actions */
+.project-clad-orders-table thead tr th:nth-child(4),
+.project-clad-orders-table tbody tr td:nth-child(4),
+.project-clad-orders-table tfoot tr td:nth-child(4) {
+  text-align: center;
+  padding-left: 0.65rem;
+  padding-right: 1.1rem;
+}
+
+/* .project-clad-actions defaults to flex-end; line-item buttons should match the centered Actions column */
+.project-clad-orders-table .project-clad-actions {
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.project-clad-orders-table tbody td .project-clad-stack {
+  margin-top: 0;
+}
+
+.project-clad-orders-table tbody td:nth-child(4) .project-clad-stack {
+  justify-items: center;
+}
+
+/*
+ * Full-width: product column top-aligned (details under image+name). Qty / Price / Actions use extra
+ * padding-top so their text/button centers line up with the variant row (vertically centered with the thumb).
+ */
+@media (min-width: 901px) {
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:first-child {
+    vertical-align: top;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:nth-child(2),
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:nth-child(3),
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:nth-child(4) {
+    vertical-align: top;
+    /* 1lh: center of qty/price/button line with variant row; 1.35em fallback where lh unsupported */
+    padding-top: calc(0.75rem + (var(--pc-order-thumb-size) - 1.35em) / 2);
+    padding-top: calc(0.75rem + (var(--pc-order-thumb-size) - 1lh) / 2);
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-item-link {
+    align-items: center;
+  }
 }
 
 /* Edit project modal: make Project members table stack vertically so actions don't get cut off */
@@ -973,9 +3234,199 @@ details.project-clad-edit-mode .project-clad-edit-view {
   min-height: 1.2em;
 }
 
+/*
+ * Project detail (single project + nested project): stacked line-item rows only when the viewport is
+ * too narrow for a 4-column table (below ~900px). Wider “half screen” keeps the table + alignment fixes above.
+ */
+@media (max-width: 900px) {
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-table-x-scroll {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table thead {
+    display: none;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody,
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot {
+    display: block;
+    width: 100%;
+  }
+
+  /* Flex column keeps DOM order reliable and centers the whole line item as one column */
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #000;
+    box-sizing: border-box;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr > td:nth-child(1) {
+    order: 1;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr > td:nth-child(2) {
+    order: 2;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr > td:nth-child(3) {
+    order: 3;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr > td:nth-child(4) {
+    order: 4;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    border: none;
+    padding: 0.25rem 0;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot tr {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table th,
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table td {
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-item-link {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:first-child {
+    text-align: center;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-item-properties {
+    text-align: center;
+    width: 100%;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb,
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb--placeholder {
+    width: min(100%, 300px);
+    max-width: 300px;
+    margin-inline: auto;
+    flex-shrink: 0;
+    aspect-ratio: 1;
+    object-fit: contain;
+    height: auto;
+    display: block;
+  }
+
+  /* Empty placeholder span has no intrinsic height without aspect-ratio / min-height */
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb--placeholder {
+    min-height: 200px;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: var(--media-radius, 10px);
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td.project-clad-table-right {
+    text-align: center;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table thead tr th:nth-child(4),
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr td:nth-child(4),
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot tr td:nth-child(4) {
+    text-align: center;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td:first-child {
+    display: block;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td:nth-child(2) {
+    display: none;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td:nth-child(3)::before {
+    content: "Subtotal: ";
+    font-weight: 700;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:nth-child(2)::before {
+    content: "Quantity: ";
+    font-weight: 700;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:nth-child(3)::before {
+    content: "Price: ";
+    font-weight: 700;
+  }
+}
+
+/* Tablet / narrow desktop: smaller thumbs + tighter cells so the line-item table does not overflow */
+@media (max-width: 720px) {
+  .project-clad-orders-table {
+    --pc-order-thumb-size: clamp(72px, 22vw, 168px);
+  }
+
+  .project-clad-orders-table th,
+  .project-clad-orders-table td {
+    padding-left: 0.45rem;
+    padding-right: 0.45rem;
+  }
+
+  .project-clad-orders-table .project-clad-button {
+    max-width: 100%;
+    box-sizing: border-box;
+    white-space: normal;
+  }
+}
+
 @media (max-width: 640px) {
   .project-clad-grid {
     grid-template-columns: 1fr;
+  }
+
+  .project-clad-page--projects .project-clad-projects-tile-head {
+    grid-template-columns: 1fr;
+  }
+
+  .project-clad-page--projects .project-clad-projects-tile-head .project-clad-title,
+  .project-clad-page--projects .project-clad-projects-tile-head .project-clad-projects-tile-company,
+  .project-clad-page--projects .project-clad-projects-tile-head .project-clad-projects-tile-po,
+  .project-clad-page--projects .project-clad-projects-tile-head .project-clad-projects-tile-created,
+  .project-clad-page--projects .project-clad-projects-tile-head .project-clad-projects-tile-orders {
+    grid-column: 1;
+    grid-row: auto;
+    max-width: none;
+    text-align: left;
+    white-space: normal;
+    align-self: stretch;
   }
 
   .project-clad-header-row,
@@ -1035,6 +3486,36 @@ details.project-clad-edit-mode .project-clad-edit-view {
     flex-direction: column;
     align-items: center;
     gap: 1rem;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-summary-head-row__subtotal {
+    margin-left: 0;
+    width: 100%;
+    text-align: left;
+  }
+
+  .project-clad-order-empty-with-totals__row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .project-clad-order-empty-with-totals__row .project-clad-table-right {
+    text-align: left;
+  }
+
+  .project-clad-orders-table tfoot td:first-child {
+    display: block;
+  }
+
+  .project-clad-orders-table tfoot td:nth-child(2) {
+    display: none;
+  }
+
+  .project-clad-orders-table tfoot td:nth-child(3)::before {
+    content: "Subtotal: ";
+    font-weight: 700;
   }
 
   /* Approve + Reject side by side, aligned and centered on mobile */
@@ -1133,15 +3614,6 @@ details.project-clad-edit-mode .project-clad-edit-view {
     font-weight: 700;
   }
 
-  .project-clad-orders-table tfoot td:first-child {
-    display: none;
-  }
-
-  .project-clad-orders-table tfoot td:nth-child(2)::before {
-    content: "Subtotal: ";
-    font-weight: 700;
-  }
-
   .project-clad-members-table td:nth-child(2)::before {
     content: "E-mail: ";
     font-weight: 700;
@@ -1153,22 +3625,15 @@ details.project-clad-edit-mode .project-clad-edit-view {
   }
 }
 
-/* Work order queue accents (after job approval) */
-.project-clad-page .project-clad-details.project-clad-work-order--unread,
+/* Work order queue accents (after job approval) — skip .project-clad-order-row (orders shell) */
+.project-clad-page .project-clad-details.project-clad-work-order--unread:not(.project-clad-order-row),
 .project-clad-page .project-clad-card.project-clad-work-order--unread {
   border-left: 4px solid #c9a227;
 }
 
-.project-clad-page .project-clad-details.project-clad-work-order--in_progress,
+.project-clad-page .project-clad-details.project-clad-work-order--in_progress:not(.project-clad-order-row),
 .project-clad-page .project-clad-card.project-clad-work-order--in_progress {
   border-left: 4px solid #2563eb;
-}
-
-.project-clad-activity-badge {
-  font-size: 0.82em;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .project-clad-receipt {

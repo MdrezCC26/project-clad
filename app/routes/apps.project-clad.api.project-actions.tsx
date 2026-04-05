@@ -114,8 +114,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return Response.json({ error: "This order already exists." }, { status: 400 });
     }
     const nextSortOrder = await getNextJobSortOrder(projectId);
-    await prisma.job.create({
+    const newJob = await prisma.job.create({
       data: { projectId, name, sortOrder: nextSortOrder },
+    });
+    await logProjectActivity({
+      projectId,
+      jobId: newJob.id,
+      type: "order_created",
+      visibility: "member",
+      actorCustomerId: customerId,
+      payload: { jobName: newJob.name },
     });
     return Response.json({ ok: true });
   }
@@ -454,6 +462,49 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       where: { id: existing.id },
       data: { approvedAt: new Date(), approvedByCustomerId: customerId },
     });
+
+    if (!itemId && jobId) {
+      const approvedJob = await prisma.job.findFirst({
+        where: { id: jobId, projectId },
+        select: { name: true },
+      });
+      if (approvedJob) {
+        await logProjectActivity({
+          projectId,
+          jobId,
+          type: "order_approved",
+          visibility: "member",
+          actorCustomerId: customerId,
+          payload: { jobName: approvedJob.name },
+        });
+      }
+    } else if (!itemId && !jobId) {
+      await logProjectActivity({
+        projectId,
+        type: "order_approved",
+        visibility: "member",
+        actorCustomerId: customerId,
+        payload: {
+          scope: "project",
+          message: "All orders in this project were approved.",
+        },
+      });
+    } else if (itemId) {
+      const itemRow = await prisma.jobItem.findFirst({
+        where: { id: itemId },
+        include: { job: { select: { id: true, name: true, projectId: true } } },
+      });
+      if (itemRow?.job.projectId === projectId) {
+        await logProjectActivity({
+          projectId,
+          jobId: itemRow.job.id,
+          type: "order_approved",
+          visibility: "member",
+          actorCustomerId: customerId,
+          payload: { jobName: itemRow.job.name, itemLine: true },
+        });
+      }
+    }
 
     const initWorkOrdersAfterApproval = async () => {
       const initJob = async (jid: string) => {

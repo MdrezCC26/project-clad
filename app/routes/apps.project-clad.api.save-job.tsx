@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { Prisma } from "@prisma/client";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
+import { logProjectActivity } from "../utils/projectActivity.server";
 
 type SaveJobPayload = {
   mode: "newProject" | "existingProject" | "existingJob";
@@ -157,6 +158,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
+    const firstJob = project.jobs[0];
+    if (firstJob) {
+      await logProjectActivity({
+        projectId: project.id,
+        jobId: firstJob.id,
+        type: "order_created",
+        visibility: "member",
+        actorCustomerId: customerId,
+        payload: { jobName: firstJob.name },
+      });
+    }
+
     return Response.json({
       projectId: project.id,
       jobId: project.jobs[0]?.id,
@@ -226,6 +239,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await prisma.project.update({
       where: { id: project.id },
       data: { poNumber, companyName },
+    });
+
+    await logProjectActivity({
+      projectId: project.id,
+      jobId: job.id,
+      type: "order_created",
+      visibility: "member",
+      actorCustomerId: customerId,
+      payload: { jobName: job.name },
     });
 
     return Response.json({ projectId: project.id, jobId: job.id });
@@ -304,6 +326,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       targetJobId = copy.id;
       copied = true;
+      await logProjectActivity({
+        projectId: project.id,
+        jobId: copy.id,
+        type: "order_created",
+        visibility: "member",
+        actorCustomerId: customerId,
+        payload: { jobName: copy.name, copiedFrom: job.name },
+      });
     }
 
     if (payload.quantityMode === "replace") {

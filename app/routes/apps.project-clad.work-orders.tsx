@@ -1,24 +1,32 @@
-import type { LoaderFunctionArgs } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
-import proxyStylesText from "../styles/project-clad-proxy.css?raw";
+import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
+import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
 
 /**
  * Work orders are managed from the embedded Shopify admin app (staff), not the storefront.
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const proxyStylesCss = rewriteProjectCladProxyFontUrls(request);
   const { shop } = requireAppProxyCustomer(request);
   const themeStyles = await getThemeStyles(shop);
   const settings = await prisma.shopSettings.findUnique({
     where: { shop },
   });
   return {
+    proxyStylesCss,
     themeStyles,
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
     logoDataUrl: settings?.logoDataUrl || null,
   };
+};
+
+export const links: LinksFunction = ({ data }) => {
+  const hrefs = data?.themeStyles?.urls || [];
+  return [...hrefs.map((href) => ({ rel: "stylesheet", href }))];
 };
 
 export default function StorefrontWorkOrdersInfo() {
@@ -27,7 +35,7 @@ export default function StorefrontWorkOrdersInfo() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: proxyStylesText }} />
+      <style dangerouslySetInnerHTML={{ __html: data.proxyStylesCss }} />
       {inlineStyles.map((css, index) => (
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
@@ -68,6 +76,9 @@ export default function StorefrontWorkOrdersInfo() {
           </header>
         </div>
       </main>
+      <script
+        dangerouslySetInnerHTML={{ __html: PROJECT_CLAD_CURSOR_GLOW_SCRIPT }}
+      />
     </>
   );
 }

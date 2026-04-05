@@ -11,6 +11,7 @@
 /* Neumorphic buttons — same language as app proxy (Uiverse jolly-robin-0) */
 .projectclad-button {
   --pc-btn-neu-transition: all 300ms cubic-bezier(0.23, 1, 0.32, 1);
+  --pc-btn-active-blur: 0.6px;
   --pc-btn-neu-bg: #eaeaea;
   --pc-btn-neu-fg: rgba(0, 0, 0, 0.9);
   --pc-btn-neu-shadow:
@@ -61,7 +62,7 @@
 }
 
 .projectclad-button:active {
-  filter: blur(0.5px);
+  filter: blur(var(--pc-btn-active-blur));
   box-shadow: var(--pc-btn-neu-shadow-active);
 }
 
@@ -94,7 +95,7 @@
 }
 
 .projectclad-button--primary:active {
-  filter: blur(0.5px);
+  filter: blur(var(--pc-btn-active-blur));
   box-shadow:
     0 12px 25px -4px rgba(0, 0, 0, 0.45),
     inset 0 8px 22px 0 rgba(0, 0, 0, 0.35),

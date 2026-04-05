@@ -9,7 +9,8 @@ import { getVariantInfo } from "../utils/storefront.server";
 import { getAdminVariantInfo } from "../utils/adminVariants.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
-import proxyStylesText from "../styles/project-clad-proxy.css?raw";
+import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
+import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
 
 type ProjectListItem = {
   id: string;
@@ -54,6 +55,7 @@ const buildProjectCartItems = (jobs: ProjectListItem["jobs"]) => {
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const proxyStylesCss = rewriteProjectCladProxyFontUrls(request);
   const { shop, customerId } = requireAppProxyCustomer(request);
   const themeStyles = await getThemeStyles(shop);
   const settings = await prisma.shopSettings.findUnique({
@@ -234,6 +236,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   ];
 
   return {
+    proxyStylesCss,
     projects: payload,
     themeStyles,
     shop,
@@ -318,6 +321,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function ProjectsPage() {
   const {
+    proxyStylesCss,
     projects,
     themeStyles,
     shop,
@@ -331,7 +335,7 @@ export default function ProjectsPage() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: proxyStylesText }} />
+      <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       {inlineStyles.map((css, index) => (
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
@@ -387,27 +391,21 @@ export default function ProjectsPage() {
                     className="project-clad-card-link"
                     rel="noopener"
                   >
-                    <div className="project-clad-summary-row">
-                      <div>
-                        <h2 className="project-clad-title">{project.name}</h2>
-                        <p className="project-clad-muted">
-                          Project #: {project.poNumber || "—"}
-                        </p>
-                        <p className="project-clad-muted">
-                          Created {new Date(project.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
+                    <div className="project-clad-projects-tile-head">
+                      <h2 className="project-clad-title">{project.name}</h2>
+                      <p className="project-clad-muted project-clad-projects-tile-company">
+                        Company name: {project.companyName || "—"}
+                      </p>
+                      <p className="project-clad-muted project-clad-projects-tile-po">
+                        Project #: {project.poNumber || "—"}
+                      </p>
+                      <p className="project-clad-muted project-clad-projects-tile-created">
+                        Created: {new Date(project.createdAt).toLocaleDateString()}
+                      </p>
+                      <p className="project-clad-muted project-clad-projects-tile-orders">
+                        Orders: {project.jobCount}
+                      </p>
                     </div>
-                    <dl className="project-clad-meta">
-                      <div>
-                        <dt>Orders</dt>
-                        <dd>{project.jobCount}</dd>
-                      </div>
-                      <div className="project-clad-meta__company">
-                        <dt>Company name</dt>
-                        <dd>{project.companyName || "—"}</dd>
-                      </div>
-                    </dl>
                   </a>
                   {hideAddToCart && (() => {
                     const status = project.approvalStatus;
@@ -461,6 +459,9 @@ export default function ProjectsPage() {
           )}
         </div>
       </main>
+      <script
+        dangerouslySetInnerHTML={{ __html: PROJECT_CLAD_CURSOR_GLOW_SCRIPT }}
+      />
       <script
         dangerouslySetInnerHTML={{
           __html: `

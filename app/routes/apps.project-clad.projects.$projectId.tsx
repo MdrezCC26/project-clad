@@ -16,7 +16,8 @@ import { getCustomersByIds } from "../utils/adminCustomers.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
-import proxyStylesText from "../styles/project-clad-proxy.css?raw";
+import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
+import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
 
 type JobItemView = {
   id: string;
@@ -59,6 +60,7 @@ const createPricingCookie = () =>
   `${PRICING_COOKIE}; Path=/; Max-Age=3600; SameSite=Lax`;
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
+  const proxyStylesCss = rewriteProjectCladProxyFontUrls(request);
   const { shop, customerId } = requireAppProxyCustomer(request);
   const themeStyles = await getThemeStyles(shop);
   const settings = await prisma.shopSettings.findUnique({
@@ -138,6 +140,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   };
 
   return {
+    proxyStylesCss,
     project: payload,
     shop,
     otherProjects: otherProjects.map((other) => ({
@@ -148,6 +151,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     canEdit,
     themeStyles,
     logoDataUrl: settings?.logoDataUrl || null,
+    backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
     navButtons: [
       { label: "Home", url: "/" },
       {
@@ -501,8 +505,18 @@ const buildCartLink = (items: JobItemView[]) => {
 };
 
 export default function ProjectDetailPage() {
-  const { project, shop, otherProjects, canViewPricing, canEdit } =
-    useLoaderData<typeof loader>();
+  const {
+    proxyStylesCss,
+    project,
+    shop,
+    otherProjects,
+    canViewPricing,
+    canEdit,
+    themeStyles,
+    navButtons,
+    logoDataUrl,
+    backgroundLogoDataUrl,
+  } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const shareLink =
     actionData &&
@@ -668,8 +682,6 @@ export default function ProjectDetailPage() {
   };
 
 
-  const { themeStyles, navButtons, logoDataUrl } =
-    useLoaderData<typeof loader>();
   const inlineStyles = themeStyles?.styles || [];
 
   return (
@@ -715,12 +727,19 @@ export default function ProjectDetailPage() {
           </Form>
         </div>
       </div>
-      <style dangerouslySetInnerHTML={{ __html: proxyStylesText }} />
+      <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       {inlineStyles.map((css, index) => (
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
       <main
-        className="project-clad-page"
+        className={`project-clad-page project-clad-page--detail project-clad-page--projects${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
+        style={
+          backgroundLogoDataUrl
+            ? {
+                ["--project-clad-bg-logo" as string]: `url(${backgroundLogoDataUrl})`,
+              }
+            : undefined
+        }
       >
         <div className="page-width project-clad-container project-clad-container--full-width">
           {logoDataUrl && (
@@ -752,7 +771,7 @@ export default function ProjectDetailPage() {
                 </span>{" "}
                 {project.poNumber || "—"}
               </span>
-              <span>Created {new Date(project.createdAt).toLocaleDateString()}</span>
+              <span>Created: {new Date(project.createdAt).toLocaleDateString()}</span>
               <span>Company name: {project.companyName || "—"}</span>
             </div>
           </header>
@@ -807,7 +826,7 @@ export default function ProjectDetailPage() {
                         <div>
                           <h3 className="project-clad-title">{job.name}</h3>
                           <p className="project-clad-muted">
-                            Created {new Date(job.createdAt).toLocaleDateString()} •{" "}
+                            Created: {new Date(job.createdAt).toLocaleDateString()} •{" "}
                             {job.isLocked ? "Locked" : "Editable"}
                           </p>
                         </div>
@@ -1000,6 +1019,39 @@ export default function ProjectDetailPage() {
           </section>
         </div>
       </main>
+      <script
+        dangerouslySetInnerHTML={{ __html: PROJECT_CLAD_CURSOR_GLOW_SCRIPT }}
+      />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+(function() {
+  var main = document.querySelector('.project-clad-page');
+  if (main) {
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        main.classList.add('project-clad-enter-done');
+      });
+    });
+  }
+  document.addEventListener('click', function(e) {
+    var a = e.target.closest('a[href]');
+    if (!a || a.target === '_blank' || a.getAttribute('data-projectclad-no-transition')) return;
+    var href = a.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+    try {
+      var url = new URL(href, location.origin);
+      if (url.origin !== location.origin) return;
+    } catch (err) { return; }
+    e.preventDefault();
+    e.stopPropagation();
+    document.body.classList.add('project-clad-leaving');
+    setTimeout(function() { window.location.href = href; }, 180);
+  }, true);
+})();
+          `,
+        }}
+      />
     </>
   );
 }
