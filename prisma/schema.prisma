@@ -89,6 +89,8 @@ model JobItem {
   customData      Json?
   /// Last known product/variant labels from Shopify (filled when live API succeeds).
   variantSnapshot Json?
+  /// Immutable line audit captured when the row is created (survives deleted Shopify variants).
+  orderLineCapture Json?
   job             Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
   drawingJob    DrawingJob?
 

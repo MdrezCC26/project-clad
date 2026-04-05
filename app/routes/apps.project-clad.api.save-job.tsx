@@ -10,6 +10,7 @@ import {
 import { sendOrderCreatedNotificationEmail } from "../utils/orderCreatedEmail.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
 import {
+  buildOrderLineCapture,
   cartLineMetaToVariantSnapshot,
   hydrateJobItemVariantSnapshots,
   type CartLineMetaInput,
@@ -64,6 +65,14 @@ function variantSnapshotFromCartItem(
   return cartLineMetaToVariantSnapshot(
     item.lineMeta,
   ) as unknown as Prisma.InputJsonValue;
+}
+
+function orderLineCaptureJson(item: NormalizedCartItem): Prisma.InputJsonValue {
+  return buildOrderLineCapture({
+    variantId: item.variantId,
+    unitPrice: item.priceSnapshot.toString(),
+    lineMeta: item.lineMeta,
+  }) as unknown as Prisma.InputJsonValue;
 }
 
 async function finalizeCartOrderSaved(args: {
@@ -224,6 +233,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 priceSnapshot: item.priceSnapshot,
                 sortOrder: index + 1,
                 variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
+                orderLineCapture: orderLineCaptureJson(item),
                 customData:
                   item.properties && item.properties.length
                     ? (item.properties as Prisma.InputJsonValue)
@@ -316,6 +326,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             priceSnapshot: item.priceSnapshot,
             sortOrder: index + 1,
             variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
+            orderLineCapture: orderLineCaptureJson(item),
             customData:
               item.properties && item.properties.length
                 ? (item.properties as Prisma.InputJsonValue)
@@ -422,6 +433,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               sortOrder: item.sortOrder,
               variantSnapshot: item.variantSnapshot ?? undefined,
               customData: item.customData ?? undefined,
+              orderLineCapture: item.orderLineCapture ?? undefined,
             })),
           },
         },
@@ -450,6 +462,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             priceSnapshot: item.priceSnapshot,
             sortOrder: index + 1,
             variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
+            orderLineCapture: orderLineCaptureJson(item),
             customData:
               item.properties && item.properties.length
                 ? (item.properties as Prisma.InputJsonValue)
@@ -481,6 +494,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             priceSnapshot: item.priceSnapshot,
             sortOrder: nextSortOrder,
             variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
+            orderLineCapture: orderLineCaptureJson(item),
             customData:
               item.properties && item.properties.length
                 ? (item.properties as Prisma.InputJsonValue)

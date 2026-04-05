@@ -64,6 +64,60 @@ export function formatVariantLineLabel(
     : productTitle;
 }
 
+/** Immutable audit row: set once when the job line is created (not updated by catalog sync). */
+export type OrderLineCaptureV1 = {
+  v: 1;
+  displayLabel: string;
+  variantId: string;
+  sku: string | null;
+  unitPrice: string;
+  capturedAt: string;
+};
+
+export function buildOrderLineCapture(args: {
+  variantId: string;
+  unitPrice: string;
+  lineMeta?: CartLineMetaInput | null;
+}): OrderLineCaptureV1 {
+  const meta = args.lineMeta;
+  const productTitle = (meta?.productTitle ?? "").trim();
+  const variantTitle = (meta?.variantTitle ?? "").trim();
+  const displayLabel =
+    productTitle || variantTitle
+      ? formatVariantLineLabel(
+          productTitle || "Product",
+          variantTitle || "Default Title",
+        )
+      : `Variant ${args.variantId}`;
+  return {
+    v: 1,
+    displayLabel,
+    variantId: args.variantId,
+    sku: meta?.sku?.trim() ? meta.sku.trim() : null,
+    unitPrice: args.unitPrice,
+    capturedAt: new Date().toISOString(),
+  };
+}
+
+export function parseOrderLineCapture(
+  raw: unknown,
+): OrderLineCaptureV1 | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (o.v !== 1) return null;
+  if (typeof o.displayLabel !== "string" || typeof o.variantId !== "string") {
+    return null;
+  }
+  return {
+    v: 1,
+    displayLabel: o.displayLabel,
+    variantId: o.variantId,
+    sku: typeof o.sku === "string" ? o.sku : null,
+    unitPrice: typeof o.unitPrice === "string" ? o.unitPrice : "",
+    capturedAt: typeof o.capturedAt === "string" ? o.capturedAt : "",
+  };
+}
+
 export function parseVariantSnapshot(
   raw: unknown,
 ): VariantSnapshotV1 | null {

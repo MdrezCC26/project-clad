@@ -244,6 +244,20 @@
     fillProjectOptions();
   };
 
+  const productHandleFromUrl = (url) => {
+    if (!url || typeof url !== "string") return null;
+    const m = url.match(/\/products\/([^/?#]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  };
+
+  const imageUrlFromLine = (item) => {
+    const raw =
+      (item.featured_image && item.featured_image.url) || item.image || null;
+    if (!raw || typeof raw !== "string") return null;
+    if (raw.startsWith("//")) return `https:${raw}`;
+    return raw;
+  };
+
   const getCartItems = async () => {
     const response = await fetch("/cart.js", { credentials: "same-origin" });
     const cart = await response.json();
@@ -274,11 +288,30 @@
         });
       }
 
+      const variantIdNum =
+        item.variant_id != null && item.variant_id !== ""
+          ? item.variant_id
+          : item.id;
+      const productTitle =
+        (item.product_title && String(item.product_title).trim()) ||
+        (item.title && String(item.title).trim()) ||
+        "";
+      const variantTitle =
+        (item.variant_title && String(item.variant_title).trim()) || "";
+
       return {
-        variantId: String(item.id),
+        variantId: String(variantIdNum),
         quantity: Number(item.quantity),
         priceSnapshot: Number(item.price) / 100,
         properties,
+        lineMeta: {
+          productTitle: productTitle || undefined,
+          variantTitle: variantTitle || undefined,
+          imageUrl: imageUrlFromLine(item),
+          productHandle: productHandleFromUrl(item.url),
+          sku: item.sku ? String(item.sku) : null,
+          vendor: item.vendor ? String(item.vendor) : null,
+        },
       };
     });
   };

@@ -14,6 +14,8 @@ import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import {
   buildVariantPresentation,
+  type OrderLineCaptureV1,
+  parseOrderLineCapture,
   parseVariantSnapshot,
   persistVariantSnapshotsFromLive,
   resolveVariantDisplayInfo,
@@ -51,6 +53,8 @@ type JobItemView = {
   productUrl: string | null;
   /** live = Shopify API; snapshot = cached DB; unknown = no product data */
   variantDisplaySource: "live" | "snapshot" | "unknown";
+  /** Immutable line snapshot from when the row was saved (may be null on older rows). */
+  orderLineCapture: OrderLineCaptureV1 | null;
   properties?: { name: string; value: string }[] | null;
 };
 
@@ -119,6 +123,10 @@ const formatPrice = (value: string | number) => {
   if (Number.isNaN(num)) return "$0.00";
   return `$${num.toFixed(2)}`;
 };
+
+function isJobItemPurchasable(item: JobItemView): boolean {
+  return item.quantity > 0 && item.variantDisplaySource !== "unknown";
+}
 
 const hasPricingAccess = (request: Request) => {
   const cookie = request.headers.get("Cookie") || "";
@@ -538,13 +546,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         subtotal: jobSubtotal,
         items: job.items.map((item) => {
           const snap = parseVariantSnapshot(item.variantSnapshot);
+          const orderLineCapture = parseOrderLineCapture(item.orderLineCapture);
           const pres = buildVariantPresentation({
             shop,
             variantId: item.variantId,
             live: variantInfo[item.variantId],
             snapshot: snap,
           });
-          const displayName = pres.displayName;
+          const displayName =
+            pres.source === "unknown" && orderLineCapture
+              ? orderLineCapture.displayLabel
+              : pres.displayName;
           const productUrl = pres.productUrl;
 
           let properties: { name: string; value: string }[] | null = null;
@@ -575,6 +587,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             imageAlt: pres.imageAlt || null,
             productUrl,
             variantDisplaySource: pres.source,
+            orderLineCapture,
             properties,
           };
         }),
@@ -1194,8 +1207,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 variantId: item.variantId,
                 quantity: item.quantity,
                 priceSnapshot: item.priceSnapshot,
+                sortOrder: item.sortOrder,
                 variantSnapshot: item.variantSnapshot ?? undefined,
                 customData: item.customData ?? undefined,
+                orderLineCapture: item.orderLineCapture ?? undefined,
               })),
             },
           },
@@ -1570,6 +1585,9 @@ export default function ProjectDetailPage() {
     items: JobItemView[],
     mode: "add" | "replace",
   ) => {
+    if (items.length === 0) {
+      throw new Error("No items available to add to the cart.");
+    }
     const lineItems = items.map((item) => {
       const base = { id: item.variantId, quantity: item.quantity };
       if (item.properties && item.properties.length > 0) {
@@ -1608,6 +1626,16 @@ export default function ProjectDetailPage() {
       return;
     }
 
+    const purchasable = job.items.filter(isJobItemPurchasable);
+    if (purchasable.length === 0) {
+      setCartError(
+        job.items.some((i) => i.quantity > 0)
+          ? "One or more items are no longer available in the store and cannot be added to the cart. Please contact us for help."
+          : "No items to add to cart.",
+      );
+      return;
+    }
+
     setCartError(null);
     setCartLoading(true);
 
@@ -1620,16 +1648,16 @@ export default function ProjectDetailPage() {
       }
       const cart = (await response.json()) as { item_count?: number };
       if ((cart.item_count || 0) > 0) {
-        setCartPrompt({ items: job.items, jobName: job.name, destination });
+        setCartPrompt({ items: purchasable, jobName: job.name, destination });
       } else {
-        await addItemsToCart(job.items, "add");
+        await addItemsToCart(purchasable, "add");
         window.location.href = destination === "checkout" ? "/checkout" : "/cart";
       }
     } catch (error) {
       setCartError(
         error instanceof Error ? error.message : "Unable to add items to cart.",
       );
-      setCartPrompt({ items: job.items, jobName: job.name, destination });
+      setCartPrompt({ items: purchasable, jobName: job.name, destination });
     } finally {
       setCartLoading(false);
     }
@@ -2653,18 +2681,45 @@ export default function ProjectDetailPage() {
                                     </p>
                                   )}
                                   {item.variantDisplaySource === "unknown" && (
-                                    <p
-                                      className="project-clad-muted"
-                                      style={{
-                                        margin: "0.35rem 0 0",
-                                        fontSize: "0.78rem",
-                                        lineHeight: 1.35,
-                                      }}
-                                    >
-                                      No product data for this variant ID. If the product still
-                                      exists, open this page again after a moment; otherwise
-                                      remove the line or replace the variant.
-                                    </p>
+                                    <>
+                                      <p
+                                        className="project-clad-muted"
+                                        style={{
+                                          margin: "0.35rem 0 0",
+                                          fontSize: "0.78rem",
+                                          lineHeight: 1.35,
+                                        }}
+                                      >
+                                        {`Product no longer available. "Variant ${item.variantId}" has been updated or removed. Please contact us for help.`}
+                                      </p>
+                                      {item.orderLineCapture ? (
+                                        <p
+                                          className="project-clad-muted"
+                                          style={{
+                                            margin: "0.35rem 0 0",
+                                            fontSize: "0.74rem",
+                                            lineHeight: 1.35,
+                                          }}
+                                        >
+                                          <strong>Recorded when saved:</strong>{" "}
+                                          {item.orderLineCapture.displayLabel}
+                                          {item.orderLineCapture.sku
+                                            ? ` · SKU ${item.orderLineCapture.sku}`
+                                            : ""}
+                                          {item.orderLineCapture.unitPrice
+                                            ? ` · ${formatPrice(item.orderLineCapture.unitPrice)} each`
+                                            : ""}
+                                          {(() => {
+                                            const raw = item.orderLineCapture.capturedAt;
+                                            if (!raw) return "";
+                                            const d = new Date(raw);
+                                            return Number.isNaN(d.getTime())
+                                              ? ""
+                                              : ` · ${d.toLocaleString()}`;
+                                          })()}
+                                        </p>
+                                      ) : null}
+                                    </>
                                   )}
                                   {item.properties && item.properties.length > 0 && (
                                     <div className="project-clad-item-properties" style={{ marginTop: "0.5rem" }}>
@@ -2777,7 +2832,10 @@ export default function ProjectDetailPage() {
                                   <td className="project-clad-table-right">
                                     <div className="project-clad-stack">
                                       <div className="project-clad-normal-view" data-projectclad-item-actions>
-                                        {!hideAddToCart && item.quantity > 0 && !isOrderAwaitingApproval(job.id) && (
+                                        {!hideAddToCart &&
+                                          item.quantity > 0 &&
+                                          item.variantDisplaySource !== "unknown" &&
+                                          !isOrderAwaitingApproval(job.id) && (
                                           <div className="project-clad-actions" style={{ gap: "0.5rem" }}>
                                             <form method="post" action="/cart/add" style={{ display: "inline" }}>
                                               <input type="hidden" name="items[0][id]" value={item.variantId} />
@@ -3004,21 +3062,22 @@ export default function ProjectDetailPage() {
                             </button>
                           </div>
                         )}
-                        {!hideAddToCart && job.items.filter((i) => i.quantity > 0).length > 0 && (
+                        {!hideAddToCart &&
+                          job.items.filter(isJobItemPurchasable).length > 0 && (
                           <div className="project-clad-actions project-clad-order-actions-add-to-cart" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
                             <form method="post" action="/cart/add" style={{ display: "inline" }} onPointerDownCapture={(e) => e.stopPropagation()} data-projectclad-add-all-to-cart data-job-name={job.name} onSubmit={(e) => { e.preventDefault(); handleAddItemsClick(job, e.currentTarget as HTMLFormElement, "cart"); }}>
-                              {job.items.filter((i) => i.quantity > 0).map((item, index) => (
+                              {job.items.filter(isJobItemPurchasable).map((item, index) => (
                                 <input key={`${job.id}-${item.id}-id-${index}`} type="hidden" name={`items[${index}][id]`} value={item.variantId} />
                               ))}
-                              {job.items.filter((i) => i.quantity > 0).map((item, index) => (
+                              {job.items.filter(isJobItemPurchasable).map((item, index) => (
                                 <input key={`${job.id}-${item.id}-qty-${index}`} type="hidden" name={`items[${index}][quantity]`} value={item.quantity} />
                               ))}
-                              {job.items.filter((i) => i.quantity > 0).map((item, index) =>
+                              {job.items.filter(isJobItemPurchasable).map((item, index) =>
                                 item.properties?.map((p, pi) => (
                                   <input key={`${job.id}-${item.id}-p-${pi}-${index}`} type="hidden" name={`items[${index}][properties][${p.name}]`} value={p.value} />
                                 )),
                               )}
-                              {job.items.filter((i) => i.quantity > 0).map((item, index) => (
+                              {job.items.filter(isJobItemPurchasable).map((item, index) => (
                                 <input
                                   key={`${job.id}-${item.id}-price-${index}`}
                                   type="hidden"

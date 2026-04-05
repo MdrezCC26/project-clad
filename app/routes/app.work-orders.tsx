@@ -7,6 +7,7 @@ import prisma from "../db.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
 import { fetchVariantPriceUsd } from "../utils/shopifyVariantPrice.server";
 import { getAdminVariantInfo } from "../utils/adminVariants.server";
+import { shopStringFilter } from "../utils/projectAccess.server";
 
 type WoStatus = "unread" | "in_progress" | "complete";
 
@@ -33,7 +34,7 @@ export const loader = async ({ request }: LoaderFunctionArgs): Promise<LoaderDat
   const { session } = await authenticate.admin(request);
 
   const jobs = await prisma.job.findMany({
-    where: { project: { shop: session.shop } },
+    where: { project: { shop: shopStringFilter(session.shop) } },
     orderBy: { createdAt: "desc" },
     include: {
       project: { select: { id: true, name: true } },
@@ -83,7 +84,7 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
 
   const job = jobId
     ? await prisma.job.findFirst({
-        where: { id: jobId, project: { shop } },
+        where: { id: jobId, project: { shop: shopStringFilter(shop) } },
         include: { project: true, items: true, orderLink: true },
       })
     : null;
