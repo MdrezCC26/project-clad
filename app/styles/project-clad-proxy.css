@@ -146,12 +146,12 @@ body.project-clad-leaving .project-clad-page {
     0 1px 0 rgba(255, 255, 255, 0.28),
     0 0 6px rgba(211, 47, 47, 0.22),
     0 0 14px rgba(211, 47, 47, 0.12);
-  /* Approval / confirming: same glow *shape* as grey neu hover label, amber/yellow (not red) */
-  --pc-approval-yellow-text: rgba(180, 125, 0, 0.96);
-  --pc-approval-yellow-text-glow:
+  /* Approval / confirming: same glow *shape* as grey neu hover label, blue (not red) */
+  --pc-approval-glow-text: rgba(28, 86, 168, 0.96);
+  --pc-approval-glow-shadow:
     0 1px 0 rgba(255, 255, 255, 0.32),
-    0 0 6px rgba(234, 179, 0, 0.42),
-    0 0 14px rgba(250, 204, 21, 0.28);
+    0 0 6px rgba(59, 130, 246, 0.48),
+    0 0 14px rgba(96, 165, 250, 0.34);
   --pc-caesura-transition:
     box-shadow 250ms ease-in-out, border-color 250ms ease-in-out, color 250ms ease-in-out,
     filter 250ms ease-in-out, background 250ms ease-in-out;
@@ -1420,7 +1420,7 @@ html:has(.project-clad-page--projects) body {
   opacity: 1;
 }
 
-/* Job awaiting approval: yellow label glow (same stack as grey neu hover), not red */
+/* Job awaiting approval: blue label glow (same stack as grey neu hover), not red */
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-orders-shell
   details.project-clad-order-row.project-clad-details.project-clad-approval-pending[open]
@@ -1447,8 +1447,8 @@ html:has(.project-clad-page--projects) body {
   details.project-clad-order-row.project-clad-details.project-clad-approval-pending[open]
   .project-clad-order-summary-head-row__subtotal
   .project-clad-hidden-link {
-  color: var(--pc-approval-yellow-text) !important;
-  text-shadow: var(--pc-approval-yellow-text-glow) !important;
+  color: var(--pc-approval-glow-text) !important;
+  text-shadow: var(--pc-approval-glow-shadow) !important;
   opacity: 1;
 }
 
@@ -1473,8 +1473,8 @@ html:has(.project-clad-page--projects) body {
   details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open])
   summary
   .project-clad-hidden-link {
-  color: var(--pc-approval-yellow-text) !important;
-  text-shadow: var(--pc-approval-yellow-text-glow) !important;
+  color: var(--pc-approval-glow-text) !important;
+  text-shadow: var(--pc-approval-glow-shadow) !important;
 }
 
 .project-clad-page--projects.project-clad-page--detail
@@ -1498,8 +1498,8 @@ html:has(.project-clad-page--projects) body {
   details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open]):hover
   summary
   .project-clad-hidden-link {
-  color: var(--pc-approval-yellow-text) !important;
-  text-shadow: var(--pc-approval-yellow-text-glow) !important;
+  color: var(--pc-approval-glow-text) !important;
+  text-shadow: var(--pc-approval-glow-shadow) !important;
 }
 
 /*
@@ -1983,8 +1983,8 @@ html:has(.project-clad-page--projects) body {
 .project-clad-page--projects:not(.project-clad-page--detail)
   .project-clad-card.project-clad-card--confirming
   .project-clad-muted {
-  color: var(--pc-approval-yellow-text) !important;
-  text-shadow: var(--pc-approval-yellow-text-glow) !important;
+  color: var(--pc-approval-glow-text) !important;
+  text-shadow: var(--pc-approval-glow-shadow) !important;
 }
 
 .project-clad-page--projects.project-clad-page--detail
@@ -1997,8 +1997,8 @@ html:has(.project-clad-page--projects) body {
   .project-clad-card.project-clad-warning.project-clad-approval-pending p,
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-card.project-clad-warning.project-clad-approval-pending strong {
-  color: var(--pc-approval-yellow-text);
-  text-shadow: var(--pc-approval-yellow-text-glow);
+  color: var(--pc-approval-glow-text);
+  text-shadow: var(--pc-approval-glow-shadow);
 }
 
 .project-clad-page--projects.project-clad-page--detail
@@ -2486,7 +2486,7 @@ html:has(.project-clad-page--projects) body {
   border: none;
 }
 
-/* .project-clad-card--confirming list styling lives under .project-clad-page--projects (neu + yellow type) */
+/* .project-clad-card--confirming list styling lives under .project-clad-page--projects (neu + blue type) */
 
 .project-clad-card-link {
   display: block;
