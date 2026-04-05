@@ -2,7 +2,18 @@ import type { ActionFunctionArgs } from "react-router";
 import { Prisma } from "@prisma/client";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
+import { viewerHasAdminTag } from "../utils/customerTags.server";
+import {
+  canEditProject,
+  projectByIdForCustomerWhere,
+} from "../utils/projectAccess.server";
+import { sendOrderCreatedNotificationEmail } from "../utils/orderCreatedEmail.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
+import {
+  cartLineMetaToVariantSnapshot,
+  hydrateJobItemVariantSnapshots,
+  type CartLineMetaInput,
+} from "../utils/variantInfo.server";
 
 type SaveJobPayload = {
   mode: "newProject" | "existingProject" | "existingJob";
@@ -18,10 +29,20 @@ type SaveJobPayload = {
     quantity: number;
     priceSnapshot: string | number;
     properties?: { name: string; value: string }[];
+    /** From storefront `/cart.js` at save time (product titles, image, SKU). */
+    lineMeta?: CartLineMetaInput;
   }[];
 };
 
-const normalizeItems = (items: SaveJobPayload["items"] = []) =>
+type NormalizedCartItem = {
+  variantId: string;
+  quantity: number;
+  priceSnapshot: Prisma.Decimal;
+  properties?: { name: string; value: string }[];
+  lineMeta?: CartLineMetaInput;
+};
+
+const normalizeItems = (items: SaveJobPayload["items"] = []): NormalizedCartItem[] =>
   items
     .filter((raw) => raw && raw.variantId && raw.quantity > 0)
     .map((raw) => ({
@@ -30,7 +51,67 @@ const normalizeItems = (items: SaveJobPayload["items"] = []) =>
       priceSnapshot: new Prisma.Decimal(raw.priceSnapshot ?? 0),
       properties:
         raw.properties && raw.properties.length ? raw.properties : undefined,
+      lineMeta:
+        raw.lineMeta && typeof raw.lineMeta === "object"
+          ? raw.lineMeta
+          : undefined,
     }));
+
+function variantSnapshotFromCartItem(
+  item: NormalizedCartItem,
+): Prisma.InputJsonValue | undefined {
+  if (!item.lineMeta) return undefined;
+  return cartLineMetaToVariantSnapshot(
+    item.lineMeta,
+  ) as unknown as Prisma.InputJsonValue;
+}
+
+async function finalizeCartOrderSaved(args: {
+  shop: string;
+  projectId: string;
+  projectName: string;
+  jobId: string;
+  jobName: string;
+  headline: string;
+  poNumber?: string | null;
+  companyName?: string | null;
+  ownerCustomerId: string;
+  actorCustomerId: string;
+}) {
+  const rows = await prisma.jobItem.findMany({
+    where: { jobId: args.jobId },
+    orderBy: { sortOrder: "asc" },
+  });
+  if (rows.length === 0) return;
+
+  await hydrateJobItemVariantSnapshots(
+    args.shop,
+    rows.map((r) => ({
+      id: r.id,
+      variantId: r.variantId,
+      variantSnapshot: r.variantSnapshot,
+    })),
+  );
+
+  const fresh = await prisma.jobItem.findMany({
+    where: { jobId: args.jobId },
+    orderBy: { sortOrder: "asc" },
+  });
+
+  await sendOrderCreatedNotificationEmail({
+    shop: args.shop,
+    projectId: args.projectId,
+    projectName: args.projectName,
+    jobId: args.jobId,
+    jobName: args.jobName,
+    headline: args.headline,
+    poNumber: args.poNumber,
+    companyName: args.companyName,
+    ownerCustomerId: args.ownerCustomerId,
+    actorCustomerId: args.actorCustomerId,
+    jobItems: fresh,
+  });
+}
 
 const getNextSortOrder = async (jobId: string) => {
   const result = await prisma.jobItem.aggregate({
@@ -97,13 +178,18 @@ async function enqueueDrawingJob(
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, customerId } = requireAppProxyCustomer(request, {
+  const { shop, customerId, customerEmail } = requireAppProxyCustomer(request, {
     jsonOnFail: true,
   });
   const payload = (await request.json()) as SaveJobPayload;
   const items = normalizeItems(payload.items);
   const poNumber = (payload.poNumber || "").trim();
   const companyName = (payload.companyName || "").trim();
+  const viewerIsAppAdmin = await viewerHasAdminTag(
+    shop,
+    customerId,
+    customerEmail,
+  );
 
   if (!items.length) {
     return Response.json({ error: "Cart has no items." }, { status: 400 });
@@ -137,6 +223,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 quantity: item.quantity,
                 priceSnapshot: item.priceSnapshot,
                 sortOrder: index + 1,
+                variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
                 customData:
                   item.properties && item.properties.length
                     ? (item.properties as Prisma.InputJsonValue)
@@ -168,6 +255,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         actorCustomerId: customerId,
         payload: { jobName: firstJob.name },
       });
+      await finalizeCartOrderSaved({
+        shop,
+        projectId: project.id,
+        projectName: project.name,
+        jobId: firstJob.id,
+        jobName: firstJob.name,
+        headline: "New project and order saved from cart",
+        poNumber: project.poNumber,
+        companyName: project.companyName,
+        ownerCustomerId: project.ownerCustomerId,
+        actorCustomerId: customerId,
+      });
     }
 
     return Response.json({
@@ -185,14 +284,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     const project = await prisma.project.findFirst({
-      where: {
-        id: payload.projectId,
+      where: projectByIdForCustomerWhere(
+        payload.projectId,
         shop,
-        OR: [
-          { ownerCustomerId: customerId },
-          { members: { some: { customerId } } },
-        ],
-      },
+        customerId,
+        viewerIsAppAdmin,
+      ),
       include: { members: true },
     });
 
@@ -200,11 +297,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return Response.json({ error: "Project not found." }, { status: 404 });
     }
 
-    const memberRole = project.members.find(
-      (member) => member.customerId === customerId,
-    )?.role;
-    const canEdit =
-      project.ownerCustomerId === customerId || memberRole === "edit";
+    const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
 
     if (!canEdit) {
       return Response.json({ error: "Forbidden." }, { status: 403 });
@@ -222,6 +315,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             quantity: item.quantity,
             priceSnapshot: item.priceSnapshot,
             sortOrder: index + 1,
+            variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
             customData:
               item.properties && item.properties.length
                 ? (item.properties as Prisma.InputJsonValue)
@@ -250,6 +344,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       payload: { jobName: job.name },
     });
 
+    await finalizeCartOrderSaved({
+      shop,
+      projectId: project.id,
+      projectName: project.name,
+      jobId: job.id,
+      jobName: job.name,
+      headline: "New order saved from cart",
+      poNumber,
+      companyName,
+      ownerCustomerId: project.ownerCustomerId,
+      actorCustomerId: customerId,
+    });
+
     return Response.json({ projectId: project.id, jobId: job.id });
   }
 
@@ -262,14 +369,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     const project = await prisma.project.findFirst({
-      where: {
-        id: payload.projectId,
+      where: projectByIdForCustomerWhere(
+        payload.projectId,
         shop,
-        OR: [
-          { ownerCustomerId: customerId },
-          { members: { some: { customerId } } },
-        ],
-      },
+        customerId,
+        viewerIsAppAdmin,
+      ),
       include: { members: true },
     });
 
@@ -277,11 +382,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return Response.json({ error: "Project not found." }, { status: 404 });
     }
 
-    const memberRole = project.members.find(
-      (member) => member.customerId === customerId,
-    )?.role;
-    const canEdit =
-      project.ownerCustomerId === customerId || memberRole === "edit";
+    const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
 
     if (!canEdit) {
       return Response.json({ error: "Forbidden." }, { status: 403 });
@@ -348,6 +449,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             quantity: item.quantity,
             priceSnapshot: item.priceSnapshot,
             sortOrder: index + 1,
+            variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
             customData:
               item.properties && item.properties.length
                 ? (item.properties as Prisma.InputJsonValue)
@@ -378,6 +480,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             quantity: item.quantity,
             priceSnapshot: item.priceSnapshot,
             sortOrder: nextSortOrder,
+            variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
             customData:
               item.properties && item.properties.length
                 ? (item.properties as Prisma.InputJsonValue)
@@ -396,6 +499,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         itemId: "",
       },
     });
+
+    const jobForNotify = await prisma.job.findFirst({
+      where: { id: targetJobId, projectId: project.id },
+      select: { name: true },
+    });
+    if (jobForNotify) {
+      await finalizeCartOrderSaved({
+        shop,
+        projectId: project.id,
+        projectName: project.name,
+        jobId: targetJobId,
+        jobName: jobForNotify.name,
+        headline: "Order updated from cart",
+        poNumber,
+        companyName,
+        ownerCustomerId: project.ownerCustomerId,
+        actorCustomerId: customerId,
+      });
+    }
 
     return Response.json({
       projectId: project.id,

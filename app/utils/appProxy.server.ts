@@ -12,6 +12,8 @@ export type AppProxyContext = {
 /** After {@link requireAppProxyCustomer} succeeds, the logged-in customer id is always set. */
 export type AppProxyContextWithCustomer = AppProxyContext & {
   customerId: string;
+  /** Present when Shopify sends `logged_in_customer_email` on the signed proxy request. */
+  customerEmail?: string;
 };
 
 const APP_PROXY_SIGNATURE_PARAM = "signature";

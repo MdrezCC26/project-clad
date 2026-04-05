@@ -9,6 +9,7 @@ import {
   getCustomersByIds,
   listCustomers,
 } from "../utils/adminCustomers.server";
+import { extractNumericCustomerIdsFromText } from "../utils/customerTags.server";
 import { getAdminVariantInfo } from "../utils/adminVariants.server";
 import { getCsvForProjectIds } from "../utils/exportProjectsCsv.server";
 import { listMediaImages } from "../utils/adminMedia.server";
@@ -163,6 +164,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ],
     })),
     grantedScopes: offlineSession?.scope || "",
+    appAdminCustomerIds: settings?.appAdminCustomerIds ?? "",
+    globalStaffEmails: settings?.globalStaffEmails ?? "",
     memberLookupError,
     variantLookupError,
     customers,
@@ -539,6 +542,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { ok: true, memberAdded: true };
   }
 
+  if (intent === "save-app-admin-ids") {
+    const raw = String(formData.get("appAdminCustomerIds") || "").trim();
+    const emailsRaw = String(formData.get("globalStaffEmails") || "").trim();
+    const extracted = extractNumericCustomerIdsFromText(raw);
+    const ids = extracted.length ? extracted.join(", ") : raw || null;
+    const globalStaffEmails = emailsRaw || null;
+    await prisma.shopSettings.upsert({
+      where: { shop: session.shop },
+      update: { appAdminCustomerIds: ids, globalStaffEmails },
+      create: {
+        shop: session.shop,
+        appAdminCustomerIds: ids,
+        globalStaffEmails,
+      },
+    });
+    return { ok: true, appAdminIdsSaved: true };
+  }
+
   if (intent === "email-csv") {
     const projectId = String(formData.get("projectId") || "").trim();
     const toEmail = String(formData.get("toEmail") || "").trim();
@@ -616,6 +637,8 @@ export default function Settings() {
     projects,
     shop,
     grantedScopes,
+    appAdminCustomerIds,
+    globalStaffEmails,
     memberLookupError,
     variantLookupError,
     customers,
@@ -637,6 +660,10 @@ export default function Settings() {
   const projectUpdated =
     actionData && typeof actionData === "object" && "projectUpdated" in actionData
       ? Boolean(actionData.projectUpdated)
+      : false;
+  const appAdminIdsSaved =
+    actionData && typeof actionData === "object" && "appAdminIdsSaved" in actionData
+      ? Boolean(actionData.appAdminIdsSaved)
       : false;
   const projectError =
     actionData && typeof actionData === "object" && "projectError" in actionData
@@ -737,6 +764,42 @@ export default function Settings() {
           <s-paragraph>
             Sessions cleared. Reopen the app to reauthorize.
           </s-paragraph>
+        )}
+      </s-section>
+      <s-section heading="Storefront staff (all projects)">
+        <s-paragraph>
+          Staff can see every saved project and get full edit access in the storefront
+          app. Add emails (matched to the signed-in customer’s email from the app
+          proxy) and/or numeric customer IDs. You can paste full Admin customer URLs
+          for IDs; numbers are extracted on save. If both lists are empty, customer
+          tags <code>admin</code> or <code>staff</code> are checked (Admin API).
+        </s-paragraph>
+        <Form method="post">
+          <input type="hidden" name="intent" value="save-app-admin-ids" />
+          <s-paragraph>Staff emails (one per line or comma-separated)</s-paragraph>
+          <textarea
+            name="globalStaffEmails"
+            rows={3}
+            style={{ width: "100%", maxWidth: 480, fontFamily: "monospace" }}
+            defaultValue={globalStaffEmails}
+            placeholder="e.g. ops@example.com"
+          />
+          <div style={{ marginTop: 12 }}>
+            <s-paragraph>Staff customer IDs</s-paragraph>
+          </div>
+          <textarea
+            name="appAdminCustomerIds"
+            rows={2}
+            style={{ width: "100%", maxWidth: 480, fontFamily: "monospace" }}
+            defaultValue={appAdminCustomerIds}
+            placeholder="e.g. 7012345678901, 7123456789012"
+          />
+          <div style={{ marginTop: 8 }}>
+            <button type="submit">Save storefront staff</button>
+          </div>
+        </Form>
+        {appAdminIdsSaved && (
+          <s-paragraph>Storefront staff settings saved.</s-paragraph>
         )}
       </s-section>
       <s-section heading="Storefront logo">

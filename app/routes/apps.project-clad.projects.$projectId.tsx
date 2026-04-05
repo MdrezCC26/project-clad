@@ -13,6 +13,15 @@ import { redirect } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import { getCustomersByIds } from "../utils/adminCustomers.server";
+import {
+  normalizeStorefrontCustomerId,
+  viewerHasAdminTag,
+} from "../utils/customerTags.server";
+import {
+  canEditProject,
+  isProjectMember,
+  shopStringFilter,
+} from "../utils/projectAccess.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
@@ -61,15 +70,15 @@ const createPricingCookie = () =>
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const proxyStylesCss = rewriteProjectCladProxyFontUrls(request);
-  const { shop, customerId } = requireAppProxyCustomer(request);
+  const { shop, customerId, customerEmail } = requireAppProxyCustomer(request);
   const themeStyles = await getThemeStyles(shop);
-  const settings = await prisma.shopSettings.findUnique({
-    where: { shop },
+  const settings = await prisma.shopSettings.findFirst({
+    where: { shop: shopStringFilter(shop) },
   });
   const projectId = params.projectId || "";
 
   const project = await prisma.project.findFirst({
-    where: { id: projectId, shop },
+    where: { id: projectId, shop: shopStringFilter(shop) },
     include: {
       jobs: {
         orderBy: { sortOrder: "asc" },
@@ -83,38 +92,50 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     throw new Response("Project not found", { status: 404 });
   }
 
-  const isMember =
-    project.ownerCustomerId === customerId ||
-    project.members.some((member) => member.customerId === customerId);
+  const viewerIsAppAdmin = await viewerHasAdminTag(
+    shop,
+    customerId,
+    customerEmail,
+  );
+
+  const viewerNumericId = normalizeStorefrontCustomerId(customerId);
+  let viewerTags: string[] = [];
+  try {
+    const info = await getCustomersByIds(shop, [viewerNumericId]);
+    viewerTags = info[viewerNumericId]?.tags ?? [];
+  } catch {
+    viewerTags = [];
+  }
+
+  const isMember = isProjectMember(project, customerId, viewerIsAppAdmin);
 
   if (!isMember) {
     throw new Response("Unauthorized", { status: 403 });
   }
 
-  const memberRole = project.members.find(
-    (member) => member.customerId === customerId,
-  )?.role;
-  const canEdit = project.ownerCustomerId === customerId || memberRole === "edit";
+  const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
 
+  const shopQ = shopStringFilter(shop);
   const otherProjects = await prisma.project.findMany({
-    where: {
-      shop,
-      id: { not: projectId },
-      OR: [
-        { ownerCustomerId: customerId },
-        { members: { some: { customerId } } },
-      ],
-    },
+    where: viewerIsAppAdmin
+      ? { shop: shopQ, id: { not: projectId } }
+      : {
+          shop: shopQ,
+          id: { not: projectId },
+          OR: [
+            { ownerCustomerId: customerId },
+            { members: { some: { customerId } } },
+          ],
+        },
     orderBy: { createdAt: "desc" },
   });
 
   let hideAddToCart = false;
   try {
-    const customerInfo = await getCustomersByIds(shop, [customerId]);
-    const viewerTags = customerInfo[customerId]?.tags ?? [];
-    hideAddToCart = viewerTags.some(
-      (t: string) => String(t).trim().toUpperCase() === "NA",
-    );
+    hideAddToCart =
+      viewerTags.some(
+        (t: string) => String(t).trim().toUpperCase() === "NA",
+      ) && !viewerIsAppAdmin;
   } catch {
     // If customer lookup fails, show add-to-cart (no NA restriction)
   }
@@ -169,12 +190,17 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 export const action = async ({ request, params }: ActionFunctionArgs) => {
   const contentType = request.headers.get("Content-Type") || "";
   const isJsonRequest = contentType.includes("application/json");
-  const { shop, customerId } = requireAppProxyCustomer(request, {
+  const { shop, customerId, customerEmail } = requireAppProxyCustomer(request, {
     jsonOnFail: isJsonRequest,
   });
   const projectId = params.projectId || "";
 
   if (contentType.includes("application/json")) {
+    const viewerIsAppAdmin = await viewerHasAdminTag(
+      shop,
+      customerId,
+      customerEmail,
+    );
     const payload = (await request.json()) as {
       intent?: string;
       jobId?: string;
@@ -186,7 +212,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       const jobIds = payload.jobIds || [];
 
       const project = await prisma.project.findFirst({
-        where: { id: projectId, shop },
+        where: { id: projectId, shop: shopStringFilter(shop) },
         include: { members: true },
       });
 
@@ -194,11 +220,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         throw new Response("Project not found", { status: 404 });
       }
 
-      const memberRole = project.members.find(
-        (member) => member.customerId === customerId,
-      )?.role;
-      const canEdit =
-        project.ownerCustomerId === customerId || memberRole === "edit";
+      const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
 
       if (!canEdit) {
         throw new Response("Forbidden", { status: 403 });
@@ -232,7 +254,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       const itemIds = payload.itemIds || [];
 
       const project = await prisma.project.findFirst({
-        where: { id: projectId, shop },
+        where: { id: projectId, shop: shopStringFilter(shop) },
         include: { members: true },
       });
 
@@ -240,11 +262,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         throw new Response("Project not found", { status: 404 });
       }
 
-      const memberRole = project.members.find(
-        (member) => member.customerId === customerId,
-      )?.role;
-      const canEdit =
-        project.ownerCustomerId === customerId || memberRole === "edit";
+      const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
 
       if (!canEdit) {
         throw new Response("Forbidden", { status: 403 });
@@ -270,7 +288,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const intent = String(formData.get("intent") || "");
 
   const project = await prisma.project.findFirst({
-    where: { id: projectId, shop },
+    where: { id: projectId, shop: shopStringFilter(shop) },
     include: { members: true },
   });
 
@@ -278,18 +296,18 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     throw new Response("Project not found", { status: 404 });
   }
 
-  const isMember =
-    project.ownerCustomerId === customerId ||
-    project.members.some((member) => member.customerId === customerId);
+  const viewerIsAppAdminForm = await viewerHasAdminTag(
+    shop,
+    customerId,
+    customerEmail,
+  );
+  const isMember = isProjectMember(project, customerId, viewerIsAppAdminForm);
 
   if (!isMember) {
     throw new Response("Unauthorized", { status: 403 });
   }
 
-  const memberRole = project.members.find(
-    (member) => member.customerId === customerId,
-  )?.role;
-  const canEdit = project.ownerCustomerId === customerId || memberRole === "edit";
+  const canEdit = canEditProject(project, customerId, viewerIsAppAdminForm);
 
   if (intent === "create-job") {
     if (!canEdit) {

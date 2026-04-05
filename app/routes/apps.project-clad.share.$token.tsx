@@ -2,13 +2,14 @@ import type { LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
+import { shopStringFilter } from "../utils/projectAccess.server";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { shop, customerId } = requireAppProxyCustomer(request);
   const token = params.token ?? "";
 
   const shareToken = await prisma.projectShareToken.findFirst({
-    where: { token, project: { shop } },
+    where: { token, project: { shop: shopStringFilter(shop) } },
     include: { project: true },
   });
 

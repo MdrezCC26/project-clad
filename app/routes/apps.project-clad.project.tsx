@@ -22,13 +22,23 @@ import {
   findCustomerIdByEmail,
   getCustomersByIds,
 } from "../utils/adminCustomers.server";
-import { hasAdminTag } from "../utils/customerTags.server";
+import {
+  normalizeStorefrontCustomerId,
+  viewerHasAdminTag,
+} from "../utils/customerTags.server";
+import {
+  canAdminProjectMembers,
+  canEditProject,
+  isProjectMember,
+  shopStringFilter,
+} from "../utils/projectAccess.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
+import { sendProjectStatusNotificationEmail } from "../utils/orderCreatedEmail.server";
 
 type JobItemView = {
   id: string;
@@ -339,12 +349,12 @@ function MemberRoleSelect({
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const proxyStylesCss = rewriteProjectCladProxyFontUrls(request);
-  const { shop, customerId: viewerCustomerId } =
+  const { shop, customerId: viewerCustomerId, customerEmail } =
     requireAppProxyCustomer(request);
   const customerId = viewerCustomerId as string;
   const themeStyles = await getThemeStyles(shop);
-  const settings = await prisma.shopSettings.findUnique({
-    where: { shop },
+  const settings = await prisma.shopSettings.findFirst({
+    where: { shop: shopStringFilter(shop) },
   });
   const projectId = getProjectId(request);
 
@@ -358,8 +368,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     );
   }
 
+  const viewerIsAppAdmin = await viewerHasAdminTag(
+    shop,
+    customerId,
+    customerEmail,
+  );
+
   const project = await prisma.project.findFirst({
-    where: { id: projectId, shop },
+    where: { id: projectId, shop: shopStringFilter(shop) },
     include: {
       jobs: {
         orderBy: { sortOrder: "asc" },
@@ -373,29 +389,52 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw projectMissingHtmlResponse(request, shop, projectId);
   }
 
+  const viewerNumericId = normalizeStorefrontCustomerId(customerId);
+  const memberIds = Array.from(
+    new Set([
+      project.ownerCustomerId,
+      ...project.members.map((member) => member.customerId),
+      viewerNumericId,
+    ]),
+  );
+  let customerInfo: Awaited<ReturnType<typeof getCustomersByIds>> = {};
+  let memberLookupError: string | null = null;
+  try {
+    customerInfo = await getCustomersByIds(shop, memberIds);
+  } catch (error) {
+    memberLookupError =
+      error instanceof Error ? error.message : "Member lookup failed.";
+  }
+
+  const viewerTags =
+    customerInfo[viewerNumericId]?.tags ??
+    customerInfo[customerId]?.tags ??
+    [];
+
   const isMember =
     project.ownerCustomerId === customerId ||
-    project.members.some((member) => member.customerId === customerId);
+    project.members.some((member) => member.customerId === customerId) ||
+    viewerIsAppAdmin;
 
   if (!isMember) {
     throw new Response("Unauthorized", { status: 403 });
   }
 
-  const memberRole = project.members.find(
-    (member) => member.customerId === customerId,
-  )?.role;
   const isOwner = project.ownerCustomerId === customerId;
-  const canEdit = isOwner || memberRole === "edit";
+  const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
 
+  const shopQ = shopStringFilter(shop);
   const otherProjects = await prisma.project.findMany({
-    where: {
-      shop,
-      id: { not: projectId },
-      OR: [
-        { ownerCustomerId: customerId },
-        { members: { some: { customerId } } },
-      ],
-    },
+    where: viewerIsAppAdmin
+      ? { shop: shopQ, id: { not: projectId } }
+      : {
+          shop: shopQ,
+          id: { not: projectId },
+          OR: [
+            { ownerCustomerId: customerId },
+            { members: { some: { customerId } } },
+          ],
+        },
     orderBy: { createdAt: "desc" },
   });
 
@@ -415,26 +454,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ),
     liveByVariantId: variantInfo,
   });
-  const memberIds = [
-    project.ownerCustomerId,
-    ...project.members.map((member) => member.customerId),
-  ];
-  let customerInfo: Awaited<ReturnType<typeof getCustomersByIds>> = {};
-  let memberLookupError: string | null = null;
-  try {
-    customerInfo = await getCustomersByIds(shop, memberIds);
-  } catch (error) {
-    memberLookupError =
-      error instanceof Error ? error.message : "Member lookup failed.";
-  }
 
-  const viewerTags = customerInfo[customerId]?.tags ?? [];
-  const hideAddToCart = viewerTags.some(
+  const hideAddToCart =
+    viewerTags.some(
+      (t: string) => String(t).trim().toUpperCase() === "NA",
+    ) && !viewerIsAppAdmin;
+  const hasNATag = viewerTags.some(
     (t: string) => String(t).trim().toUpperCase() === "NA",
   );
-  const hasNATag = hideAddToCart;
-  const canAdminMembers = isOwner || (canEdit && !hasNATag);
-  const viewerIsAdmin = hasAdminTag(viewerTags);
+  const canAdminMembers = canAdminProjectMembers(
+    project,
+    customerId,
+    viewerIsAppAdmin,
+    hasNATag,
+  );
+  const viewerIsAdmin = viewerIsAppAdmin;
 
   const approvalRequests = await prisma.approvalRequest.findMany({
     where: { projectId },
@@ -653,10 +687,46 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
+async function emailProjectStatusSnapshot(args: {
+  shop: string;
+  projectId: string;
+  actorCustomerId: string;
+  headline: string;
+  introLines?: string[];
+}) {
+  try {
+    const p = await prisma.project.findFirst({
+      where: { id: args.projectId, shop: shopStringFilter(args.shop) },
+      select: {
+        id: true,
+        name: true,
+        poNumber: true,
+        companyName: true,
+        ownerCustomerId: true,
+      },
+    });
+    if (!p) return;
+    await sendProjectStatusNotificationEmail({
+      headline: args.headline,
+      shop: args.shop,
+      projectId: p.id,
+      projectName: p.name,
+      ownerCustomerId: p.ownerCustomerId,
+      actorCustomerId: args.actorCustomerId,
+      introLines: args.introLines,
+    });
+  } catch (err) {
+    console.error(
+      "[project] status email failed:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
 export const action = async ({ request }: ActionFunctionArgs) => {
   const contentType = request.headers.get("Content-Type") || "";
   const isJsonRequest = contentType.includes("application/json");
-  const { shop, customerId } = requireAppProxyCustomer(request, {
+  const { shop, customerId, customerEmail } = requireAppProxyCustomer(request, {
     jsonOnFail: isJsonRequest,
   });
 
@@ -665,6 +735,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (!projectId) {
       return new Response("Project not found", { status: 404 });
     }
+
+    const viewerIsAppAdmin = await viewerHasAdminTag(
+      shop,
+      customerId,
+      customerEmail,
+    );
 
     const payload = (await request.json()) as {
       intent?: string;
@@ -681,7 +757,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const jobIds = payload.jobIds || [];
 
       const project = await prisma.project.findFirst({
-        where: { id: projectId, shop },
+        where: { id: projectId, shop: shopStringFilter(shop) },
         include: { members: true },
       });
 
@@ -689,11 +765,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         throw new Response("Project not found", { status: 404 });
       }
 
-      const memberRole = project.members.find(
-        (member) => member.customerId === customerId,
-      )?.role;
-      const canEdit =
-        project.ownerCustomerId === customerId || memberRole === "edit";
+      const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
 
       if (!canEdit) {
         throw new Response("Forbidden", { status: 403 });
@@ -717,6 +789,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             }),
           ),
         );
+        await emailProjectStatusSnapshot({
+          shop,
+          projectId,
+          actorCustomerId: customerId,
+          headline: "Orders reordered",
+          introLines: [
+            "The order list for this project was reordered.",
+            "Full snapshot below so you can verify everything before production.",
+          ],
+        });
       }
 
       return new Response(null, { status: 204 });
@@ -727,7 +809,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const itemIds = payload.itemIds || [];
 
       const project = await prisma.project.findFirst({
-        where: { id: projectId, shop },
+        where: { id: projectId, shop: shopStringFilter(shop) },
         include: { members: true },
       });
 
@@ -735,11 +817,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         throw new Response("Project not found", { status: 404 });
       }
 
-      const memberRole = project.members.find(
-        (member) => member.customerId === customerId,
-      )?.role;
-      const canEdit =
-        project.ownerCustomerId === customerId || memberRole === "edit";
+      const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
 
       if (!canEdit) {
         throw new Response("Forbidden", { status: 403 });
@@ -754,6 +832,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             }),
           ),
         );
+        await emailProjectStatusSnapshot({
+          shop,
+          projectId,
+          actorCustomerId: customerId,
+          headline: "Order lines reordered",
+          introLines: [
+            "Line items inside an order were reordered.",
+            "Use variant IDs below to replace any bad rows in Shopify if needed.",
+          ],
+        });
       }
 
       return new Response(null, { status: 204 });
@@ -774,7 +862,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const deleteJob = Boolean(payload.deleteJob);
 
       const project = await prisma.project.findFirst({
-        where: { id: projectId, shop },
+        where: { id: projectId, shop: shopStringFilter(shop) },
         include: { members: true },
       });
 
@@ -782,11 +870,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         throw new Response("Project not found", { status: 404 });
       }
 
-      const memberRole = project.members.find(
-        (member) => member.customerId === customerId,
-      )?.role;
-      const canEdit =
-        project.ownerCustomerId === customerId || memberRole === "edit";
+      const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
 
       if (!canEdit) {
         throw new Response("Forbidden", { status: 403 });
@@ -801,23 +885,59 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         if (job) {
           const isLocked = job.isLocked || Boolean(job.orderLink);
           if (!isLocked) {
+            let didChange = false;
+            const jobTitleForMessage = job.name;
+
             if (deleteJob) {
               await prisma.job.delete({ where: { id: jobId } });
+              didChange = true;
+              await emailProjectStatusSnapshot({
+                shop,
+                projectId,
+                actorCustomerId: customerId,
+                headline: "Order deleted from project",
+                introLines: [
+                  `The order "${jobTitleForMessage}" was removed from this project.`,
+                  "Snapshot below lists all remaining orders and lines.",
+                ],
+              });
             } else {
+              if (removeItemIds.length) {
+                for (const rid of removeItemIds) {
+                  if (job.items.some((i) => i.id === rid)) {
+                    await prisma.jobItem.delete({ where: { id: rid } });
+                    didChange = true;
+                  }
+                }
+              }
               if (jobName && jobName !== job.name) {
                 await prisma.job.update({
                   where: { id: jobId },
                   data: { name: jobName },
                 });
+                didChange = true;
               }
               for (const { itemId, quantity } of itemUpdates) {
-                const item = job.items.find((i) => i.id === itemId);
-                if (item && quantity >= 0) {
+                const row = job.items.find((i) => i.id === itemId);
+                if (row && quantity >= 0) {
                   await prisma.jobItem.update({
                     where: { id: itemId },
                     data: { quantity },
                   });
+                  didChange = true;
                 }
+              }
+              if (didChange) {
+                await emailProjectStatusSnapshot({
+                  shop,
+                  projectId,
+                  actorCustomerId: customerId,
+                  headline: "Order updated on project page",
+                  introLines: [
+                    `Someone edited order "${jobTitleForMessage}" (quantities, name, or removed lines).`,
+                    "Full project snapshot is below — use variant IDs to fix or replace SKUs in Shopify.",
+                  ],
+                });
               }
             }
           }
@@ -841,7 +961,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intent = String(formData.get("intent") || "");
 
   const project = await prisma.project.findFirst({
-    where: { id: projectId, shop },
+    where: { id: projectId, shop: shopStringFilter(shop) },
     include: { members: true },
   });
 
@@ -849,9 +969,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     throw new Response("Project not found", { status: 404 });
   }
 
+  const viewerIsAppAdmin = await viewerHasAdminTag(
+    shop,
+    customerId,
+    customerEmail,
+  );
   const isMember =
-    project.ownerCustomerId === customerId ||
-    project.members.some((member) => member.customerId === customerId);
+    isProjectMember(project, customerId, viewerIsAppAdmin);
 
   if (!isMember) {
     throw new Response("Unauthorized", { status: 403 });
@@ -871,24 +995,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return redirectToProject(request, projectId, shop);
   }
 
-  const memberRole = project.members.find(
-    (member) => member.customerId === customerId,
-  )?.role;
   const isOwner = project.ownerCustomerId === customerId;
-  const canEdit = isOwner || memberRole === "edit";
-  let canAdminMembers = isOwner;
-
+  const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
+  let viewerHasNATag = false;
   try {
-    const customerInfo = await getCustomersByIds(shop, [customerId]);
-    const viewerTags = customerInfo[customerId]?.tags ?? [];
-    const hasNATag = viewerTags.some(
+    const vid = normalizeStorefrontCustomerId(customerId);
+    const customerInfo = await getCustomersByIds(shop, [vid]);
+    const viewerTags = customerInfo[vid]?.tags ?? [];
+    viewerHasNATag = viewerTags.some(
       (t) => String(t).trim().toUpperCase() === "NA",
     );
-    canAdminMembers = isOwner || (canEdit && !hasNATag);
   } catch {
-    // If customer lookup fails, fall back to owner-only admin.
-    canAdminMembers = isOwner;
+    viewerHasNATag = false;
   }
+  const canAdminMembers = canAdminProjectMembers(
+    project,
+    customerId,
+    viewerIsAppAdmin,
+    viewerHasNATag,
+  );
 
   if (intent === "create-job") {
     if (!canEdit) {
@@ -939,6 +1064,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       payload: { jobName: newJob.name },
     });
 
+    await emailProjectStatusSnapshot({
+      shop,
+      projectId,
+      actorCustomerId: customerId,
+      headline: "New empty order added",
+      introLines: [
+        `Order "${newJob.name}" was created on the project page (no checkout lines yet).`,
+        "Full project snapshot below.",
+      ],
+    });
+
     return redirectToProject(request, projectId, shop);
   }
 
@@ -968,6 +1104,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     await prisma.job.delete({ where: { id: jobId } });
 
+    await emailProjectStatusSnapshot({
+      shop,
+      projectId,
+      actorCustomerId: customerId,
+      headline: "Order deleted from project",
+      introLines: [
+        `The order "${job.name}" was removed.`,
+        "Snapshot below lists all remaining orders and lines.",
+      ],
+    });
+
     return redirectToProject(request, projectId, shop);
   }
 
@@ -985,9 +1132,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
 
       if (job) {
+        const targetProject = await prisma.project.findFirst({
+          where: { id: targetProjectId, shop: shopStringFilter(shop) },
+          select: { name: true },
+        });
         await prisma.job.update({
           where: { id: jobId },
           data: { projectId: targetProjectId },
+        });
+        await emailProjectStatusSnapshot({
+          shop,
+          projectId,
+          actorCustomerId: customerId,
+          headline: "Order moved to another project",
+          introLines: [
+            `Order "${job.name}" was moved out of this project.`,
+            targetProject
+              ? `Destination project: ${targetProject.name}`
+              : "It was moved to another saved project.",
+            "Snapshot below is for this project after the move.",
+          ],
+        });
+        await emailProjectStatusSnapshot({
+          shop,
+          projectId: targetProjectId,
+          actorCustomerId: customerId,
+          headline: "Order moved into this project",
+          introLines: [
+            `Order "${job.name}" was moved here from another saved project.`,
+            "Snapshot below includes all orders and lines on this project.",
+          ],
         });
       }
     }
@@ -1034,6 +1208,39 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           actorCustomerId: customerId,
           payload: { jobName: copyJob.name, copiedFrom: job.name },
         });
+
+        const sourceProject = await prisma.project.findFirst({
+          where: { id: projectId, shop: shopStringFilter(shop) },
+          select: { name: true },
+        });
+        const targetProject = await prisma.project.findFirst({
+          where: { id: targetProjectId, shop: shopStringFilter(shop) },
+          select: { name: true },
+        });
+        await emailProjectStatusSnapshot({
+          shop,
+          projectId,
+          actorCustomerId: customerId,
+          headline: "Order copied to another project",
+          introLines: [
+            `A copy of order "${job.name}" was created${
+              targetProject ? ` on project "${targetProject.name}"` : " on another project"
+            } as "${copyJob.name}".`,
+            "Snapshot below is for this project (source).",
+          ],
+        });
+        await emailProjectStatusSnapshot({
+          shop,
+          projectId: targetProjectId,
+          actorCustomerId: customerId,
+          headline: "Order copied into this project",
+          introLines: [
+            `Order "${copyJob.name}" was added (copy of "${job.name}"${
+              sourceProject ? ` from "${sourceProject.name}"` : ""
+            }).`,
+            "Full snapshot of this project below.",
+          ],
+        });
       }
     }
 
@@ -1071,6 +1278,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           jobId: item.jobId,
           itemId: "",
         },
+      });
+
+      await emailProjectStatusSnapshot({
+        shop,
+        projectId,
+        actorCustomerId: customerId,
+        headline: "Line removed from order",
+        introLines: [
+          `A line was removed from order "${item.job.name}".`,
+          "Use the snapshot below to align Shopify or replace variants if needed.",
+        ],
       });
     }
 
@@ -1199,6 +1417,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await prisma.project.update({
       where: { id: projectId },
       data: { name, poNumber, companyName },
+    });
+
+    await emailProjectStatusSnapshot({
+      shop,
+      projectId,
+      actorCustomerId: customerId,
+      headline: "Project details updated",
+      introLines: [
+        "Project name, PO number, or company name was changed on the project page.",
+        "Current project contents are listed below.",
+      ],
     });
 
     return redirectToProject(request, projectId, shop);

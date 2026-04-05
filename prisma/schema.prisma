@@ -209,6 +209,10 @@ model GaugeConfig {
 model ShopSettings {
   id                     String   @id @default(cuid())
   shop                   String   @unique
+  /// Comma-separated Shopify customer IDs (numeric) with full storefront staff access (all projects, edit).
+  appAdminCustomerIds    String?
+  /// Comma or newline separated emails: global storefront staff (all projects). Matched to signed `logged_in_customer_email` — no Admin API.
+  globalStaffEmails      String?
   logoDataUrl            String?
   backgroundLogoDataUrl  String?
   pricingPasswordHash  String?

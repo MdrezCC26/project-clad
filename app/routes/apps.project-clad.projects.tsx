@@ -18,6 +18,16 @@ import { getThemeStyles } from "../utils/themeAssets.server";
 import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
+import {
+  hasAdminTag,
+  normalizeStorefrontCustomerId,
+  viewerHasAdminTag,
+} from "../utils/customerTags.server";
+import {
+  canAdminProjectMembers,
+  projectsListWhere,
+  shopStringFilter,
+} from "../utils/projectAccess.server";
 
 type ProjectListItem = {
   id: string;
@@ -63,20 +73,19 @@ const buildProjectCartItems = (jobs: ProjectListItem["jobs"]) => {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const proxyStylesCss = rewriteProjectCladProxyFontUrls(request);
-  const { shop, customerId } = requireAppProxyCustomer(request);
+  const { shop, customerId, customerEmail } = requireAppProxyCustomer(request);
   const themeStyles = await getThemeStyles(shop);
-  const settings = await prisma.shopSettings.findUnique({
-    where: { shop },
+  const settings = await prisma.shopSettings.findFirst({
+    where: { shop: shopStringFilter(shop) },
   });
+  const viewerIsAppAdmin = await viewerHasAdminTag(
+    shop,
+    customerId,
+    customerEmail,
+  );
 
   const projects = await prisma.project.findMany({
-    where: {
-      shop,
-      OR: [
-        { ownerCustomerId: customerId },
-        { members: { some: { customerId } } },
-      ],
-    },
+    where: projectsListWhere(shop, customerId, viewerIsAppAdmin),
     include: {
       jobs: {
         orderBy: { sortOrder: "asc" },
@@ -110,15 +119,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   let hideAddToCart = false;
   try {
-    const numericId = String(customerId).includes("/")
-      ? String(customerId).split("/").pop() || customerId
-      : customerId;
+    const numericId = normalizeStorefrontCustomerId(customerId);
     const customerInfo = await getCustomersByIds(shop, [numericId]);
     const viewerTags =
       customerInfo[numericId]?.tags ?? customerInfo[customerId]?.tags ?? [];
-    hideAddToCart = viewerTags.some(
-      (t: string) => String(t).trim().toUpperCase() === "NA",
-    );
+    hideAddToCart =
+      viewerTags.some(
+        (t: string) => String(t).trim().toUpperCase() === "NA",
+      ) && !hasAdminTag(viewerTags);
   } catch {
     // If customer lookup fails, show add-to-cart (no NA restriction)
   }
@@ -248,6 +256,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     navButtons,
     logoDataUrl: settings?.logoDataUrl || null,
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
+    viewerStaffViewAll: viewerIsAppAdmin,
   };
 };
 
@@ -265,8 +274,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return new Response("Project not found", { status: 404 });
   }
 
+  const viewerIsAppAdmin = await viewerHasAdminTag(
+    shop,
+    customerId,
+    customerEmail,
+  );
+
   const project = await prisma.project.findFirst({
-    where: { id: projectId, shop },
+    where: { id: projectId, shop: shopStringFilter(shop) },
     include: { members: true },
   });
 
@@ -274,24 +289,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return new Response("Project not found", { status: 404 });
   }
 
-  const memberRole = project.members.find(
-    (member) => member.customerId === customerId,
-  )?.role;
-  const isOwner = project.ownerCustomerId === customerId;
-  const canEdit = isOwner || memberRole === "edit";
-
-  let canAdminMembers = isOwner;
+  let viewerHasNATag = false;
   try {
-    const customerInfo = await getCustomersByIds(shop, [customerId]);
-    const viewerTags = customerInfo[customerId]?.tags ?? [];
-    const hasNATag = viewerTags.some(
+    const vid = normalizeStorefrontCustomerId(customerId);
+    const customerInfo = await getCustomersByIds(shop, [vid]);
+    const viewerTags = customerInfo[vid]?.tags ?? [];
+    viewerHasNATag = viewerTags.some(
       (t: string) => String(t).trim().toUpperCase() === "NA",
     );
-    canAdminMembers = isOwner || (canEdit && !hasNATag);
   } catch {
-    // If customer lookup fails, fall back to owner-only admin.
-    canAdminMembers = isOwner;
+    viewerHasNATag = false;
   }
+
+  const canAdminMembers = canAdminProjectMembers(
+    project,
+    customerId,
+    viewerIsAppAdmin,
+    viewerHasNATag,
+  );
 
   if (!canAdminMembers) {
     throw new Response("Forbidden", { status: 403 });
@@ -333,6 +348,7 @@ export default function ProjectsPage() {
     navButtons,
     logoDataUrl,
     backgroundLogoDataUrl,
+    viewerStaffViewAll,
   } = useLoaderData<typeof loader>();
   const inlineStyles = themeStyles?.styles || [];
 
@@ -376,6 +392,11 @@ export default function ProjectsPage() {
               </nav>
             </div>
           </header>
+          {viewerStaffViewAll && (
+            <p className="project-clad-muted" style={{ marginBottom: "0.75rem" }}>
+              Staff view: showing all saved projects for this store.
+            </p>
+          )}
           {variantLookupError && (
             <p className="project-clad-muted">{variantLookupError}</p>
           )}

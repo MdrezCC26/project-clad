@@ -19,7 +19,39 @@ export type VariantSnapshotV1 = {
   imageAlt: string | null;
   productHandle: string | null;
   capturedAt: string;
+  /** Set when snapshot was captured from the storefront cart at save time. */
+  source?: string;
+  sku?: string | null;
+  vendor?: string | null;
 };
+
+/** Line labels from `/cart.js` at save time (survives deleted catalog / draft-only variants). */
+export type CartLineMetaInput = {
+  productTitle?: string;
+  variantTitle?: string;
+  imageUrl?: string | null;
+  productHandle?: string | null;
+  sku?: string | null;
+  vendor?: string | null;
+};
+
+export function cartLineMetaToVariantSnapshot(
+  meta: CartLineMetaInput,
+): VariantSnapshotV1 {
+  const productTitle = (meta.productTitle || "Product").trim() || "Product";
+  const variantTitle = (meta.variantTitle || "").trim() || "Default Title";
+  return {
+    productTitle,
+    variantTitle,
+    imageUrl: meta.imageUrl ?? null,
+    imageAlt: productTitle,
+    productHandle: meta.productHandle ?? null,
+    capturedAt: new Date().toISOString(),
+    source: "cart_line",
+    sku: meta.sku ?? null,
+    vendor: meta.vendor ?? null,
+  };
+}
 
 export type VariantDisplaySource = "live" | "snapshot" | "unknown";
 
@@ -47,6 +79,9 @@ export function parseVariantSnapshot(
     imageAlt: typeof o.imageAlt === "string" ? o.imageAlt : null,
     productHandle: typeof o.productHandle === "string" ? o.productHandle : null,
     capturedAt: typeof o.capturedAt === "string" ? o.capturedAt : "",
+    source: typeof o.source === "string" ? o.source : undefined,
+    sku: typeof o.sku === "string" ? o.sku : null,
+    vendor: typeof o.vendor === "string" ? o.vendor : null,
   };
 }
 
@@ -68,6 +103,20 @@ function snapshotsEqual(a: VariantSnapshotV1, b: VariantSnapshotV1) {
     a.imageUrl === b.imageUrl &&
     a.productHandle === b.productHandle
   );
+}
+
+/** After creating line items, merge in live Shopify data when available. */
+export async function hydrateJobItemVariantSnapshots(
+  shop: string,
+  jobItems: Array<{ id: string; variantId: string; variantSnapshot: unknown }>,
+): Promise<void> {
+  if (jobItems.length === 0) return;
+  const variantIds = jobItems.map((r) => r.variantId);
+  const { info } = await resolveVariantDisplayInfo(shop, variantIds);
+  await persistVariantSnapshotsFromLive({
+    items: jobItems,
+    liveByVariantId: info,
+  });
 }
 
 /**
@@ -193,8 +242,13 @@ export async function persistVariantSnapshotsFromLive(args: {
     const live = liveByVariantId[item.variantId];
     if (!live) continue;
 
-    const next = snapshotFromLive(live);
     const prev = parseVariantSnapshot(item.variantSnapshot);
+    const next: VariantSnapshotV1 = {
+      ...snapshotFromLive(live),
+      sku: prev?.sku ?? null,
+      vendor: prev?.vendor ?? null,
+      source: "shopify_api",
+    };
     if (prev && snapshotsEqual(prev, next)) continue;
 
     updates.push({

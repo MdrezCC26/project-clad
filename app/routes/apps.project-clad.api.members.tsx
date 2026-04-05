@@ -2,6 +2,8 @@ import type { ActionFunctionArgs } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import { findCustomerIdByEmail } from "../utils/adminCustomers.server";
+import { viewerHasAdminTag } from "../utils/customerTags.server";
+import { shopStringFilter } from "../utils/projectAccess.server";
 
 type MemberPayload = {
   intent?: "add" | "remove";
@@ -12,7 +14,7 @@ type MemberPayload = {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, customerId } = requireAppProxyCustomer(request, {
+  const { shop, customerId, customerEmail } = requireAppProxyCustomer(request, {
     jsonOnFail: true,
   });
   const payload = (await request.json()) as MemberPayload;
@@ -24,7 +26,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   const project = await prisma.project.findFirst({
-    where: { id: projectId, shop },
+    where: { id: projectId, shop: shopStringFilter(shop) },
     include: { members: true },
   });
 
@@ -33,7 +35,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   const isOwner = project.ownerCustomerId === customerId;
-  if (!isOwner) {
+  const viewerIsAppAdmin = await viewerHasAdminTag(
+    shop,
+    customerId,
+    customerEmail,
+  );
+  if (!isOwner && !viewerIsAppAdmin) {
     return Response.json(
       { error: "Only the project owner can manage members." },
       { status: 403 },

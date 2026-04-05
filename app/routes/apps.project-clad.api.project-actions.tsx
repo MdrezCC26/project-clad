@@ -6,6 +6,16 @@ import {
   findCustomerIdByEmail,
   getCustomersByIds,
 } from "../utils/adminCustomers.server";
+import {
+  normalizeStorefrontCustomerId,
+  viewerHasAdminTag,
+} from "../utils/customerTags.server";
+import {
+  canAdminProjectMembers,
+  canEditProject,
+  isProjectMember,
+  shopStringFilter,
+} from "../utils/projectAccess.server";
 import { isEmailConfigured, sendEmail } from "../utils/email.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
@@ -29,7 +39,7 @@ const getNextJobSortOrder = async (projectId: string) => {
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { shop, customerId } = requireAppProxyCustomer(request, {
+  const { shop, customerId, customerEmail } = requireAppProxyCustomer(request, {
     jsonOnFail: true,
   });
   const url = new URL(request.url);
@@ -41,7 +51,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const project = await prisma.project.findFirst({
-    where: { id: projectId, shop },
+    where: { id: projectId, shop: shopStringFilter(shop) },
     include: { members: true },
   });
 
@@ -49,35 +59,42 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return Response.json({ error: "Project not found." }, { status: 404 });
   }
 
-  const isMember =
-    project.ownerCustomerId === customerId ||
-    project.members.some((member) => member.customerId === customerId);
+  const viewerIsAppAdmin = await viewerHasAdminTag(
+    shop,
+    customerId,
+    customerEmail,
+  );
+
+  const vid = normalizeStorefrontCustomerId(customerId);
+  let viewerTags: string[] = [];
+  try {
+    const info = await getCustomersByIds(shop, [vid]);
+    viewerTags = info[vid]?.tags ?? [];
+  } catch {
+    viewerTags = [];
+  }
+  const viewerHasNATag = viewerTags.some(
+    (t: string) => String(t).trim().toUpperCase() === "NA",
+  );
+
+  const isMember = isProjectMember(project, customerId, viewerIsAppAdmin);
   if (!isMember) {
     return Response.json({ error: "Unauthorized." }, { status: 403 });
   }
 
-  const memberRole = project.members.find(
-    (member) => member.customerId === customerId,
-  )?.role;
-  const isOwner = project.ownerCustomerId === customerId;
-  const canEdit = isOwner || memberRole === "edit";
-  let canAdminMembers = isOwner;
-
-  try {
-    const customerInfo = await getCustomersByIds(shop, [customerId]);
-    const viewerTags = customerInfo[customerId]?.tags ?? [];
-    const hasNATag = viewerTags.some(
-      (t: string) => String(t).trim().toUpperCase() === "NA",
-    );
-    canAdminMembers = isOwner || (canEdit && !hasNATag);
-  } catch {
-    // If customer lookup fails, fall back to owner-only admin.
-    canAdminMembers = isOwner;
-  }
+  const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
+  const canAdminMembers = canAdminProjectMembers(
+    project,
+    customerId,
+    viewerIsAppAdmin,
+    viewerHasNATag,
+  );
 
   if (intent === "unlock-pricing") {
     const password = (url.searchParams.get("password") || "").trim();
-    const settings = await prisma.shopSettings.findUnique({ where: { shop } });
+    const settings = await prisma.shopSettings.findFirst({
+      where: { shop: shopStringFilter(shop) },
+    });
     if (!settings?.pricingPasswordHash || !settings.pricingPasswordSalt) {
       return Response.json({ error: "Pricing is not configured." }, { status: 400 });
     }
@@ -476,10 +493,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   if (intent === "approve") {
-    const memberIds = [
-      project.ownerCustomerId,
-      ...project.members.map((m) => m.customerId),
-    ];
+    const memberIds = Array.from(
+      new Set([
+        project.ownerCustomerId,
+        ...project.members.map((m) => m.customerId),
+        vid,
+      ]),
+    );
     let customerInfo: Awaited<ReturnType<typeof getCustomersByIds>> = {};
     try {
       customerInfo = await getCustomersByIds(shop, memberIds);
@@ -491,8 +511,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
     const hasNATag = (tags: string[]) =>
       tags.some((t: string) => String(t).trim().toUpperCase() === "NA");
-    const currentTags = customerInfo[customerId]?.tags ?? [];
-    if (hasNATag(currentTags)) {
+    const currentTags =
+      customerInfo[vid]?.tags ?? customerInfo[customerId]?.tags ?? [];
+    if (hasNATag(currentTags) && !viewerIsAppAdmin) {
       return Response.json(
         { error: "Only approvers (members without NA tag) can approve." },
         { status: 403 },
@@ -739,7 +760,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed." }, { status: 405 });
   }
-  const { shop, customerId } = requireAppProxyCustomer(request, {
+  const { shop, customerId, customerEmail } = requireAppProxyCustomer(request, {
     jsonOnFail: true,
   });
   let body: Record<string, unknown>;
@@ -759,25 +780,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   const project = await prisma.project.findFirst({
-    where: { id: projectId, shop },
+    where: { id: projectId, shop: shopStringFilter(shop) },
     include: { members: true },
   });
   if (!project) {
     return Response.json({ error: "Project not found." }, { status: 404 });
   }
 
-  const isMember =
-    project.ownerCustomerId === customerId ||
-    project.members.some((member) => member.customerId === customerId);
+  const viewerIsAppAdminPost = await viewerHasAdminTag(
+    shop,
+    customerId,
+    customerEmail,
+  );
+  const isMember = isProjectMember(project, customerId, viewerIsAppAdminPost);
   if (!isMember) {
     return Response.json({ error: "Unauthorized." }, { status: 403 });
   }
 
-  const memberRole = project.members.find(
-    (member) => member.customerId === customerId,
-  )?.role;
-  const isOwner = project.ownerCustomerId === customerId;
-  const canEdit = isOwner || memberRole === "edit";
+  const canEdit = canEditProject(project, customerId, viewerIsAppAdminPost);
   if (!canEdit) {
     return Response.json({ error: "Forbidden." }, { status: 403 });
   }

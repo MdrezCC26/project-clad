@@ -2,9 +2,9 @@ import type { ActionFunctionArgs } from "react-router";
 import { Prisma } from "@prisma/client";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
-import { getCustomersByIds } from "../utils/adminCustomers.server";
 import { getAdminVariantInfo } from "../utils/adminVariants.server";
-import { hasAdminTag } from "../utils/customerTags.server";
+import { viewerHasAdminTag } from "../utils/customerTags.server";
+import { shopStringFilter } from "../utils/projectAccess.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
 import { fetchVariantPriceUsd } from "../utils/shopifyVariantPrice.server";
 
@@ -12,22 +12,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
-  const { shop, customerId: viewerCustomerId } = requireAppProxyCustomer(
-    request,
-    {
+  const { shop, customerId: viewerCustomerId, customerEmail } =
+    requireAppProxyCustomer(request, {
       jsonOnFail: true,
-    },
-  );
+    });
   const customerId = viewerCustomerId as string;
 
-  let customerInfo: Awaited<ReturnType<typeof getCustomersByIds>>;
-  try {
-    customerInfo = await getCustomersByIds(shop, [customerId]);
-  } catch {
-    return Response.json({ error: "Could not verify admin." }, { status: 500 });
-  }
-  const tags = customerInfo[customerId]?.tags ?? [];
-  if (!hasAdminTag(tags)) {
+  const isStaff = await viewerHasAdminTag(shop, customerId, customerEmail);
+  if (!isStaff) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -43,7 +35,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const job = jobId
     ? await prisma.job.findFirst({
-        where: { id: jobId, project: { shop } },
+        where: { id: jobId, project: { shop: shopStringFilter(shop) } },
         include: { project: true, items: true, orderLink: true },
       })
     : null;

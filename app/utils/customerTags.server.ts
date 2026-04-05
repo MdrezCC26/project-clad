@@ -39,9 +39,7 @@ export function customerIdDigitKey(customerId: string): string {
   return normalizeStorefrontCustomerId(customerId).replace(/\D/g, "");
 }
 
-/**
- * Pulls 10–20 digit IDs from pasted text (plain IDs, Admin URLs, CSV, etc.).
- */
+/** Pulls 6–20 digit IDs from pasted text (plain IDs, Admin URLs, CSV, etc.). */
 export function extractNumericCustomerIdsFromText(raw: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -53,6 +51,34 @@ export function extractNumericCustomerIdsFromText(raw: string): string[] {
     }
   }
   return out;
+}
+
+function normalizeStaffEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function parseGlobalStaffEmailsRaw(raw: string): string[] {
+  return raw
+    .split(/[\n,;]+/)
+    .map((s) => normalizeStaffEmail(s))
+    .filter(Boolean);
+}
+
+function emailMatchesGlobalStaffList(
+  customerEmail: string | null | undefined,
+  listRaw: string | null | undefined,
+): boolean {
+  if (!customerEmail?.trim() || !listRaw?.trim()) return false;
+  const e = normalizeStaffEmail(customerEmail);
+  return parseGlobalStaffEmailsRaw(listRaw).includes(e);
+}
+
+function emailInGlobalStaffEnv(
+  customerEmail: string | null | undefined,
+): boolean {
+  const raw = process.env.PROJECTCLAD_GLOBAL_STAFF_EMAILS?.trim();
+  if (!raw) return false;
+  return emailMatchesGlobalStaffList(customerEmail, raw);
 }
 
 function customerIdInEnvAdminAllowlist(customerId: string): boolean {
@@ -74,38 +100,50 @@ function allowlistRawMatchesCustomer(
   return listed.includes(v);
 }
 
-async function customerIdInShopSettingsAdminList(
-  shop: string,
-  customerId: string,
-): Promise<boolean> {
-  const row = await prisma.shopSettings.findFirst({
-    where: { shop: shopStringFilter(shop) },
-    select: { appAdminCustomerIds: true },
-  });
-  if (!row?.appAdminCustomerIds?.trim()) {
-    return false;
-  }
-  return allowlistRawMatchesCustomer(row.appAdminCustomerIds, customerId);
-}
-
+/**
+ * Full storefront staff / “global” access: every project for the shop, edit rights.
+ * Order: env emails → shop setting emails → env customer IDs → shop customer IDs → Shopify tags (API).
+ *
+ * @param customerEmail Signed `logged_in_customer_email` from the app proxy when present — enables access without Admin Customer API.
+ */
 export async function viewerHasAdminTag(
   shop: string,
   customerId: string,
+  customerEmail?: string | null,
 ): Promise<boolean> {
   if (process.env.PROJECTCLAD_DEBUG_STAFF === "1") {
     const key = customerIdDigitKey(customerId);
     console.info(
-      "[ProjectClad staff] shop=%s viewerDigitKey=%s",
+      "[ProjectClad staff] shop=%s viewerDigitKey=%s email=%s",
       shop,
       key || "(empty)",
+      customerEmail?.trim()
+        ? normalizeStaffEmail(customerEmail)
+        : "(none)",
     );
+  }
+
+  if (emailInGlobalStaffEnv(customerEmail)) {
+    return true;
+  }
+
+  const staffRow = await prisma.shopSettings.findFirst({
+    where: { shop: shopStringFilter(shop) },
+    select: { appAdminCustomerIds: true, globalStaffEmails: true },
+  });
+
+  if (emailMatchesGlobalStaffList(customerEmail, staffRow?.globalStaffEmails)) {
+    return true;
   }
 
   if (customerIdInEnvAdminAllowlist(customerId)) {
     return true;
   }
 
-  if (await customerIdInShopSettingsAdminList(shop, customerId)) {
+  if (
+    staffRow?.appAdminCustomerIds &&
+    allowlistRawMatchesCustomer(staffRow.appAdminCustomerIds, customerId)
+  ) {
     return true;
   }
 
