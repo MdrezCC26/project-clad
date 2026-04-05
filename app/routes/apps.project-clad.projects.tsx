@@ -393,9 +393,7 @@ export default function ProjectsPage() {
             </div>
           </header>
           {viewerStaffViewAll && (
-            <p className="project-clad-staff-banner">
-              Staff view: showing all saved projects for this store.
-            </p>
+            <p className="project-clad-staff-banner">Staff view</p>
           )}
           {variantLookupError && (
             <p className="project-clad-muted">{variantLookupError}</p>

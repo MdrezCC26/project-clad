@@ -39,7 +39,7 @@ body.project-clad-leaving .project-clad-page {
   transform: translateY(-8px);
 }
 
-/* Staff mode: full-store project list (centered, red glow) */
+/* Staff mode label on projects list (centered, red glow) */
 .project-clad-staff-banner {
   display: block;
   width: 100%;
