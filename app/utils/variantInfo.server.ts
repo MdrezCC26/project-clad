@@ -10,6 +10,9 @@ export type VariantDisplayInfo = {
   imageUrl: string | null;
   imageAlt: string | null;
   productHandle: string | null;
+  sku: string | null;
+  /** Shopify Product legacy numeric id (from GID). */
+  catalogProductId: string | null;
 };
 
 export type VariantSnapshotV1 = {
@@ -31,6 +34,8 @@ export type CartLineMetaInput = {
   variantTitle?: string;
   imageUrl?: string | null;
   productHandle?: string | null;
+  /** Shopify product id from `/cart.js` (numeric string). */
+  productId?: string | null;
   sku?: string | null;
   vendor?: string | null;
 };
@@ -70,6 +75,8 @@ export type OrderLineCaptureV1 = {
   displayLabel: string;
   variantId: string;
   sku: string | null;
+  /** Shopify product id when captured from cart (numeric). */
+  productId?: string | null;
   unitPrice: string;
   capturedAt: string;
 };
@@ -89,11 +96,13 @@ export function buildOrderLineCapture(args: {
           variantTitle || "Default Title",
         )
       : `Variant ${args.variantId}`;
+  const productId = meta?.productId?.trim() ? meta.productId.trim() : null;
   return {
     v: 1,
     displayLabel,
     variantId: args.variantId,
     sku: meta?.sku?.trim() ? meta.sku.trim() : null,
+    ...(productId ? { productId } : {}),
     unitPrice: args.unitPrice,
     capturedAt: new Date().toISOString(),
   };
@@ -108,11 +117,16 @@ export function parseOrderLineCapture(
   if (typeof o.displayLabel !== "string" || typeof o.variantId !== "string") {
     return null;
   }
+  const productId =
+    typeof o.productId === "string" && o.productId.trim()
+      ? o.productId.trim()
+      : null;
   return {
     v: 1,
     displayLabel: o.displayLabel,
     variantId: o.variantId,
     sku: typeof o.sku === "string" ? o.sku : null,
+    ...(productId ? { productId } : {}),
     unitPrice: typeof o.unitPrice === "string" ? o.unitPrice : "",
     capturedAt: typeof o.capturedAt === "string" ? o.capturedAt : "",
   };
@@ -147,6 +161,7 @@ function snapshotFromLive(info: VariantDisplayInfo): VariantSnapshotV1 {
     imageAlt: info.imageAlt,
     productHandle: info.productHandle,
     capturedAt: new Date().toISOString(),
+    sku: info.sku ?? null,
   };
 }
 
@@ -155,7 +170,8 @@ function snapshotsEqual(a: VariantSnapshotV1, b: VariantSnapshotV1) {
     a.productTitle === b.productTitle &&
     a.variantTitle === b.variantTitle &&
     a.imageUrl === b.imageUrl &&
-    a.productHandle === b.productHandle
+    a.productHandle === b.productHandle &&
+    (a.sku ?? null) === (b.sku ?? null)
   );
 }
 
@@ -191,7 +207,8 @@ export async function resolveVariantDisplayInfo(
   let storefrontError: string | null = null;
 
   try {
-    merged = await getVariantInfo(shop, unique);
+    const fromStore = await getVariantInfo(shop, unique);
+    merged = fromStore as Record<string, VariantDisplayInfo>;
   } catch (e) {
     storefrontError =
       e instanceof Error ? e.message : "Storefront variant lookup failed.";
@@ -206,7 +223,10 @@ export async function resolveVariantDisplayInfo(
         missingAfterStorefront,
         options?.adminSession,
       );
-      merged = { ...merged, ...admin };
+      merged = {
+        ...merged,
+        ...(admin as Record<string, VariantDisplayInfo>),
+      };
     } catch (e) {
       const adminMsg =
         e instanceof Error ? e.message : "Admin variant lookup failed.";
@@ -299,16 +319,25 @@ export async function persistVariantSnapshotsFromLive(args: {
     const prev = parseVariantSnapshot(item.variantSnapshot);
     const next: VariantSnapshotV1 = {
       ...snapshotFromLive(live),
-      sku: prev?.sku ?? null,
+      sku: live.sku ?? prev?.sku ?? null,
       vendor: prev?.vendor ?? null,
       source: "shopify_api",
     };
-    if (prev && snapshotsEqual(prev, next)) continue;
+    const snapshotChanged = !(prev && snapshotsEqual(prev, next));
 
-    updates.push({
-      id: item.id,
-      data: { variantSnapshot: next as unknown as Prisma.InputJsonValue },
-    });
+    const data: Prisma.JobItemUpdateInput = {};
+    if (snapshotChanged) {
+      data.variantSnapshot = next as unknown as Prisma.InputJsonValue;
+    }
+    if (live.catalogProductId) {
+      data.catalogProductId = live.catalogProductId;
+    }
+    if (live.sku) {
+      data.catalogSku = live.sku;
+    }
+    if (Object.keys(data).length === 0) continue;
+
+    updates.push({ id: item.id, data });
   }
 
   if (updates.length === 0) return;

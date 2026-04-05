@@ -3,7 +3,10 @@ import {
   getCustomersByIds,
   type CustomerInfo,
 } from "./adminCustomers.server";
-import { getAdminVariantInfo } from "./adminVariants.server";
+import {
+  getAdminVariantInfo,
+  type AdminVariantInfo,
+} from "./adminVariants.server";
 
 const escapeCell = (value: string) => {
   const safe = value.replace(/"/g, '""');
@@ -34,7 +37,7 @@ export async function getCsvForProjectIds(
     project.jobs.flatMap((job) => job.items.map((item) => item.variantId)),
   );
   const variantInfo = await getAdminVariantInfo(shop, variantIds).catch(
-    () => ({}) as Awaited<ReturnType<typeof getAdminVariantInfo>>,
+    () => ({}) as Record<string, AdminVariantInfo>,
   );
 
   const rows: string[] = [];
@@ -50,6 +53,8 @@ export async function getCsvForProjectIds(
       "Order Name",
       "Item ID",
       "Variant ID",
+      "Catalog product ID",
+      "SKU",
       "Product",
       "Quantity",
       "Price Snapshot",
@@ -73,6 +78,8 @@ export async function getCsvForProjectIds(
           project.companyName || "",
           ownerEmail,
           memberEmails,
+          "",
+          "",
           "",
           "",
           "",
@@ -104,6 +111,8 @@ export async function getCsvForProjectIds(
             "",
             "",
             "",
+            "",
+            "",
           ]
             .map((cell) => escapeCell(String(cell)))
             .join(","),
@@ -130,6 +139,8 @@ export async function getCsvForProjectIds(
             job.name,
             item.id,
             item.variantId,
+            item.catalogProductId || info?.catalogProductId || "",
+            item.catalogSku || info?.sku || "",
             productName,
             item.quantity,
             item.priceSnapshot.toString(),

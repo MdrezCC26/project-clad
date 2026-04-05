@@ -1211,6 +1211,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 variantSnapshot: item.variantSnapshot ?? undefined,
                 customData: item.customData ?? undefined,
                 orderLineCapture: item.orderLineCapture ?? undefined,
+                catalogProductId: item.catalogProductId ?? undefined,
+                catalogSku: item.catalogSku ?? undefined,
               })),
             },
           },
@@ -1515,6 +1517,9 @@ export default function ProjectDetailPage() {
 
   const isOrderAwaitingApproval = (jobId: string) =>
     hasProjectLevelApprovalPending || getApprovalStatus(jobId, "") === "awaiting";
+
+  /** NA buyers use the approval flow; app admins (staff) can submit orders for review too. */
+  const showApprovalSubmitFlow = hideAddToCart || viewerIsAdmin;
 
   const getJobApprovalInfo = (jobId: string) => {
     const r = approvalRequests.find(
@@ -2481,7 +2486,7 @@ export default function ProjectDetailPage() {
                             className="project-clad-job-name-input"
                           />
                         </div>
-                        {hideAddToCart ? (
+                        {showApprovalSubmitFlow ? (
                           (() => {
                             const status = getApprovalStatus(job.id, "");
                             if (status === "approved") {

@@ -1,9 +1,13 @@
+import { shopifyGidToLegacyNumericId } from "./shopifyIds.server";
+
 type VariantInfo = {
   title: string;
   productTitle: string;
   imageUrl: string | null;
   imageAlt: string | null;
   productHandle: string | null;
+  sku: string | null;
+  catalogProductId: string | null;
 };
 
 const STOREFRONT_API_VERSION = "2024-10";
@@ -50,11 +54,13 @@ export const getVariantInfo = async (
               ... on ProductVariant {
                 id
                 title
+                sku
                 image {
                   url
                   altText
                 }
                 product {
+                  id
                   title
                   handle
                   featuredImage {
@@ -79,8 +85,10 @@ export const getVariantInfo = async (
         nodes?: Array<{
           id: string;
           title: string;
+          sku?: string | null;
           image?: { url: string; altText?: string | null } | null;
           product?: {
+            id: string;
             title: string;
             handle: string;
             featuredImage?: { url: string; altText?: string | null } | null;
@@ -94,12 +102,15 @@ export const getVariantInfo = async (
       const variantId = idMap.get(node.id);
       if (!variantId) return;
       const image = node.image || node.product?.featuredImage || null;
+      const sku = node.sku?.trim() ? node.sku.trim() : null;
       results[variantId] = {
         title: node.title,
         productTitle: node.product?.title || "Product",
         imageUrl: image?.url || null,
         imageAlt: image?.altText || node.product?.title || null,
         productHandle: node.product?.handle || null,
+        sku,
+        catalogProductId: shopifyGidToLegacyNumericId(node.product?.id),
       };
     });
   }

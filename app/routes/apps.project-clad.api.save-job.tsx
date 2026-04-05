@@ -75,6 +75,18 @@ function orderLineCaptureJson(item: NormalizedCartItem): Prisma.InputJsonValue {
   }) as unknown as Prisma.InputJsonValue;
 }
 
+/** Stable catalog keys from cart line meta (product id + SKU). */
+function catalogFromLineMeta(
+  lineMeta?: CartLineMetaInput | null,
+): Pick<Prisma.JobItemCreateInput, "catalogProductId" | "catalogSku"> {
+  const pid = lineMeta?.productId?.trim();
+  const sku = lineMeta?.sku?.trim();
+  return {
+    ...(pid ? { catalogProductId: pid } : {}),
+    ...(sku ? { catalogSku: sku } : {}),
+  };
+}
+
 async function finalizeCartOrderSaved(args: {
   shop: string;
   projectId: string;
@@ -234,6 +246,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 sortOrder: index + 1,
                 variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
                 orderLineCapture: orderLineCaptureJson(item),
+                ...catalogFromLineMeta(item.lineMeta),
                 customData:
                   item.properties && item.properties.length
                     ? (item.properties as Prisma.InputJsonValue)
@@ -327,6 +340,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             sortOrder: index + 1,
             variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
             orderLineCapture: orderLineCaptureJson(item),
+            ...catalogFromLineMeta(item.lineMeta),
             customData:
               item.properties && item.properties.length
                 ? (item.properties as Prisma.InputJsonValue)
@@ -434,6 +448,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               variantSnapshot: item.variantSnapshot ?? undefined,
               customData: item.customData ?? undefined,
               orderLineCapture: item.orderLineCapture ?? undefined,
+              catalogProductId: item.catalogProductId ?? undefined,
+              catalogSku: item.catalogSku ?? undefined,
             })),
           },
         },
@@ -463,6 +479,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             sortOrder: index + 1,
             variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
             orderLineCapture: orderLineCaptureJson(item),
+            ...catalogFromLineMeta(item.lineMeta),
             customData:
               item.properties && item.properties.length
                 ? (item.properties as Prisma.InputJsonValue)
@@ -495,6 +512,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             sortOrder: nextSortOrder,
             variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
             orderLineCapture: orderLineCaptureJson(item),
+            ...catalogFromLineMeta(item.lineMeta),
             customData:
               item.properties && item.properties.length
                 ? (item.properties as Prisma.InputJsonValue)

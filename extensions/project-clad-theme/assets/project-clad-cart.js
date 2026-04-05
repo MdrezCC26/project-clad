@@ -309,6 +309,10 @@
           variantTitle: variantTitle || undefined,
           imageUrl: imageUrlFromLine(item),
           productHandle: productHandleFromUrl(item.url),
+          productId:
+            item.product_id != null && item.product_id !== ""
+              ? String(item.product_id)
+              : undefined,
           sku: item.sku ? String(item.sku) : null,
           vendor: item.vendor ? String(item.vendor) : null,
         },

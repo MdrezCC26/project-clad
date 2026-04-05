@@ -1,11 +1,14 @@
 import { sessionStorage } from "../shopify.server";
+import { shopifyGidToLegacyNumericId } from "./shopifyIds.server";
 
-type VariantInfo = {
+export type AdminVariantInfo = {
   title: string;
   productTitle: string;
   imageUrl: string | null;
   imageAlt: string | null;
   productHandle: string | null;
+  sku: string | null;
+  catalogProductId: string | null;
 };
 
 const chunk = <T,>(items: T[], size: number) => {
@@ -22,7 +25,7 @@ export const getAdminVariantInfo = async (
   shop: string,
   variantIds: string[],
   currentSession?: SessionWithOptionalToken,
-): Promise<Record<string, VariantInfo>> => {
+): Promise<Record<string, AdminVariantInfo>> => {
   if (variantIds.length === 0) {
     return {};
   }
@@ -47,7 +50,7 @@ export const getAdminVariantInfo = async (
     return gid;
   });
 
-  const results: Record<string, VariantInfo> = {};
+  const results: Record<string, AdminVariantInfo> = {};
   const endpoint = `https://${shop}/admin/api/2024-10/graphql.json`;
 
   for (const group of chunk(gids, 50)) {
@@ -64,11 +67,13 @@ export const getAdminVariantInfo = async (
               ... on ProductVariant {
                 id
                 title
+                sku
                 image {
                   url
                   altText
                 }
                 product {
+                  id
                   title
                   handle
                   featuredImage {
@@ -95,8 +100,10 @@ export const getAdminVariantInfo = async (
         nodes?: Array<{
           id: string;
           title: string;
+          sku?: string | null;
           image?: { url: string; altText?: string | null } | null;
           product?: {
+            id: string;
             title: string;
             handle: string;
             featuredImage?: { url: string; altText?: string | null } | null;
@@ -116,8 +123,10 @@ export const getAdminVariantInfo = async (
       | Array<{
           id: string;
           title: string;
+          sku?: string | null;
           image?: { url: string; altText?: string | null } | null;
           product?: {
+            id: string;
             title: string;
             handle: string;
             featuredImage?: { url: string; altText?: string | null } | null;
@@ -130,12 +139,15 @@ export const getAdminVariantInfo = async (
       const variantId = idMap.get(node.id);
       if (!variantId) return;
       const image = node.image || node.product?.featuredImage || null;
+      const sku = node.sku?.trim() ? node.sku.trim() : null;
       results[variantId] = {
         title: node.title,
         productTitle: node.product?.title || "Product",
         imageUrl: image?.url || null,
         imageAlt: image?.altText || node.product?.title || null,
         productHandle: node.product?.handle || null,
+        sku,
+        catalogProductId: shopifyGidToLegacyNumericId(node.product?.id),
       };
     });
   }

@@ -83,6 +83,10 @@ model JobItem {
   id              String       @id @default(cuid())
   jobId           String
   variantId       String
+  /// Shopify product ID (numeric). More stable than variant ID when variants are recreated.
+  catalogProductId String?
+  /// Variant SKU at last sync / save. Preferred business key when SKUs are unique and maintained.
+  catalogSku      String?
   quantity        Int
   priceSnapshot   Decimal
   sortOrder       Int          @default(0)
@@ -96,6 +100,7 @@ model JobItem {
 
   @@index([jobId])
   @@index([jobId, sortOrder])
+  @@index([catalogSku])
 }
 
 model DrawingJob {
