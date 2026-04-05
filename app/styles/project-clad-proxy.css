@@ -146,6 +146,12 @@ body.project-clad-leaving .project-clad-page {
     0 1px 0 rgba(255, 255, 255, 0.28),
     0 0 6px rgba(211, 47, 47, 0.22),
     0 0 14px rgba(211, 47, 47, 0.12);
+  /* Approval / confirming: same glow *shape* as grey neu hover label, amber/yellow (not red) */
+  --pc-approval-yellow-text: rgba(180, 125, 0, 0.96);
+  --pc-approval-yellow-text-glow:
+    0 1px 0 rgba(255, 255, 255, 0.32),
+    0 0 6px rgba(234, 179, 0, 0.42),
+    0 0 14px rgba(250, 204, 21, 0.28);
   --pc-caesura-transition:
     box-shadow 250ms ease-in-out, border-color 250ms ease-in-out, color 250ms ease-in-out,
     filter 250ms ease-in-out, background 250ms ease-in-out;
@@ -1414,6 +1420,88 @@ html:has(.project-clad-page--projects) body {
   opacity: 1;
 }
 
+/* Job awaiting approval: yellow label glow (same stack as grey neu hover), not red */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending[open]
+  .project-clad-order-summary-head-row
+  .project-clad-title,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending[open]
+  .project-clad-order-summary-head-row
+  .project-clad-title
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending[open]
+  .project-clad-order-summary-head-row__subtotal
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending[open]
+  .project-clad-order-summary-head-row__subtotal
+  .project-clad-order-summary-qty__sub-amount,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending[open]
+  .project-clad-order-summary-head-row__subtotal
+  .project-clad-hidden-link {
+  color: var(--pc-approval-yellow-text) !important;
+  text-shadow: var(--pc-approval-yellow-text-glow) !important;
+  opacity: 1;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open])
+  summary
+  .project-clad-title,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open])
+  summary
+  .project-clad-title
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open])
+  summary
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open])
+  summary
+  .project-clad-order-summary-qty__sub-amount,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open])
+  summary
+  .project-clad-hidden-link {
+  color: var(--pc-approval-yellow-text) !important;
+  text-shadow: var(--pc-approval-yellow-text-glow) !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open]):hover
+  summary
+  .project-clad-title,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open]):hover
+  summary
+  .project-clad-title
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open]):hover
+  summary
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open]):hover
+  summary
+  .project-clad-order-summary-qty__sub-amount,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open]):hover
+  summary
+  .project-clad-hidden-link {
+  color: var(--pc-approval-yellow-text) !important;
+  text-shadow: var(--pc-approval-yellow-text-glow) !important;
+}
+
 /*
  * ::details-content: height open/close — avoid !important on closed height/padding so the
  * browser can interpolate back to 0 (same duration/easing as open). Still depends on
@@ -1857,24 +1945,85 @@ html:has(.project-clad-page--projects) body {
   filter: brightness(1.02);
 }
 
-.project-clad-page--projects .project-clad-card.project-clad-approval-pending,
-.project-clad-page--projects .project-clad-card.project-clad-card--confirming,
-.project-clad-page--projects.project-clad-page--detail
-  details.project-clad-order-row.project-clad-details.project-clad-approval-pending {
-  border: 3px solid #c00;
-  outline: 2px solid #c00;
-  outline-offset: 2px;
+/* Approval / confirming: white rim + flat neu face like grey .project-clad-button:hover (no red frame) */
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card.project-clad-approval-pending,
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card.project-clad-card--confirming {
+  border-radius: var(--pc-neu-radius);
+  border: var(--pc-caesura-border);
+  border-color: var(--pc-caesura-border-hover);
+  background: var(--pc-caesura-bg);
+  background-image: none;
+  box-shadow: var(--pc-btn-neu-shadow-hover);
+  outline: none;
 }
 
-.project-clad-page--projects .project-clad-card.project-clad-approval-pending:hover,
-.project-clad-page--projects .project-clad-card.project-clad-card--confirming:hover,
-.project-clad-page--projects.project-clad-page--detail
-  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:hover {
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card.project-clad-approval-pending:hover,
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card.project-clad-card--confirming:hover {
   box-shadow:
-    0 2px 0 rgba(255, 255, 255, 0.95) inset,
-    0 -4px 10px rgba(0, 0, 0, 0.08) inset,
-    0 24px 48px rgba(0, 0, 0, 0.16),
-    0 0 0 1px rgba(192, 0, 0, 0.25);
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 -1px 1px rgba(0, 0, 0, 0.07) inset,
+    22px 22px 48px #b0b0b0,
+    -22px -22px 48px #ffffff;
+  border-color: rgba(255, 255, 255, 0.65);
+}
+
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card.project-clad-approval-pending
+  .project-clad-title,
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card.project-clad-card--confirming
+  .project-clad-title,
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card.project-clad-approval-pending
+  .project-clad-muted,
+.project-clad-page--projects:not(.project-clad-page--detail)
+  .project-clad-card.project-clad-card--confirming
+  .project-clad-muted {
+  color: var(--pc-approval-yellow-text) !important;
+  text-shadow: var(--pc-approval-yellow-text-glow) !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-card.project-clad-warning.project-clad-approval-pending {
+  border: 2px solid rgba(255, 255, 255, 0.88);
+  outline: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-card.project-clad-warning.project-clad-approval-pending p,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-card.project-clad-warning.project-clad-approval-pending strong {
+  color: var(--pc-approval-yellow-text);
+  text-shadow: var(--pc-approval-yellow-text-glow);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open]) {
+  border: var(--pc-caesura-border);
+  border-color: var(--pc-caesura-border-hover);
+  outline: none;
+  box-shadow: var(--pc-btn-neu-shadow-hover);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending[open] {
+  border: var(--pc-caesura-border);
+  border-color: var(--pc-caesura-border-hover);
+  outline: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details.project-clad-approval-pending:not([open]):hover {
+  border-color: rgba(255, 255, 255, 0.65);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 -1px 1px rgba(0, 0, 0, 0.07) inset,
+    22px 22px 48px #b0b0b0,
+    -22px -22px 48px #ffffff;
 }
 
 .project-clad-logo {
@@ -2337,12 +2486,7 @@ html:has(.project-clad-page--projects) body {
   border: none;
 }
 
-/* Projects list: card in "Confirming order" state */
-.project-clad-card--confirming {
-  border-color: #c00;
-  outline: 2px solid #c00;
-  outline-offset: 2px;
-}
+/* .project-clad-card--confirming list styling lives under .project-clad-page--projects (neu + yellow type) */
 
 .project-clad-card-link {
   display: block;
@@ -3239,12 +3383,7 @@ details.project-clad-edit-mode
   cursor: grab;
 }
 
-.project-clad-approval-pending {
-  border: 3px solid #c00;
-  outline: 2px solid #c00;
-  outline-offset: 2px;
-  box-shadow: none;
-}
+/* Approval chrome: order rows + list tiles + warning banner (scoped above); no global red frame */
 
 .project-clad-pending-delete {
   opacity: 0.7;
