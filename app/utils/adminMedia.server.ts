@@ -13,7 +13,8 @@ export async function listMediaImages(
   const sessions = await sessionStorage.findSessionsByShop(shop);
   const offlineSession = sessions.find((s) => !s.isOnline);
 
-  if (!offlineSession) {
+  const accessToken = offlineSession?.accessToken;
+  if (!accessToken) {
     throw new Error("App needs to be reauthorized to access media.");
   }
 
@@ -23,7 +24,7 @@ export async function listMediaImages(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": offlineSession.accessToken,
+        "X-Shopify-Access-Token": accessToken,
       },
       body: JSON.stringify({
         query: `#graphql

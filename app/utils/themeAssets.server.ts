@@ -106,13 +106,14 @@ export const getThemeStyles = async (shop: string) => {
 
   const sessions = await sessionStorage.findSessionsByShop(shop);
   const offlineSession = sessions.find((session) => !session.isOnline);
-  if (!offlineSession) {
+  const accessToken = offlineSession?.accessToken;
+  if (!accessToken) {
     return { urls: [], styles: [] };
   }
 
   const themesResponse = await fetchJson(
     `https://${shop}/admin/api/${THEME_API_VERSION}/themes.json?role=main`,
-    offlineSession.accessToken,
+    accessToken,
   );
 
   const mainTheme = themesResponse?.themes?.[0];
@@ -126,7 +127,7 @@ export const getThemeStyles = async (shop: string) => {
   if (!configuredKey) {
     const themeLiquidResponse = await fetchJson(
       `https://${shop}/admin/api/${THEME_API_VERSION}/themes/${mainTheme.id}/assets.json?asset[key]=layout/theme.liquid`,
-      offlineSession.accessToken,
+      accessToken,
     );
     const themeLiquid = themeLiquidResponse?.asset?.value;
     if (typeof themeLiquid === "string") {
@@ -143,7 +144,7 @@ export const getThemeStyles = async (shop: string) => {
       `https://${shop}/admin/api/${THEME_API_VERSION}/themes/${mainTheme.id}/assets.json?asset[key]=${encodeURIComponent(
         key,
       )}`,
-      offlineSession.accessToken,
+      accessToken,
     );
 
     const publicUrl = assetResponse?.asset?.public_url;
@@ -160,7 +161,7 @@ export const getThemeStyles = async (shop: string) => {
 
   const assetsResponse = await fetchJson(
     `https://${shop}/admin/api/${THEME_API_VERSION}/themes/${mainTheme.id}/assets.json`,
-    offlineSession.accessToken,
+    accessToken,
   );
 
   const assetKeys =
@@ -176,7 +177,7 @@ export const getThemeStyles = async (shop: string) => {
       `https://${shop}/admin/api/${THEME_API_VERSION}/themes/${mainTheme.id}/assets.json?asset[key]=${encodeURIComponent(
         key,
       )}`,
-      offlineSession.accessToken,
+      accessToken,
     );
 
     const publicUrl = assetResponse?.asset?.public_url;

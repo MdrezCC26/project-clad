@@ -5,7 +5,7 @@ import { requireAppProxyCustomer } from "../utils/appProxy.server";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { shop, customerId } = requireAppProxyCustomer(request);
-  const token = params.token || "";
+  const token = params.token ?? "";
 
   const shareToken = await prisma.projectShareToken.findFirst({
     where: { token, project: { shop } },

@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import prisma from "../db.server";
 
 export type ActivityVisibility = "member" | "admin";
@@ -15,7 +16,7 @@ export async function logProjectActivity(input: {
       projectId: input.projectId,
       jobId: input.jobId ?? null,
       type: input.type,
-      payload: input.payload ?? undefined,
+      payload: input.payload as Prisma.InputJsonValue | undefined,
       visibility: input.visibility,
       actorCustomerId: input.actorCustomerId ?? null,
     },

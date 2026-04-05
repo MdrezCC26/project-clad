@@ -1066,7 +1066,7 @@ export default function Settings() {
                 name="projectId"
                 value={selectedProjectId || ""}
               />
-              <s-stack direction="inline" gap="base" align="center">
+              <s-stack direction="inline" gap="base" alignItems="center">
                 <label style={{ display: "grid", gap: "0.25rem" }}>
                   <span>Email CSV to</span>
                   <input
@@ -1185,8 +1185,8 @@ export default function Settings() {
                               key={item.id}
                               direction="inline"
                               gap="base"
-                              align="center"
-                              justify="space-between"
+                              alignItems="center"
+                              justifyContent="space-between"
                             >
                               <s-paragraph>
                                 {item.displayName} • Quantity {item.quantity}
@@ -1232,8 +1232,8 @@ export default function Settings() {
                           key={`${selectedProject.id}-${member.customerId}`}
                           direction="inline"
                           gap="base"
-                          align="center"
-                          justify="space-between"
+                          alignItems="center"
+                          justifyContent="space-between"
                         >
                           <s-paragraph>
                             {name || "—"} • {member.email || "—"} •{" "}

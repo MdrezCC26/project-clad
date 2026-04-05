@@ -2,7 +2,7 @@ import { sessionStorage } from "../shopify.server";
 
 const CUSTOMER_API_VERSION = "2024-10";
 
-type CustomerInfo = {
+export type CustomerInfo = {
   id: string;
   email: string | null;
   firstName: string | null;
@@ -27,7 +27,8 @@ export const findCustomerIdByEmail = async (
 
   const sessions = await sessionStorage.findSessionsByShop(shop);
   const offlineSession = sessions.find((session) => !session.isOnline);
-  if (!offlineSession) {
+  const accessToken = offlineSession?.accessToken;
+  if (!accessToken) {
     return null;
   }
 
@@ -36,7 +37,7 @@ export const findCustomerIdByEmail = async (
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Shopify-Access-Token": offlineSession.accessToken,
+      "X-Shopify-Access-Token": accessToken,
     },
     body: JSON.stringify({
       query: `
@@ -87,7 +88,7 @@ export const findCustomerIdByEmail = async (
   const restResponse = await fetch(restEndpoint, {
     headers: {
       "Content-Type": "application/json",
-      "X-Shopify-Access-Token": offlineSession.accessToken,
+      "X-Shopify-Access-Token": accessToken,
     },
   });
 
@@ -118,7 +119,8 @@ export const getCustomersByIds = async (
 
   const sessions = await sessionStorage.findSessionsByShop(shop);
   const offlineSession = sessions.find((session) => !session.isOnline);
-  if (!offlineSession) {
+  const accessToken = offlineSession?.accessToken;
+  if (!accessToken) {
     throw new Error(
       "Customer details unavailable. Reauthorize the app to refresh access.",
     );
@@ -134,7 +136,7 @@ export const getCustomersByIds = async (
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": offlineSession.accessToken,
+        "X-Shopify-Access-Token": accessToken,
       },
       body: JSON.stringify({
         query: `
@@ -205,7 +207,8 @@ export const listCustomers = async (
 ): Promise<CustomerInfo[]> => {
   const sessions = await sessionStorage.findSessionsByShop(shop);
   const offlineSession = sessions.find((session) => !session.isOnline);
-  if (!offlineSession) {
+  const accessToken = offlineSession?.accessToken;
+  if (!accessToken) {
     throw new Error(
       "Customer details unavailable. Reauthorize the app to refresh access.",
     );
@@ -216,7 +219,7 @@ export const listCustomers = async (
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Shopify-Access-Token": offlineSession.accessToken,
+      "X-Shopify-Access-Token": accessToken,
     },
     body: JSON.stringify({
       query: `

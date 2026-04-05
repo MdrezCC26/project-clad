@@ -2,11 +2,18 @@ import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "reac
 import { redirect, useLoaderData } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
-import { getCustomersByIds } from "../utils/adminCustomers.server";
+import {
+  getCustomersByIds,
+  type CustomerInfo,
+} from "../utils/adminCustomers.server";
 import { getCsvForProjectIds } from "../utils/exportProjectsCsv.server";
 import { isEmailConfigured, sendEmail } from "../utils/email.server";
-import { getVariantInfo } from "../utils/storefront.server";
-import { getAdminVariantInfo } from "../utils/adminVariants.server";
+import {
+  buildVariantPresentation,
+  parseVariantSnapshot,
+  persistVariantSnapshotsFromLive,
+  resolveVariantDisplayInfo,
+} from "../utils/variantInfo.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
@@ -85,25 +92,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const variantIds = projects.flatMap((project) =>
     project.jobs.flatMap((job) => job.items.map((item) => item.variantId)),
   );
-  let variantInfo: Record<
-    string,
-    { title: string; productTitle: string; imageUrl?: string | null; imageAlt?: string | null; productHandle?: string | null }
-  > = {};
-  let variantLookupError: string | null = null;
-  try {
-    // Prefer Storefront API; fall back to Admin API if needed.
-    variantInfo = await getVariantInfo(shop, variantIds);
-    if (Object.keys(variantInfo).length === 0) {
-      variantInfo = await getAdminVariantInfo(shop, variantIds);
-    }
-  } catch (error) {
-    try {
-      variantInfo = await getAdminVariantInfo(shop, variantIds);
-    } catch (error2) {
-      variantLookupError =
-        error2 instanceof Error ? error2.message : "Product lookup failed.";
-    }
-  }
+  const { info: variantInfo, error: variantLookupError } =
+    await resolveVariantDisplayInfo(shop, variantIds);
+
+  await persistVariantSnapshotsFromLive({
+    items: projects.flatMap((project) =>
+      project.jobs.flatMap((job) =>
+        job.items.map((item) => ({
+          id: item.id,
+          variantId: item.variantId,
+          variantSnapshot: item.variantSnapshot,
+        })),
+      ),
+    ),
+    liveByVariantId: variantInfo,
+  });
 
   let hideAddToCart = false;
   try {
@@ -114,7 +117,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const viewerTags =
       customerInfo[numericId]?.tags ?? customerInfo[customerId]?.tags ?? [];
     hideAddToCart = viewerTags.some(
-      (t) => String(t).trim().toUpperCase() === "NA",
+      (t: string) => String(t).trim().toUpperCase() === "NA",
     );
   } catch {
     // If customer lookup fails, show add-to-cart (no NA restriction)
@@ -153,7 +156,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   ];
   const approverInfo =
     approverCustomerIds.length > 0
-      ? await getCustomersByIds(shop, approverCustomerIds).catch(() => ({}))
+      ? await getCustomersByIds(shop, approverCustomerIds).catch(
+          () => ({}) as Record<string, CustomerInfo>,
+        )
       : {};
 
   const payload: ProjectListItem[] = projects.map((project) => {
@@ -196,23 +201,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       isLocked: job.isLocked || Boolean(job.orderLink),
       itemCount: job.items.reduce((sum, item) => sum + item.quantity, 0),
       items: job.items.map((item) => {
-        const info = variantInfo[item.variantId];
-        const displayName = info
-          ? `${info.productTitle} — ${info.title}`
-          : `Variant ${item.variantId}`;
-
-        const productUrl = info?.productHandle
-          ? `https://${shop}/products/${info.productHandle}?variant=${item.variantId}`
-          : null;
+        const pres = buildVariantPresentation({
+          shop,
+          variantId: item.variantId,
+          live: variantInfo[item.variantId],
+          snapshot: parseVariantSnapshot(item.variantSnapshot),
+        });
 
         return {
           id: item.id,
           variantId: item.variantId,
           quantity: item.quantity,
-          displayName,
-          imageUrl: info?.imageUrl || null,
-          imageAlt: info?.imageAlt || null,
-          productUrl,
+          displayName: pres.displayName,
+          imageUrl: pres.imageUrl,
+          imageAlt: pres.imageAlt,
+          productUrl: pres.productUrl,
         };
       }),
     })),
@@ -282,7 +285,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const customerInfo = await getCustomersByIds(shop, [customerId]);
     const viewerTags = customerInfo[customerId]?.tags ?? [];
     const hasNATag = viewerTags.some(
-      (t) => String(t).trim().toUpperCase() === "NA",
+      (t: string) => String(t).trim().toUpperCase() === "NA",
     );
     canAdminMembers = isOwner || (canEdit && !hasNATag);
   } catch {
@@ -335,6 +338,9 @@ export default function ProjectsPage() {
 
   return (
     <>
+      {(themeStyles?.urls ?? []).map((href: string) => (
+        <link key={href} rel="stylesheet" href={href} />
+      ))}
       <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       {inlineStyles.map((css, index) => (
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
@@ -535,10 +541,6 @@ export default function ProjectsPage() {
   );
 }
 
-export const links: LinksFunction = (args) => {
-  const hrefs = args?.data?.themeStyles?.urls || [];
-  return [
-    ...hrefs.map((href) => ({ rel: "stylesheet", href })),
-    { rel: "stylesheet", href: proxyStylesUrl },
-  ];
-};
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: proxyStylesUrl },
+];

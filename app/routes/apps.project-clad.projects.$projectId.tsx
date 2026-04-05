@@ -113,7 +113,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     const customerInfo = await getCustomersByIds(shop, [customerId]);
     const viewerTags = customerInfo[customerId]?.tags ?? [];
     hideAddToCart = viewerTags.some(
-      (t) => String(t).trim().toUpperCase() === "NA",
+      (t: string) => String(t).trim().toUpperCase() === "NA",
     );
   } catch {
     // If customer lookup fails, show add-to-cart (no NA restriction)
@@ -396,6 +396,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
                 variantId: item.variantId,
                 quantity: item.quantity,
                 priceSnapshot: item.priceSnapshot,
+                variantSnapshot: item.variantSnapshot ?? undefined,
+                customData: item.customData ?? undefined,
               })),
             },
           },
@@ -686,6 +688,9 @@ export default function ProjectDetailPage() {
 
   return (
     <>
+      {(themeStyles?.urls ?? []).map((href: string) => (
+        <link key={href} rel="stylesheet" href={href} />
+      ))}
       <div
         className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
         data-projectclad-pricing-modal-backdrop
@@ -1056,10 +1061,6 @@ export default function ProjectDetailPage() {
   );
 }
 
-export const links: LinksFunction = ({ data }) => {
-  const hrefs = data?.themeStyles?.urls || [];
-  return [
-    ...hrefs.map((href) => ({ rel: "stylesheet", href })),
-    { rel: "stylesheet", href: proxyStylesUrl },
-  ];
-};
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: proxyStylesUrl },
+];

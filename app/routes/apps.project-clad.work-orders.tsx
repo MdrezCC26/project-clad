@@ -24,10 +24,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-export const links: LinksFunction = ({ data }) => {
-  const hrefs = data?.themeStyles?.urls || [];
-  return [...hrefs.map((href) => ({ rel: "stylesheet", href }))];
-};
+export const links: LinksFunction = () => [];
 
 export default function StorefrontWorkOrdersInfo() {
   const data = useLoaderData<typeof loader>();
@@ -35,6 +32,9 @@ export default function StorefrontWorkOrdersInfo() {
 
   return (
     <>
+      {(data.themeStyles?.urls ?? []).map((href: string) => (
+        <link key={href} rel="stylesheet" href={href} />
+      ))}
       <style dangerouslySetInnerHTML={{ __html: data.proxyStylesCss }} />
       {inlineStyles.map((css, index) => (
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />

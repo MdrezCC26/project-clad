@@ -80,14 +80,16 @@ model Job {
 }
 
 model JobItem {
-  id            String       @id @default(cuid())
-  jobId         String
-  variantId     String
-  quantity      Int
-  priceSnapshot Decimal
-  sortOrder     Int          @default(0)
-  customData    Json?
-  job           Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  id              String       @id @default(cuid())
+  jobId           String
+  variantId       String
+  quantity        Int
+  priceSnapshot   Decimal
+  sortOrder       Int          @default(0)
+  customData      Json?
+  /// Last known product/variant labels from Shopify (filled when live API succeeds).
+  variantSnapshot Json?
+  job             Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
   drawingJob    DrawingJob?
 
   @@index([jobId])

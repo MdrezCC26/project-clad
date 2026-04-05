@@ -9,6 +9,11 @@ export type AppProxyContext = {
   formActionUrl: string;
 };
 
+/** After {@link requireAppProxyCustomer} succeeds, the logged-in customer id is always set. */
+export type AppProxyContextWithCustomer = AppProxyContext & {
+  customerId: string;
+};
+
 const APP_PROXY_SIGNATURE_PARAM = "signature";
 
 const buildMessage = (params: URLSearchParams) => {
@@ -75,7 +80,7 @@ export const getAppProxyContext = (request: Request): AppProxyContext => {
 export const requireAppProxyCustomer = (
   request: Request,
   options: { jsonOnFail?: boolean } = {},
-) => {
+): AppProxyContextWithCustomer => {
   const context = getAppProxyContext(request);
 
   if (!context.customerId) {
@@ -90,5 +95,5 @@ export const requireAppProxyCustomer = (
     throw redirect(loginUrl);
   }
 
-  return context;
+  return { ...context, customerId: context.customerId };
 };

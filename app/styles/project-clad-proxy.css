@@ -1950,6 +1950,42 @@ html:has(.project-clad-page--projects) body {
   }
 }
 
+/*
+ * Project detail (app proxy) header: Add member + nav share a 3-col grid; mid widths overlap.
+ * Only when the left slot exists (:has) — other detail routes keep title + nav grid.
+ */
+@media (max-width: 900px) {
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-header-row:has(.project-clad-header-slot--left) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-header-row:has(.project-clad-header-slot--left)
+    .project-clad-header-slot--left {
+    display: flex !important;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    order: 2;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-header-row:has(.project-clad-header-slot--left)
+    .project-clad-nav {
+    grid-column: unset;
+    width: 100%;
+    max-width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    order: 1;
+  }
+}
+
 .project-clad-add-member-popover {
   --pc-add-member-control-h: 2.75rem;
   display: none;

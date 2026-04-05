@@ -12,8 +12,12 @@ import {
 import { redirect } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
-import { getVariantInfo } from "../utils/storefront.server";
-import { getAdminVariantInfo } from "../utils/adminVariants.server";
+import {
+  buildVariantPresentation,
+  parseVariantSnapshot,
+  persistVariantSnapshotsFromLive,
+  resolveVariantDisplayInfo,
+} from "../utils/variantInfo.server";
 import {
   findCustomerIdByEmail,
   getCustomersByIds,
@@ -24,6 +28,7 @@ import { getThemeStyles } from "../utils/themeAssets.server";
 import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
+import { logProjectActivity } from "../utils/projectActivity.server";
 
 type JobItemView = {
   id: string;
@@ -34,6 +39,8 @@ type JobItemView = {
   imageUrl: string | null;
   imageAlt: string | null;
   productUrl: string | null;
+  /** live = Shopify API; snapshot = cached DB; unknown = no product data */
+  variantDisplaySource: "live" | "snapshot" | "unknown";
   properties?: { name: string; value: string }[] | null;
 };
 
@@ -215,6 +222,36 @@ function formatActivitySummary(ev: ActivityFeedItem): string {
       return `${String(p.fromLabel || "—")} → ${String(p.toLabel || "—")}`;
     case "order_paid":
       return p.orderName ? `Paid · ${String(p.orderName)}` : "Paid";
+    case "approval_requested": {
+      if (p.scope === "project") {
+        return "Approval requested · entire project";
+      }
+      const jn = String(p.jobName || "Order");
+      return p.itemLine ? `Approval requested (line) · ${jn}` : `Approval requested · ${jn}`;
+    }
+    case "order_rejected": {
+      if (p.scope === "project") {
+        const r = String(p.rejectReason || "").trim();
+        return r ? `Project approval rejected — ${r}` : "Project approval rejected";
+      }
+      const jn = String(p.jobName || "Order");
+      const r = String(p.rejectReason || "").trim();
+      const suffix = r
+        ? ` — ${r.length > 90 ? `${r.slice(0, 87)}…` : r}`
+        : "";
+      return p.itemLine
+        ? `Order line rejected · ${jn}${suffix}`
+        : `Order rejected · ${jn}${suffix}`;
+    }
+    case "approval_request_cancelled": {
+      if (p.scope === "project") {
+        return "Approval request withdrawn · entire project";
+      }
+      const jn = String(p.jobName || "Order");
+      return p.itemLine
+        ? `Approval request withdrawn (line) · ${jn}`
+        : `Approval request withdrawn · ${jn}`;
+    }
     default:
       return ev.type.replace(/_/g, " ");
   }
@@ -365,26 +402,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const variantIds = project.jobs.flatMap((job) =>
     job.items.map((item) => item.variantId),
   );
-  let variantInfo: Record<
-    string,
-    { title: string; productTitle: string; imageUrl?: string | null; imageAlt?: string | null; productHandle?: string | null }
-  > = {};
-  let variantLookupError: string | null = null;
-  try {
-    // Prefer Storefront API (does not depend on admin auth),
-    // but fall back to Admin API if needed.
-    variantInfo = await getVariantInfo(shop, variantIds);
-    if (Object.keys(variantInfo).length === 0) {
-      variantInfo = await getAdminVariantInfo(shop, variantIds);
-    }
-  } catch (error) {
-    try {
-      variantInfo = await getAdminVariantInfo(shop, variantIds);
-    } catch (error2) {
-      variantLookupError =
-        error2 instanceof Error ? error2.message : "Product lookup failed.";
-    }
-  }
+  const { info: variantInfo, error: variantLookupError } =
+    await resolveVariantDisplayInfo(shop, variantIds);
+
+  await persistVariantSnapshotsFromLive({
+    items: project.jobs.flatMap((job) =>
+      job.items.map((item) => ({
+        id: item.id,
+        variantId: item.variantId,
+        variantSnapshot: item.variantSnapshot,
+      })),
+    ),
+    liveByVariantId: variantInfo,
+  });
   const memberIds = [
     project.ownerCustomerId,
     ...project.members.map((member) => member.customerId),
@@ -473,15 +503,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         orderName: job.orderLink?.orderName ?? null,
         subtotal: jobSubtotal,
         items: job.items.map((item) => {
-          const info = variantInfo[item.variantId];
-          const displayName = info
-            ? info.title && info.title !== "Default Title"
-              ? `${info.productTitle} — ${info.title}`
-              : info.productTitle
-            : `Variant ${item.variantId}`;
-          const productUrl = info?.productHandle
-            ? `https://${shop}/products/${info.productHandle}?variant=${item.variantId}`
-            : null;
+          const snap = parseVariantSnapshot(item.variantSnapshot);
+          const pres = buildVariantPresentation({
+            shop,
+            variantId: item.variantId,
+            live: variantInfo[item.variantId],
+            snapshot: snap,
+          });
+          const displayName = pres.displayName;
+          const productUrl = pres.productUrl;
 
           let properties: { name: string; value: string }[] | null = null;
           let customImageUrl: string | null = null;
@@ -507,9 +537,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             quantity: item.quantity,
             priceSnapshot: item.priceSnapshot.toString(),
             displayName,
-            imageUrl: customImageUrl || info?.imageUrl || null,
-            imageAlt: info?.imageAlt || null,
+            imageUrl: customImageUrl || pres.imageUrl || null,
+            imageAlt: pres.imageAlt || null,
             productUrl,
+            variantDisplaySource: pres.source,
             properties,
           };
         }),
@@ -625,13 +656,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const contentType = request.headers.get("Content-Type") || "";
   const isJsonRequest = contentType.includes("application/json");
-  const { shop, customerId: viewerCustomerId } = requireAppProxyCustomer(
-    request,
-    {
-      jsonOnFail: isJsonRequest,
-    },
-  );
-  const customerId = viewerCustomerId as string;
+  const { shop, customerId } = requireAppProxyCustomer(request, {
+    jsonOnFail: isJsonRequest,
+  });
 
   if (isJsonRequest) {
     const projectId = getProjectId(request);
@@ -642,6 +669,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const payload = (await request.json()) as {
       intent?: string;
       jobId?: string;
+      jobName?: string;
       jobIds?: string[];
       itemIds?: string[];
       removeItemIds?: string[];
@@ -894,12 +922,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
     const nextSortOrder = (maxOrder._max.sortOrder ?? 0) + 1;
 
-    await prisma.job.create({
+    const newJob = await prisma.job.create({
       data: {
         projectId,
         name,
         sortOrder: nextSortOrder,
       },
+    });
+
+    await logProjectActivity({
+      projectId,
+      jobId: newJob.id,
+      type: "order_created",
+      visibility: "member",
+      actorCustomerId: customerId,
+      payload: { jobName: newJob.name },
     });
 
     return redirectToProject(request, projectId, shop);
@@ -973,7 +1010,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
 
       if (job) {
-        await prisma.job.create({
+        const copyJob = await prisma.job.create({
           data: {
             projectId: targetProjectId,
             name: `${job.name} (Copy)`,
@@ -983,9 +1020,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 variantId: item.variantId,
                 quantity: item.quantity,
                 priceSnapshot: item.priceSnapshot,
+                variantSnapshot: item.variantSnapshot ?? undefined,
+                customData: item.customData ?? undefined,
               })),
             },
           },
+        });
+        await logProjectActivity({
+          projectId: targetProjectId,
+          jobId: copyJob.id,
+          type: "order_created",
+          visibility: "member",
+          actorCustomerId: customerId,
+          payload: { jobName: copyJob.name, copiedFrom: job.name },
         });
       }
     }
@@ -1458,6 +1505,9 @@ export default function ProjectDetailPage() {
 
   return (
     <>
+      {(themeStyles?.urls ?? []).map((href: string) => (
+        <link key={href} rel="stylesheet" href={href} />
+      ))}
       {cartPrompt && (
         <div
           className="project-clad-modal-backdrop"
@@ -2360,6 +2410,33 @@ export default function ProjectDetailPage() {
                                       </div>
                                     );
                                   })()}
+                                  {item.variantDisplaySource === "snapshot" && (
+                                    <p
+                                      className="project-clad-muted"
+                                      style={{
+                                        margin: "0.35rem 0 0",
+                                        fontSize: "0.78rem",
+                                        lineHeight: 1.35,
+                                      }}
+                                    >
+                                      Saved product name (Shopify did not return this variant;
+                                      name is from a previous sync).
+                                    </p>
+                                  )}
+                                  {item.variantDisplaySource === "unknown" && (
+                                    <p
+                                      className="project-clad-muted"
+                                      style={{
+                                        margin: "0.35rem 0 0",
+                                        fontSize: "0.78rem",
+                                        lineHeight: 1.35,
+                                      }}
+                                    >
+                                      No product data for this variant ID. If the product still
+                                      exists, open this page again after a moment; otherwise
+                                      remove the line or replace the variant.
+                                    </p>
+                                  )}
                                   {item.properties && item.properties.length > 0 && (
                                     <div className="project-clad-item-properties" style={{ marginTop: "0.5rem" }}>
                                       {(() => {
@@ -3434,10 +3511,6 @@ export default function ProjectDetailPage() {
   );
 }
 
-export const links: LinksFunction = (args) => {
-  const hrefs = args?.data?.themeStyles?.urls || [];
-  return [
-    ...hrefs.map((href) => ({ rel: "stylesheet", href })),
-    { rel: "stylesheet", href: proxyStylesUrl },
-  ];
-};
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: proxyStylesUrl },
+];

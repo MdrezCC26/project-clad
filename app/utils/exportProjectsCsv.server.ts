@@ -1,5 +1,8 @@
 import prisma from "../db.server";
-import { getCustomersByIds } from "./adminCustomers.server";
+import {
+  getCustomersByIds,
+  type CustomerInfo,
+} from "./adminCustomers.server";
 import { getAdminVariantInfo } from "./adminVariants.server";
 
 const escapeCell = (value: string) => {
@@ -24,14 +27,14 @@ export async function getCsvForProjectIds(
     ...project.members.map((member) => member.customerId),
   ]);
   const customerInfo = await getCustomersByIds(shop, memberIds).catch(
-    () => ({}),
+    () => ({}) as Record<string, CustomerInfo>,
   );
 
   const variantIds = projects.flatMap((project) =>
     project.jobs.flatMap((job) => job.items.map((item) => item.variantId)),
   );
   const variantInfo = await getAdminVariantInfo(shop, variantIds).catch(
-    () => ({}),
+    () => ({}) as Awaited<ReturnType<typeof getAdminVariantInfo>>,
   );
 
   const rows: string[] = [];

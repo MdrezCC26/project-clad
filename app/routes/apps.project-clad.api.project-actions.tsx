@@ -6,11 +6,14 @@ import {
   findCustomerIdByEmail,
   getCustomersByIds,
 } from "../utils/adminCustomers.server";
-import { getVariantInfo } from "../utils/storefront.server";
-import { getAdminVariantInfo } from "../utils/adminVariants.server";
 import { isEmailConfigured, sendEmail } from "../utils/email.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
+import {
+  buildVariantPresentation,
+  parseVariantSnapshot,
+  resolveVariantDisplayInfo,
+} from "../utils/variantInfo.server";
 
 const PRICING_COOKIE = "projectclad_pricing=1";
 
@@ -64,7 +67,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const customerInfo = await getCustomersByIds(shop, [customerId]);
     const viewerTags = customerInfo[customerId]?.tags ?? [];
     const hasNATag = viewerTags.some(
-      (t) => String(t).trim().toUpperCase() === "NA",
+      (t: string) => String(t).trim().toUpperCase() === "NA",
     );
     canAdminMembers = isOwner || (canEdit && !hasNATag);
   } catch {
@@ -286,7 +289,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       );
     }
     const hasNATag = (tags: string[]) =>
-      tags.some((t) => String(t).trim().toUpperCase() === "NA");
+      tags.some((t: string) => String(t).trim().toUpperCase() === "NA");
     const approverIds = memberIds.filter((id) => {
       const tags = customerInfo[id]?.tags ?? [];
       return !hasNATag(tags) && id !== customerId;
@@ -322,13 +325,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           include: { job: { select: { name: true } } },
         });
         if (item?.job) {
-          const variantInfo =
-            (await getVariantInfo(shop, [item.variantId]).catch(() => ({}))) ||
-            (await getAdminVariantInfo(shop, [item.variantId]).catch(() => ({})));
+          const { info } = await resolveVariantDisplayInfo(shop, [item.variantId]);
+          const pres = buildVariantPresentation({
+            shop,
+            variantId: item.variantId,
+            live: info[item.variantId],
+            snapshot: parseVariantSnapshot(item.variantSnapshot),
+          });
           const productLabel =
-            variantInfo[item.variantId]?.productTitle ||
-            variantInfo[item.variantId]?.title ||
-            "Item";
+            pres.source === "unknown" ? "Item" : pres.displayName;
           contextLabel = `${productLabel} in ${item.job.name}, ${project.name}`;
         } else {
           contextLabel = `item in ${jobName}, ${project.name}`;
@@ -375,6 +380,35 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         itemId: itemId || "",
       },
     });
+
+    const approvalLogPayload: Record<string, unknown> = {};
+    if (!jobId && !itemId) {
+      approvalLogPayload.scope = "project";
+    } else if (jobId && !itemId) {
+      approvalLogPayload.scope = "job";
+      const jn = await prisma.job.findFirst({
+        where: { id: jobId, projectId },
+        select: { name: true },
+      });
+      if (jn) approvalLogPayload.jobName = jn.name;
+    } else if (jobId && itemId) {
+      approvalLogPayload.scope = "item";
+      approvalLogPayload.itemLine = true;
+      const jn = await prisma.job.findFirst({
+        where: { id: jobId, projectId },
+        select: { name: true },
+      });
+      if (jn) approvalLogPayload.jobName = jn.name;
+    }
+    await logProjectActivity({
+      projectId,
+      jobId: jobId || null,
+      type: "approval_requested",
+      visibility: "member",
+      actorCustomerId: customerId,
+      payload: approvalLogPayload,
+    });
+
     return Response.json({ ok: true });
   }
 
@@ -407,6 +441,34 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       );
     }
 
+    const cancelLogPayload: Record<string, unknown> = {};
+    if (!jobId && !itemId) {
+      cancelLogPayload.scope = "project";
+    } else if (jobId && !itemId) {
+      cancelLogPayload.scope = "job";
+      const jn = await prisma.job.findFirst({
+        where: { id: jobId, projectId },
+        select: { name: true },
+      });
+      if (jn) cancelLogPayload.jobName = jn.name;
+    } else if (jobId && itemId) {
+      cancelLogPayload.scope = "item";
+      cancelLogPayload.itemLine = true;
+      const jn = await prisma.job.findFirst({
+        where: { id: jobId, projectId },
+        select: { name: true },
+      });
+      if (jn) cancelLogPayload.jobName = jn.name;
+    }
+    await logProjectActivity({
+      projectId,
+      jobId: jobId || null,
+      type: "approval_request_cancelled",
+      visibility: "member",
+      actorCustomerId: customerId,
+      payload: cancelLogPayload,
+    });
+
     await prisma.approvalRequest.delete({
       where: { id: existing.id },
     });
@@ -428,7 +490,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       );
     }
     const hasNATag = (tags: string[]) =>
-      tags.some((t) => String(t).trim().toUpperCase() === "NA");
+      tags.some((t: string) => String(t).trim().toUpperCase() === "NA");
     const currentTags = customerInfo[customerId]?.tags ?? [];
     if (hasNATag(currentTags)) {
       return Response.json(
@@ -573,13 +635,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             include: { job: { select: { name: true } } },
           });
           if (item?.job) {
-            const variantInfo = await getVariantInfo(shop, [
-              item.variantId,
-            ]).catch(() => ({}));
+            const { info } = await resolveVariantDisplayInfo(shop, [item.variantId]);
+            const pres = buildVariantPresentation({
+              shop,
+              variantId: item.variantId,
+              live: info[item.variantId],
+              snapshot: parseVariantSnapshot(item.variantSnapshot),
+            });
             const productLabel =
-              variantInfo[item.variantId]?.productTitle ||
-              variantInfo[item.variantId]?.title ||
-              "Item";
+              pres.source === "unknown" ? "Item" : pres.displayName;
             contextLabel = `${productLabel} in ${item.job.name}, ${project.name}`;
             if (item.quantity > 0) {
               itemsToInclude.push({
@@ -594,14 +658,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         } else if (job) {
           contextLabel = `${jobName} in ${project.name}`;
           const variantIds = job.items.map((i) => i.variantId);
-          const variantInfo =
-            (await getVariantInfo(shop, variantIds).catch(() => ({}))) ||
-            (await getAdminVariantInfo(shop, variantIds).catch(() => ({})));
+          const { info: variantInfo } = await resolveVariantDisplayInfo(
+            shop,
+            variantIds,
+          );
           for (const i of job.items) {
+            const pres = buildVariantPresentation({
+              shop,
+              variantId: i.variantId,
+              live: variantInfo[i.variantId],
+              snapshot: parseVariantSnapshot(i.variantSnapshot),
+            });
             const label =
-              variantInfo[i.variantId]?.productTitle ||
-              variantInfo[i.variantId]?.title ||
-              "Item";
+              pres.source === "unknown" ? "Item" : pres.displayName;
             itemsToInclude.push({ jobName: job.name, displayName: label, quantity: i.quantity });
           }
         }
@@ -612,15 +681,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           orderBy: { sortOrder: "asc" },
         });
         const variantIds = jobs.flatMap((j) => j.items.map((i) => i.variantId));
-        const variantInfo =
-          (await getVariantInfo(shop, variantIds).catch(() => ({}))) ||
-          (await getAdminVariantInfo(shop, variantIds).catch(() => ({})));
+        const { info: variantInfo } = await resolveVariantDisplayInfo(
+          shop,
+          variantIds,
+        );
         for (const j of jobs) {
           for (const i of j.items) {
+            const pres = buildVariantPresentation({
+              shop,
+              variantId: i.variantId,
+              live: variantInfo[i.variantId],
+              snapshot: parseVariantSnapshot(i.variantSnapshot),
+            });
             const label =
-              variantInfo[i.variantId]?.productTitle ||
-              variantInfo[i.variantId]?.title ||
-              "Item";
+              pres.source === "unknown" ? "Item" : pres.displayName;
             itemsToInclude.push({ jobName: j.name, displayName: label, quantity: i.quantity });
           }
         }
@@ -764,13 +838,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         include: { job: { select: { name: true } } },
       });
       if (item?.job) {
-        const variantInfo =
-          (await getVariantInfo(shop, [item.variantId]).catch(() => ({}))) ||
-          (await getAdminVariantInfo(shop, [item.variantId]).catch(() => ({})));
+        const { info } = await resolveVariantDisplayInfo(shop, [item.variantId]);
+        const pres = buildVariantPresentation({
+          shop,
+          variantId: item.variantId,
+          live: info[item.variantId],
+          snapshot: parseVariantSnapshot(item.variantSnapshot),
+        });
         const productLabel =
-          variantInfo[item.variantId]?.productTitle ||
-          variantInfo[item.variantId]?.title ||
-          "Item";
+          pres.source === "unknown" ? "Item" : pres.displayName;
         contextLabel = `${productLabel} in ${item.job.name}, ${project.name}`;
       } else {
         contextLabel = `item in ${jobName}, ${project.name}`;
@@ -779,6 +855,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       contextLabel = `${jobName} in ${project.name}`;
     }
   }
+
+  const rejectLogPayload: Record<string, unknown> = {};
+  if (!jobId && !itemId) {
+    rejectLogPayload.scope = "project";
+  } else if (jobId && !itemId) {
+    rejectLogPayload.scope = "job";
+    const j = await prisma.job.findFirst({
+      where: { id: jobId, projectId },
+      select: { name: true },
+    });
+    if (j) rejectLogPayload.jobName = j.name;
+  } else {
+    rejectLogPayload.scope = "item";
+    rejectLogPayload.itemLine = true;
+    const j = await prisma.job.findFirst({
+      where: { id: jobId, projectId },
+      select: { name: true },
+    });
+    if (j) rejectLogPayload.jobName = j.name;
+  }
+  if (rejectReason) rejectLogPayload.rejectReason = rejectReason;
+
+  await logProjectActivity({
+    projectId,
+    jobId: jobId || null,
+    type: "order_rejected",
+    visibility: "member",
+    actorCustomerId: customerId,
+    payload: rejectLogPayload,
+  });
 
   await prisma.approvalRequest.delete({
     where: { id: existing.id },

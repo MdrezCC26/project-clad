@@ -16,22 +16,23 @@ const chunk = <T,>(items: T[], size: number) => {
   return result;
 };
 
-type SessionWithToken = { accessToken: string };
+type SessionWithOptionalToken = { accessToken?: string | null };
 
 export const getAdminVariantInfo = async (
   shop: string,
   variantIds: string[],
-  currentSession?: SessionWithToken,
+  currentSession?: SessionWithOptionalToken,
 ): Promise<Record<string, VariantInfo>> => {
   if (variantIds.length === 0) {
     return {};
   }
 
-  let accessToken: string | undefined = currentSession?.accessToken;
+  let accessToken: string | undefined =
+    currentSession?.accessToken ?? undefined;
   if (!accessToken) {
     const sessions = await sessionStorage.findSessionsByShop(shop);
     const offlineSession = sessions.find((session) => !session.isOnline);
-    accessToken = offlineSession?.accessToken;
+    accessToken = offlineSession?.accessToken ?? undefined;
   }
 
   if (!accessToken) {

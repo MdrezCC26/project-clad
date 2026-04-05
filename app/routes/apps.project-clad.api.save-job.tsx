@@ -139,7 +139,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 sortOrder: index + 1,
                 customData:
                   item.properties && item.properties.length
-                    ? (item.properties as unknown as Prisma.JsonValue)
+                    ? (item.properties as Prisma.InputJsonValue)
                     : undefined,
               })),
             },
@@ -224,7 +224,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             sortOrder: index + 1,
             customData:
               item.properties && item.properties.length
-                ? (item.properties as unknown as Prisma.JsonValue)
+                ? (item.properties as Prisma.InputJsonValue)
                 : undefined,
           })),
         },
@@ -319,6 +319,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               quantity: item.quantity,
               priceSnapshot: item.priceSnapshot,
               sortOrder: item.sortOrder,
+              variantSnapshot: item.variantSnapshot ?? undefined,
+              customData: item.customData ?? undefined,
             })),
           },
         },
@@ -348,7 +350,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             sortOrder: index + 1,
             customData:
               item.properties && item.properties.length
-                ? (item.properties as unknown as Prisma.JsonValue)
+                ? (item.properties as Prisma.InputJsonValue)
                 : undefined,
           })),
         }),
@@ -378,7 +380,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             sortOrder: nextSortOrder,
             customData:
               item.properties && item.properties.length
-                ? (item.properties as unknown as Prisma.JsonValue)
+                ? (item.properties as Prisma.InputJsonValue)
                 : undefined,
           },
         });
