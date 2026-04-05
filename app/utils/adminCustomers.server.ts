@@ -1,6 +1,64 @@
+import prisma from "../db.server";
 import { sessionStorage } from "../shopify.server";
 
 const CUSTOMER_API_VERSION = "2024-10";
+
+const shopHost = (shop: string) => shop.trim().toLowerCase();
+
+/**
+ * Offline Admin token for storefront proxy requests. Session rows sometimes differ
+ * in shop string casing from the signed `shop` query param, so we fall back to DB.
+ */
+export async function getOfflineAccessTokenForShop(
+  shop: string,
+): Promise<string | null> {
+  const trimmed = shop.trim();
+  const tryShops = Array.from(new Set([trimmed, trimmed.toLowerCase()]));
+
+  for (const s of tryShops) {
+    const sessions = await sessionStorage.findSessionsByShop(s);
+    const offline = sessions.find((sess) => !sess.isOnline);
+    if (offline?.accessToken) {
+      return offline.accessToken;
+    }
+  }
+
+  const row = await prisma.session.findFirst({
+    where: {
+      isOnline: false,
+      shop: { equals: trimmed, mode: "insensitive" },
+    },
+    orderBy: { expires: "desc" },
+  });
+  return row?.accessToken ?? null;
+}
+
+/** So `logged_in_customer_id` matches GraphQL map keys (leading zeros, formatting). */
+function addCustomerInfoKeyAliases(results: Record<string, CustomerInfo>): void {
+  for (const v of Object.values(results)) {
+    const digits = v.id.replace(/\D/g, "");
+    if (!digits) continue;
+    results[digits] = v;
+    const canonical = String(parseInt(digits, 10));
+    if (canonical !== "NaN" && canonical !== digits) {
+      results[canonical] = v;
+    }
+  }
+}
+
+/** Shopify may return tags as `[String!]` or a comma-separated string (REST / some payloads). */
+export function normalizeShopifyTagsField(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((t) => String(t).trim()).filter(Boolean);
+  }
+  if (typeof raw === "string") {
+    return raw
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
 
 export type CustomerInfo = {
   id: string;
@@ -25,14 +83,13 @@ export const findCustomerIdByEmail = async (
   const trimmed = email.trim().toLowerCase();
   if (!trimmed) return null;
 
-  const sessions = await sessionStorage.findSessionsByShop(shop);
-  const offlineSession = sessions.find((session) => !session.isOnline);
-  const accessToken = offlineSession?.accessToken;
+  const shopDomain = shopHost(shop);
+  const accessToken = await getOfflineAccessTokenForShop(shop);
   if (!accessToken) {
     return null;
   }
 
-  const endpoint = `https://${shop}/admin/api/${CUSTOMER_API_VERSION}/graphql.json`;
+  const endpoint = `https://${shopDomain}/admin/api/${CUSTOMER_API_VERSION}/graphql.json`;
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -82,7 +139,7 @@ export const findCustomerIdByEmail = async (
     }
   }
 
-  const restEndpoint = `https://${shop}/admin/api/${CUSTOMER_API_VERSION}/customers/search.json?query=${encodeURIComponent(
+  const restEndpoint = `https://${shopDomain}/admin/api/${CUSTOMER_API_VERSION}/customers/search.json?query=${encodeURIComponent(
     `email:${trimmed}`,
   )}`;
   const restResponse = await fetch(restEndpoint, {
@@ -117,9 +174,8 @@ export const getCustomersByIds = async (
     return {};
   }
 
-  const sessions = await sessionStorage.findSessionsByShop(shop);
-  const offlineSession = sessions.find((session) => !session.isOnline);
-  const accessToken = offlineSession?.accessToken;
+  const shopDomain = shopHost(shop);
+  const accessToken = await getOfflineAccessTokenForShop(shop);
   if (!accessToken) {
     throw new Error(
       "Customer details unavailable. Reauthorize the app to refresh access.",
@@ -129,7 +185,7 @@ export const getCustomersByIds = async (
   const uniqueIds = Array.from(new Set(customerIds));
   const gids = uniqueIds.map((id) => `gid://shopify/Customer/${id}`);
   const results: Record<string, CustomerInfo> = {};
-  const endpoint = `https://${shop}/admin/api/${CUSTOMER_API_VERSION}/graphql.json`;
+  const endpoint = `https://${shopDomain}/admin/api/${CUSTOMER_API_VERSION}/graphql.json`;
 
   for (const group of chunk(gids, 50)) {
     const response = await fetch(endpoint, {
@@ -194,27 +250,27 @@ export const getCustomersByIds = async (
         email: node.email ?? null,
         firstName: node.firstName ?? null,
         lastName: node.lastName ?? null,
-        tags: Array.isArray(node.tags) ? node.tags : [],
+        tags: normalizeShopifyTagsField(node.tags),
       };
     });
   }
 
+  addCustomerInfoKeyAliases(results);
   return results;
 };
 
 export const listCustomers = async (
   shop: string,
 ): Promise<CustomerInfo[]> => {
-  const sessions = await sessionStorage.findSessionsByShop(shop);
-  const offlineSession = sessions.find((session) => !session.isOnline);
-  const accessToken = offlineSession?.accessToken;
+  const shopDomain = shopHost(shop);
+  const accessToken = await getOfflineAccessTokenForShop(shop);
   if (!accessToken) {
     throw new Error(
       "Customer details unavailable. Reauthorize the app to refresh access.",
     );
   }
 
-  const endpoint = `https://${shop}/admin/api/${CUSTOMER_API_VERSION}/graphql.json`;
+  const endpoint = `https://${shopDomain}/admin/api/${CUSTOMER_API_VERSION}/graphql.json`;
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -285,8 +341,54 @@ export const listCustomers = async (
         email: node.email ?? null,
         firstName: node.firstName ?? null,
         lastName: node.lastName ?? null,
-        tags: Array.isArray(node.tags) ? node.tags : [],
+        tags: normalizeShopifyTagsField(node.tags),
       };
     })
     .filter((customer): customer is CustomerInfo => Boolean(customer));
 };
+
+/**
+ * REST Admin API returns `tags` as a comma-separated string; use when GraphQL nodes miss tags.
+ */
+export async function fetchCustomerTagsRest(
+  shop: string,
+  numericCustomerId: string,
+): Promise<string[]> {
+  const shopDomain = shopHost(shop);
+  const accessToken = await getOfflineAccessTokenForShop(shop);
+  if (!accessToken) {
+    return [];
+  }
+
+  const digits = numericCustomerId.replace(/\D/g, "");
+  const idVariants = new Set<string>([numericCustomerId.trim()]);
+  if (digits) {
+    idVariants.add(digits);
+    const canonical = String(parseInt(digits, 10));
+    if (canonical !== "NaN") {
+      idVariants.add(canonical);
+    }
+  }
+
+  for (const tryId of idVariants) {
+    if (!tryId) continue;
+    const url = `https://${shopDomain}/admin/api/${CUSTOMER_API_VERSION}/customers/${tryId}.json`;
+    const response = await fetch(url, {
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": accessToken,
+      },
+    });
+
+    if (!response.ok) {
+      continue;
+    }
+
+    const payload = (await response.json()) as {
+      customer?: { tags?: string };
+    };
+    return normalizeShopifyTagsField(payload.customer?.tags);
+  }
+
+  return [];
+}
