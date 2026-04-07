@@ -1182,7 +1182,8 @@ html:has(.project-clad-page--projects) body {
   .project-clad-orders-shell
   .project-clad-project-meta-chip__dot {
   flex: 0 0 auto;
-  opacity: 0.45;
+  color: var(--pc-pill-text-glow-hover);
+  opacity: 0.9;
   user-select: none;
 }
 
