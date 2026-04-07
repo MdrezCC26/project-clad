@@ -2269,7 +2269,7 @@ export default function ProjectDetailPage() {
                     data-projectclad-add-member-popover
                     role="dialog"
                     aria-label="Add project member"
-                    style={{ display: "none" }}
+                    aria-hidden="true"
                   >
                     <Form
                       id="projectclad-add-member-form-header"
@@ -3563,6 +3563,28 @@ export default function ProjectDetailPage() {
     });
   }
 
+  const isAddMemberPopoverOpen = (popover) =>
+    popover instanceof HTMLElement &&
+    popover.classList.contains('project-clad-add-member-popover--open');
+
+  const openAddMemberPopover = (popover, toggle) => {
+    if (!(popover instanceof HTMLElement)) return;
+    popover.classList.add('project-clad-add-member-popover--open');
+    popover.setAttribute('aria-hidden', 'false');
+    if (toggle instanceof HTMLElement) {
+      toggle.setAttribute('aria-expanded', 'true');
+    }
+  };
+
+  const closeAddMemberPopover = (popover, toggle) => {
+    if (!(popover instanceof HTMLElement)) return;
+    popover.classList.remove('project-clad-add-member-popover--open');
+    popover.setAttribute('aria-hidden', 'true');
+    if (toggle instanceof HTMLElement) {
+      toggle.setAttribute('aria-expanded', 'false');
+    }
+  };
+
   document.addEventListener('click', (event) => {
     const addMemberToggle = event.target?.closest?.('[data-projectclad-add-member-popover-toggle]');
     if (addMemberToggle instanceof HTMLElement) {
@@ -3570,10 +3592,11 @@ export default function ProjectDetailPage() {
       event.stopPropagation();
       const pop = document.querySelector('[data-projectclad-add-member-popover]');
       if (pop instanceof HTMLElement) {
-        const open = pop.style.display === 'flex';
-        pop.style.display = open ? 'none' : 'flex';
-        addMemberToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
-        if (!open) {
+        const open = isAddMemberPopoverOpen(pop);
+        if (open) {
+          closeAddMemberPopover(pop, addMemberToggle);
+        } else {
+          openAddMemberPopover(pop, addMemberToggle);
           const email = document.getElementById('member-email-header');
           if (email instanceof HTMLElement) setTimeout(function() { email.focus(); }, 30);
         }
@@ -3587,8 +3610,7 @@ export default function ProjectDetailPage() {
       const popOver = document.querySelector('[data-projectclad-add-member-popover]');
       const popToggle = document.querySelector('[data-projectclad-add-member-popover-toggle]');
       if (popOver instanceof HTMLElement) {
-        popOver.style.display = 'none';
-        if (popToggle) popToggle.setAttribute('aria-expanded', 'false');
+        closeAddMemberPopover(popOver, popToggle);
       }
       const modal = document.querySelector('[data-projectclad-edit-project-modal]');
       if (modal instanceof HTMLElement) modal.style.display = 'flex';
@@ -3621,11 +3643,10 @@ export default function ProjectDetailPage() {
     }
 
     const addMemberPopoverEl = document.querySelector('[data-projectclad-add-member-popover]');
-    if (addMemberPopoverEl instanceof HTMLElement && addMemberPopoverEl.style.display === 'flex') {
+    if (isAddMemberPopoverOpen(addMemberPopoverEl)) {
       if (!event.target?.closest?.('[data-projectclad-add-member-popover]') && !event.target?.closest?.('[data-projectclad-add-member-popover-toggle]')) {
-        addMemberPopoverEl.style.display = 'none';
         const tt = document.querySelector('[data-projectclad-add-member-popover-toggle]');
-        if (tt) tt.setAttribute('aria-expanded', 'false');
+        closeAddMemberPopover(addMemberPopoverEl, tt);
       }
     }
   }, true);
@@ -3634,9 +3655,8 @@ export default function ProjectDetailPage() {
     if (event.key !== 'Escape') return;
     const pop = document.querySelector('[data-projectclad-add-member-popover]');
     const tgl = document.querySelector('[data-projectclad-add-member-popover-toggle]');
-    if (pop instanceof HTMLElement && pop.style.display === 'flex') {
-      pop.style.display = 'none';
-      if (tgl) tgl.setAttribute('aria-expanded', 'false');
+    if (isAddMemberPopoverOpen(pop)) {
+      closeAddMemberPopover(pop, tgl);
     }
   });
 

@@ -1188,6 +1188,16 @@ html:has(.project-clad-page--projects) body {
   user-select: none;
 }
 
+/* Beat the broader `.project-clad-project-meta-chip__inner * { ... !important; }` rule. */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip
+  .project-clad-project-meta-chip__inner
+  .project-clad-project-meta-chip__dot {
+  color: var(--pc-pill-text-glow-hover) !important;
+  text-shadow: none !important;
+}
+
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-orders-shell
   .project-clad-project-meta-chip__part {
@@ -2154,7 +2164,7 @@ html:has(.project-clad-page--projects) body {
 
 .project-clad-add-member-popover {
   --pc-add-member-control-h: 2.75rem;
-  display: none;
+  display: flex;
   flex-direction: column;
   gap: 0.65rem;
   position: absolute;
@@ -2175,6 +2185,32 @@ html:has(.project-clad-page--projects) body {
     0 10px 24px rgba(0, 0, 0, 0.1);
   border: none;
   text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-6px) scale(0.985);
+  transform-origin: top left;
+  max-height: 0;
+  overflow: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    max-height 0.24s ease,
+    visibility 0s linear 0.24s;
+}
+
+.project-clad-add-member-popover.project-clad-add-member-popover--open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  max-height: 36rem;
+  overflow: visible;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    max-height 0.24s ease,
+    visibility 0s;
 }
 
 /* Popover: Bakbak everywhere (beats .project-clad-page * Helvetica) */
