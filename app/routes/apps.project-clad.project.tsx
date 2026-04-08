@@ -288,7 +288,13 @@ function ProjectActivityCommentLine({
   emptyAuthorLabel?: string;
 }) {
   const name = authorLabel.trim() || emptyAuthorLabel;
-  const when = new Date(createdAt).toLocaleString();
+  const when = new Date(createdAt).toLocaleString(undefined, {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
   const msg = body.replace(/\s+/g, " ").trim();
   const full = `${name} - ${when}: ${msg}`;
   return (
@@ -326,31 +332,30 @@ function MemberRoleSelect({
         <span className="project-clad-member-role-select__chevron" aria-hidden="true">
           ▾
         </span>
-      </summary>
-      <div className="project-clad-member-role-select__list" role="group">
-        <label className="project-clad-member-role-select__option" htmlFor={editId}>
-          <input
-            id={editId}
-            type="radio"
-            name="role"
-            value="edit"
-            defaultChecked={defaultValue === "edit"}
-            className="project-clad-member-role-select__input"
-          />
-          <span className="project-clad-member-role-select__option-text">Edit</span>
-        </label>
-        <label className="project-clad-member-role-select__option" htmlFor={viewId}>
-          <input
-            id={viewId}
-            type="radio"
-            name="role"
-            value="view"
-            defaultChecked={defaultValue === "view"}
-            className="project-clad-member-role-select__input"
-          />
-          <span className="project-clad-member-role-select__option-text">View only</span>
-        </label>
-      </div>
+      </summary><div className="project-clad-member-role-select__panel"><div className="project-clad-member-role-select__list" role="group">
+          <label className="project-clad-member-role-select__option" htmlFor={editId}>
+            <input
+              id={editId}
+              type="radio"
+              name="role"
+              value="edit"
+              defaultChecked={defaultValue === "edit"}
+              className="project-clad-member-role-select__input"
+            />
+            <span className="project-clad-member-role-select__option-text">Edit</span>
+          </label>
+          <label className="project-clad-member-role-select__option" htmlFor={viewId}>
+            <input
+              id={viewId}
+              type="radio"
+              name="role"
+              value="view"
+              defaultChecked={defaultValue === "view"}
+              className="project-clad-member-role-select__input"
+            />
+            <span className="project-clad-member-role-select__option-text">View only</span>
+          </label>
+        </div></div>
     </details>
   );
 }
@@ -1904,6 +1909,7 @@ export default function ProjectDetailPage() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-project-modal-title"
+        aria-hidden="true"
         style={{ display: "none" }}
       >
         <div
@@ -2109,7 +2115,9 @@ export default function ProjectDetailPage() {
                       {canAdminMembers && (
                         <td className="project-clad-table-right">
                           {member.role === "owner" ? (
-                            "—"
+                            <span aria-hidden="true" style={{ visibility: "hidden" }}>
+                              —
+                            </span>
                           ) : (
                             <Form
                               method="post"
@@ -2348,7 +2356,10 @@ export default function ProjectDetailPage() {
                   >
                     <input type="hidden" name="approveJobId" value="" />
                     <input type="hidden" name="approveItemId" value="" />
-                    <button type="submit" className="project-clad-button">
+                    <button
+                      type="submit"
+                      className="project-clad-button project-clad-button--approve"
+                    >
                       Approve
                     </button>
                     <span className="project-clad-muted project-clad-approval-msg" data-projectclad-form-message />
@@ -2469,11 +2480,6 @@ export default function ProjectDetailPage() {
                         <div className="project-clad-order-summary-padded">
                           <h3 className="project-clad-title">
                             {job.name}
-                            {!hideAddToCart && getApprovalStatus(job.id, "") === "awaiting" && (
-                              <span className="project-clad-muted" style={{ fontWeight: 600, marginLeft: "0.5rem" }}>
-                                — Confirming order
-                              </span>
-                            )}
                           </h3>
                           <input
                             type="text"
@@ -3020,7 +3026,10 @@ export default function ProjectDetailPage() {
                         >
                           <input type="hidden" name="approveJobId" value={job.id} />
                           <input type="hidden" name="approveItemId" value="" />
-                          <button type="submit" className="project-clad-button">
+                          <button
+                            type="submit"
+                            className="project-clad-button project-clad-button--approve"
+                          >
                             Approve
                           </button>
                           <span
@@ -3277,17 +3286,189 @@ export default function ProjectDetailPage() {
     if (labelEl && text) labelEl.textContent = text;
   }
 
+  var PC_ROLE_PANEL_MS = 240;
+  var PC_ROLE_PANEL_EASE = 'cubic-bezier(0.23, 1, 0.32, 1)';
+
+  var PC_EDIT_PROJECT_MODAL_MS = 300;
+  var editProjectModalCloseTimer = null;
+
+  function pcEditProjectModalMotionMs() {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return 0;
+    }
+    return PC_EDIT_PROJECT_MODAL_MS;
+  }
+
+  function openEditProjectModal() {
+    var modal = document.querySelector('[data-projectclad-edit-project-modal]');
+    if (!(modal instanceof HTMLElement)) return;
+    if (editProjectModalCloseTimer) {
+      clearTimeout(editProjectModalCloseTimer);
+      editProjectModalCloseTimer = null;
+    }
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+    modal.classList.remove('project-clad-edit-project-modal--open');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        modal.classList.add('project-clad-edit-project-modal--open');
+      });
+    });
+  }
+
+  function closeEditProjectModal() {
+    var modal = document.querySelector('[data-projectclad-edit-project-modal]');
+    if (!(modal instanceof HTMLElement)) return;
+    if (editProjectModalCloseTimer) {
+      clearTimeout(editProjectModalCloseTimer);
+      editProjectModalCloseTimer = null;
+    }
+    var ms = pcEditProjectModalMotionMs();
+    if (!modal.classList.contains('project-clad-edit-project-modal--open')) {
+      modal.style.display = 'none';
+      modal.setAttribute('aria-hidden', 'true');
+      return;
+    }
+    modal.classList.remove('project-clad-edit-project-modal--open');
+    if (ms <= 0) {
+      modal.style.display = 'none';
+      modal.setAttribute('aria-hidden', 'true');
+      return;
+    }
+    editProjectModalCloseTimer = window.setTimeout(function () {
+      editProjectModalCloseTimer = null;
+      modal.style.display = 'none';
+      modal.setAttribute('aria-hidden', 'true');
+    }, ms);
+  }
+
+  function pcMemberRolePanel(details) {
+    return details.querySelector('.project-clad-member-role-select__panel');
+  }
+  function pcMemberRoleList(details) {
+    return details.querySelector('.project-clad-member-role-select__list');
+  }
+
+  function pcAnimateMemberRoleOpen(details) {
+    var panel = pcMemberRolePanel(details);
+    var list = pcMemberRoleList(details);
+    if (!panel || !list) return;
+    var target = list.scrollHeight;
+    panel.style.overflow = 'hidden';
+    panel.style.transition = 'height ' + PC_ROLE_PANEL_MS / 1000 + 's ' + PC_ROLE_PANEL_EASE;
+    panel.style.height = '0px';
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        panel.style.height = target + 'px';
+      });
+    });
+    function settle() {
+      if (details.open) panel.style.height = 'auto';
+    }
+    function onEnd(ev) {
+      if (ev.propertyName !== 'height') return;
+      clearTimeout(tid);
+      settle();
+    }
+    var tid = setTimeout(settle, PC_ROLE_PANEL_MS + 100);
+    panel.addEventListener('transitionend', onEnd, { once: true });
+  }
+
+  function pcAnimateMemberRoleClose(details, done) {
+    var panel = pcMemberRolePanel(details);
+    var list = pcMemberRoleList(details);
+    if (!panel || !list) {
+      done();
+      return;
+    }
+    var h = list.scrollHeight;
+    panel.style.overflow = 'hidden';
+    panel.style.transition = 'height ' + PC_ROLE_PANEL_MS / 1000 + 's ' + PC_ROLE_PANEL_EASE;
+    if (panel.style.height === 'auto' || panel.style.height === '') {
+      panel.style.height = h + 'px';
+    }
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        panel.style.height = '0px';
+      });
+    });
+    var finished = false;
+    function finish() {
+      if (finished) return;
+      finished = true;
+      panel.removeEventListener('transitionend', onEnd);
+      clearTimeout(tid);
+      panel.style.transition = '';
+      panel.style.height = '';
+      done();
+    }
+    function onEnd(ev) {
+      if (ev.propertyName !== 'height') return;
+      finish();
+    }
+    panel.addEventListener('transitionend', onEnd);
+    var tid = setTimeout(finish, PC_ROLE_PANEL_MS + 100);
+  }
+
+  function pcBindMemberRoleSelect(details) {
+    var sum = details.querySelector('summary.project-clad-member-role-select__trigger');
+    if (!(sum instanceof HTMLElement)) return;
+    sum.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (details.open) {
+        pcAnimateMemberRoleClose(details, function () {
+          details.open = false;
+        });
+      } else {
+        var p = pcMemberRolePanel(details);
+        if (p) {
+          p.style.transition = 'none';
+          p.style.height = '0px';
+        }
+        details.open = true;
+        if (p) {
+          void p.offsetHeight;
+          p.style.transition = '';
+        }
+        pcAnimateMemberRoleOpen(details);
+      }
+    });
+  }
+
   document.querySelectorAll('[data-projectclad-member-role-select]').forEach(function (el) {
     if (!(el instanceof HTMLDetailsElement)) return;
     syncMemberRoleSelect(el);
+    pcBindMemberRoleSelect(el);
     el.addEventListener('change', function (ev) {
-      const t = ev.target;
+      var t = ev.target;
       if (t instanceof HTMLInputElement && t.name === 'role') {
         syncMemberRoleSelect(el);
-        el.open = false;
+        if (el.open) {
+          pcAnimateMemberRoleClose(el, function () {
+            el.open = false;
+          });
+        } else {
+          el.open = false;
+        }
       }
     });
   });
+
+  document.addEventListener(
+    'pointerdown',
+    function (e) {
+      var t = e.target;
+      if (!(t instanceof Node)) return;
+      document.querySelectorAll('details[data-projectclad-member-role-select][open]').forEach(function (d) {
+        if (!(d instanceof HTMLDetailsElement)) return;
+        if (d.contains(t)) return;
+        pcAnimateMemberRoleClose(d, function () {
+          d.open = false;
+        });
+      });
+    },
+    true,
+  );
 
   const memberMessage = document.querySelector('[data-projectclad-member-message]');
   const setMemberMessage = (text) => {
@@ -3612,17 +3793,14 @@ export default function ProjectDetailPage() {
       if (popOver instanceof HTMLElement) {
         closeAddMemberPopover(popOver, popToggle);
       }
-      const modal = document.querySelector('[data-projectclad-edit-project-modal]');
-      if (modal instanceof HTMLElement) modal.style.display = 'flex';
+      openEditProjectModal();
     }
     const editProjectCancel = event.target?.closest?.('[data-projectclad-edit-project-cancel]');
     if (editProjectCancel) {
-      const modal = document.querySelector('[data-projectclad-edit-project-modal]');
-      if (modal instanceof HTMLElement) modal.style.display = 'none';
+      closeEditProjectModal();
     }
     if (event.target?.closest?.('[data-projectclad-edit-project-modal]') === event.target) {
-      const modal = document.querySelector('[data-projectclad-edit-project-modal]');
-      if (modal instanceof HTMLElement) modal.style.display = 'none';
+      closeEditProjectModal();
     }
 
     const deleteProjectOpen = event.target?.closest?.('[data-projectclad-delete-project-open]');
@@ -3657,6 +3835,14 @@ export default function ProjectDetailPage() {
     const tgl = document.querySelector('[data-projectclad-add-member-popover-toggle]');
     if (isAddMemberPopoverOpen(pop)) {
       closeAddMemberPopover(pop, tgl);
+      return;
+    }
+    const editProjModal = document.querySelector('[data-projectclad-edit-project-modal]');
+    if (
+      editProjModal instanceof HTMLElement &&
+      editProjModal.classList.contains('project-clad-edit-project-modal--open')
+    ) {
+      closeEditProjectModal();
     }
   });
 

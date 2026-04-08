@@ -392,9 +392,6 @@ export default function ProjectsPage() {
               </nav>
             </div>
           </header>
-          {viewerStaffViewAll && (
-            <p className="project-clad-staff-banner">Staff view</p>
-          )}
           {variantLookupError && (
             <p className="project-clad-muted">{variantLookupError}</p>
           )}

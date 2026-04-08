@@ -140,18 +140,21 @@ body.project-clad-leaving .project-clad-page {
     inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5);
   --pc-caesura-border: 3px solid transparent;
   --pc-caesura-border-hover: rgba(255, 255, 255, 0.5);
+  --color-1: #c40000;
+  --color-2: #00c462;
+  --color-3: #0062c4;
   /* Grey button hover: white rim (caesura); red type + soft glow below */
-  --pc-caesura-hover-red-text: rgba(211, 47, 47, 0.78);
+  --pc-caesura-hover-red-text: var(--color-1);
   --pc-caesura-hover-red-text-glow:
     0 1px 0 rgba(255, 255, 255, 0.28),
-    0 0 6px rgba(211, 47, 47, 0.22),
-    0 0 14px rgba(211, 47, 47, 0.12);
+    0 0 6px rgba(196, 0, 0, 0.22),
+    0 0 14px rgba(196, 0, 0, 0.12);
   /* Approval / confirming: same glow *shape* as grey neu hover label, blue (not red) */
-  --pc-approval-glow-text: rgba(28, 86, 168, 0.96);
+  --pc-approval-glow-text: var(--color-3);
   --pc-approval-glow-shadow:
     0 1px 0 rgba(255, 255, 255, 0.32),
-    0 0 6px rgba(59, 130, 246, 0.48),
-    0 0 14px rgba(96, 165, 250, 0.34);
+    0 0 6px rgba(28, 28, 186, 0.48),
+    0 0 14px rgba(28, 28, 186, 0.34);
   --pc-caesura-transition:
     box-shadow 250ms ease-in-out, border-color 250ms ease-in-out, color 250ms ease-in-out,
     filter 250ms ease-in-out, background 250ms ease-in-out;
@@ -184,25 +187,32 @@ body.project-clad-leaving .project-clad-page {
     inset 20px 20px 42px rgba(0, 0, 0, 0.34),
     inset -20px -20px 42px rgba(255, 210, 210, 0.28);
   /* Nav pills + hovers: red label; --pc-pill-text-glow-shadow stays off */
-  --pc-pill-text-glow-hover: #d32f2f;
+  --pc-pill-text-glow-hover: var(--color-1);
   --pc-pill-text-glow-shadow: none;
   /* Tray section titles: black depth only (fill stays --pc-pill-text-glow-hover) */
   --pc-section-heading-text-shadow:
     0 3px 8px rgba(0, 0, 0, 0.5),
     0 2px 5px rgba(0, 0, 0, 0.52),
     0 6px 18px rgba(0, 0, 0, 0.22);
-  /* Bakbak accent headings + neu button hover label: depth + soft red halo */
+  /*
+   * Orders / Project subtotal / More — letterpress on neu grey + same red fill (--color-1).
+   * Shadows use neutral caesura tones for “soft UI” depth; halo stays hue-matched to red, not a new color.
+   */
   --pc-accent-heading-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.4),
-    0 2px 6px rgba(0, 0, 0, 0.14),
-    0 0 10px rgba(211, 47, 47, 0.38),
-    0 0 22px rgba(211, 47, 47, 0.18);
-  /* Same stack, less red halo (e.g. More drawer chip on grey neu) */
+    0.75px 0.75px 0 rgba(255, 255, 255, 0.78),
+    -0.65px -0.65px 0 rgba(72, 79, 96, 0.16),
+    0 1px 0 rgba(255, 255, 255, 0.38),
+    0 2px 8px rgba(0, 0, 0, 0.1),
+    0 0 14px rgba(196, 0, 0, 0.22),
+    0 0 28px rgba(196, 0, 0, 0.09);
+  /* Same idea, lighter (More drawer summary on neu chip) */
   --pc-accent-heading-shadow-soft:
-    0 1px 0 rgba(255, 255, 255, 0.36),
-    0 2px 5px rgba(0, 0, 0, 0.12),
-    0 0 6px rgba(211, 47, 47, 0.22),
-    0 0 14px rgba(211, 47, 47, 0.09);
+    0.65px 0.65px 0 rgba(255, 255, 255, 0.72),
+    -0.55px -0.55px 0 rgba(72, 79, 96, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.32),
+    0 2px 6px rgba(0, 0, 0, 0.07),
+    0 0 10px rgba(196, 0, 0, 0.16),
+    0 0 20px rgba(196, 0, 0, 0.06);
   /* Red neu buttons (danger / projects): white label glow on hover — same “glow weight” as accent shadow */
   --pc-red-button-hover-label-glow:
     0 0 10px rgba(255, 235, 235, 0.55),
@@ -2223,7 +2233,7 @@ html:has(.project-clad-page--projects) body {
 /*
  * Labels + helper = orders-shell grey.
  * Exclude role dropdown options — they are <label>s too; popover label color + !important was
- * beating .project-clad-member-role-select__option:has(input:checked) { color: #fff } (grey on blue).
+ * beating selected-option red text styling.
  */
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-add-member-popover
@@ -2289,14 +2299,27 @@ html:has(.project-clad-page--projects) body {
  * Member role: pressed caesura pill + options in flowing ::details-content (order-row expand).
  */
 .project-clad-member-role-select {
-  --pc-role-select-blue: #1a73e8;
-  --pc-role-select-row: #eceff1;
+  /* Same corner radius closed (pill) and open (all four corners match trigger cap) */
+  --pc-role-select-pill-r: calc(var(--pc-add-member-control-h, 2.75rem) / 2);
+  /* Unselected hover: same ink as trigger; stronger red halos from --color-1 (#c40000) */
+  --pc-role-option-hover-glow:
+    0 1px 0 rgba(255, 255, 255, 0.32),
+    0 0 8px rgba(196, 0, 0, 0.68),
+    0 0 18px rgba(196, 0, 0, 0.52),
+    0 0 30px rgba(196, 0, 0, 0.38),
+    0 0 44px rgba(196, 0, 0, 0.22);
+  --pc-role-option-hover-fg: var(--pc-btn-neu-fg);
   position: relative;
   z-index: 0;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  /* Must be stable open ↔ closed or transitions on the panel never run. */
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
 }
 
 .project-clad-member-role-select:not([open]) {
@@ -2306,7 +2329,17 @@ html:has(.project-clad-page--projects) body {
 
 .project-clad-member-role-select[open] {
   z-index: 80;
-  overflow: visible;
+  overflow: hidden;
+  border-radius: var(--pc-role-select-pill-r);
+  border: var(--pc-caesura-border);
+  border-color: rgba(60, 64, 67, 0.22);
+  background: var(--pc-caesura-bg);
+  /* One inset for the whole open control — not duplicated on the trigger row */
+  box-shadow: var(--pc-caesura-inset);
+}
+
+.project-clad-member-role-select[open]:hover {
+  border-color: var(--pc-caesura-border-hover);
 }
 
 .project-clad-member-role-select__trigger {
@@ -2326,13 +2359,21 @@ html:has(.project-clad-page--projects) body {
   font-size: max(15px, calc(0.88rem * var(--pc-text-scale)));
   font-weight: 600 !important;
   user-select: none;
-  box-shadow: var(--pc-btn-neu-shadow-active);
+  /* Same inset well as native inputs / order row <select> — not raised neu pill */
+  box-shadow: var(--pc-caesura-inset);
   text-shadow: none;
   transition: var(--pc-btn-neu-transition);
+  outline: none;
+}
+
+.project-clad-member-role-select__trigger:focus-visible {
+  box-shadow: none;
+  border-color: var(--pc-caesura-border-hover);
 }
 
 .project-clad-member-role-select:not([open]):hover > .project-clad-member-role-select__trigger {
-  box-shadow: var(--pc-btn-neu-shadow-hover);
+  /* Keep sunk-in on hover; grey selects never drop to flat “raised” */
+  box-shadow: var(--pc-caesura-inset);
   border-color: var(--pc-caesura-border-hover);
 }
 
@@ -2358,14 +2399,34 @@ html:has(.project-clad-page--projects) body {
 .project-clad-member-role-select[open] > .project-clad-member-role-select__trigger {
   position: relative;
   z-index: 2;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-  /* One continuous edge with the list below (soft, not pure black). */
-  border-bottom-color: rgba(60, 64, 67, 0.28);
+  /* Match shell radius exactly — 9999px on a wide bar resolves differently than
+     --pc-role-select-pill-r and leaves a “ghost” inner arc that clips the label mid-open. */
+  border-radius: var(--pc-role-select-pill-r) var(--pc-role-select-pill-r) 0 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  /* Pull list up 1px to kill subpixel seam between summary and panel */
+  margin-bottom: -1px;
 }
 
 .project-clad-member-role-select[open] .project-clad-member-role-select__chevron {
   transform: rotate(180deg);
+}
+
+/*
+ * Height is driven by JS (summary click + outside close + radio) so open/close both animate.
+ * max-height + :not([open])::details-content { height:0 } made the second open and all closes instant.
+ */
+.project-clad-member-role-select__panel {
+  overflow: hidden;
+  border-radius: 0 0 var(--pc-role-select-pill-r) var(--pc-role-select-pill-r);
+  background: transparent;
+  box-shadow: none;
+  transition: height 0.24s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.project-clad-member-role-select:not([open]) .project-clad-member-role-select__panel {
+  height: 0;
 }
 
 .project-clad-member-role-select__list {
@@ -2374,12 +2435,12 @@ html:has(.project-clad-page--projects) body {
   width: 100%;
   margin: 0;
   padding: 0;
-  border: 1px solid rgba(60, 64, 67, 0.28);
-  border-top: none;
-  border-radius: 0 0 0.85rem 0.85rem;
-  background: var(--pc-caesura-bg);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   box-sizing: border-box;
   overflow: hidden;
+  box-shadow: none;
 }
 
 .project-clad-member-role-select::details-content {
@@ -2388,9 +2449,6 @@ html:has(.project-clad-page--projects) body {
   max-width: 100%;
   overflow: hidden;
   box-sizing: border-box;
-  transition:
-    height 0.22s cubic-bezier(0.23, 1, 0.32, 1),
-    padding 0.22s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .project-clad-member-role-select:not([open])::details-content {
@@ -2402,19 +2460,9 @@ html:has(.project-clad-page--projects) body {
 }
 
 .project-clad-member-role-select[open]::details-content {
+  height: auto;
   padding: 0;
-  /* Keep hidden so open height animation + list corners stay contained; list uses overflow:hidden */
   overflow: hidden;
-}
-
-@supports (interpolate-size: allow-keywords) {
-  .project-clad-member-role-select {
-    interpolate-size: allow-keywords;
-  }
-
-  .project-clad-member-role-select[open]::details-content {
-    height: auto;
-  }
 }
 
 .project-clad-member-role-select__option {
@@ -2424,30 +2472,45 @@ html:has(.project-clad-page--projects) body {
   cursor: pointer;
   font-size: max(15px, calc(0.88rem * var(--pc-text-scale)));
   font-weight: 600 !important;
-  color: #3c4043;
-  background: var(--pc-role-select-row);
-  transition: background 0.12s ease, color 0.12s ease;
+  color: var(--pc-caesura-dark);
+  background: transparent;
+  transition:
+    background 0.2s ease,
+    color 0.22s cubic-bezier(0.23, 1, 0.32, 1),
+    filter 0.2s ease;
 }
 
-.project-clad-member-role-select__option:hover {
-  filter: brightness(0.98);
+/* Unselected row: trigger-colored label + stronger red glow (--color-1). */
+.project-clad-member-role-select__option:not(:has(input:checked)):hover {
+  filter: none;
+  color: var(--pc-role-option-hover-fg) !important;
 }
 
+.project-clad-member-role-select__option:not(:has(input:checked)):hover .project-clad-member-role-select__option-text,
+.project-clad-member-role-select__option:not(:has(input:checked)) .project-clad-member-role-select__option-text:hover {
+  color: var(--pc-role-option-hover-fg) !important;
+  text-shadow: var(--pc-role-option-hover-glow) !important;
+}
+
+/* Selected: same inset surface as siblings; red label + glow only (no filled highlight) */
 .project-clad-member-role-select__option:has(input:checked) {
-  background: var(--pc-role-select-blue);
-  color: #fff !important;
+  background: transparent;
+  filter: none;
 }
 
 .project-clad-member-role-select__option:has(input:checked) .project-clad-member-role-select__option-text {
-  color: #fff !important;
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
 }
 
 .project-clad-member-role-select__option:has(input:checked):hover {
-  filter: brightness(1.05);
+  filter: none;
+  background: transparent;
 }
 
 .project-clad-member-role-select__option:has(input:checked):hover .project-clad-member-role-select__option-text {
-  color: #fff !important;
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
 }
 
 .project-clad-member-role-select__input {
@@ -2465,7 +2528,11 @@ html:has(.project-clad-page--projects) body {
 .project-clad-member-role-select__option-text {
   display: block;
   padding: 0.58rem 1rem;
-  pointer-events: none;
+  /* Must allow hit-testing so :hover styles apply when the cursor is over the label text */
+  pointer-events: auto;
+  transition:
+    color 0.22s cubic-bezier(0.23, 1, 0.32, 1),
+    text-shadow 0.32s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .project-clad-page--projects.project-clad-page--detail .project-clad-share-access-form .project-clad-member-role-select {
@@ -2830,14 +2897,29 @@ details.project-clad-edit-mode
 
 /* Grey caesura buttons: hover = flat + white rim; red label + soft red glow */
 .project-clad-page
-  .project-clad-button:not(:disabled):not(.project-clad-button--danger):not(.project-clad-button--projects):hover,
+  .project-clad-button:not(:disabled):not(.project-clad-button--danger):not(.project-clad-button--projects):not(.project-clad-button--approve):hover,
 .project-clad-modal-backdrop
-  .project-clad-button:not(:disabled):not(.project-clad-button--danger):not(.project-clad-button--projects):hover {
+  .project-clad-button:not(:disabled):not(.project-clad-button--danger):not(.project-clad-button--projects):not(.project-clad-button--approve):hover {
   z-index: 1;
   box-shadow: none;
   border-color: var(--pc-caesura-border-hover);
   color: var(--pc-caesura-hover-red-text);
   text-shadow: var(--pc-caesura-hover-red-text-glow);
+}
+
+/* Approve action only: same hover treatment as grey buttons, but green label glow. */
+.project-clad-page
+  .project-clad-button.project-clad-button--approve:not(:disabled):hover,
+.project-clad-modal-backdrop
+  .project-clad-button.project-clad-button--approve:not(:disabled):hover {
+  z-index: 1;
+  box-shadow: none;
+  border-color: var(--pc-caesura-border-hover);
+  color: var(--color-2) !important;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 6px rgba(28, 186, 28, 0.28),
+    0 0 14px rgba(28, 186, 28, 0.16) !important;
 }
 
 /* Add member open: light neu face + white rim + red label + glow (not filled red) */
@@ -2979,6 +3061,30 @@ details.project-clad-edit-mode
   min-height: 40px;
 }
 
+/* Edit project modal: backdrop + panel enter/exit */
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] {
+  background: rgba(0, 0, 0, 0);
+  transition: background-color 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal].project-clad-edit-project-modal--open {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal]:not(.project-clad-edit-project-modal--open)
+  .project-clad-card.project-clad-modal {
+  opacity: 0;
+  transform: scale(0.94) translateY(14px);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal],
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-card.project-clad-modal {
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* Edit project modal: neu panel (match projects / order cards), no hover lift */
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-card.project-clad-modal {
   position: relative;
@@ -2996,15 +3102,17 @@ details.project-clad-edit-mode
     0 24px 50px rgba(0, 0, 0, 0.14),
     0 10px 24px rgba(0, 0, 0, 0.1),
     0 46px 82px -18px rgba(0, 0, 0, 0.2);
-  transform: scale(1);
+  transform: scale(1) translateY(0);
   transform-origin: center center;
   transition: box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1), filter 0.3s cubic-bezier(0.23, 1, 0.32, 1),
-    transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+    transform 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 0.3s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-card.project-clad-modal:hover {
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal].project-clad-edit-project-modal--open
+  .project-clad-card.project-clad-modal:hover {
   z-index: 0;
-  transform: scale(1);
+  transform: scale(1) translateY(0);
   filter: none;
   box-shadow:
     0 2px 0 rgba(255, 255, 255, 0.95) inset,
@@ -3086,13 +3194,42 @@ details.project-clad-edit-mode
   text-shadow: var(--pc-accent-heading-shadow);
 }
 
-/* Edit project modal: section headings (Edit project details, Create new order, Share access, Project members) same size and underlined */
+/* Edit project modal: scroll area — keep overflow, hide scrollbar (Firefox / WebKit / legacy Edge) */
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-reject-modal {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-reject-modal::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/*
+ * Section headings — same treatment as Orders / Project subtotal / More (h2.project-clad-neon-title on detail page).
+ */
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] #edit-project-modal-title,
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-section-title {
-  font-size: calc(1.25rem * var(--pc-text-scale));
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  margin-top: 0.35rem;
+  margin-bottom: 1rem;
+  padding: 0.15rem 0;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: clamp(1.1rem, 4vw, 1.72rem) !important;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  color: var(--pc-pill-text-glow-hover) !important;
+  text-shadow: var(--pc-accent-heading-shadow);
+  text-transform: uppercase;
+  opacity: 1 !important;
+  text-decoration: none !important;
+  -webkit-font-smoothing: antialiased;
 }
+
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] [data-projectclad-section-underline] {
-  text-decoration: underline !important;
+  text-decoration: none !important;
 }
 
 /* Edit project modal: all buttons same size as Save/Cancel */
@@ -3356,6 +3493,49 @@ details.project-clad-edit-mode
   margin-bottom: 0;
 }
 
+/* Order table footer: same neon as Project subtotal; no rules above/below this block */
+.project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td {
+  border-bottom: none !important;
+  border-top: none !important;
+  color: var(--pc-pill-text-glow-hover) !important;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: clamp(1.1rem, 4vw, 1.72rem) !important;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  text-shadow: var(--pc-accent-heading-shadow);
+  text-transform: uppercase;
+  opacity: 1 !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td::before {
+  font-weight: 400 !important;
+  color: inherit;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-order-empty-with-totals__row {
+  border-top: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-order-empty-with-totals__row .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail .project-clad-order-empty-with-totals__row .project-clad-table-right {
+  color: var(--pc-pill-text-glow-hover) !important;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: clamp(1.1rem, 4vw, 1.72rem) !important;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  text-shadow: var(--pc-accent-heading-shadow);
+  text-transform: uppercase;
+  opacity: 1 !important;
+  -webkit-font-smoothing: antialiased;
+}
+
 .project-clad-orders-table tbody td .project-clad-stack {
   margin-top: 0;
 }
@@ -3401,7 +3581,7 @@ details.project-clad-edit-mode
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-members-table tr {
   display: block;
   width: 100%;
-  border-bottom: 1px solid #000;
+  border-bottom: none;
   padding: 0.5rem 0;
 }
 
@@ -3500,6 +3680,10 @@ details.project-clad-edit-mode .project-clad-edit-view {
     padding: 0.75rem 0;
     border-bottom: 1px solid #000;
     box-sizing: border-box;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr:last-child {
+    border-bottom: none;
   }
 
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr > td:nth-child(1) {
@@ -3602,7 +3786,7 @@ details.project-clad-edit-mode .project-clad-edit-view {
 
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td:nth-child(3)::before {
     content: "Subtotal: ";
-    font-weight: 700;
+    font-weight: 400;
   }
 
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:nth-child(2)::before {
@@ -3819,7 +4003,7 @@ details.project-clad-edit-mode .project-clad-edit-view {
 
   .project-clad-orders-table tfoot td:nth-child(3)::before {
     content: "Subtotal: ";
-    font-weight: 700;
+    font-weight: 400;
   }
 
   /* Approve + Reject side by side, aligned and centered on mobile */
