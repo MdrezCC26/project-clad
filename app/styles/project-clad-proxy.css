@@ -12,7 +12,7 @@
   - Main page title ("PROJECTS")     .project-clad-header .main-page-title
   - Section headings ("Orders")     .project-clad-section-title (accent: .project-clad-neon-title → Bakbak One)
   - Card/order titles               .project-clad-title (list tiles: full tile Bakbak via .project-clad-card-link + .project-clad-actions)
-  - Nav links (Store, Cart)        .project-clad-nav .link
+  - Storefront nav (theme-style)   .project-clad-storefront-nav__link
   - Muted/secondary text           .project-clad-muted (inherits)
   - Meta labels (Orders, PO#)      .project-clad-meta dt
   - Buttons                        Bakbak One; grey = CodePen caesura neu (QWNjvOX); red = gradient neu
@@ -679,6 +679,49 @@ html:has(.project-clad-page--projects) body {
   color: var(--pc-muted);
 }
 
+/* Project footer (rolled-up subtotal / tax / total): Bakbak + same grey as amounts */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-orders-shell__footer
+  h2.project-clad-project-footer-metric-label {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: calc(1.05rem * var(--pc-text-scale));
+  color: var(--pc-muted);
+  text-shadow: none;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-orders-shell__footer
+  .project-clad-summary-action,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-orders-shell__footer
+  .project-clad-summary-action
+  .project-clad-hidden-link {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+}
+
+/*
+ * Order card: delivery schedule line + Edit order — explicit Bakbak (beats .project-clad-page * Helvetica).
+ */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-schedule-summary,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-schedule-summary__line {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-actions-top-row
+  .project-clad-button {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+}
+
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-orders-shell
   .project-clad-table th,
@@ -1152,11 +1195,9 @@ html:has(.project-clad-page--projects) body {
   position: relative;
   z-index: 1;
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem 0.55rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
@@ -1166,6 +1207,29 @@ html:has(.project-clad-page--projects) body {
   overflow-x: visible;
   line-height: 1.35;
   overflow-wrap: break-word;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip__row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 0.55rem;
+  width: 100%;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-project-meta-chip__delivery {
+  width: 100%;
+  text-align: center;
+  font-size: 0.92em;
+  padding-top: 0.4rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  line-height: 1.45;
 }
 
 .project-clad-page--projects.project-clad-page--detail
@@ -1665,14 +1729,70 @@ html:has(.project-clad-page--projects) body {
 
 .project-clad-page--projects.project-clad-page--detail
   details.project-clad-order-row
-  .project-clad-order-summary-head-row__subtotal {
+  .project-clad-order-summary-head-end {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
   flex: 0 0 auto;
   margin-left: auto;
+  min-width: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-head-row__subtotal {
+  flex: 0 0 auto;
   text-align: right;
-  text-transform: none;
-  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: var(--pc-button-font-size);
+  line-height: var(--pc-button-line-height);
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
   font-weight: 400 !important;
+}
+
+/*
+ * Header total: inner spans/button match .project-clad-page * { Helvetica !important } — they do not
+ * inherit font-family from the parent div; set Bakbak on each (same pattern as list tile link *).
+ */
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-head-row__subtotal
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-head-row__subtotal
+  .project-clad-order-summary-qty__sub-amount,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-head-row__subtotal
+  .project-clad-hidden-link {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: var(--pc-button-font-size) !important;
+  line-height: var(--pc-button-line-height) !important;
+  letter-spacing: 0.03em !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-head-row__subtotal
+  .project-clad-order-summary-qty__sub-amount {
+  text-transform: none !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-head-row__subtotal
+  .project-clad-muted,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-head-row__subtotal
+  .project-clad-hidden-link {
+  text-transform: uppercase !important;
 }
 
 .project-clad-order-empty-with-totals__row {
@@ -1683,7 +1803,7 @@ html:has(.project-clad-page--projects) body {
   gap: 0.5rem 1.25rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px solid #000;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .project-clad-page--projects.project-clad-page--detail
@@ -2084,6 +2204,277 @@ html:has(.project-clad-page--projects) body {
   }
 }
 
+/*
+ * Storefront-style header (Canadian Cladding theme): raised stadium pill, hamburger + logo,
+ * circular search / account / cart + cart badge — compact bar like the live storefront.
+ */
+.project-clad-storefront-nav {
+  --pc-storefront-nav-icon: 38px;
+  --pc-storefront-nav-cluster-gap: 0.55rem;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 0 1.25rem;
+  box-sizing: border-box;
+}
+
+.project-clad-storefront-nav__shell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pc-storefront-nav-cluster-gap) 0.75rem;
+  padding: max(0.35rem, calc((var(--pc-storefront-nav-icon) + 8px - 1.25rem) / 2)) 0.65rem
+    max(0.35rem, calc((var(--pc-storefront-nav-icon) + 8px - 1.25rem) / 2)) 0.85rem;
+  border-radius: 9999px;
+  box-sizing: border-box;
+  background: linear-gradient(165deg, #eceef1 0%, #e4e6ea 45%, #dcdfe3 100%);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.75) inset,
+    0 -2px 8px rgba(0, 0, 0, 0.05) inset,
+    0 10px 28px rgba(0, 0, 0, 0.08),
+    0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.project-clad-storefront-nav__left {
+  display: flex;
+  align-items: center;
+  gap: var(--pc-storefront-nav-cluster-gap);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+/* Hamburger + flyout: same as theme compact header at all breakpoints */
+.project-clad-storefront-nav__drawer {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.project-clad-storefront-nav__menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--pc-storefront-nav-icon);
+  height: var(--pc-storefront-nav-icon);
+  min-width: var(--pc-storefront-nav-icon);
+  min-height: var(--pc-storefront-nav-icon);
+  padding: 0;
+  margin: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  list-style: none;
+  color: var(--pc-caesura-dark);
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+  background: var(--pc-caesura-bg);
+  box-shadow: var(--pc-btn-neu-shadow);
+  transition: var(--pc-btn-neu-transition);
+  box-sizing: border-box;
+}
+
+.project-clad-storefront-nav__menu-btn::-webkit-details-marker {
+  display: none;
+}
+
+.project-clad-storefront-nav__menu-btn::marker {
+  content: "";
+}
+
+.project-clad-storefront-nav__menu-btn:hover {
+  border-color: var(--pc-caesura-border-hover);
+  color: var(--pc-caesura-hover-red-text);
+  box-shadow: var(--pc-btn-neu-shadow-hover);
+}
+
+.project-clad-storefront-nav__menu-btn:active {
+  box-shadow: var(--pc-btn-neu-shadow-active);
+}
+
+.project-clad-storefront-nav__drawer-panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 80;
+  min-width: min(280px, 86vw);
+  padding: 0.55rem;
+  border-radius: var(--pc-neu-radius);
+  background: var(--pc-caesura-bg);
+  border: var(--pc-caesura-border);
+  box-shadow: var(--pc-btn-neu-shadow);
+  box-sizing: border-box;
+}
+
+.project-clad-storefront-nav__drawer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.project-clad-storefront-nav__link--drawer {
+  width: 100%;
+  box-sizing: border-box;
+  justify-content: center;
+}
+
+.project-clad-storefront-nav__logo-link {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  max-width: min(200px, 42vw);
+  text-decoration: none;
+  line-height: 0;
+}
+
+.project-clad-storefront-nav__logo-img {
+  max-height: calc(var(--pc-storefront-nav-icon) + 4px);
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.project-clad-storefront-nav__logo-fallback {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  color: var(--pc-caesura-dark);
+}
+
+.project-clad-storefront-nav__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.65rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-size: calc(0.58rem * var(--pc-text-scale));
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pc-caesura-dark);
+  line-height: 1.2;
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+  background: var(--pc-caesura-bg);
+  box-shadow: var(--pc-btn-neu-shadow);
+  transition: var(--pc-btn-neu-transition);
+}
+
+.project-clad-storefront-nav__link:hover {
+  border-color: var(--pc-caesura-border-hover);
+  color: var(--pc-caesura-hover-red-text);
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+  box-shadow: var(--pc-btn-neu-shadow-hover);
+}
+
+.project-clad-storefront-nav__link:active {
+  box-shadow: var(--pc-btn-neu-shadow-active);
+}
+
+.project-clad-storefront-nav__tools {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: var(--pc-storefront-nav-cluster-gap);
+}
+
+.project-clad-storefront-nav__icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--pc-storefront-nav-icon);
+  height: var(--pc-storefront-nav-icon);
+  min-width: var(--pc-storefront-nav-icon);
+  min-height: var(--pc-storefront-nav-icon);
+  padding: 0;
+  border-radius: 50%;
+  text-decoration: none;
+  color: var(--pc-caesura-dark);
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+  background: var(--pc-caesura-bg);
+  box-shadow: var(--pc-btn-neu-shadow);
+  transition: var(--pc-btn-neu-transition);
+  box-sizing: border-box;
+}
+
+.project-clad-storefront-nav__icon-btn--avatar {
+  background: var(--pc-caesura-dark);
+  color: #fff;
+}
+
+.project-clad-storefront-nav__icon-btn--avatar:hover {
+  color: #fff;
+  border-color: var(--pc-caesura-border-hover);
+  box-shadow: var(--pc-btn-neu-shadow-hover);
+}
+
+.project-clad-storefront-nav__account-initial {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 400;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.project-clad-storefront-nav__icon-btn--cart.project-clad-storefront-nav__icon-btn--has-badge .project-clad-storefront-nav__icon {
+  position: relative;
+}
+
+.project-clad-storefront-nav__cart-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  background: var(--color-1, #c40000);
+  border-radius: 50%;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.project-clad-storefront-nav__icon-btn:hover {
+  border-color: var(--pc-caesura-border-hover);
+  color: var(--pc-caesura-hover-red-text);
+  box-shadow: var(--pc-btn-neu-shadow-hover);
+}
+
+.project-clad-storefront-nav__icon-btn--avatar:hover {
+  color: #fff;
+}
+
+.project-clad-storefront-nav__icon-btn:active {
+  box-shadow: var(--pc-btn-neu-shadow-active);
+}
+
+.project-clad-storefront-nav__icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.project-clad-header-toolbar {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 0.75rem;
+}
+
+@media (min-width: 641px) {
+  .project-clad-page--projects.project-clad-page--detail .project-clad-header-toolbar {
+    justify-content: flex-start;
+  }
+}
+
 .project-clad-header {
   margin-bottom: 2rem;
 }
@@ -2120,55 +2511,16 @@ html:has(.project-clad-page--projects) body {
   z-index: 0;
 }
 
-/* Project detail (desktop): quick add member — grid column 1, popover under button */
-.project-clad-page--projects.project-clad-page--detail .project-clad-header-slot--left {
-  display: none;
+/* Project detail: Add member toolbar above storefront nav; popover anchored to button */
+.project-clad-page--projects.project-clad-page--detail .project-clad-header-toolbar .project-clad-header-slot--left {
   position: relative;
-  grid-column: 1;
-  justify-self: start;
-  align-self: center;
+  display: block;
   min-width: 0;
 }
 
-@media (min-width: 641px) {
-  .project-clad-page--projects.project-clad-page--detail .project-clad-header-slot--left {
-    display: block;
-  }
-}
-
-/*
- * Project detail (app proxy) header: Add member + nav share a 3-col grid; mid widths overlap.
- * Only when the left slot exists (:has) — other detail routes keep title + nav grid.
- */
 @media (max-width: 900px) {
-  .project-clad-page--projects.project-clad-page--detail
-    .project-clad-header-row:has(.project-clad-header-slot--left) {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .project-clad-page--projects.project-clad-page--detail
-    .project-clad-header-row:has(.project-clad-header-slot--left)
-    .project-clad-header-slot--left {
-    display: flex !important;
+  .project-clad-page--projects.project-clad-page--detail .project-clad-header-toolbar {
     justify-content: center;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    order: 2;
-  }
-
-  .project-clad-page--projects.project-clad-page--detail
-    .project-clad-header-row:has(.project-clad-header-slot--left)
-    .project-clad-nav {
-    grid-column: unset;
-    width: 100%;
-    max-width: 100%;
-    justify-content: center;
-    flex-wrap: wrap;
-    order: 1;
   }
 }
 
@@ -2644,6 +2996,23 @@ html:has(.project-clad-page--projects) body {
   cursor: pointer;
 }
 
+/*
+ * Order row header: native <summary> can intercept pointer events so buttons inside never receive
+ * clicks (varies by browser). Let the summary shell be transparent; interactive descendants handle input.
+ */
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details
+  > summary.project-clad-summary {
+  pointer-events: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row.project-clad-details
+  > summary.project-clad-summary
+  * {
+  pointer-events: auto;
+}
+
 .project-clad-details > summary::-webkit-details-marker {
   display: none;
 }
@@ -2662,20 +3031,127 @@ html:has(.project-clad-page--projects) body {
 }
 
 /*
- * Order name: <h3> for display, <input> for edit. Theme styles often force inputs visible
- * (!important), so both were stacking and looked like misaligned “double” text.
+ * Edit order: two stacked fields (order name + PO), same label + inset input pattern as cart modal.
  */
-.project-clad-job-name-input {
+.project-clad-job-name-field,
+.project-clad-job-po-field {
   display: none !important;
-  margin-top: 0.35rem;
   width: 100%;
-  max-width: min(280px, 100%);
+  max-width: min(320px, 100%);
   box-sizing: border-box;
-  border-radius: var(--pc-neu-radius);
 }
 
-details.project-clad-edit-mode .project-clad-job-name-input {
+details.project-clad-edit-mode .project-clad-job-name-field,
+details.project-clad-edit-mode .project-clad-job-po-field {
   display: block !important;
+}
+
+details.project-clad-edit-mode .project-clad-job-po-field {
+  margin-top: 0.65rem;
+}
+
+.project-clad-job-edit-label {
+  display: block;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: 0.68rem;
+  font-weight: 400;
+  font-style: normal !important;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 0 0 0.35rem;
+  padding: 0;
+  color: var(--pc-btn-neu-fg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/*
+ * Order name + PO fields: theme / UA often force serif or system font on inputs — match app body (Helvetica).
+ * Use type + class + long chain so storefront CSS does not win.
+ */
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-edit-mode
+  .project-clad-order-summary-padded
+  input[type="text"].project-clad-job-edit-input {
+  display: block !important;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box !important;
+  min-height: 2.75rem;
+  margin: 0 !important;
+  padding: 0.55rem 0.85rem !important;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-style: normal !important;
+  font-size: calc(0.8rem * var(--pc-text-scale)) !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+  letter-spacing: 0.03em !important;
+  color: var(--pc-btn-neu-fg) !important;
+  border-radius: var(--pc-neu-radius) !important;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-edit-mode
+  .project-clad-order-summary-padded
+  input[type="text"].project-clad-job-edit-input::placeholder {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-style: normal !important;
+  color: var(--pc-caesura-fg) !important;
+  opacity: 1;
+  font-weight: 400 !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-edit-mode
+  .project-clad-order-summary-padded
+  input[type="text"].project-clad-job-edit-input:-webkit-autofill,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-edit-mode
+  .project-clad-order-summary-padded
+  input[type="text"].project-clad-job-edit-input:-webkit-autofill:hover,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-edit-mode
+  .project-clad-order-summary-padded
+  input[type="text"].project-clad-job-edit-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--pc-btn-neu-fg) !important;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  transition: background-color 99999s ease-out;
+}
+
+.project-clad-order-tfoot-total-lead-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  text-align: left;
+}
+
+.project-clad-order-foot-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  text-align: left;
+}
+
+.project-clad-order-foot-label {
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.project-clad-order-foot-line {
+  line-height: 1.35;
+}
+
+.project-clad-order-foot-value {
+  font-weight: 600;
 }
 
 /* Only hide the order title in the summary (not other .project-clad-title on the page). */
@@ -2772,6 +3248,271 @@ details.project-clad-edit-mode
   align-items: center;
   gap: 1rem;
   width: 100%;
+}
+
+/* Delivery line + Edit order: same vertical center (avoid inline flex-end fighting this). */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-actions-top-row {
+  align-items: center !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-actions-top-row
+  .project-clad-order-schedule-summary {
+  display: flex;
+  align-items: center;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-actions-top-row
+  > .project-clad-order-actions-left.project-clad-actions {
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Order row: preferred / delivered schedule line — project meta chip typography + wrap (no clip) */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-schedule-summary {
+  flex: 1 1 12rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-order-schedule-summary__line {
+  display: block;
+  margin: 0;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: calc(0.9rem * var(--pc-text-scale)) !important;
+  line-height: 1.45;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  opacity: 1 !important;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Preferred delivery: project-tile typography on “between”; add-member control height */
+.project-clad-page--projects.project-clad-page--detail .project-clad-preferred-delivery-form {
+  --pc-add-member-control-h: 2.75rem;
+  gap: 0.55rem !important;
+  max-width: min(32rem, 100%);
+  align-items: flex-start;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-preferred-delivery-fields {
+  width: 100%;
+  min-width: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-preferred-delivery-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Same ink + glow as .project-clad-project-meta-chip inner copy */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-preferred-delivery-between,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-shell
+  .project-clad-staff-fulfillment__label--tile {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 0.05rem;
+  font-size: calc(1rem * var(--pc-text-scale));
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  text-transform: none;
+  opacity: 1 !important;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-preferred-delivery-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  margin: 0;
+  min-width: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-preferred-delivery-field--date {
+  flex: 0 1 auto;
+  width: auto;
+  max-width: 11.5rem;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-preferred-delivery-field--time {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  max-width: 13.5rem;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-preferred-delivery-form
+  input.project-clad-preferred-delivery-input,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-preferred-delivery-form
+  select.project-clad-preferred-delivery-input {
+  height: var(--pc-add-member-control-h);
+  min-height: var(--pc-add-member-control-h);
+  max-height: var(--pc-add-member-control-h);
+  padding: 0 0.75rem 0 0.9rem;
+  box-sizing: border-box;
+  margin: 0;
+  line-height: 1.2;
+  font-size: max(15px, calc(0.88rem * var(--pc-text-scale))) !important;
+  font-weight: 600 !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-preferred-delivery-form
+  input.project-clad-preferred-delivery-input {
+  width: 100%;
+  max-width: 100%;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-preferred-delivery-form
+  select.project-clad-preferred-delivery-input {
+  display: block;
+  width: auto;
+  max-width: 13.5rem;
+  min-width: 10.25rem;
+  padding-right: 2.35rem;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236c7587' d='M2.5 4.25 6 7.75 9.5 4.25z'/%3E%3C/svg%3E");
+  background-position: right 0.72rem center;
+  background-repeat: no-repeat;
+  background-size: 12px 12px;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-preferred-delivery-form
+  input.project-clad-preferred-delivery-input::-webkit-date-and-time-value {
+  text-align: left;
+  min-height: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-preferred-delivery-submit {
+  margin-top: 0.15rem;
+  align-self: flex-start;
+}
+
+/* Staff fulfillment (edit order): status select matches add-member / preferred-delivery control height */
+.project-clad-page--projects.project-clad-page--detail .project-clad-staff-fulfillment {
+  min-width: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-staff-fulfillment-status-form {
+  width: 100%;
+  min-width: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-staff-fulfillment-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-staff-fulfillment__status {
+  display: block;
+  box-sizing: border-box;
+  height: var(--pc-add-member-control-h, 2.75rem);
+  min-height: var(--pc-add-member-control-h, 2.75rem);
+  max-height: var(--pc-add-member-control-h, 2.75rem);
+  margin: 0;
+  padding: 0 2.35rem 0 0.9rem;
+  line-height: 1.2;
+  font-size: max(15px, calc(0.88rem * var(--pc-text-scale))) !important;
+  font-weight: 600 !important;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236c7587' d='M2.5 4.25 6 7.75 9.5 4.25z'/%3E%3C/svg%3E");
+  background-position: right 0.72rem center;
+  background-repeat: no-repeat;
+  background-size: 12px 12px;
+  flex: 1 1 10rem;
+  width: auto;
+  min-width: 8rem;
+  max-width: 18rem;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-staff-fulfillment-status-row
+  .project-clad-button {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-staff-fulfillment-photo-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  min-width: 0;
+  gap: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-staff-fulfillment-upload-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-staff-fulfillment__file-input {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  font-size: max(14px, calc(0.85rem * var(--pc-text-scale))) !important;
+  line-height: 1.2;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-staff-fulfillment__picked-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  font-size: max(15px, calc(0.88rem * var(--pc-text-scale)));
+  font-weight: 600;
+  line-height: var(--pc-add-member-control-h, 2.75rem);
+  color: var(--pc-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .project-clad-order-actions-add-to-cart {
@@ -3000,6 +3741,21 @@ details.project-clad-edit-mode
 .project-clad-actions form,
 .project-clad-stack form {
   display: inline-flex;
+}
+
+/*
+ * Order card body is wrapped in .project-clad-stack; nested forms that also use
+ * .project-clad-stack on the <form> must stay a vertical grid — otherwise the rule
+ * above turns them into inline-flex row and squishes headings/fields (one char per line).
+ */
+.project-clad-stack form.project-clad-stack {
+  display: grid;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  gap: 0.75rem;
+  margin-top: 0;
+  align-items: start;
 }
 
 .project-clad-share-input {
@@ -3451,6 +4207,83 @@ details.project-clad-edit-mode
   overflow-wrap: anywhere;
 }
 
+/*
+ * Order line items + column headers: Bakbak + meta chip scale (explicit descendants / ::before beat
+ * .project-clad-page * { Helvetica !important }). No line under thead or under last body row — see below.
+ */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  thead
+  th {
+  border-bottom: none !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  tbody
+  td {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12) !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  tbody
+  tr:last-child
+  td {
+  border-bottom: none !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  thead
+  th:not(:first-child),
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  thead
+  th:first-child::before {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: calc(0.9rem * var(--pc-text-scale)) !important;
+  letter-spacing: 0.025em;
+  text-transform: uppercase !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  tbody
+  td {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: calc(0.9rem * var(--pc-text-scale)) !important;
+  letter-spacing: 0.025em;
+  text-transform: none !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  tbody
+  td
+  .project-clad-item-link,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  tbody
+  td
+  .project-clad-item-link
+  *,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  tbody
+  td
+  .project-clad-hidden-link {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: calc(0.9rem * var(--pc-text-scale)) !important;
+  letter-spacing: 0.025em;
+  -webkit-font-smoothing: antialiased;
+}
+
 .project-clad-table .project-clad-thumb,
 .project-clad-table .project-clad-thumb--placeholder {
   flex-shrink: 0;
@@ -3473,8 +4306,61 @@ details.project-clad-edit-mode
   object-fit: contain;
 }
 
+/* Project detail: smaller drawing + raised neu tile (matches nav pills, not flat white slab) */
+.project-clad-page--projects.project-clad-page--detail .project-clad-orders-table {
+  --pc-order-thumb-size: clamp(80px, 18vw, 220px);
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb,
+.project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb--placeholder {
+  background: var(--pc-card-bg);
+  padding: 0.4rem;
+  border-radius: var(--pc-neu-radius);
+  border: var(--pc-caesura-border);
+  box-shadow: var(--pc-caesura-drop);
+  box-sizing: border-box;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  .project-clad-thumb--placeholder {
+  min-height: 0;
+}
+
 .project-clad-table-right {
   text-align: right;
+}
+
+/* Orders table: Quantity column — center header + values (Price stays right via .project-clad-table-right). */
+.project-clad-page--projects.project-clad-page--detail .project-clad-orders-table thead tr th:nth-child(2),
+.project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr td:nth-child(2) {
+  text-align: center !important;
+}
+
+/*
+ * Quantity cell body: value lives in .project-clad-normal-view — still matches .project-clad-page *
+ * (Helvetica) unless font is set on the span; match thead Bakbak + shell body color.
+ */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  tbody
+  tr
+  td:nth-child(2)
+  .project-clad-normal-view,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  tbody
+  tr
+  td:nth-child(2)
+  input[data-projectclad-qty-input] {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: calc(0.9rem * var(--pc-text-scale)) !important;
+  letter-spacing: 0.025em !important;
+  color: var(--pc-muted) !important;
+  opacity: 1 !important;
+  text-transform: none !important;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Orders table: Actions is 4th column when shown — center with Add to cart / row actions */
@@ -3493,11 +4379,7 @@ details.project-clad-edit-mode
   margin-bottom: 0;
 }
 
-/* Order table footer: same neon as Project subtotal; no rules above/below this block */
-.project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
+/* Order table footer: same neon as Project subtotal (body/thead outer borders cleared above). */
 .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td {
   border-bottom: none !important;
   border-top: none !important;
@@ -3513,9 +4395,86 @@ details.project-clad-edit-mode
   -webkit-font-smoothing: antialiased;
 }
 
+/* Divider above subtotal: matches line items + order-actions strip (rgba(0,0,0,0.12)). */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  tfoot
+  tr:first-child
+  td {
+  border-top: 1px solid rgba(0, 0, 0, 0.12) !important;
+}
+
 .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td::before {
   font-weight: 400 !important;
   color: inherit;
+}
+
+/* Tax row col 1: Total Order Quantity only. */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-tfoot-qty-cell {
+  text-align: left;
+  vertical-align: middle;
+}
+
+/* Total row col 1: PURCHASE ORDER # (same line / font weight as “Total”) + optional Shopify ref */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-tfoot-order-ref-cell {
+  text-align: left;
+  vertical-align: middle;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  tr.project-clad-order-tfoot-row--total
+  > td {
+  vertical-align: middle;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-order-tfoot-po-total-line {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: clamp(1.1rem, 4vw, 1.72rem) !important;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  text-shadow: var(--pc-accent-heading-shadow);
+  text-transform: uppercase;
+  color: var(--pc-pill-text-glow-hover) !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-order-tfoot-po-value {
+  font-weight: 400 !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-tfoot-total-lead-cell
+  .project-clad-order-foot-label {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: clamp(0.95rem, 3.5vw, 1.45rem) !important;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--pc-pill-text-glow-hover) !important;
+  text-shadow: var(--pc-accent-heading-shadow) !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-empty-with-totals__total-lead {
+  text-align: left;
+  align-self: flex-start;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-order-foot-order-name {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  color: var(--pc-pill-text-glow-hover) !important;
+  text-shadow: var(--pc-accent-heading-shadow);
+  text-transform: none !important;
+  -webkit-font-smoothing: antialiased;
 }
 
 .project-clad-page--projects.project-clad-page--detail .project-clad-order-empty-with-totals__row {
@@ -3678,7 +4637,7 @@ details.project-clad-edit-mode .project-clad-edit-view {
     max-width: 100%;
     min-width: 0;
     padding: 0.75rem 0;
-    border-bottom: 1px solid #000;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
     box-sizing: border-box;
   }
 
@@ -3749,21 +4708,27 @@ details.project-clad-edit-mode .project-clad-edit-view {
 
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb,
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb--placeholder {
-    width: min(100%, 300px);
-    max-width: 300px;
+    width: min(100%, 240px);
+    max-width: 240px;
     margin-inline: auto;
     flex-shrink: 0;
     aspect-ratio: 1;
     object-fit: contain;
     height: auto;
     display: block;
+    background: var(--pc-card-bg);
+    padding: 0.4rem;
+    border-radius: var(--pc-neu-radius);
+    border: var(--pc-caesura-border);
+    box-shadow: var(--pc-caesura-drop);
+    box-sizing: border-box;
   }
 
   /* Empty placeholder span has no intrinsic height without aspect-ratio / min-height */
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb--placeholder {
-    min-height: 200px;
-    background: rgba(0, 0, 0, 0.08);
-    border-radius: var(--media-radius, 10px);
+    min-height: 160px;
+    background: var(--pc-card-bg);
+    border-radius: var(--pc-neu-radius);
   }
 
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td.project-clad-table-right {
@@ -3780,12 +4745,67 @@ details.project-clad-edit-mode .project-clad-edit-view {
     display: block;
   }
 
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    tfoot
+    tr.project-clad-order-tfoot-row--subtotal
+    td.project-clad-order-tfoot-lead--empty:first-child {
+    display: none !important;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    tfoot
+    tr.project-clad-order-tfoot-row--total
+    td.project-clad-order-tfoot-lead--empty:first-child {
+    display: none !important;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    tfoot
+    tr.project-clad-order-tfoot-row--delivery
+    td.project-clad-order-tfoot-lead--empty:first-child {
+    display: none !important;
+  }
+
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td:nth-child(2) {
     display: none;
   }
 
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td:nth-child(3)::before {
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    tfoot
+    tr.project-clad-order-tfoot-row--subtotal
+    td:nth-child(3)::before {
     content: "Subtotal: ";
+    font-weight: 400;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    tfoot
+    tr.project-clad-order-tfoot-row--tax
+    td:nth-child(3)::before {
+    content: "Tax (13%): ";
+    font-weight: 400;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    tfoot
+    tr.project-clad-order-tfoot-row--delivery
+    td:nth-child(3)::before {
+    content: "Delivery: ";
+    font-weight: 400;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    tfoot
+    tr.project-clad-order-tfoot-row--total
+    td:nth-child(3)::before {
+    content: "Total: ";
     font-weight: 400;
   }
 
@@ -3867,6 +4887,20 @@ details.project-clad-edit-mode .project-clad-edit-view {
   .project-clad-page--projects.project-clad-page--detail
     details.project-clad-order-row
     .project-clad-order-summary-head-row
+    > .project-clad-order-summary-head-end {
+    margin-left: 0;
+    width: 100%;
+    max-width: 100%;
+    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-summary-head-row
+    .project-clad-order-summary-head-end
     > .project-clad-inline-form {
     width: 100%;
     display: flex;
@@ -3880,6 +4914,7 @@ details.project-clad-edit-mode .project-clad-edit-view {
   .project-clad-page--projects.project-clad-page--detail
     details.project-clad-order-row
     .project-clad-order-summary-head-row
+    .project-clad-order-summary-head-end
     > span.project-clad-muted {
     width: 100%;
     text-align: center;
@@ -3978,6 +5013,12 @@ details.project-clad-edit-mode .project-clad-edit-view {
 
   .project-clad-page--projects.project-clad-page--detail
     details.project-clad-order-row
+    .project-clad-order-summary-head-end {
+    align-items: flex-start;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
     .project-clad-order-summary-head-row__subtotal {
     margin-left: 0;
     width: 100%;
@@ -3997,12 +5038,48 @@ details.project-clad-edit-mode .project-clad-edit-view {
     display: block;
   }
 
+  .project-clad-orders-table
+    tfoot
+    tr.project-clad-order-tfoot-row--subtotal
+    td.project-clad-order-tfoot-lead--empty:first-child {
+    display: none !important;
+  }
+
+  .project-clad-orders-table
+    tfoot
+    tr.project-clad-order-tfoot-row--total
+    td.project-clad-order-tfoot-lead--empty:first-child {
+    display: none !important;
+  }
+
+  .project-clad-orders-table
+    tfoot
+    tr.project-clad-order-tfoot-row--delivery
+    td.project-clad-order-tfoot-lead--empty:first-child {
+    display: none !important;
+  }
+
   .project-clad-orders-table tfoot td:nth-child(2) {
     display: none;
   }
 
-  .project-clad-orders-table tfoot td:nth-child(3)::before {
+  .project-clad-orders-table tfoot tr.project-clad-order-tfoot-row--subtotal td:nth-child(3)::before {
     content: "Subtotal: ";
+    font-weight: 400;
+  }
+
+  .project-clad-orders-table tfoot tr.project-clad-order-tfoot-row--tax td:nth-child(3)::before {
+    content: "Tax (13%): ";
+    font-weight: 400;
+  }
+
+  .project-clad-orders-table tfoot tr.project-clad-order-tfoot-row--delivery td:nth-child(3)::before {
+    content: "Delivery: ";
+    font-weight: 400;
+  }
+
+  .project-clad-orders-table tfoot tr.project-clad-order-tfoot-row--total td:nth-child(3)::before {
+    content: "Total: ";
     font-weight: 400;
   }
 
@@ -4126,4 +5203,46 @@ details.project-clad-edit-mode .project-clad-edit-view {
 
 .project-clad-receipt {
   box-sizing: border-box;
+}
+
+/*
+ * Order name + PO (edit mode): match grey menu / .project-clad-button label color (--pc-btn-neu-fg).
+ * #project-clad-orders-font-scope — high specificity vs theme.
+ */
+#project-clad-orders-font-scope label.project-clad-job-edit-label {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-style: normal !important;
+  font-weight: 400 !important;
+  font-size: 0.68rem !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+  color: var(--pc-btn-neu-fg) !important;
+  -webkit-font-smoothing: antialiased !important;
+}
+
+#project-clad-orders-font-scope input[type="text"].project-clad-job-edit-input {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-style: normal !important;
+  font-weight: 400 !important;
+  font-size: calc(0.8rem * var(--pc-text-scale)) !important;
+  line-height: 1.35 !important;
+  letter-spacing: 0.03em !important;
+  color: var(--pc-btn-neu-fg) !important;
+  -webkit-font-smoothing: antialiased !important;
+}
+
+#project-clad-orders-font-scope input[type="text"].project-clad-job-edit-input::placeholder {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-style: normal !important;
+  font-weight: 400 !important;
+  color: var(--pc-caesura-fg) !important;
+  opacity: 1 !important;
+}
+
+#project-clad-orders-font-scope input[type="text"].project-clad-job-edit-input:-webkit-autofill,
+#project-clad-orders-font-scope input[type="text"].project-clad-job-edit-input:-webkit-autofill:hover,
+#project-clad-orders-font-scope input[type="text"].project-clad-job-edit-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--pc-btn-neu-fg) !important;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  transition: background-color 99999s ease-out;
 }

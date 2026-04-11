@@ -27,6 +27,8 @@ import { getThemeStyles } from "../utils/themeAssets.server";
 import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
+import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
+import { getStorefrontAppNav } from "../utils/storefrontAppNav.server";
 
 type JobItemView = {
   id: string;
@@ -100,9 +102,17 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 
   const viewerNumericId = normalizeStorefrontCustomerId(customerId);
   let viewerTags: string[] = [];
+  let navAccountInitial: string | null = null;
   try {
     const info = await getCustomersByIds(shop, [viewerNumericId]);
-    viewerTags = info[viewerNumericId]?.tags ?? [];
+    const v = info[viewerNumericId];
+    viewerTags = v?.tags ?? [];
+    const fn = v?.firstName?.trim();
+    navAccountInitial = fn
+      ? fn.charAt(0).toUpperCase()
+      : customerEmail?.trim()
+        ? customerEmail.trim().charAt(0).toUpperCase()
+        : null;
   } catch {
     viewerTags = [];
   }
@@ -173,17 +183,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     themeStyles,
     logoDataUrl: settings?.logoDataUrl || null,
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
-    navButtons: [
-      { label: "Home", url: "/" },
-      {
-        label: settings?.navButton2Label || "Shop",
-        url: settings?.navButton2Url || "/collections/main-products",
-      },
-      {
-        label: settings?.navButton3Label || "Cart",
-        url: settings?.navButton3Url || "/cart",
-      },
-    ],
+    storefrontAppNav: getStorefrontAppNav(settings),
+    navAccountInitial,
   };
 };
 
@@ -408,6 +409,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           data: {
             projectId: targetProjectId,
             name: `${job.name} (Copy)`,
+            purchaseOrderNumber: job.purchaseOrderNumber ?? undefined,
             isLocked: false,
             items: {
               create: job.items.map((item) => ({
@@ -533,9 +535,10 @@ export default function ProjectDetailPage() {
     canViewPricing,
     canEdit,
     themeStyles,
-    navButtons,
+    storefrontAppNav,
     logoDataUrl,
     backgroundLogoDataUrl,
+    navAccountInitial,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const shareLink =
@@ -765,28 +768,17 @@ export default function ProjectDetailPage() {
         }
       >
         <div className="page-width project-clad-container project-clad-container--full-width">
-          {logoDataUrl && (
-            <div className="project-clad-logo">
-              <a href="/apps/project-clad/projects" className="project-clad-logo__link">
-                <img
-                  src={logoDataUrl}
-                  alt="Logo"
-                  className="project-clad-logo__img"
-                />
-              </a>
-            </div>
-          )}
           <header className="project-clad-header">
-            <div className="project-clad-header-row">
-              <h1 className="main-page-title page-title">{project.name}</h1>
-              <nav className="project-clad-nav">
-                {navButtons.map((btn, i) => (
-                  <a key={i} href={btn.url} className="project-clad-button">
-                    {btn.label}
-                  </a>
-                ))}
-              </nav>
-            </div>
+            <ProjectCladStorefrontNav
+              logoDataUrl={logoDataUrl}
+              logoHref="/"
+              links={storefrontAppNav.links}
+              cartUrl={storefrontAppNav.cartUrl}
+              searchUrl={storefrontAppNav.searchUrl}
+              accountUrl={storefrontAppNav.accountUrl}
+              accountInitial={navAccountInitial}
+            />
+            <h1 className="main-page-title page-title">{project.name}</h1>
             <div className="project-clad-header-meta">
               <span className="project-clad-header-meta__project-ref">
                 <span className="project-clad-header-meta__project-ref-label">

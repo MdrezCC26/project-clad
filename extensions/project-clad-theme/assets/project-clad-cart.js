@@ -1,4 +1,190 @@
 (() => {
+  function initCheckoutFulfillmentModal(root) {
+    const modal = root.querySelector(
+      "[data-projectclad-checkout-fulfillment-modal]",
+    );
+    if (!(modal instanceof HTMLElement)) return;
+
+    const content = modal.querySelector(".projectclad-modal__content");
+    const closeBtn = modal.querySelector(
+      "[data-projectclad-checkout-fulfill-close]",
+    );
+    const cancelBtn = modal.querySelector(
+      "[data-projectclad-checkout-fulfill-cancel]",
+    );
+    const continueBtn = modal.querySelector(
+      "[data-projectclad-checkout-fulfill-continue]",
+    );
+
+    let pendingCheckout = null;
+
+    const closeFulfill = () => {
+      modal.hidden = true;
+      pendingCheckout = null;
+      if (document.body.style.overflow === "hidden") {
+        document.body.style.overflow = "";
+      }
+    };
+
+    const openFulfill = (intent) => {
+      pendingCheckout = intent;
+      modal.hidden = false;
+      document.body.style.overflow = "hidden";
+    };
+
+    const applyCartAttributeAndGo = async (method) => {
+      try {
+        const r = await fetch("/cart/update.js", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            attributes: { projectclad_fulfillment: method },
+          }),
+        });
+        if (!r.ok) throw new Error("cart update failed");
+      } catch (e) {
+        console.error("[ProjectClad] cart fulfillment attribute failed", e);
+        alert("Unable to update cart. Please try again.");
+        return;
+      }
+      const intent = pendingCheckout;
+      closeFulfill();
+      if (!intent) return;
+      if (intent.kind === "href") {
+        window.location.href = intent.url;
+        return;
+      }
+      if (intent.kind === "form" && intent.form instanceof HTMLFormElement) {
+        const sub = intent.form.querySelector('[name="checkout"]');
+        if (
+          sub instanceof HTMLElement &&
+          typeof intent.form.requestSubmit === "function"
+        ) {
+          intent.form.requestSubmit(sub);
+          return;
+        }
+        intent.form.submit();
+      }
+    };
+
+    continueBtn?.addEventListener("click", () => {
+      const sel = modal.querySelector(
+        'input[name="projectclad-checkout-fulfill"]:checked',
+      );
+      const v = sel instanceof HTMLInputElement ? sel.value : "pickup";
+      if (v !== "pickup" && v !== "delivery") return;
+      void applyCartAttributeAndGo(v);
+    });
+    closeBtn?.addEventListener("click", closeFulfill);
+    cancelBtn?.addEventListener("click", closeFulfill);
+    modal.addEventListener("pointerdown", (e) => {
+      if (e.target === modal) closeFulfill();
+    });
+    content?.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+    });
+
+    const checkoutLabelMatch = (el) => {
+      const t = (el.textContent || "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
+      if (!t) return false;
+      return (
+        t === "order now" ||
+        t === "checkout" ||
+        t === "check out" ||
+        t.includes("order now")
+      );
+    };
+
+    const inThemeCartUi = (el) =>
+      Boolean(
+        el.closest(
+          "[data-cart-drawer],cart-drawer,[is='cart-drawer'],[id*='CartDrawer'],[id*='cart-drawer'],[class*='cart-drawer'],[class*='CartDrawer'],[class*='drawer__footer'],[class*='cart__ctas'],[class*='cart__blocks'],[class*='mini-cart'],[class*='minicart'],#cart-drawer,.shopify-section[class*='cart']",
+        ),
+      );
+
+    const cartContextHint = /cart|drawer|checkout|basket|bag|subtotal|order-summary|totals|line-items/i;
+    const nearCartLikeContainer = (el) => {
+      let p = el;
+      for (let i = 0; i < 14 && p; i += 1, p = p.parentElement) {
+        if (!(p instanceof HTMLElement)) continue;
+        const id = String(p.id || "");
+        const cls =
+          typeof p.className === "string"
+            ? p.className
+            : String(p.className || "");
+        if (cartContextHint.test(`${id} ${cls}`)) return true;
+      }
+      return false;
+    };
+
+    const resolveCheckoutIntent = (target) => {
+      let node = target;
+      if (node && node.nodeType === 3 && node.parentElement) {
+        node = node.parentElement;
+      }
+      if (!(node instanceof Element)) return null;
+
+      if (node.closest("[data-projectclad-checkout-fulfillment-modal]")) {
+        return null;
+      }
+      if (node.closest("[data-projectclad]")) return null;
+
+      const a = node.closest('a[href*="/checkout"]');
+      if (a instanceof HTMLAnchorElement) {
+        const href = a.getAttribute("href") || "";
+        if (!href.includes("checkout")) return null;
+        return { kind: "href", url: a.href };
+      }
+
+      const named = node.closest('[name="checkout"]');
+      if (
+        named instanceof HTMLButtonElement ||
+        named instanceof HTMLInputElement
+      ) {
+        const form = named.form;
+        if (!form) return null;
+        return { kind: "form", form };
+      }
+
+      const btn = node.closest("button, a");
+      if (
+        btn instanceof HTMLElement &&
+        checkoutLabelMatch(btn) &&
+        (inThemeCartUi(node) || nearCartLikeContainer(btn))
+      ) {
+        if (btn instanceof HTMLAnchorElement) {
+          const h = btn.getAttribute("href") || "";
+          if (h && !h.startsWith("#") && !h.startsWith("javascript:")) {
+            return { kind: "href", url: btn.href };
+          }
+        }
+        return {
+          kind: "href",
+          url: `${window.location.origin}/checkout`,
+        };
+      }
+
+      return null;
+    };
+
+    document.addEventListener(
+      "click",
+      (event) => {
+        const intent = resolveCheckoutIntent(event.target);
+        if (!intent) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        openFulfill(intent);
+      },
+      true,
+    );
+  }
+
   const root = document.querySelector("[data-projectclad]");
   if (!root) return;
 
@@ -8,10 +194,31 @@
   const viewProjectsUrl =
     root.getAttribute("data-projectclad-view-projects-url") || "";
 
+  const hasCustomParts =
+    root.getAttribute("data-projectclad-has-custom-parts") === "true";
+  if (hasCustomParts) {
+    const checkoutSelectors = [
+      'a[href="/checkout"]',
+      'a[href*="/checkout"]',
+      '[name="checkout"]',
+      '[data-checkout]',
+      'form[action="/checkout"]',
+      'form[action*="checkout"]',
+    ];
+    checkoutSelectors.forEach((sel) => {
+      document.querySelectorAll(sel).forEach((el) => {
+        if (el.closest("[data-projectclad]")) return;
+        el.style.display = "none";
+      });
+    });
+  } else {
+    initCheckoutFulfillmentModal(root);
+  }
+
   const saveButton = root.querySelector("[data-projectclad-save]");
   const viewProjectsLink = root.querySelector("[data-projectclad-view-projects]");
   const modal = root.querySelector("[data-projectclad-modal]");
-  const modalContent = root.querySelector(".projectclad-modal__content");
+  const modalContent = modal?.querySelector(".projectclad-modal__content");
   const closeButton = root.querySelector("[data-projectclad-close]");
   const form = root.querySelector("[data-projectclad-form]");
   const modeSelect = root.querySelector("[data-projectclad-mode]");
@@ -34,25 +241,6 @@
   );
 
   if (!saveButton || !modal || !form || !modeSelect) return;
-
-  const hasCustomParts =
-    root.getAttribute("data-projectclad-has-custom-parts") === "true";
-  if (hasCustomParts) {
-    const checkoutSelectors = [
-      'a[href="/checkout"]',
-      'a[href*="/checkout"]',
-      '[name="checkout"]',
-      '[data-checkout]',
-      'form[action="/checkout"]',
-      'form[action*="checkout"]',
-    ];
-    checkoutSelectors.forEach((sel) => {
-      document.querySelectorAll(sel).forEach((el) => {
-        if (el.closest("[data-projectclad]")) return;
-        el.style.display = "none";
-      });
-    });
-  }
 
   let cachedProjects = [];
   let cartRefreshTimer;
@@ -98,13 +286,6 @@
     } catch {
       // ignore cart fetch errors
     }
-  };
-
-  const buildOrderDisplayName = (baseName, orderNumber) => {
-    const name = (baseName || "").trim();
-    const number = (orderNumber || "").trim();
-    if (!number) return name;
-    return `${name} (#${number})`;
   };
 
   const getVisibleInput = (selector) => {
@@ -180,12 +361,36 @@
     placeholder.textContent = "Select order";
     jobSelect.appendChild(placeholder);
     const project = cachedProjects.find((item) => item.id === projectId);
-    if (!project) return;
+    if (!project) {
+      orderNumberInputs.forEach((input) => {
+        if (input instanceof HTMLInputElement) input.value = "";
+      });
+      return;
+    }
     project.jobs.forEach((job) => {
       const option = document.createElement("option");
       option.value = job.id;
       option.textContent = job.name + (job.isLocked ? " (Locked)" : "");
       jobSelect.appendChild(option);
+    });
+    orderNumberInputs.forEach((input) => {
+      if (input instanceof HTMLInputElement) input.value = "";
+    });
+  };
+
+  const syncPurchaseOrderFromSelectedJob = () => {
+    if (!(jobSelect instanceof HTMLSelectElement) || !jobSelect.value) return;
+    const activeProject =
+      projectSelects.find(
+        (select) => !select.closest("[hidden]") && select.value,
+      )?.value || "";
+    if (!activeProject) return;
+    const project = cachedProjects.find((p) => p.id === activeProject);
+    const job = project?.jobs.find((j) => j.id === jobSelect.value);
+    if (!job) return;
+    const po = (job.purchaseOrderNumber || "").trim();
+    orderNumberInputs.forEach((input) => {
+      if (input instanceof HTMLInputElement) input.value = po;
     });
   };
 
@@ -398,6 +603,10 @@
     });
   });
 
+  jobSelect?.addEventListener("change", () => {
+    syncPurchaseOrderFromSelectedJob();
+  });
+
   const getUniqueProjectName = (baseName) => {
     const names = cachedProjects.map((p) => p.name);
     const baseLower = baseName.trim().toLowerCase();
@@ -420,44 +629,52 @@
     return baseName.trim() + " (" + (maxN + 1) + ")";
   };
 
+  let saveInFlight = false;
+
   const performSave = async (payload, clearCart) => {
-    const response = await fetch(saveUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify(payload),
-    });
+    if (saveInFlight) return;
+    saveInFlight = true;
+    try {
+      const response = await fetch(saveUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(payload),
+      });
 
-    if (response.status === 401) {
-      const data = await response.json();
-      if (data?.redirectTo) {
-        window.location.href = data.redirectTo;
+      if (response.status === 401) {
+        const data = await response.json();
+        if (data?.redirectTo) {
+          window.location.href = data.redirectTo;
+        }
+        return;
       }
-      return;
-    }
 
-    if (!response.ok) {
-      alert("Unable to save order. Please try again.");
-      return;
-    }
+      if (!response.ok) {
+        alert("Unable to save order. Please try again.");
+        return;
+      }
 
-    const result = await response.json();
-    const redirectTo = result?.projectId
-      ? `/apps/project-clad/project?id=${result.projectId}`
-      : "/apps/project-clad/projects";
-    if (clearCart) {
-      const clearForm = document.createElement("form");
-      clearForm.method = "post";
-      clearForm.action = "/cart/clear";
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = "return_to";
-      input.value = redirectTo;
-      clearForm.appendChild(input);
-      document.body.appendChild(clearForm);
-      clearForm.submit();
-    } else {
-      window.location.href = redirectTo;
+      const result = await response.json();
+      const redirectTo = result?.projectId
+        ? `/apps/project-clad/project?id=${result.projectId}`
+        : "/apps/project-clad/projects";
+      if (clearCart) {
+        const clearForm = document.createElement("form");
+        clearForm.method = "post";
+        clearForm.action = "/cart/clear";
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "return_to";
+        input.value = redirectTo;
+        clearForm.appendChild(input);
+        document.body.appendChild(clearForm);
+        clearForm.submit();
+      } else {
+        window.location.href = redirectTo;
+      }
+    } finally {
+      saveInFlight = false;
     }
   };
 
@@ -495,6 +712,7 @@
       companyName: payload.companyName,
       projectId: matchingProject.id,
       jobName: payload.jobName,
+      purchaseOrderNumber: payload.purchaseOrderNumber,
       quantityMode: payload.quantityMode || "add",
       items: payload.items,
     };
@@ -550,9 +768,8 @@
       companyName: companyName || undefined,
       projectName: projectName || undefined,
       jobName:
-        jobName instanceof HTMLInputElement
-          ? buildOrderDisplayName(jobName.value, orderNumber)
-          : undefined,
+        jobName instanceof HTMLInputElement ? jobName.value.trim() : undefined,
+      purchaseOrderNumber: orderNumber || undefined,
       projectId: selectedProject || undefined,
       jobId: selectedJob || undefined,
       quantityMode:
@@ -563,9 +780,19 @@
     };
 
     if (mode === "newProject" && projectName) {
-      const matchingProject = cachedProjects.find(
-        (p) => p.name.trim().toLowerCase() === projectName.trim().toLowerCase(),
-      );
+      const normStr = (s) => (s || "").trim();
+      const matchingProject = cachedProjects.find((p) => {
+        const sameName =
+          p.name.trim().toLowerCase() === projectName.trim().toLowerCase();
+        const pPo = normStr(p.poNumber);
+        const pCo = normStr(p.companyName);
+        const samePoCompany =
+          poNumber &&
+          companyName &&
+          pPo === poNumber &&
+          pCo === companyName;
+        return sameName || samePoCompany;
+      });
       if (matchingProject) {
         pendingDuplicate = { payload, clearCart, matchingProject };
         if (duplicateModal) duplicateModal.hidden = false;

@@ -16,7 +16,11 @@ import {
   isProjectMember,
   shopStringFilter,
 } from "../utils/projectAccess.server";
-import { isEmailConfigured, sendEmail } from "../utils/email.server";
+import {
+  dedupeEmailAddresses,
+  isEmailConfigured,
+  sendEmail,
+} from "../utils/email.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
 import {
@@ -369,7 +373,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const text = `${requesterName} has submitted the following for approval: ${contextLabel}\n\nView and approve: ${approveLink}`;
 
     try {
-      for (const to of approverEmails) {
+      for (const to of dedupeEmailAddresses(approverEmails)) {
         await sendEmail({ to, subject, text });
       }
     } catch (err) {
@@ -397,6 +401,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         itemId: itemId || "",
       },
     });
+
+    if (jobId && !itemId) {
+      await prisma.job.updateMany({
+        where: { id: jobId, projectId },
+        data: { orderLifecycleStatus: "pending_review" },
+      });
+    }
 
     const approvalLogPayload: Record<string, unknown> = {};
     if (!jobId && !itemId) {
@@ -489,6 +500,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     await prisma.approvalRequest.delete({
       where: { id: existing.id },
     });
+
+    if (jobId && !itemId) {
+      await prisma.job.updateMany({
+        where: { id: jobId, projectId },
+        data: { orderLifecycleStatus: "draft" },
+      });
+    }
+
     return Response.json({ ok: true });
   }
 
@@ -611,6 +630,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
       if (jobId && !itemId) {
         await initJob(jobId);
+        await prisma.job.updateMany({
+          where: { id: jobId, projectId },
+          data: { orderLifecycleStatus: "ready_to_order" },
+        });
       } else if (!jobId && !itemId) {
         const jobs = await prisma.job.findMany({ where: { projectId } });
         for (const j of jobs) {
@@ -628,6 +651,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             payload: { jobName: j.name, workOrderStatus: "unread" },
           });
         }
+        await prisma.job.updateMany({
+          where: { projectId },
+          data: { orderLifecycleStatus: "ready_to_order" },
+        });
       }
     };
 
@@ -741,7 +768,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       const text = `${approverName} has approved: ${contextLabel}${itemsList}\nView project: ${projectLink}`;
 
       try {
-        for (const to of memberEmails) {
+        for (const to of dedupeEmailAddresses(memberEmails)) {
           await sendEmail({ to, subject, text });
         }
       } catch (err) {
@@ -924,7 +951,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       `${rejectorName} has rejected: ${contextLabel}${reasonText}\nView project: ${projectLink}`;
 
     try {
-      for (const to of memberEmails) {
+      for (const to of dedupeEmailAddresses(memberEmails)) {
         await sendEmail({ to, subject, text });
       }
     } catch (err) {

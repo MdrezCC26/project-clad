@@ -29,6 +29,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       jobs: project.jobs.map((job) => ({
         id: job.id,
         name: job.name,
+        purchaseOrderNumber: job.purchaseOrderNumber,
         isLocked: job.isLocked || Boolean(job.orderLink),
       })),
     })),

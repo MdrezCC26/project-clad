@@ -1,26 +1,48 @@
 import type { LinksFunction, LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import prisma from "../db.server";
+import { getCustomersByIds } from "../utils/adminCustomers.server";
+import { normalizeStorefrontCustomerId } from "../utils/customerTags.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
+import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
+import { getStorefrontAppNav } from "../utils/storefrontAppNav.server";
 
 /**
  * Work orders are managed from the embedded Shopify admin app (staff), not the storefront.
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const proxyStylesCss = rewriteProjectCladProxyFontUrls(request);
-  const { shop } = requireAppProxyCustomer(request);
+  const { shop, customerId, customerEmail } = requireAppProxyCustomer(request);
   const themeStyles = await getThemeStyles(shop);
   const settings = await prisma.shopSettings.findUnique({
     where: { shop },
   });
+  let navAccountInitial: string | null = null;
+  try {
+    const numericId = normalizeStorefrontCustomerId(customerId);
+    const customerInfo = await getCustomersByIds(shop, [numericId]);
+    const viewer = customerInfo[numericId] ?? customerInfo[customerId];
+    const fn = viewer?.firstName?.trim();
+    navAccountInitial = fn
+      ? fn.charAt(0).toUpperCase()
+      : customerEmail?.trim()
+        ? customerEmail.trim().charAt(0).toUpperCase()
+        : null;
+  } catch {
+    navAccountInitial = customerEmail?.trim()
+      ? customerEmail.trim().charAt(0).toUpperCase()
+      : null;
+  }
   return {
     proxyStylesCss,
     themeStyles,
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
     logoDataUrl: settings?.logoDataUrl || null,
+    storefrontAppNav: getStorefrontAppNav(settings),
+    navAccountInitial,
   };
 };
 
@@ -28,6 +50,7 @@ export const links: LinksFunction = () => [];
 
 export default function StorefrontWorkOrdersInfo() {
   const data = useLoaderData<typeof loader>();
+  const { storefrontAppNav } = data;
   const inlineStyles = data.themeStyles?.styles || [];
 
   return (
@@ -50,18 +73,16 @@ export default function StorefrontWorkOrdersInfo() {
         }
       >
         <div className="page-width project-clad-container project-clad-container--full-width">
-          {data.logoDataUrl ? (
-            <div className="project-clad-logo">
-              <a href="/apps/project-clad/projects" className="project-clad-logo__link">
-                <img
-                  src={data.logoDataUrl}
-                  alt="Logo"
-                  className="project-clad-logo__img"
-                />
-              </a>
-            </div>
-          ) : null}
           <header className="project-clad-header">
+            <ProjectCladStorefrontNav
+              logoDataUrl={data.logoDataUrl}
+              logoHref="/"
+              links={storefrontAppNav.links}
+              cartUrl={storefrontAppNav.cartUrl}
+              searchUrl={storefrontAppNav.searchUrl}
+              accountUrl={storefrontAppNav.accountUrl}
+              accountInitial={data.navAccountInitial}
+            />
             <h1 className="main-page-title page-title">Work orders</h1>
             <p className="project-clad-muted">
               Work orders are managed in <strong>Shopify Admin</strong>: open the{" "}

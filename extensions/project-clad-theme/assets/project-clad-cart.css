@@ -111,6 +111,11 @@
   z-index: 60;
 }
 
+/* Above Shopify cart drawer / sticky checkout (themes use very large z-index). */
+.projectclad-modal--checkout-fulfillment {
+  z-index: 10000001;
+}
+
 .projectclad-modal {
   position: fixed;
   inset: 0;

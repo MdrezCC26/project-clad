@@ -6,6 +6,8 @@ import { viewerHasAdminTag } from "../utils/customerTags.server";
 import {
   canEditProject,
   projectByIdForCustomerWhere,
+  shopifyCustomerIdVariants,
+  shopStringFilter,
 } from "../utils/projectAccess.server";
 import { sendOrderCreatedNotificationEmail } from "../utils/orderCreatedEmail.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
@@ -22,6 +24,8 @@ type SaveJobPayload = {
   companyName?: string;
   projectName?: string;
   jobName?: string;
+  /** Cart "PURCHASE ORDER #" — stored on Job, not appended to `name`. */
+  purchaseOrderNumber?: string;
   projectId?: string;
   jobId?: string;
   quantityMode?: "add" | "replace";
@@ -57,6 +61,23 @@ const normalizeItems = (items: SaveJobPayload["items"] = []): NormalizedCartItem
           ? raw.lineMeta
           : undefined,
     }));
+
+/** Plain order name + optional PO; supports legacy `name` ending in ` (#…)`. */
+function normalizeJobNameAndPo(
+  jobNameRaw: string | undefined,
+  purchaseOrderRaw: string | undefined,
+): { name: string; purchaseOrderNumber: string | undefined } {
+  let name = (jobNameRaw ?? "").trim();
+  let po = (purchaseOrderRaw ?? "").trim();
+  if (!po && name) {
+    const legacy = name.match(/^(.*)\s+\(#([^)]+)\)\s*$/);
+    if (legacy) {
+      name = legacy[1].trim();
+      po = legacy[2].trim();
+    }
+  }
+  return { name, purchaseOrderNumber: po || undefined };
+}
 
 function variantSnapshotFromCartItem(
   item: NormalizedCartItem,
@@ -204,6 +225,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   });
   const payload = (await request.json()) as SaveJobPayload;
   const items = normalizeItems(payload.items);
+  const { name: saveJobName, purchaseOrderNumber: saveJobPurchaseOrderNumber } =
+    normalizeJobNameAndPo(payload.jobName, payload.purchaseOrderNumber);
   const poNumber = (payload.poNumber || "").trim();
   const companyName = (payload.companyName || "").trim();
   const viewerIsAppAdmin = await viewerHasAdminTag(
@@ -217,17 +240,47 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (payload.mode === "newProject") {
-    if (!payload.projectName || !payload.jobName) {
+    if (!payload.projectName || !saveJobName) {
       return Response.json(
         { error: "Project name and order name are required." },
         { status: 400 },
       );
     }
 
+    const projectName = payload.projectName.trim();
+    const norm = (s: string | null | undefined) => (s ?? "").trim();
+    const recentCutoff = new Date(Date.now() - 60_000);
+    const ownerVariants = shopifyCustomerIdVariants(customerId);
+    const recentCandidates = await prisma.project.findMany({
+      where: {
+        shop: shopStringFilter(shop),
+        ownerCustomerId: { in: ownerVariants },
+        createdAt: { gte: recentCutoff },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 15,
+      include: {
+        jobs: { orderBy: { sortOrder: "asc" }, take: 1 },
+      },
+    });
+    const accidentalDuplicate = recentCandidates.find(
+      (p) =>
+        norm(p.name) === norm(projectName) &&
+        norm(p.poNumber) === norm(poNumber) &&
+        norm(p.companyName) === norm(companyName),
+    );
+    if (accidentalDuplicate?.jobs[0]) {
+      return Response.json({
+        projectId: accidentalDuplicate.id,
+        jobId: accidentalDuplicate.jobs[0].id,
+        reusedExistingProject: true,
+      });
+    }
+
     const project = await prisma.project.create({
       data: {
         shop,
-        name: payload.projectName,
+        name: projectName,
         ownerCustomerId: customerId,
         poNumber,
         companyName,
@@ -236,7 +289,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         },
         jobs: {
           create: {
-            name: payload.jobName,
+            name: saveJobName,
+            ...(saveJobPurchaseOrderNumber
+              ? { purchaseOrderNumber: saveJobPurchaseOrderNumber }
+              : {}),
             sortOrder: 1,
             items: {
               create: items.map((item, index) => ({
@@ -299,7 +355,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (payload.mode === "existingProject") {
-    if (!payload.projectId || !payload.jobName) {
+    if (!payload.projectId || !saveJobName) {
       return Response.json(
         { error: "Select a project and order name." },
         { status: 400 },
@@ -330,7 +386,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const job = await prisma.job.create({
       data: {
         projectId: project.id,
-        name: payload.jobName,
+        name: saveJobName,
+        ...(saveJobPurchaseOrderNumber
+          ? { purchaseOrderNumber: saveJobPurchaseOrderNumber }
+          : {}),
         sortOrder: nextJobSortOrder,
         items: {
           create: items.map((item, index) => ({
@@ -437,6 +496,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         data: {
           projectId: project.id,
           name: `${job.name} (Copy)`,
+          purchaseOrderNumber: job.purchaseOrderNumber ?? undefined,
           isLocked: false,
           sortOrder: nextJobSortOrder,
           items: {

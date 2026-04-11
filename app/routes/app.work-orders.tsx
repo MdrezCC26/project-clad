@@ -265,7 +265,7 @@ export default function AdminWorkOrdersPage() {
                     Open project (storefront)
                   </a>
                   {!job.jobApproved ? " · Not approved yet" : null}
-                  {job.paidAt ? " · Paid (locked)" : null}
+                  {job.paidAt ? " · Order complete (locked)" : null}
                 </p>
 
                 <statusFetcher.Form

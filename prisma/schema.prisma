@@ -38,6 +38,26 @@ model Session {
   refreshTokenExpires DateTime?
 }
 
+enum OrderLifecycleStatus {
+  draft
+  pending_review
+  ready_to_order
+  ordered
+  delivered
+  paid
+}
+
+enum JobFulfillmentMethod {
+  delivery
+  pickup
+}
+
+/// Default for how the customer receives project orders (drives address requirement + delivery fee display).
+enum ProjectReceiveMode {
+  delivery
+  pickup
+}
+
 model Project {
   id                String            @id @default(cuid())
   shop              String
@@ -46,6 +66,14 @@ model Project {
   poNumber          String?
   companyName       String?
   cardImageDataUrl  String?
+  /// Saved delivery address (required before customer can confirm order).
+  shipAddress1      String?
+  shipAddress2      String?
+  shipCity          String?
+  shipProvince      String?
+  shipPostal        String?
+  shipCountry       String?
+  receiveMode       ProjectReceiveMode @default(pickup)
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   jobs             Job[]
@@ -63,9 +91,23 @@ model Job {
   id                String      @id @default(cuid())
   projectId         String
   name              String
+  /// Customer purchase order / reference (cart "PURCHASE ORDER #"), not the Shopify order name.
+  purchaseOrderNumber String?
   createdAt         DateTime    @default(now())
   isLocked          Boolean     @default(false)
   sortOrder         Int         @default(0)
+  /// Customer order lifecycle (Send for review → … → Paid). Independent of workOrderStatus.
+  orderLifecycleStatus OrderLifecycleStatus @default(draft)
+  /// Calendar date for scheduled delivery (Ottawa). Stored as YYYY-MM-DD.
+  scheduledDeliveryDate   String?
+  /// e.g. morning | afternoon | evening — free text allowed
+  scheduledDeliveryWindow String?
+  /// Set when the customer confirms Order now (delivery vs store pickup).
+  fulfillmentMethod     JobFulfillmentMethod?
+  /// Relative storage key under app storage dir (not a public URL).
+  fulfillmentPhotoStorageKey String?
+  /// Set when fulfillment emails + invoice hook ran (idempotency).
+  fulfillmentNotifiedAt   DateTime?
   /// unread | in_progress | complete — only meaningful after job-level approval
   workOrderStatus   String?
   completedAt       DateTime?
@@ -230,6 +272,8 @@ model ShopSettings {
   navButton2Url        String?
   navButton3Label      String?
   navButton3Url        String?
+  /// Optional JSON array of { "label", "url" } for app-proxy storefront nav. If null, defaults + navButton1–3 are used.
+  storefrontNavLinksJson String? @db.Text
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }

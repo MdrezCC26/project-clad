@@ -1,19 +1,14 @@
 import { reactRouter } from "@react-router/dev/vite";
 import { defineConfig, type Plugin, type UserConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { applyHostToShopifyAppUrlFromEnv } from "./app/utils/publicAppOrigin";
 
 // Related: https://github.com/remix-run/remix/issues/2835#issuecomment-1144102176
-// Replace the HOST env var with SHOPIFY_APP_URL so that it doesn't break the Vite server.
-// The CLI will eventually stop passing in HOST,
-// so we can remove this workaround after the next major release.
-if (
-  process.env.HOST &&
-  (!process.env.SHOPIFY_APP_URL ||
-    process.env.SHOPIFY_APP_URL === process.env.HOST)
-) {
-  process.env.SHOPIFY_APP_URL = process.env.HOST;
-  delete process.env.HOST;
-}
+//
+// `shopify app dev` passes the live tunnel URL as HOST (e.g. *.trycloudflare.com).
+// Copy it to SHOPIFY_APP_URL once here so the whole Node process (Vite + SSR loaders)
+// agrees on the public app origin — signed fulfillment photo links and server.origin match.
+applyHostToShopifyAppUrlFromEnv();
 
 const appUrl = process.env.SHOPIFY_APP_URL || "http://localhost";
 const host = new URL(appUrl).hostname;

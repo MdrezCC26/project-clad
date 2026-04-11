@@ -32,5 +32,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     },
   });
 
-  return redirect(`/apps/project-clad/projects/${shareToken.projectId}`);
+  // Use the canonical project URL (not `/projects/:id`) so we always hit `apps.project-clad.project`.
+  return redirect(
+    `/apps/project-clad/project?id=${encodeURIComponent(shareToken.projectId)}`,
+  );
 };

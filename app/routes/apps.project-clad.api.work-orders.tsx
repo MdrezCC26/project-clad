@@ -18,7 +18,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
   const customerId = viewerCustomerId as string;
 
-  const isStaff = await viewerHasAdminTag(shop, customerId, customerEmail);
+  const isStaff = await viewerHasAdminTag(
+    shop,
+    customerId,
+    customerEmail,
+  );
   if (!isStaff) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }

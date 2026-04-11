@@ -1,6 +1,10 @@
 import prisma from "../db.server";
 import { getCustomersByIds } from "./adminCustomers.server";
-import { isEmailConfigured, sendEmail } from "./email.server";
+import {
+  dedupeEmailAddresses,
+  isEmailConfigured,
+  sendEmail,
+} from "./email.server";
 import {
   buildVariantPresentation,
   parseVariantSnapshot,
@@ -32,18 +36,18 @@ async function collectRecipientEmails(
     process.env.PROJECTCLAD_ORDER_NOTIFY_EMAIL?.split(/[,;]/)
       .map((s) => s.trim())
       .filter(Boolean) ?? [];
-  const emails = new Set<string>(fromEnv);
+  const list: string[] = [...fromEnv];
   const ids = Array.from(new Set([ownerCustomerId, actorCustomerId]));
   try {
     const info = await getCustomersByIds(shop, ids);
     for (const id of ids) {
       const e = info[id]?.email?.trim();
-      if (e) emails.add(e);
+      if (e) list.push(e);
     }
   } catch {
     // Owner/actor lookup failed; still notify env addresses if any.
   }
-  return Array.from(emails);
+  return dedupeEmailAddresses(list);
 }
 
 /** Full project: every order and line with labels, variant ids, qty, prices (for staff to replace bad variants). */

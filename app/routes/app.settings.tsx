@@ -18,6 +18,10 @@ import {
   isEmailConfigured,
   sendEmail,
 } from "../utils/email.server";
+import {
+  parseStorefrontNavLinksJson,
+  STOREFRONT_APP_NAV_JSON_PLACEHOLDER,
+} from "../utils/storefrontAppNav.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -116,6 +120,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     mediaImages,
     mediaError,
     navButtons,
+    storefrontNavLinksJson: settings?.storefrontNavLinksJson ?? "",
     emailConfigured: isEmailConfigured(),
     smtpStatus,
     shop: session.shop,
@@ -361,6 +366,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
     return { ok: true, navButtonsSaved: true };
+  }
+
+  if (intent === "save-storefront-nav-json") {
+    const raw = String(formData.get("storefrontNavLinksJson") || "").trim();
+    if (raw) {
+      const parsed = parseStorefrontNavLinksJson(raw);
+      if (!parsed) {
+        return {
+          storefrontNavJsonError:
+            "Invalid JSON. Use an array of objects with label and url strings.",
+        };
+      }
+    }
+    await prisma.shopSettings.upsert({
+      where: { shop: session.shop },
+      update: { storefrontNavLinksJson: raw || null },
+      create: { shop: session.shop, storefrontNavLinksJson: raw || null },
+    });
+    return { ok: true, storefrontNavSaved: true };
   }
 
   if (intent === "update-project") {
@@ -632,6 +656,7 @@ export default function Settings() {
     mediaImages,
     mediaError,
     navButtons,
+    storefrontNavLinksJson,
     emailConfigured,
     smtpStatus,
     projects,
@@ -1022,8 +1047,10 @@ export default function Settings() {
       </s-section>
       <s-section heading="Navigation buttons">
         <s-paragraph>
-          Configure the three navigation buttons shown on Projects and Project
-          detail pages. Leave a field blank to use the default.
+          These three slots feed the storefront-style menu on app pages when you
+          are not using the JSON override below: button 1 is typically Projects,
+          button 2 Shop, button 3 sets the cart icon URL. Leave a field blank to
+          use the default.
         </s-paragraph>
         <Form method="post">
           <input type="hidden" name="intent" value="save-nav-buttons" />
@@ -1073,6 +1100,43 @@ export default function Settings() {
               </div>
             ))}
             <button type="submit">Save navigation buttons</button>
+          </s-stack>
+        </Form>
+      </s-section>
+      <s-section heading="Storefront menu on app pages (optional)">
+        <s-paragraph>
+          Paste a JSON array of links to match your theme header exactly. When
+          empty, the app builds a default menu from the three navigation buttons
+          below plus common pages (Custom part, Colours, Contact). Search,
+          account,           and cart always use <code>/search</code>, <code>/account</code>, and
+          button 3 URL (or <code>/cart</code>).
+        </s-paragraph>
+        <Form method="post">
+          <input type="hidden" name="intent" value="save-storefront-nav-json" />
+          <s-stack direction="block" gap="base">
+            <label htmlFor="storefrontNavLinksJson" style={{ display: "grid", gap: "0.35rem" }}>
+              <span>Menu JSON (array of objects with label and url)</span>
+              <textarea
+                id="storefrontNavLinksJson"
+                name="storefrontNavLinksJson"
+                rows={12}
+                defaultValue={storefrontNavLinksJson}
+                placeholder={STOREFRONT_APP_NAV_JSON_PLACEHOLDER}
+                style={{ fontFamily: "monospace", fontSize: "0.85rem" }}
+              />
+            </label>
+            <button type="submit">Save storefront menu JSON</button>
+            {actionData &&
+              typeof actionData === "object" &&
+              "storefrontNavJsonError" in actionData && (
+                <s-paragraph>{actionData.storefrontNavJsonError as string}</s-paragraph>
+              )}
+            {actionData &&
+              typeof actionData === "object" &&
+              "storefrontNavSaved" in actionData &&
+              (actionData.storefrontNavSaved as boolean) && (
+                <s-paragraph>Storefront menu saved.</s-paragraph>
+              )}
           </s-stack>
         </Form>
       </s-section>

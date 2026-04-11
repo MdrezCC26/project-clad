@@ -17,6 +17,54 @@
   data-projectclad-view-projects-url="{% if customer %}{{ view_projects_url }}{% else %}{{ login_url }}{% endif %}"
   data-projectclad-has-custom-parts="{{ has_custom_parts }}"
 >
+    <div
+      class="projectclad-modal projectclad-modal--checkout-fulfillment"
+      data-projectclad-checkout-fulfillment-modal
+      hidden
+    >
+      <div
+        class="projectclad-modal__content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="projectclad-checkout-fulfill-title"
+      >
+        <button
+          type="button"
+          class="projectclad-modal__close"
+          data-projectclad-checkout-fulfill-close
+          aria-label="Close"
+        >
+          &times;
+        </button>
+        <h2 id="projectclad-checkout-fulfill-title">Receive this order</h2>
+        <p class="projectclad-cart-notice" style="margin: 0">
+          Choose store pickup or delivery before checkout.
+        </p>
+        <div class="projectclad-fieldset" style="border: 1px solid #ccc; padding: 0.75rem; border-radius: 6px; margin-top: 0.5rem">
+          <label style="display: block; margin-bottom: 0.5rem">
+            <input type="radio" name="projectclad-checkout-fulfill" value="pickup" checked />
+            Store pickup
+          </label>
+          <label style="display: block">
+            <input type="radio" name="projectclad-checkout-fulfill" value="delivery" />
+            Delivery
+          </label>
+        </div>
+        <div class="projectclad-modal-buttons">
+          <button
+            type="button"
+            class="projectclad-button projectclad-button--primary"
+            data-projectclad-checkout-fulfill-continue
+          >
+            Continue to checkout
+          </button>
+          <button type="button" class="projectclad-button" data-projectclad-checkout-fulfill-cancel">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
   <div class="projectclad-cart-actions__buttons">
     <a
       class="projectclad-button"

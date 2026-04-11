@@ -1,0 +1,1058 @@
+{% comment %}
+  iTunes-style cover flow for one or more collections (section blocks).
+  Inspired by https://codepen.io/vaskemaskine/pen/kYpPmx — 3D transforms, drag, slider, search jump.
+  Copy into your theme's sections/ folder.
+{% endcomment %}
+
+{% liquid
+  assign max_products = section.settings.max_products | default: 24
+%}
+
+<div
+  class="itunes-cflow"
+  id="itunes-cflow-{{ section.id }}"
+  data-itunes-cflow-root
+  data-autoplay="{{ section.settings.enable_autoplay }}"
+  data-autoplay-ms="{{ section.settings.autoplay_interval | times: 1000 }}"
+>
+  {% if section.settings.heading != blank %}
+    <h2 class="itunes-cflow__heading">{{ section.settings.heading | escape }}</h2>
+  {% endif %}
+
+  {% if section.blocks.size == 0 %}
+    <p class="itunes-cflow__empty">Add one or more “Collection” blocks in this section.</p>
+  {% else %}
+    {% if section.blocks.size > 1 %}
+      <div class="itunes-cflow__tabs" role="tablist" aria-label="Collections">
+        {% for block in section.blocks %}
+          <button
+            type="button"
+            class="itunes-cflow__tab{% if forloop.first %} itunes-cflow__tab--active{% endif %}"
+            role="tab"
+            aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
+            aria-controls="itunes-cflow-panel-{{ block.id }}"
+            id="itunes-cflow-tab-{{ block.id }}"
+            data-itunes-cflow-tab
+            data-panel-id="itunes-cflow-panel-{{ block.id }}"
+          >
+            {{ block.settings.tab_label | default: block.settings.collection.title | default: 'Collection' | escape }}
+          </button>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% for block in section.blocks %}
+      {% assign coll = block.settings.collection %}
+      <div
+        class="itunes-cflow__panel{% unless forloop.first %} itunes-cflow__panel--hidden{% endunless %}"
+        id="itunes-cflow-panel-{{ block.id }}"
+        role="tabpanel"
+        aria-labelledby="itunes-cflow-tab-{{ block.id }}"
+        {% unless forloop.first %}hidden{% endunless %}
+        data-itunes-cflow-panel
+      >
+        {% if coll == blank or coll.products_count == 0 %}
+          <p class="itunes-cflow__empty">Choose a collection with products in this block.</p>
+        {% else %}
+          <div class="itunes-cflow__controls">
+            <label class="itunes-cflow__search-label visually-hidden" for="itunes-cflow-search-{{ block.id }}">
+              {{ section.settings.search_label | escape }}
+            </label>
+            <input
+              type="search"
+              id="itunes-cflow-search-{{ block.id }}"
+              class="itunes-cflow__input"
+              placeholder="{{ section.settings.search_placeholder | escape }}"
+              autocomplete="off"
+              data-itunes-cflow-search
+            />
+            <button type="button" class="itunes-cflow__btn itunes-cflow__btn--small" data-itunes-cflow-search-btn>
+              {{ section.settings.search_button_label | escape }}
+            </button>
+          </div>
+          <p class="itunes-cflow__hint" data-itunes-cflow-feedback hidden></p>
+
+          <div class="itunes-cflow__slider-nav-row">
+            <div class="itunes-cflow__slider-row">
+              <label class="itunes-cflow__slider-label" for="itunes-cflow-range-{{ block.id }}">
+                {{ section.settings.slider_label | escape }}
+              </label>
+              <input
+                type="range"
+                id="itunes-cflow-range-{{ block.id }}"
+                class="itunes-cflow__range"
+                min="0"
+                max="0"
+                value="0"
+                data-itunes-cflow-range
+                aria-valuemin="0"
+                aria-valuemax="0"
+                aria-valuenow="0"
+              />
+            </div>
+            <div class="itunes-cflow__nav">
+              <button type="button" class="itunes-cflow__nav-btn" data-itunes-cflow-prev aria-label="{{ section.settings.prev_label | escape }}">
+                {{ section.settings.prev_label | escape }}
+              </button>
+              <button type="button" class="itunes-cflow__nav-btn" data-itunes-cflow-next aria-label="{{ section.settings.next_label | escape }}">
+                {{ section.settings.next_label | escape }}
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="itunes-cflow__stage-wrap"
+            data-itunes-cflow-stage-wrap
+            tabindex="0"
+          >
+            <div class="itunes-cflow__stage" data-itunes-cflow-stage>
+              {% for product in coll.products limit: max_products %}
+                {% assign v = product.selected_or_first_available_variant %}
+                <article
+                  class="itunes-cflow__item"
+                  data-itunes-cflow-item
+                  data-index="{{ forloop.index0 }}"
+                  data-title="{{ product.title | downcase | escape }}"
+                  data-sku="{{ v.sku | downcase | escape }}"
+                >
+                  <a class="itunes-cflow__card" href="{{ product.url }}">
+                    {% if product.featured_image %}
+                      {% assign img_alt = product.featured_image.alt | default: product.title %}
+                      <div class="itunes-cflow__media">
+                        {{
+                          product.featured_image
+                          | image_url: width: 800
+                          | image_tag:
+                            loading: 'lazy',
+                            widths: '200,300,400,600,800',
+                            sizes: '(max-width: 749px) 75vw, min(360px, 40vw)',
+                            class: 'itunes-cflow__img',
+                            alt: img_alt
+                        }}
+                      </div>
+                    {% else %}
+                      <div class="itunes-cflow__media itunes-cflow__media--placeholder"></div>
+                    {% endif %}
+                  </a>
+                </article>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% endif %}
+</div>
+
+{% stylesheet %}
+  .itunes-cflow {
+    --itunes-card-w: min(320px, 72vw);
+    --itunes-card-h: auto;
+    --itunes-tx: min(200px, 26vw);
+    --itunes-perspective: 900px;
+    /* Align with body.cc-store-neu / canadian-clad-neumorphic.css (fallbacks for other themes) */
+    --itunes-neu-bg: var(--pc-caesura-bg, #ebecf0);
+    --itunes-neu-fg: var(--pc-caesura-fg, #6c7587);
+    --itunes-neu-dark: var(--pc-caesura-dark, #484f60);
+    --itunes-neu-light: var(--pc-caesura-light, #ffffff);
+    --itunes-neu-drop: var(
+      --pc-caesura-drop,
+      8px 8px 12px -2px rgba(72, 79, 96, 0.4),
+      -6px -6px 12px -1px rgba(255, 255, 255, 1)
+    );
+    --itunes-neu-inset: var(
+      --pc-caesura-inset,
+      inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
+      inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5)
+    );
+    --itunes-neu-border: var(--pc-caesura-border, 3px solid transparent);
+    --itunes-neu-border-hover: var(--pc-caesura-border-hover, rgba(255, 255, 255, 0.5));
+    --itunes-neu-trans: var(
+      --pc-caesura-transition,
+      box-shadow 250ms ease-in-out,
+      border-color 250ms ease-in-out,
+      color 250ms ease-in-out,
+      filter 250ms ease-in-out,
+      background 250ms ease-in-out
+    );
+    --itunes-neu-red: var(--pc-caesura-hover-red-text, #c40000);
+    --itunes-neu-red-glow: var(
+      --pc-caesura-hover-red-text-glow,
+      0 1px 0 rgba(255, 255, 255, 0.28),
+      0 0 6px rgba(196, 0, 0, 0.22),
+      0 0 14px rgba(196, 0, 0, 0.12)
+    );
+    /* Filled portion of range track (set by JS as 0–100 for WebKit) */
+    --itunes-range-pct: 0;
+    /* Red fill (track has no glow — stays locked to thumb) */
+    --itunes-range-fill: linear-gradient(90deg, #6b0f14 0%, #b91c1c 32%, #dc2626 58%, #b91c1c 100%);
+    padding: 1.5rem 0 2rem;
+  }
+  .itunes-cflow__heading {
+    margin: 0 0 1rem;
+    text-align: center;
+  }
+  .itunes-cflow__tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 1.25rem;
+  }
+  .itunes-cflow__tab {
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+  }
+  .itunes-cflow__tab--active {
+    background: #111;
+    color: #fff;
+    border-color: #111;
+  }
+  .itunes-cflow__panel--hidden {
+    display: none;
+  }
+  .itunes-cflow__controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.35rem;
+  }
+  .itunes-cflow__input {
+    flex: 1 1 200px;
+    max-width: 320px;
+    padding: 0.5rem 1rem;
+    min-height: 44px;
+    box-sizing: border-box;
+    border: var(--itunes-neu-border);
+    border-radius: 9999px;
+    background-color: var(--itunes-neu-bg);
+    color: var(--itunes-neu-dark);
+    box-shadow: var(--itunes-neu-inset);
+    transition: var(--itunes-neu-trans);
+    outline: none;
+    font: inherit;
+    font-size: max(16px, 1rem);
+  }
+  .itunes-cflow__input::placeholder {
+    color: var(--itunes-neu-fg);
+    opacity: 1;
+  }
+  .itunes-cflow__input:focus-visible {
+    box-shadow: none;
+    border-color: var(--itunes-neu-border-hover);
+  }
+  .itunes-cflow__btn {
+    padding: 0.5rem 1.15rem;
+    min-height: 44px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: var(--itunes-neu-border);
+    background: var(--itunes-neu-bg);
+    color: var(--itunes-neu-dark);
+    box-shadow: var(--itunes-neu-drop);
+    transition: var(--itunes-neu-trans);
+    cursor: pointer;
+    font: inherit;
+    font-family: 'Bakbak One', Helvetica, 'Helvetica Neue', Arial, sans-serif;
+    font-size: max(15px, 0.9rem);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    text-shadow: none;
+  }
+  .itunes-cflow__btn:hover:not(:disabled) {
+    box-shadow: none;
+    border-color: var(--itunes-neu-border-hover);
+    color: var(--itunes-neu-red);
+    text-shadow: var(--itunes-neu-red-glow);
+  }
+  .itunes-cflow__btn:active:not(:disabled) {
+    box-shadow: var(--itunes-neu-inset);
+    border-color: transparent;
+    color: var(--itunes-neu-dark);
+    text-shadow: none;
+  }
+  .itunes-cflow__btn:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.35);
+    outline-offset: 3px;
+  }
+  .itunes-cflow__btn--small {
+    padding: 0.5rem 0.95rem;
+  }
+  .itunes-cflow__hint {
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--itunes-neu-fg);
+    margin: 0 0 0.35rem;
+    min-height: 1.25em;
+  }
+  .itunes-cflow__hint[data-state='error'] {
+    color: #b00020;
+  }
+  .itunes-cflow__slider-nav-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem 1rem;
+    max-width: min(960px, 100%);
+    margin: 0 auto 0.15rem;
+    padding: 0 0.35rem;
+    box-sizing: border-box;
+  }
+  .itunes-cflow__slider-row {
+    flex: 1 1 16rem;
+    min-width: min(100%, 12rem);
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    box-sizing: border-box;
+  }
+  .itunes-cflow__slider-label {
+    display: block;
+    font-size: 0.8125rem;
+    margin-bottom: 0.1rem;
+    color: var(--itunes-neu-dark);
+  }
+  .itunes-cflow__range {
+    width: 100%;
+    height: 26px;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+  }
+  .itunes-cflow__range:focus {
+    outline: none;
+  }
+  .itunes-cflow__range:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.35);
+    outline-offset: 4px;
+    border-radius: 999px;
+  }
+  .itunes-cflow__range::-webkit-slider-runnable-track {
+    height: 16px;
+    border-radius: 999px;
+    border: none;
+    box-shadow:
+      inset 2px 2px 5px rgba(72, 79, 96, 0.38),
+      inset -2px -2px 6px rgba(255, 255, 255, 0.75),
+      0 1px 6px rgba(72, 79, 96, 0.08);
+    background-color: rgba(0, 0, 0, 0.09);
+    background-image: var(--itunes-range-fill);
+    background-size: calc(var(--itunes-range-pct) * 1%) 100%;
+    background-repeat: no-repeat;
+    background-position: 0 50%;
+    background-clip: border-box;
+  }
+  .itunes-cflow__range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 26px;
+    height: 26px;
+    margin-top: -5px;
+    border-radius: 50%;
+    background: var(--itunes-neu-bg);
+    border: var(--itunes-neu-border);
+    box-shadow: var(--itunes-neu-drop);
+    transition: var(--itunes-neu-trans);
+  }
+  .itunes-cflow__range:hover::-webkit-slider-thumb {
+    box-shadow: none;
+    border-color: var(--itunes-neu-border-hover);
+  }
+  .itunes-cflow__range:active::-webkit-slider-thumb {
+    box-shadow: var(--itunes-neu-inset);
+    border-color: transparent;
+  }
+  .itunes-cflow__range::-moz-range-track {
+    height: 16px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.09);
+    border: none;
+    box-shadow:
+      inset 2px 2px 5px rgba(72, 79, 96, 0.38),
+      inset -2px -2px 6px rgba(255, 255, 255, 0.75),
+      0 1px 6px rgba(72, 79, 96, 0.08);
+  }
+  .itunes-cflow__range::-moz-range-progress {
+    height: 16px;
+    border-radius: 999px;
+    background: var(--itunes-range-fill);
+  }
+  .itunes-cflow__range::-moz-range-thumb {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--itunes-neu-bg);
+    border: var(--itunes-neu-border);
+    box-shadow: var(--itunes-neu-drop);
+    transition: var(--itunes-neu-trans);
+  }
+  .itunes-cflow__range:hover::-moz-range-thumb {
+    box-shadow: none;
+    border-color: var(--itunes-neu-border-hover);
+  }
+  .itunes-cflow__range:active::-moz-range-thumb {
+    box-shadow: var(--itunes-neu-inset);
+    border-color: transparent;
+  }
+  .itunes-cflow__stage-wrap {
+    position: relative;
+    max-width: min(960px, 100%);
+    margin: 0 auto;
+    padding: 0.05rem 0 0.35rem;
+    outline: none;
+  }
+  .itunes-cflow__stage-wrap:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.35);
+    outline-offset: 4px;
+    border-radius: 12px;
+  }
+  .itunes-cflow__stage {
+    position: relative;
+    /* Tall enough for portrait-style drawings when card width is --itunes-card-w */
+    min-height: clamp(300px, 52vw, 560px);
+    height: clamp(300px, 52vw, 560px);
+    perspective: var(--itunes-perspective);
+    perspective-origin: 50% 45%;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: grab;
+    /* Allow horizontal swipe + wheel; vertical still scrolls the page when gesture is mostly vertical */
+    touch-action: pan-x pan-y;
+    overflow: hidden;
+    border-radius: 16px;
+  }
+  .itunes-cflow__stage.itunes-cflow__stage--dragging {
+    cursor: grabbing;
+  }
+  .itunes-cflow__item {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--itunes-card-w);
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+    --itunes-fade-duration: 0.58s;
+    --itunes-move-duration: 0.68s;
+    transition:
+      transform var(--itunes-move-duration) cubic-bezier(0.22, 1, 0.36, 1),
+      opacity var(--itunes-fade-duration) cubic-bezier(0.4, 0, 0.2, 1),
+      z-index 0s linear 0.32s;
+    z-index: 0;
+  }
+  .itunes-cflow__item--left-hidden {
+    transform: translate(-50%, -50%) rotateY(26deg) translateX(calc(-1 * var(--itunes-tx) * 1.55)) translateZ(-100px)
+      skewY(-4deg) scale(0.42);
+    opacity: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .itunes-cflow__item--left {
+    transform: translate(-50%, -50%) rotateY(22deg) translateX(calc(-1 * var(--itunes-tx))) skewY(-3deg) scale(0.58);
+    opacity: 0.92;
+    z-index: 2;
+  }
+  .itunes-cflow__item--middle {
+    transform: translate(-50%, -50%) rotateY(0deg) translateX(0) translateZ(0) scale(1);
+    opacity: 1;
+    z-index: 5;
+  }
+  .itunes-cflow__item--right {
+    transform: translate(-50%, -50%) rotateY(-22deg) translateX(var(--itunes-tx)) skewY(3deg) scale(0.58);
+    opacity: 0.92;
+    z-index: 2;
+  }
+  .itunes-cflow__item--right-hidden {
+    transform: translate(-50%, -50%) rotateY(-26deg) translateX(calc(var(--itunes-tx) * 1.55)) translateZ(-100px) skewY(4deg)
+      scale(0.42);
+    opacity: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .itunes-cflow__card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow:
+      0 12px 40px rgba(0, 0, 0, 0.25),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+    background: #fff;
+    width: 100%;
+  }
+  .itunes-cflow__media {
+    width: 100%;
+    background: #fff;
+    line-height: 0;
+  }
+  .itunes-cflow__media--placeholder {
+    min-height: 160px;
+    background: #f0f0f0;
+    aspect-ratio: 4 / 5;
+  }
+  .itunes-cflow__img {
+    width: 100%;
+    height: auto;
+    max-height: min(58vh, 520px);
+    object-fit: contain;
+    object-position: center top;
+    display: block;
+  }
+  .itunes-cflow__nav {
+    display: flex;
+    flex-direction: row;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin: 0;
+  }
+  .itunes-cflow__nav-btn {
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: var(--itunes-neu-border);
+    background: var(--itunes-neu-bg);
+    color: var(--itunes-neu-dark);
+    text-shadow: none;
+    box-shadow: var(--itunes-neu-drop);
+    transition:
+      box-shadow 0.48s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.48s cubic-bezier(0.22, 1, 0.36, 1),
+      color 0.38s ease,
+      transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+    cursor: pointer;
+    font-family: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-size: 1.125rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0;
+    text-transform: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .itunes-cflow__nav-btn:hover {
+    box-shadow: none;
+    border-color: var(--itunes-neu-border-hover);
+    color: var(--itunes-neu-red);
+    transform: translateY(-1px);
+    filter: none;
+  }
+  .itunes-cflow__nav-btn:active {
+    box-shadow: var(--itunes-neu-inset);
+    border-color: transparent;
+    color: var(--itunes-neu-dark);
+    text-shadow: none;
+    transform: translateY(0);
+  }
+  .itunes-cflow__nav-btn:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.35);
+    outline-offset: 3px;
+  }
+  .itunes-cflow__empty {
+    text-align: center;
+    color: #666;
+    margin: 1rem 0;
+  }
+  .visually-hidden {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .itunes-cflow__item {
+      transition-duration: 0.01ms;
+    }
+    .itunes-cflow__input,
+    .itunes-cflow__btn,
+    .itunes-cflow__nav-btn,
+    .itunes-cflow__range::-webkit-slider-thumb,
+    .itunes-cflow__range::-moz-range-thumb {
+      transition: none;
+    }
+  }
+{% endstylesheet %}
+
+{% javascript %}
+  (function () {
+    var CLASSES = ['left-hidden', 'left', 'middle', 'right', 'right-hidden'];
+    var CLASS_PREFIX = 'itunes-cflow__item--';
+
+    function norm(s) {
+      return String(s || '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function slotForIndex(i, focus, n) {
+      var rel = i - focus;
+      if (rel < -2) return 'left-hidden';
+      if (rel === -2) return 'left-hidden';
+      if (rel === -1) return 'left';
+      if (rel === 0) return 'middle';
+      if (rel === 1) return 'right';
+      return 'right-hidden';
+    }
+
+    function applyFocus(items, focus) {
+      var n = items.length;
+      if (!n) return 0;
+      focus = Math.max(0, Math.min(focus, n - 1));
+      for (var i = 0; i < n; i++) {
+        var el = items[i];
+        var slot = slotForIndex(i, focus, n);
+        for (var c = 0; c < CLASSES.length; c++) {
+          el.classList.remove(CLASS_PREFIX + CLASSES[c]);
+        }
+        el.classList.add(CLASS_PREFIX + slot);
+      }
+      return focus;
+    }
+
+    function initPanel(panel, root) {
+      var items = [].slice.call(panel.querySelectorAll('[data-itunes-cflow-item]'));
+      if (!items.length) return;
+
+      var stage = panel.querySelector('[data-itunes-cflow-stage]');
+      var stageWrap = panel.querySelector('[data-itunes-cflow-stage-wrap]');
+      var range = panel.querySelector('[data-itunes-cflow-range]');
+      var search = panel.querySelector('[data-itunes-cflow-search]');
+      var searchBtn = panel.querySelector('[data-itunes-cflow-search-btn]');
+      var feedback = panel.querySelector('[data-itunes-cflow-feedback]');
+      var prev = panel.querySelector('[data-itunes-cflow-prev]');
+      var next = panel.querySelector('[data-itunes-cflow-next]');
+
+      var focus = 0;
+      var dragStartX = 0;
+      var dragStartY = 0;
+      var dragging = false;
+      var moved = false;
+      var suppressStageClick = false;
+      var wheelAccum = 0;
+      var wheelIdleTimer = null;
+      var rangeSync = false;
+      var autoTimer = null;
+
+      var autoplay = root.getAttribute('data-autoplay') === 'true';
+      var autoplayMs = parseInt(root.getAttribute('data-autoplay-ms') || '5000', 10) || 5000;
+
+      function setFeedback(msg, state) {
+        if (!feedback) return;
+        if (!msg) {
+          feedback.hidden = true;
+          feedback.textContent = '';
+          feedback.removeAttribute('data-state');
+          return;
+        }
+        feedback.hidden = false;
+        feedback.textContent = msg;
+        if (state) feedback.setAttribute('data-state', state);
+        else feedback.removeAttribute('data-state');
+      }
+
+      function syncRangeFill() {
+        if (!range) return;
+        var min = parseFloat(range.min);
+        var max = parseFloat(range.max);
+        var val = parseFloat(range.value);
+        if (isNaN(min)) min = 0;
+        if (isNaN(max)) max = 0;
+        if (isNaN(val)) val = min;
+        var pct;
+        if (max <= min) {
+          pct = 100;
+        } else {
+          pct = ((val - min) / (max - min)) * 100;
+        }
+        range.style.setProperty('--itunes-range-pct', String(pct));
+      }
+
+      function syncRange() {
+        if (!range) return;
+        var max = items.length - 1;
+        range.min = '0';
+        range.max = String(max);
+        rangeSync = true;
+        range.value = String(focus);
+        rangeSync = false;
+        range.setAttribute('aria-valuemin', '0');
+        range.setAttribute('aria-valuemax', String(max));
+        range.setAttribute('aria-valuenow', String(focus));
+        syncRangeFill();
+      }
+
+      function go(delta) {
+        var n = items.length;
+        focus = applyFocus(items, focus + delta);
+        syncRange();
+        setFeedback('');
+      }
+
+      function goTo(index) {
+        focus = applyFocus(items, index);
+        syncRange();
+        setFeedback('');
+      }
+
+      function findSearchIndex(q) {
+        var query = norm(q);
+        if (!query) return -1;
+        for (var i = 0; i < items.length; i++) {
+          var el = items[i];
+          var t = norm(el.getAttribute('data-title') || '');
+          var sku = norm(el.getAttribute('data-sku') || '');
+          if (t.indexOf(query) !== -1 || query.indexOf(t) !== -1) return i;
+          if (sku && (sku.indexOf(query) !== -1 || query.indexOf(sku) !== -1)) return i;
+        }
+        return -1;
+      }
+
+      function doSearch() {
+        if (!search) return;
+        var idx = findSearchIndex(search.value);
+        if (idx >= 0) {
+          goTo(idx);
+          setFeedback('');
+        } else {
+          setFeedback('No matching product.', 'error');
+        }
+      }
+
+      function stopAutoplay() {
+        if (autoTimer) {
+          clearInterval(autoTimer);
+          autoTimer = null;
+        }
+      }
+
+      function startAutoplay() {
+        stopAutoplay();
+        if (!autoplay || items.length < 2) return;
+        var hidden =
+          panel.hidden || (panel.classList && panel.classList.contains('itunes-cflow__panel--hidden'));
+        if (hidden) return;
+        autoTimer = setInterval(function () {
+          if (focus >= items.length - 1) goTo(0);
+          else go(1);
+        }, autoplayMs);
+      }
+
+      var initialFocus = Math.floor((items.length - 1) / 2);
+      focus = applyFocus(items, initialFocus);
+      syncRange();
+
+      if (prev) prev.addEventListener('click', function () { stopAutoplay(); go(-1); });
+      if (next) next.addEventListener('click', function () { stopAutoplay(); go(1); });
+
+      if (searchBtn) searchBtn.addEventListener('click', doSearch);
+      if (search) {
+        search.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            doSearch();
+          }
+        });
+      }
+
+      if (range) {
+        range.addEventListener('input', function () {
+          if (rangeSync) return;
+          stopAutoplay();
+          var v = parseInt(range.value, 10);
+          if (!isNaN(v)) goTo(v);
+        });
+      }
+
+      if (stageWrap) {
+        stageWrap.addEventListener('mouseenter', stopAutoplay);
+        stageWrap.addEventListener('mouseleave', startAutoplay);
+        stageWrap.addEventListener('keydown', function (e) {
+          if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            stopAutoplay();
+            go(-1);
+          } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            stopAutoplay();
+            go(1);
+          }
+        });
+      }
+
+      if (stage) {
+        stage.addEventListener(
+          'click',
+          function (e) {
+            if (!suppressStageClick) return;
+            e.preventDefault();
+            e.stopPropagation();
+            suppressStageClick = false;
+          },
+          true
+        );
+        stage.addEventListener('pointerdown', function (e) {
+          if (e.button !== 0 && e.pointerType === 'mouse') return;
+          /* Include drags starting on product cards; swipe uses horizontal delta, tap still opens product */
+          suppressStageClick = false;
+          dragging = true;
+          moved = false;
+          dragStartX = e.clientX;
+          dragStartY = e.clientY;
+          stage.classList.add('itunes-cflow__stage--dragging');
+          try {
+            stage.setPointerCapture(e.pointerId);
+          } catch (err) {}
+        });
+        stage.addEventListener('pointermove', function (e) {
+          if (!dragging) return;
+          if (Math.abs(e.clientX - dragStartX) > 8 || Math.abs(e.clientY - dragStartY) > 8) moved = true;
+        });
+        stage.addEventListener('pointerup', function (e) {
+          if (!dragging) return;
+          dragging = false;
+          stage.classList.remove('itunes-cflow__stage--dragging');
+          try {
+            stage.releasePointerCapture(e.pointerId);
+          } catch (err) {}
+          var dx = e.clientX - dragStartX;
+          var dy = e.clientY - dragStartY;
+          if (moved && Math.abs(dx) > 40 && Math.abs(dx) >= Math.abs(dy)) {
+            stopAutoplay();
+            suppressStageClick = true;
+            if (dx < 0) go(1);
+            else go(-1);
+          }
+        });
+        stage.addEventListener('pointercancel', function () {
+          dragging = false;
+          stage.classList.remove('itunes-cflow__stage--dragging');
+        });
+      }
+
+      /* Trackpad / mouse horizontal scroll (and Shift + vertical wheel) advances the carousel */
+      if (stageWrap && items.length > 1) {
+        stageWrap.addEventListener(
+          'wheel',
+          function (e) {
+            var dx = e.deltaX;
+            if (e.shiftKey) dx += e.deltaY;
+            if (Math.abs(dx) < Math.abs(e.deltaY) && !e.shiftKey) return;
+            if (Math.abs(dx) < 4) return;
+            e.preventDefault();
+            wheelAccum += dx;
+            if (wheelIdleTimer) clearTimeout(wheelIdleTimer);
+            wheelIdleTimer = setTimeout(function () {
+              wheelAccum = 0;
+              wheelIdleTimer = null;
+            }, 180);
+            if (Math.abs(wheelAccum) < 72) return;
+            stopAutoplay();
+            if (wheelAccum > 0) go(1);
+            else go(-1);
+            wheelAccum = 0;
+          },
+          { passive: false }
+        );
+      }
+
+      panel.__itunesStopAutoplay = stopAutoplay;
+      panel.__itunesStartAutoplay = startAutoplay;
+
+      startAutoplay();
+    }
+
+    function panelIsHidden(panel) {
+      return panel.hidden || (panel.classList && panel.classList.contains('itunes-cflow__panel--hidden'));
+    }
+
+    function activateVisiblePanel(root) {
+      [].slice.call(root.querySelectorAll('[data-itunes-cflow-panel]')).forEach(function (p) {
+        if (p.__itunesStopAutoplay) p.__itunesStopAutoplay();
+      });
+      [].slice.call(root.querySelectorAll('[data-itunes-cflow-panel]')).forEach(function (p) {
+        if (panelIsHidden(p)) return;
+        if (p.dataset.itunesPanelReady !== '1') {
+          initPanel(p, root);
+          p.dataset.itunesPanelReady = '1';
+        } else if (p.__itunesStartAutoplay) {
+          p.__itunesStartAutoplay();
+        }
+      });
+    }
+
+    function initRoot(root) {
+      if (!root || root.dataset.itunesCflowBound === '1') return;
+      root.dataset.itunesCflowBound = '1';
+
+      var tabs = [].slice.call(root.querySelectorAll('[data-itunes-cflow-tab]'));
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          var id = tab.getAttribute('data-panel-id');
+          if (!id) return;
+          [].slice.call(root.querySelectorAll('[data-itunes-cflow-panel]')).forEach(function (p) {
+            if (p.__itunesStopAutoplay) p.__itunesStopAutoplay();
+          });
+          tabs.forEach(function (t) {
+            var on = t === tab;
+            t.classList.toggle('itunes-cflow__tab--active', on);
+            t.setAttribute('aria-selected', on ? 'true' : 'false');
+          });
+          [].slice.call(root.querySelectorAll('[data-itunes-cflow-panel]')).forEach(function (p) {
+            var show = p.id === id;
+            p.classList.toggle('itunes-cflow__panel--hidden', !show);
+            p.hidden = !show;
+          });
+          activateVisiblePanel(root);
+        });
+      });
+
+      [].slice.call(root.querySelectorAll('[data-itunes-cflow-panel]')).forEach(function (p) {
+        if (!panelIsHidden(p)) {
+          initPanel(p, root);
+          p.dataset.itunesPanelReady = '1';
+        }
+      });
+    }
+
+    document.querySelectorAll('[data-itunes-cflow-root]').forEach(initRoot);
+    document.addEventListener('shopify:section:load', function (ev) {
+      var r = ev.target && ev.target.querySelector && ev.target.querySelector('[data-itunes-cflow-root]');
+      if (r) initRoot(r);
+    });
+  })();
+{% endjavascript %}
+
+{% schema %}
+{
+  "name": "Cover flow",
+  "tag": "section",
+  "class": "section-itunes-coverflow",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Browse the collection"
+    },
+    {
+      "type": "range",
+      "id": "max_products",
+      "min": 4,
+      "max": 50,
+      "step": 1,
+      "default": 24,
+      "label": "Max products per collection"
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_autoplay",
+      "label": "Autoplay (pauses on hover)",
+      "default": false
+    },
+    {
+      "type": "range",
+      "id": "autoplay_interval",
+      "min": 2,
+      "max": 10,
+      "step": 1,
+      "default": 5,
+      "unit": "s",
+      "label": "Autoplay interval"
+    },
+    {
+      "type": "text",
+      "id": "search_label",
+      "label": "Search label (screen readers)",
+      "default": "Search products"
+    },
+    {
+      "type": "text",
+      "id": "search_placeholder",
+      "label": "Search placeholder",
+      "default": "Search title or SKU…"
+    },
+    {
+      "type": "text",
+      "id": "search_button_label",
+      "label": "Search button",
+      "default": "Go"
+    },
+    {
+      "type": "text",
+      "id": "slider_label",
+      "label": "Slider label",
+      "default": "Scroll through products"
+    },
+    {
+      "type": "text",
+      "id": "prev_label",
+      "label": "Previous button (visible text)",
+      "default": "<"
+    },
+    {
+      "type": "text",
+      "id": "next_label",
+      "label": "Next button (visible text)",
+      "default": ">"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "coverflow_collection",
+      "name": "Collection",
+      "settings": [
+        {
+          "type": "text",
+          "id": "tab_label",
+          "label": "Tab label",
+          "info": "Shown when you add more than one collection",
+          "default": "Collection"
+        },
+        {
+          "type": "collection",
+          "id": "collection",
+          "label": "Collection"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Cover flow",
+      "blocks": [
+        {
+          "type": "coverflow_collection",
+          "settings": {
+            "tab_label": "Featured"
+          }
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}

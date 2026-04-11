@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "react-router";
-import { redirect, useLoaderData } from "react-router";
+import { Outlet, redirect, useLoaderData, useLocation } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import {
@@ -28,6 +28,8 @@ import {
   projectsListWhere,
   shopStringFilter,
 } from "../utils/projectAccess.server";
+import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
+import { getStorefrontAppNav } from "../utils/storefrontAppNav.server";
 
 type ProjectListItem = {
   id: string;
@@ -118,15 +120,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 
   let hideAddToCart = false;
+  let navAccountInitial: string | null = null;
   try {
     const numericId = normalizeStorefrontCustomerId(customerId);
     const customerInfo = await getCustomersByIds(shop, [numericId]);
-    const viewerTags =
-      customerInfo[numericId]?.tags ?? customerInfo[customerId]?.tags ?? [];
+    const viewer =
+      customerInfo[numericId] ?? customerInfo[customerId];
+    const viewerTags = viewer?.tags ?? [];
     hideAddToCart =
       viewerTags.some(
         (t: string) => String(t).trim().toUpperCase() === "NA",
       ) && !hasAdminTag(viewerTags);
+    const fn = viewer?.firstName?.trim();
+    navAccountInitial = fn
+      ? fn.charAt(0).toUpperCase()
+      : customerEmail?.trim()
+        ? customerEmail.trim().charAt(0).toUpperCase()
+        : null;
   } catch {
     // If customer lookup fails, show add-to-cart (no NA restriction)
   }
@@ -234,17 +244,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
   });
 
-  const navButtons = [
-    { label: "Home", url: "/" },
-    {
-      label: settings?.navButton2Label || "Shop",
-      url: settings?.navButton2Url || "/collections/main-products",
-    },
-    {
-      label: settings?.navButton3Label || "Cart",
-      url: settings?.navButton3Url || "/cart",
-    },
-  ];
+  const storefrontAppNav = getStorefrontAppNav(settings);
 
   return {
     proxyStylesCss,
@@ -253,10 +253,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shop,
     variantLookupError,
     hideAddToCart,
-    navButtons,
+    storefrontAppNav,
     logoDataUrl: settings?.logoDataUrl || null,
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
-    viewerStaffViewAll: viewerIsAppAdmin,
+    navAccountInitial,
   };
 };
 
@@ -342,15 +342,23 @@ export default function ProjectsPage() {
     proxyStylesCss,
     projects,
     themeStyles,
-    shop,
     variantLookupError,
     hideAddToCart,
-    navButtons,
+    storefrontAppNav,
     logoDataUrl,
     backgroundLogoDataUrl,
-    viewerStaffViewAll,
+    navAccountInitial,
   } = useLoaderData<typeof loader>();
   const inlineStyles = themeStyles?.styles || [];
+  const { pathname } = useLocation();
+  /** Nested legacy route `apps.project-clad.projects.$projectId` — parent must render `<Outlet />`. */
+  const isNestedProjectDetail = /\/apps\/project-clad\/projects\/[^/?#]+/.test(
+    pathname,
+  );
+
+  if (isNestedProjectDetail) {
+    return <Outlet />;
+  }
 
   return (
     <>
@@ -370,27 +378,16 @@ export default function ProjectsPage() {
         }
       >
         <div className="page-width project-clad-container project-clad-container--full-width">
-          {logoDataUrl && (
-            <div className="project-clad-logo">
-              <a href="/apps/project-clad/projects" className="project-clad-logo__link">
-                <img
-                  src={logoDataUrl}
-                  alt="Logo"
-                  className="project-clad-logo__img"
-                />
-              </a>
-            </div>
-          )}
           <header className="project-clad-header">
-            <div className="project-clad-header-row">
-              <nav className="project-clad-nav">
-                {navButtons.map((btn, i) => (
-                  <a key={i} href={btn.url} className="project-clad-button">
-                    {btn.label}
-                  </a>
-                ))}
-              </nav>
-            </div>
+            <ProjectCladStorefrontNav
+              logoDataUrl={logoDataUrl}
+              logoHref="/"
+              links={storefrontAppNav.links}
+              cartUrl={storefrontAppNav.cartUrl}
+              searchUrl={storefrontAppNav.searchUrl}
+              accountUrl={storefrontAppNav.accountUrl}
+              accountInitial={navAccountInitial}
+            />
           </header>
           {variantLookupError && (
             <p className="project-clad-muted">{variantLookupError}</p>
@@ -409,9 +406,8 @@ export default function ProjectsPage() {
                   className={`project-clad-card${project.approvalStatus.requested ? " project-clad-card--confirming" : ""}`}
                 >
                   <a
-                    href={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+                    href={`/apps/project-clad/project?id=${encodeURIComponent(project.id)}`}
                     className="project-clad-card-link"
-                    rel="noopener"
                   >
                     <div className="project-clad-projects-tile-head">
                       <h2 className="project-clad-title">{project.name}</h2>
@@ -443,10 +439,9 @@ export default function ProjectsPage() {
                         <div className="project-clad-actions">
                           <form
                             method="get"
-                            action={`https://${shop}/apps/project-clad/api/project-actions`}
+                            action="/apps/project-clad/api/project-actions"
                             data-projectclad-submit-approval
                             data-project-id={project.id}
-                            data-shop={shop}
                             data-intent="cancel-approval-request"
                           >
                             <input
@@ -523,12 +518,11 @@ export default function ProjectsPage() {
     form.addEventListener('submit', function(e) {
       e.preventDefault();
       var projectId = form.getAttribute('data-project-id');
-      var shop = form.getAttribute('data-shop');
       var msgEl = form.querySelector('[data-projectclad-approval-message]');
       function setMsg(t) { if (msgEl) msgEl.textContent = t || ''; }
       setMsg('');
       var intent = form.getAttribute('data-intent') || 'submit-for-approval';
-      var url = 'https://' + shop + '/apps/project-clad/api/project-actions?intent=' + encodeURIComponent(intent) + '&projectId=' + encodeURIComponent(projectId);
+      var url = '/apps/project-clad/api/project-actions?intent=' + encodeURIComponent(intent) + '&projectId=' + encodeURIComponent(projectId);
       fetch(url, { credentials: 'include' }).then(function(r) {
         return r.json().then(function(data) {
           if (!r.ok && data?.redirectTo) {

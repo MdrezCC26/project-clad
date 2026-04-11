@@ -44,15 +44,15 @@ export const getAppProxyContext = (request: Request): AppProxyContext => {
   const url = new URL(request.url);
   const params = new URLSearchParams(url.search);
   const signature = params.get(APP_PROXY_SIGNATURE_PARAM);
-  const shop = params.get("shop");
+  const shopRaw = params.get("shop");
   const secret = process.env.SHOPIFY_API_SECRET || "";
 
-  if (!signature || !shop || !secret) {
+  if (!signature || shopRaw == null || !secret) {
     throw new Response("Unauthorized", { status: 401 });
   }
 
-  if (!VALID_SHOP_REGEX.test(shop)) {
-    throw new Response("Invalid shop domain", { status: 400 });
+  if (!shopRaw.trim()) {
+    throw new Response("Unauthorized", { status: 401 });
   }
 
   const message = buildMessage(params);
@@ -63,6 +63,11 @@ export const getAppProxyContext = (request: Request): AppProxyContext => {
 
   if (!safeEqual(digest, signature)) {
     throw new Response("Unauthorized", { status: 401 });
+  }
+
+  const shop = shopRaw.trim().toLowerCase();
+  if (!VALID_SHOP_REGEX.test(shop)) {
+    throw new Response("Invalid shop domain", { status: 400 });
   }
 
   const customerId = params.get("logged_in_customer_id") || undefined;
@@ -83,7 +88,37 @@ export const requireAppProxyCustomer = (
   request: Request,
   options: { jsonOnFail?: boolean } = {},
 ): AppProxyContextWithCustomer => {
-  const context = getAppProxyContext(request);
+  let context: AppProxyContext;
+  try {
+    context = getAppProxyContext(request);
+  } catch (thrown) {
+    if (options.jsonOnFail && thrown instanceof Response) {
+      const status = thrown.status;
+      if (status === 401) {
+        throw Response.json(
+          {
+            error:
+              "App proxy session is invalid. Reload the project page and try again.",
+          },
+          { status: 401 },
+        );
+      }
+      if (status === 400) {
+        throw Response.json(
+          {
+            error:
+              "Invalid shop or signed proxy parameters. Reload the project page and try again.",
+          },
+          { status: 400 },
+        );
+      }
+      throw Response.json(
+        { error: `Request failed (${status}).` },
+        { status },
+      );
+    }
+    throw thrown;
+  }
 
   if (!context.customerId) {
     const loginUrl = `/account/login?return_url=${encodeURIComponent(

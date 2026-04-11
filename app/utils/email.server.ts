@@ -35,6 +35,24 @@ export type SendEmailOptions = {
   attachments?: Array<{ filename: string; content: string | Buffer }>;
 };
 
+/**
+ * Removes duplicate addresses (case-insensitive). Keeps the first spelling for each mailbox.
+ * Use before per-recipient loops so the same person is not mailed twice.
+ */
+export function dedupeEmailAddresses(addresses: Iterable<string>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of addresses) {
+    const t = raw.trim();
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
+
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
   if (!user || !pass) {
     throw new Error(

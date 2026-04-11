@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
-import { useEffect, useRef, useState } from "react";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "react-router";
 import {
   Form,
@@ -25,6 +28,7 @@ import {
   getCustomersByIds,
 } from "../utils/adminCustomers.server";
 import {
+  hasStaffStorefrontTag,
   normalizeStorefrontCustomerId,
   viewerHasAdminTag,
 } from "../utils/customerTags.server";
@@ -39,8 +43,30 @@ import { getThemeStyles } from "../utils/themeAssets.server";
 import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
+import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
+import { getStorefrontAppNav } from "../utils/storefrontAppNav.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
 import { sendProjectStatusNotificationEmail } from "../utils/orderCreatedEmail.server";
+import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";
+import {
+  formatOrderDeliveryFootline,
+  isKnownOttawaHourWindow,
+  isOttawaDeliveryWindowValidForDate,
+  isYmdBeforeMin,
+  minPreferredDeliveryYmd,
+  OTTAWA_DELIVERY_HOUR_WINDOWS,
+  PREFERRED_DELIVERY_MIN_DAY_OFFSET_FROM_TODAY,
+} from "../utils/preferredDeliveryFormat";
+import { buildSignedFulfillmentPhotoUrl } from "../utils/fulfillmentPhotoSignedUrl.server";
+import {
+  ORDER_DISPLAY_TAX_RATE,
+  orderTaxFromSubtotal,
+  orderTotalWithTax,
+} from "../utils/orderDisplayTax";
+import {
+  jobNameForOrderSummary,
+  jobPurchaseOrderDisplay,
+} from "../utils/jobNameDisplay";
 
 type JobItemView = {
   id: string;
@@ -68,8 +94,16 @@ type JobView = {
   paidAt: string | null;
   receiptSnapshot: unknown | null;
   orderName: string | null;
+  /** Cart / customer "PURCHASE ORDER #" (not Shopify `orderName`). */
+  purchaseOrderNumber: string | null;
   items: JobItemView[];
   subtotal: number;
+  orderLifecycleStatus: string;
+  scheduledDeliveryDate: string | null;
+  scheduledDeliveryWindow: string | null;
+  fulfillmentMethod: string | null;
+  hasFulfillmentPhoto: boolean;
+  fulfillmentPhotoUrl: string | null;
 };
 
 type ActivityFeedItem = {
@@ -105,6 +139,13 @@ type ProjectView = {
   poNumber: string | null;
   companyName: string | null;
   createdAt: string;
+  shipAddress1: string | null;
+  shipCity: string | null;
+  shipProvince: string | null;
+  shipPostal: string | null;
+  shipCountry: string | null;
+  /** Project default: delivery (+fee) vs store pickup (no address required on project). */
+  receiveMode: "delivery" | "pickup";
   jobs: JobView[];
   members: {
     customerId: string;
@@ -118,14 +159,317 @@ type ProjectView = {
 
 const PRICING_COOKIE = "projectclad_pricing=1";
 
+/** Per-order delivery line in order footers (display; not taxed). */
+const PROJECT_DELIVERY_FEE = 15;
+
+function hasCompleteShipToDetails(project: {
+  shipAddress1?: string | null;
+  shipCity?: string | null;
+  shipProvince?: string | null;
+  shipPostal?: string | null;
+}) {
+  return Boolean(
+    project.shipAddress1?.trim() &&
+      project.shipCity?.trim() &&
+      project.shipProvince?.trim() &&
+      project.shipPostal?.trim(),
+  );
+}
+
 const formatPrice = (value: string | number) => {
   const num = Number(value || 0);
   if (Number.isNaN(num)) return "$0.00";
   return `$${num.toFixed(2)}`;
 };
 
-function isJobItemPurchasable(item: JobItemView): boolean {
-  return item.quantity > 0 && item.variantDisplaySource !== "unknown";
+const CANADA_PROVINCE_OPTIONS: { code: string; label: string }[] = [
+  { code: "AB", label: "Alberta" },
+  { code: "BC", label: "British Columbia" },
+  { code: "MB", label: "Manitoba" },
+  { code: "NB", label: "New Brunswick" },
+  { code: "NL", label: "Newfoundland and Labrador" },
+  { code: "NS", label: "Nova Scotia" },
+  { code: "NT", label: "Northwest Territories" },
+  { code: "NU", label: "Nunavut" },
+  { code: "ON", label: "Ontario" },
+  { code: "PE", label: "Prince Edward Island" },
+  { code: "QC", label: "Quebec" },
+  { code: "SK", label: "Saskatchewan" },
+  { code: "YT", label: "Yukon" },
+];
+
+function PreferredDeliveryScheduleFields({
+  job,
+  minYmd,
+}: {
+  job: JobView;
+  minYmd: string | undefined;
+}) {
+  const [dateVal, setDateVal] = useState(job.scheduledDeliveryDate ?? "");
+  const [windowVal, setWindowVal] = useState(job.scheduledDeliveryWindow ?? "");
+
+  useEffect(() => {
+    setDateVal(job.scheduledDeliveryDate ?? "");
+    setWindowVal(job.scheduledDeliveryWindow ?? "");
+  }, [job.id, job.scheduledDeliveryDate, job.scheduledDeliveryWindow]);
+
+  const now = new Date();
+
+  return (
+    <div className="project-clad-preferred-delivery-fields">
+      <div
+        className="project-clad-preferred-delivery-row"
+        role="group"
+        aria-label="Preferred delivery day and time"
+      >
+        <div className="project-clad-preferred-delivery-field project-clad-preferred-delivery-field--date">
+          <input
+            type="date"
+            name="scheduledDeliveryDate"
+            value={dateVal}
+            onChange={(e) => {
+              const v = e.target.value;
+              setDateVal(v);
+              if (!v.trim()) {
+                setWindowVal("");
+                return;
+              }
+              setWindowVal((prev) =>
+                prev && !isOttawaDeliveryWindowValidForDate(prev, v, new Date())
+                  ? ""
+                  : prev,
+              );
+            }}
+            min={minYmd}
+            className="project-clad-preferred-delivery-input"
+            aria-label="Delivery day"
+          />
+        </div>
+        <span className="project-clad-preferred-delivery-between">between</span>
+        <div className="project-clad-preferred-delivery-field project-clad-preferred-delivery-field--time">
+          <select
+            name="scheduledDeliveryWindow"
+            disabled={!dateVal.trim()}
+            value={windowVal}
+            onChange={(e) => setWindowVal(e.target.value)}
+            className="project-clad-preferred-delivery-input"
+            aria-label="Delivery time"
+          >
+          <option value="">
+            {!dateVal.trim() ? "Select a day first…" : "Select…"}
+          </option>
+          {OTTAWA_DELIVERY_HOUR_WINDOWS.map((w) => {
+            const ended =
+              Boolean(dateVal.trim()) &&
+              !isOttawaDeliveryWindowValidForDate(w, dateVal, now);
+            return (
+              <option key={w} value={w} disabled={ended}>
+                {w}
+                {ended ? " (ended)" : ""}
+              </option>
+            );
+          })}
+          {job.scheduledDeliveryWindow &&
+          !isKnownOttawaHourWindow(job.scheduledDeliveryWindow) ? (
+            <option value={job.scheduledDeliveryWindow}>
+              {job.scheduledDeliveryWindow} (saved)
+            </option>
+          ) : null}
+        </select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StaffFulfillmentPhotoUpload({
+  job,
+  projectId,
+}: {
+  job: JobView;
+  projectId: string;
+}) {
+  const [pickedName, setPickedName] = useState("");
+  const inputId = `project-clad-fulfillment-photo-${job.id}`;
+  const actionUrl = `/apps/project-clad/project?id=${encodeURIComponent(projectId)}`;
+
+  useEffect(() => {
+    setPickedName("");
+  }, [job.id]);
+
+  /* Native <form> + full navigation: React Router <Form> can drop multipart file bodies on client navigation. */
+  return (
+    <form
+      method="post"
+      action={actionUrl}
+      encType="multipart/form-data"
+      className="project-clad-staff-fulfillment-photo-form"
+    >
+      <input type="hidden" name="intent" value="upload-fulfillment-photo" />
+      <input type="hidden" name="jobId" value={job.id} />
+      <div className="project-clad-staff-fulfillment-upload-row">
+        <input
+          type="file"
+          id={inputId}
+          name="photo"
+          accept="image/*"
+          required
+          className="project-clad-staff-fulfillment__file-input"
+          onChange={(e) => {
+            const f = e.currentTarget.files?.[0];
+            setPickedName(f?.name ?? "");
+          }}
+        />
+        {pickedName ? (
+          <span
+            className="project-clad-staff-fulfillment__picked-name"
+            title={pickedName}
+          >
+            {pickedName}
+          </span>
+        ) : null}
+        <button type="submit" className="project-clad-button">
+          Upload photo
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function defaultCanadaProvinceCode(saved: string | null | undefined): string {
+  const p = saved?.trim();
+  if (!p) return "ON";
+  if (CANADA_PROVINCE_OPTIONS.some((o) => o.code === p)) return p;
+  const hit = CANADA_PROVINCE_OPTIONS.find(
+    (o) => o.label.toLowerCase() === p.toLowerCase(),
+  );
+  return hit?.code ?? "ON";
+}
+
+function EditProjectDeliveryAddressForm({
+  projectId,
+  shipAddress1,
+  shipCity,
+  shipProvince,
+  shipPostal,
+}: {
+  projectId: string;
+  shipAddress1: string | null;
+  shipCity: string | null;
+  shipProvince: string | null;
+  shipPostal: string | null;
+}) {
+  const [draft, setDraft] = useState(() => ({
+    shipAddress1: shipAddress1 ?? "",
+    shipCity: shipCity ?? "",
+    shipPostal: shipPostal ?? "",
+    shipProvince: defaultCanadaProvinceCode(shipProvince),
+    shipCountry: "Canada",
+  }));
+
+  useEffect(() => {
+    setDraft({
+      shipAddress1: shipAddress1 ?? "",
+      shipCity: shipCity ?? "",
+      shipPostal: shipPostal ?? "",
+      shipProvince: defaultCanadaProvinceCode(shipProvince),
+      shipCountry: "Canada",
+    });
+  }, [shipAddress1, shipCity, shipProvince, shipPostal]);
+
+  return (
+    <>
+      <h3
+        className="project-clad-section-title"
+        style={{ marginTop: "1.35rem", marginBottom: "0.5rem", fontSize: "1rem" }}
+        data-projectclad-section-underline
+      >
+        Delivery details
+      </h3>
+      {/*
+        Native form + full document navigation: RR <Form> uses fetch navigation and often
+        loses app-proxy signing / session for POST, so pickup/delivery never persisted.
+      */}
+      <form
+        method="post"
+        action={`/apps/project-clad/project?id=${encodeURIComponent(projectId)}`}
+        className="project-clad-inline-form project-clad-pricing-form"
+      >
+        <input type="hidden" name="intent" value="update-project-delivery" />
+        <label htmlFor="edit-ship-address1">Address</label>
+        <input
+          id="edit-ship-address1"
+          name="shipAddress1"
+          type="text"
+          value={draft.shipAddress1}
+          onChange={(e) =>
+            setDraft((d) => ({ ...d, shipAddress1: e.target.value }))
+          }
+          autoComplete="street-address"
+          className="project-clad-pricing-password-input"
+        />
+        <label htmlFor="edit-ship-city">City</label>
+        <input
+          id="edit-ship-city"
+          name="shipCity"
+          type="text"
+          value={draft.shipCity}
+          onChange={(e) =>
+            setDraft((d) => ({ ...d, shipCity: e.target.value }))
+          }
+          autoComplete="address-level2"
+          className="project-clad-pricing-password-input"
+        />
+        <label htmlFor="edit-ship-province">Province</label>
+        <select
+          id="edit-ship-province"
+          name="shipProvince"
+          value={draft.shipProvince}
+          onChange={(e) =>
+            setDraft((d) => ({ ...d, shipProvince: e.target.value }))
+          }
+          className="project-clad-pricing-password-input"
+        >
+          <option value="">—</option>
+          {CANADA_PROVINCE_OPTIONS.map(({ code, label }) => (
+            <option key={code} value={code}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <label htmlFor="edit-ship-postal">Postal code</label>
+        <input
+          id="edit-ship-postal"
+          name="shipPostal"
+          type="text"
+          value={draft.shipPostal}
+          onChange={(e) =>
+            setDraft((d) => ({ ...d, shipPostal: e.target.value }))
+          }
+          autoComplete="postal-code"
+          className="project-clad-pricing-password-input"
+        />
+        <label htmlFor="edit-ship-country">Country</label>
+        <select
+          id="edit-ship-country"
+          name="shipCountry"
+          value={draft.shipCountry}
+          onChange={(e) =>
+            setDraft((d) => ({ ...d, shipCountry: e.target.value }))
+          }
+          className="project-clad-pricing-password-input"
+        >
+          <option value="">—</option>
+          <option value="Canada">Canada</option>
+        </select>
+        <div className="project-clad-actions" style={{ marginTop: "0.75rem", gap: "0.5rem" }}>
+          <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
+            Save details
+          </button>
+        </div>
+      </form>
+    </>
+  );
 }
 
 const hasPricingAccess = (request: Request) => {
@@ -211,8 +555,6 @@ const redirectToProject = (request: Request, projectId: string, shop: string) =>
   );
 };
 
-const getProjectsPath = () => "/apps/project-clad/projects";
-
 /** One-line activity text for the timeline (paired with actor + time in the UI). */
 function formatActivitySummary(ev: ActivityFeedItem): string {
   const p =
@@ -239,7 +581,9 @@ function formatActivitySummary(ev: ActivityFeedItem): string {
     case "job_item_variant_swapped":
       return `${String(p.fromLabel || "—")} → ${String(p.toLabel || "—")}`;
     case "order_paid":
-      return p.orderName ? `Paid · ${String(p.orderName)}` : "Paid";
+      return p.orderName
+        ? `Order complete · ${String(p.orderName)}`
+        : "Order complete";
     case "approval_requested": {
       if (p.scope === "project") {
         return "Approval requested · entire project";
@@ -527,12 +871,35 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return name || c.email || id;
   };
 
+  const viewerCanFulfill =
+    viewerIsAppAdmin || hasStaffStorefrontTag(viewerTags);
+
+  const hasCompleteSavedAddress = hasCompleteShipToDetails({
+    shipAddress1: project.shipAddress1,
+    shipCity: project.shipCity,
+    shipProvince: project.shipProvince,
+    shipPostal: project.shipPostal,
+  });
+  /** Blank ship-to → treat as store pickup until a full address exists. */
+  const receiveModeForUi =
+    !hasCompleteSavedAddress
+      ? "pickup"
+      : project.receiveMode === "pickup"
+        ? "pickup"
+        : "delivery";
+
   const payload: ProjectView = {
     id: project.id,
     name: project.name,
     poNumber: project.poNumber,
     companyName: project.companyName,
     createdAt: project.createdAt.toISOString(),
+    shipAddress1: project.shipAddress1 ?? null,
+    shipCity: project.shipCity ?? null,
+    shipProvince: project.shipProvince ?? null,
+    shipPostal: project.shipPostal ?? null,
+    shipCountry: project.shipCountry ?? null,
+    receiveMode: receiveModeForUi,
     jobs: project.jobs.map((job) => {
       const jobSubtotal = job.items.reduce((sum, item) => {
         const price = Number(item.priceSnapshot || 0);
@@ -548,7 +915,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         paidAt: job.paidAt?.toISOString() ?? null,
         receiptSnapshot: job.receiptSnapshot ?? null,
         orderName: job.orderLink?.orderName ?? null,
+        purchaseOrderNumber: job.purchaseOrderNumber ?? null,
         subtotal: jobSubtotal,
+        orderLifecycleStatus: job.orderLifecycleStatus,
+        scheduledDeliveryDate: job.scheduledDeliveryDate ?? null,
+        scheduledDeliveryWindow: job.scheduledDeliveryWindow ?? null,
+        fulfillmentMethod: job.fulfillmentMethod ?? null,
+        hasFulfillmentPhoto: Boolean(job.fulfillmentPhotoStorageKey),
+        fulfillmentPhotoUrl: job.fulfillmentPhotoStorageKey
+          ? !hasNATag || viewerIsAppAdmin
+            ? (buildSignedFulfillmentPhotoUrl({ jobId: job.id, shop }) ??
+              `/apps/project-clad/fulfillment-photo?jobId=${encodeURIComponent(job.id)}`)
+            : null
+          : null,
         items: job.items.map((item) => {
           const snap = parseVariantSnapshot(item.variantSnapshot);
           const orderLineCapture = parseOrderLineCapture(item.orderLineCapture);
@@ -627,6 +1006,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }, 0),
   };
 
+  const viewerCustomer =
+    customerInfo[viewerNumericId] ?? customerInfo[customerId];
+  const navName = viewerCustomer?.firstName?.trim();
+  const navAccountInitial = navName
+    ? navName.charAt(0).toUpperCase()
+    : customerEmail?.trim()
+      ? customerEmail.trim().charAt(0).toUpperCase()
+      : null;
+
   return {
     proxyStylesCss,
     project: payload,
@@ -688,20 +1076,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shop,
     logoDataUrl: settings?.logoDataUrl || null,
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
-    navButtons: [
-      {
-        label: "Home",
-        url: "/",
-      },
-      {
-        label: settings?.navButton2Label || "Shop",
-        url: settings?.navButton2Url || "/collections/main-products",
-      },
-      {
-        label: settings?.navButton3Label || "Cart",
-        url: settings?.navButton3Url || "/cart",
-      },
-    ],
+    viewerCanFulfill,
+    viewerHasNATag: hasNATag,
+    storefrontAppNav: getStorefrontAppNav(settings),
+    navAccountInitial,
   };
 };
 
@@ -743,15 +1121,82 @@ async function emailProjectStatusSnapshot(args: {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const contentType = request.headers.get("Content-Type") || "";
-  const isJsonRequest = contentType.includes("application/json");
+  const declaresJson = /application\/json|\+json/i.test(contentType);
+  // Only skip reading the body as text for multipart uploads. Shopify’s app proxy
+  // sometimes mislabels JSON POSTs as urlencoded; if we skip sniffing, jsonOnFail
+  // stays false and formData() runs on a JSON body → opaque 400 from the runtime.
+  const canSniffJsonBody =
+    request.method === "POST" && !/multipart\/form-data/i.test(contentType);
+
+  let postProbe = "";
+  if (canSniffJsonBody) {
+    postProbe = await request.clone().text();
+  }
+  /** BOM / whitespace before `{` would skip JSON sniffing and send the body to formData() → opaque 400 HTML. */
+  const probeForJsonSniff = postProbe.replace(/^\uFEFF/, "").trimStart();
+  /** Match fetch() JSON calls even if the proxy strips Content-Type (still need signed query string). */
+  const likelyJsonApiPost =
+    request.method === "POST" &&
+    (declaresJson || probeForJsonSniff.startsWith("{"));
+
   const { shop, customerId, customerEmail } = requireAppProxyCustomer(request, {
-    jsonOnFail: isJsonRequest,
+    jsonOnFail: likelyJsonApiPost,
   });
 
-  if (isJsonRequest) {
+  let jsonPayload: Record<string, unknown> | null = null;
+  if (declaresJson) {
+    try {
+      const parsed: unknown = await request.json();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return Response.json({ error: "Invalid JSON body." }, { status: 400 });
+      }
+      jsonPayload = parsed as Record<string, unknown>;
+    } catch {
+      return Response.json({ error: "Invalid JSON body." }, { status: 400 });
+    }
+    if (typeof jsonPayload.intent !== "string") {
+      return Response.json(
+        { error: 'JSON body must include a string "intent" field.' },
+        { status: 400 },
+      );
+    }
+  } else if (likelyJsonApiPost && probeForJsonSniff.startsWith("{")) {
+    try {
+      const parsed: unknown = JSON.parse(probeForJsonSniff);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return Response.json({ error: "Invalid JSON body." }, { status: 400 });
+      }
+      const p = parsed as Record<string, unknown>;
+      if (typeof p.intent !== "string") {
+        return Response.json(
+          { error: 'JSON body must include a string "intent" field.' },
+          { status: 400 },
+        );
+      }
+      jsonPayload = p;
+    } catch {
+      return Response.json({ error: "Invalid JSON body." }, { status: 400 });
+    }
+  }
+
+  if (jsonPayload) {
+    const payload = jsonPayload as {
+      intent?: string;
+      jobId?: string;
+      jobName?: string;
+      purchaseOrderNumber?: string;
+      jobIds?: string[];
+      itemIds?: string[];
+      removeItemIds?: string[];
+      itemUpdates?: Array<{ itemId: string; quantity: number }>;
+      deleteJob?: boolean;
+      fulfillmentMethod?: string;
+    };
+    const intent = String(payload.intent || "").trim();
+
     const projectId = getProjectId(request);
     if (!projectId) {
-      return new Response("Project not found", { status: 404 });
+      return Response.json({ error: "Project not found." }, { status: 404 });
     }
 
     const viewerIsAppAdmin = await viewerHasAdminTag(
@@ -760,18 +1205,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       customerEmail,
     );
 
-    const payload = (await request.json()) as {
-      intent?: string;
-      jobId?: string;
-      jobName?: string;
-      jobIds?: string[];
-      itemIds?: string[];
-      removeItemIds?: string[];
-      itemUpdates?: Array<{ itemId: string; quantity: number }>;
-      deleteJob?: boolean;
-    };
-
-    if (payload.intent === "reorder-jobs") {
+    if (intent === "reorder-jobs") {
       const jobIds = payload.jobIds || [];
 
       const project = await prisma.project.findFirst({
@@ -780,13 +1214,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
 
       if (!project) {
-        throw new Response("Project not found", { status: 404 });
+        return Response.json({ error: "Project not found." }, { status: 404 });
       }
 
       const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
 
       if (!canEdit) {
-        throw new Response("Forbidden", { status: 403 });
+        return Response.json({ error: "Forbidden." }, { status: 403 });
       }
 
       if (jobIds.length) {
@@ -796,7 +1230,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         });
 
         if (jobs.length !== jobIds.length) {
-          throw new Response("Invalid order list", { status: 400 });
+          return Response.json(
+            { error: "Invalid order list." },
+            { status: 400 },
+          );
         }
 
         await prisma.$transaction(
@@ -822,7 +1259,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return new Response(null, { status: 204 });
     }
 
-    if (payload.intent === "reorder-items") {
+    if (intent === "reorder-items") {
       const jobId = payload.jobId || "";
       const itemIds = payload.itemIds || [];
 
@@ -832,13 +1269,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
 
       if (!project) {
-        throw new Response("Project not found", { status: 404 });
+        return Response.json({ error: "Project not found." }, { status: 404 });
       }
 
       const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
 
       if (!canEdit) {
-        throw new Response("Forbidden", { status: 403 });
+        return Response.json({ error: "Forbidden." }, { status: 403 });
       }
 
       if (jobId && itemIds.length) {
@@ -865,10 +1302,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return new Response(null, { status: 204 });
     }
 
-    if (payload.intent === "save-order-edit") {
+    if (intent === "save-order-edit") {
       const jobId = String(payload.jobId || "");
       const jobName =
         typeof payload.jobName === "string" ? payload.jobName.trim() : "";
+      const purchaseOrderNumberRaw =
+        typeof payload.purchaseOrderNumber === "string"
+          ? payload.purchaseOrderNumber.trim()
+          : "";
       const removeItemIds = Array.isArray(payload.removeItemIds)
         ? payload.removeItemIds.filter((id): id is string => typeof id === "string")
         : [];
@@ -885,13 +1326,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
 
       if (!project) {
-        throw new Response("Project not found", { status: 404 });
+        return Response.json({ error: "Project not found." }, { status: 404 });
       }
 
       const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
 
       if (!canEdit) {
-        throw new Response("Forbidden", { status: 403 });
+        return Response.json({ error: "Forbidden." }, { status: 403 });
       }
 
       if (jobId) {
@@ -928,10 +1369,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   }
                 }
               }
-              if (jobName && jobName !== job.name) {
+              const nextPo =
+                purchaseOrderNumberRaw === ""
+                  ? null
+                  : purchaseOrderNumberRaw;
+              const prevPo = job.purchaseOrderNumber ?? null;
+              const nameChanged = Boolean(jobName && jobName !== job.name);
+              const poChanged = nextPo !== prevPo;
+              if (nameChanged || poChanged) {
                 await prisma.job.update({
                   where: { id: jobId },
-                  data: { name: jobName },
+                  data: {
+                    ...(nameChanged ? { name: jobName } : {}),
+                    ...(poChanged ? { purchaseOrderNumber: nextPo } : {}),
+                  },
                 });
                 didChange = true;
               }
@@ -965,7 +1416,122 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return redirectToProject(request, projectId, shop);
     }
 
-    return new Response("Unsupported JSON action", { status: 400 });
+    if (intent === "confirm-order-now") {
+      const jobId = String(payload.jobId || "");
+      if (!jobId) {
+        return Response.json({ error: "Order is required." }, { status: 400 });
+      }
+
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, shop: shopStringFilter(shop) },
+        include: { members: true },
+      });
+      if (!project) {
+        return Response.json({ error: "Project not found." }, { status: 404 });
+      }
+
+      const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
+      if (!canEdit) {
+        return Response.json(
+          { error: "You do not have permission to place this order." },
+          { status: 403 },
+        );
+      }
+
+      const job = await prisma.job.findFirst({
+        where: { id: jobId, projectId },
+      });
+      if (!job) {
+        return Response.json({ error: "Order not found." }, { status: 404 });
+      }
+      if (job.orderLifecycleStatus !== "ready_to_order") {
+        return Response.json(
+          { error: "This order is not ready for Order now." },
+          { status: 400 },
+        );
+      }
+
+      const arJob = await prisma.approvalRequest.findUnique({
+        where: {
+          projectId_jobId_itemId: {
+            projectId,
+            jobId,
+            itemId: "",
+          },
+        },
+      });
+      const arProject = await prisma.approvalRequest.findUnique({
+        where: {
+          projectId_jobId_itemId: {
+            projectId,
+            jobId: "",
+            itemId: "",
+          },
+        },
+      });
+      const approvedAt = arJob?.approvedAt ?? arProject?.approvedAt;
+      if (!approvedAt) {
+        return Response.json(
+          { error: "Staff approval is required before ordering." },
+          { status: 400 },
+        );
+      }
+
+      const methodRaw = String(payload.fulfillmentMethod || "")
+        .trim()
+        .toLowerCase();
+      if (methodRaw !== "delivery" && methodRaw !== "pickup") {
+        return Response.json(
+          { error: 'Choose "Delivery" or "Store pickup" before placing the order.' },
+          { status: 400 },
+        );
+      }
+      const fulfillmentMethod =
+        methodRaw === "pickup" ? "pickup" : "delivery";
+
+      if (fulfillmentMethod === "delivery") {
+        const shipOk = Boolean(
+          project.shipAddress1?.trim() &&
+            project.shipCity?.trim() &&
+            project.shipProvince?.trim() &&
+            project.shipPostal?.trim(),
+        );
+        if (!shipOk) {
+          return Response.json(
+            {
+              error:
+                "Add a complete delivery address on the project before ordering for delivery.",
+            },
+            { status: 400 },
+          );
+        }
+      }
+
+      try {
+        await prisma.job.update({
+          where: { id: jobId },
+          data: {
+            orderLifecycleStatus: "ordered",
+            fulfillmentMethod,
+          },
+        });
+      } catch (e) {
+        const detail =
+          e instanceof Error ? e.message : "Database error while confirming order.";
+        console.error("[project-clad] confirm-order-now prisma error:", e);
+        return Response.json({ error: detail }, { status: 500 });
+      }
+      return Response.json({ ok: true });
+    }
+
+    return Response.json(
+      {
+        error: intent
+          ? `Unknown action "${intent}". Reload the page and try again.`
+          : "Missing action. Reload the page and try again.",
+      },
+      { status: 400 },
+    );
   }
 
   const formData = await request.formData();
@@ -1015,23 +1581,392 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const isOwner = project.ownerCustomerId === customerId;
   const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
-  let viewerHasNATag = false;
+  let viewerTagsForAction: string[] = [];
   try {
     const vid = normalizeStorefrontCustomerId(customerId);
     const customerInfo = await getCustomersByIds(shop, [vid]);
-    const viewerTags = customerInfo[vid]?.tags ?? [];
-    viewerHasNATag = viewerTags.some(
-      (t) => String(t).trim().toUpperCase() === "NA",
-    );
+    viewerTagsForAction = customerInfo[vid]?.tags ?? [];
   } catch {
-    viewerHasNATag = false;
+    viewerTagsForAction = [];
   }
+  const viewerHasNATag = viewerTagsForAction.some(
+    (t) => String(t).trim().toUpperCase() === "NA",
+  );
+  const viewerCanFulfill =
+    viewerIsAppAdmin || hasStaffStorefrontTag(viewerTagsForAction);
   const canAdminMembers = canAdminProjectMembers(
     project,
     customerId,
     viewerIsAppAdmin,
     viewerHasNATag,
   );
+
+  if (intent === "save-order-schedule") {
+    const staffScheduleBypass =
+      viewerCanFulfill && formData.get("staffSchedule") === "1";
+    if (!canEdit && !staffScheduleBypass) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+    const jobId = String(formData.get("jobId") || "");
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, projectId },
+    });
+    if (!job) {
+      throw new Response("Order not found", { status: 404 });
+    }
+    const dateRaw = String(formData.get("scheduledDeliveryDate") || "").trim();
+    const windowRaw = String(
+      formData.get("scheduledDeliveryWindow") || "",
+    ).trim();
+    const staffOverride = staffScheduleBypass;
+    if (
+      !staffOverride &&
+      (job.orderLifecycleStatus === "ordered" ||
+        job.orderLifecycleStatus === "delivered" ||
+        job.orderLifecycleStatus === "paid")
+    ) {
+      const origin = getStorefrontOriginForAppProxyRedirect(request, shop);
+      return redirect(
+        `${origin}${storefrontProjectActionPath}?id=${encodeURIComponent(projectId)}&scheduleLocked=1`,
+      );
+    }
+    if (
+      !staffOverride &&
+      dateRaw &&
+      isYmdBeforeMin(
+        dateRaw,
+        minPreferredDeliveryYmd(PREFERRED_DELIVERY_MIN_DAY_OFFSET_FROM_TODAY),
+      )
+    ) {
+      const origin = getStorefrontOriginForAppProxyRedirect(request, shop);
+      return redirect(
+        `${origin}${storefrontProjectActionPath}?id=${encodeURIComponent(projectId)}&scheduleDateError=1`,
+      );
+    }
+    if (windowRaw.trim() && !dateRaw.trim()) {
+      const origin = getStorefrontOriginForAppProxyRedirect(request, shop);
+      return redirect(
+        `${origin}${storefrontProjectActionPath}?id=${encodeURIComponent(projectId)}&scheduleWindowNeedsDate=1`,
+      );
+    }
+    if (
+      dateRaw.trim() &&
+      windowRaw.trim() &&
+      !isOttawaDeliveryWindowValidForDate(windowRaw, dateRaw, new Date())
+    ) {
+      const origin = getStorefrontOriginForAppProxyRedirect(request, shop);
+      return redirect(
+        `${origin}${storefrontProjectActionPath}?id=${encodeURIComponent(projectId)}&scheduleWindowPastError=1`,
+      );
+    }
+    await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        scheduledDeliveryDate: dateRaw || null,
+        scheduledDeliveryWindow: windowRaw || null,
+      },
+    });
+    return redirectToProject(request, projectId, shop);
+  }
+
+  if (intent === "upload-fulfillment-photo") {
+    if (!viewerCanFulfill) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+    const jobId = String(formData.get("jobId") || "");
+    const file = formData.get("photo");
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, projectId },
+    });
+    if (!job) {
+      throw new Response("Order not found", { status: 404 });
+    }
+    if (job.orderLifecycleStatus !== "ordered") {
+      throw new Response(
+        "Photo upload is only allowed while the order is in Ordered status.",
+        { status: 400 },
+      );
+    }
+    if (!(file instanceof File) || file.size === 0) {
+      throw new Response("Photo file is required.", { status: 400 });
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      throw new Response("Photo must be 8MB or smaller.", { status: 400 });
+    }
+    const orig = (file.name || "photo.jpg").toLowerCase();
+    const ext = orig.endsWith(".png")
+      ? ".png"
+      : orig.endsWith(".webp")
+        ? ".webp"
+        : ".jpg";
+    const shopDir = shop.replace(/[^a-zA-Z0-9._-]+/g, "_");
+    const storageKey = `${shopDir}/${jobId}-${Date.now()}${ext}`;
+    const root = path.resolve(process.cwd(), "storage", "fulfillment-photos");
+    const abs = path.resolve(root, storageKey);
+    if (!abs.startsWith(root + path.sep)) {
+      throw new Response("Invalid path", { status: 400 });
+    }
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    const buf = Buffer.from(await file.arrayBuffer());
+    await fs.writeFile(abs, buf);
+
+    await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        fulfillmentPhotoStorageKey: storageKey,
+        orderLifecycleStatus: "delivered",
+        ...(job.completedAt ? {} : { completedAt: new Date() }),
+      },
+    });
+
+    if (!job.fulfillmentNotifiedAt) {
+      try {
+        await sendFulfillmentPackageEmails({
+          shop,
+          projectId,
+          jobId,
+        });
+        await prisma.job.update({
+          where: { id: jobId },
+          data: { fulfillmentNotifiedAt: new Date() },
+        });
+      } catch (err) {
+        console.error(
+          "[project] fulfillment notify failed:",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+
+    return redirectToProject(request, projectId, shop);
+  }
+
+  if (intent === "staff-mark-order-paid") {
+    if (!viewerCanFulfill) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+    const jobId = String(formData.get("jobId") || "");
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, projectId },
+    });
+    if (!job) {
+      throw new Response("Order not found", { status: 404 });
+    }
+    if (job.orderLifecycleStatus !== "delivered") {
+      throw new Response(
+        "Mark paid is only available after delivery (photo uploaded).",
+        { status: 400 },
+      );
+    }
+    await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        orderLifecycleStatus: "paid",
+        paidAt: new Date(),
+      },
+    });
+    return redirectToProject(request, projectId, shop);
+  }
+
+  if (intent === "staff-set-order-lifecycle") {
+    if (!viewerCanFulfill) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+    const jobId = String(formData.get("jobId") || "");
+    const next = String(formData.get("lifecycleStatus") || "").trim();
+    const allowed = [
+      "draft",
+      "pending_review",
+      "ready_to_order",
+      "ordered",
+      "delivered",
+      "paid",
+    ] as const;
+    if (!allowed.includes(next as (typeof allowed)[number])) {
+      throw new Response("Invalid status", { status: 400 });
+    }
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, projectId },
+    });
+    if (!job) {
+      throw new Response("Order not found", { status: 404 });
+    }
+    if (next === "delivered" && !job.fulfillmentPhotoStorageKey) {
+      const origin = getStorefrontOriginForAppProxyRedirect(request, shop);
+      return redirect(
+        `${origin}${storefrontProjectActionPath}?id=${encodeURIComponent(projectId)}&statusPhotoRequired=1`,
+      );
+    }
+    const lifecycleData: {
+      orderLifecycleStatus:
+        | "draft"
+        | "pending_review"
+        | "ready_to_order"
+        | "ordered"
+        | "delivered"
+        | "paid";
+      completedAt?: Date;
+      paidAt?: Date;
+    } = {
+      orderLifecycleStatus: next as
+        | "draft"
+        | "pending_review"
+        | "ready_to_order"
+        | "ordered"
+        | "delivered"
+        | "paid",
+    };
+    if (next === "delivered" && !job.completedAt) {
+      lifecycleData.completedAt = new Date();
+    }
+    if (next === "paid") {
+      if (!job.paidAt) {
+        lifecycleData.paidAt = new Date();
+      }
+      if (!job.completedAt && !lifecycleData.completedAt) {
+        lifecycleData.completedAt = new Date();
+      }
+    }
+
+    const wasDeliveredOrPaid =
+      job.orderLifecycleStatus === "delivered" ||
+      job.orderLifecycleStatus === "paid";
+    const wasOrderedWithPhoto =
+      job.orderLifecycleStatus === "ordered" &&
+      Boolean(job.fulfillmentPhotoStorageKey);
+    const isPreDeliveryNext =
+      next === "draft" ||
+      next === "pending_review" ||
+      next === "ready_to_order" ||
+      next === "ordered";
+
+    const shouldDeleteFulfillmentPhoto =
+      Boolean(job.fulfillmentPhotoStorageKey) &&
+      isPreDeliveryNext &&
+      (wasDeliveredOrPaid ||
+        (wasOrderedWithPhoto &&
+          (next === "draft" ||
+            next === "pending_review" ||
+            next === "ready_to_order")));
+
+    const storageKeyToRemove = shouldDeleteFulfillmentPhoto
+      ? job.fulfillmentPhotoStorageKey
+      : null;
+
+    const jobUpdateData: {
+      orderLifecycleStatus: (typeof lifecycleData)["orderLifecycleStatus"];
+      completedAt?: Date | null;
+      paidAt?: Date | null;
+      fulfillmentPhotoStorageKey?: string | null;
+      fulfillmentNotifiedAt?: Date | null;
+    } = { ...lifecycleData };
+
+    if (shouldDeleteFulfillmentPhoto) {
+      jobUpdateData.fulfillmentPhotoStorageKey = null;
+      jobUpdateData.fulfillmentNotifiedAt = null;
+    }
+    if (next !== "paid" && job.paidAt) {
+      jobUpdateData.paidAt = null;
+    }
+    if (!["delivered", "paid"].includes(next) && job.completedAt) {
+      jobUpdateData.completedAt = null;
+    }
+
+    const now = new Date();
+    const staffApproveStatuses = [
+      "ready_to_order",
+      "ordered",
+      "delivered",
+      "paid",
+    ] as const;
+
+    const removeFulfillmentPhotoFromDisk = async (key: string) => {
+      const root = path.resolve(process.cwd(), "storage", "fulfillment-photos");
+      const abs = path.resolve(root, key);
+      if (!abs.startsWith(root + path.sep)) return;
+      try {
+        await fs.unlink(abs);
+      } catch (e) {
+        const code = (e as NodeJS.ErrnoException)?.code;
+        if (code !== "ENOENT") {
+          console.error("[project-clad] fulfillment photo unlink:", e);
+        }
+      }
+    };
+
+    if (next === "pending_review") {
+      await prisma.$transaction([
+        prisma.approvalRequest.upsert({
+          where: {
+            projectId_jobId_itemId: {
+              projectId,
+              jobId,
+              itemId: "",
+            },
+          },
+          update: {
+            requestedAt: now,
+            approvedAt: null,
+            approvedByCustomerId: null,
+          },
+          create: {
+            projectId,
+            jobId,
+            itemId: "",
+            requestedAt: now,
+          },
+        }),
+        prisma.job.update({
+          where: { id: jobId },
+          data: jobUpdateData,
+        }),
+      ]);
+    } else if (next === "draft") {
+      await prisma.$transaction([
+        prisma.approvalRequest.deleteMany({
+          where: { projectId, jobId, itemId: "" },
+        }),
+        prisma.job.update({
+          where: { id: jobId },
+          data: jobUpdateData,
+        }),
+      ]);
+    } else if ((staffApproveStatuses as readonly string[]).includes(next)) {
+      await prisma.$transaction([
+        prisma.approvalRequest.upsert({
+          where: {
+            projectId_jobId_itemId: {
+              projectId,
+              jobId,
+              itemId: "",
+            },
+          },
+          update: {
+            approvedAt: now,
+            approvedByCustomerId: customerId,
+          },
+          create: {
+            projectId,
+            jobId,
+            itemId: "",
+            requestedAt: now,
+            approvedAt: now,
+            approvedByCustomerId: customerId,
+          },
+        }),
+        prisma.job.update({
+          where: { id: jobId },
+          data: jobUpdateData,
+        }),
+      ]);
+    }
+
+    if (storageKeyToRemove) {
+      await removeFulfillmentPhotoFromDisk(storageKeyToRemove);
+    }
+
+    return redirectToProject(request, projectId, shop);
+  }
 
   if (intent === "create-job") {
     if (!canEdit) {
@@ -1206,6 +2141,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           data: {
             projectId: targetProjectId,
             name: `${job.name} (Copy)`,
+            purchaseOrderNumber: job.purchaseOrderNumber ?? undefined,
             isLocked: false,
             items: {
               create: job.items.map((item) => ({
@@ -1438,7 +2374,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     await prisma.project.update({
       where: { id: projectId },
-      data: { name, poNumber, companyName },
+      data: {
+        name,
+        poNumber,
+        companyName,
+      },
     });
 
     await emailProjectStatusSnapshot({
@@ -1447,7 +2387,74 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       actorCustomerId: customerId,
       headline: "Project details updated",
       introLines: [
-        "Project name, PO number, or company name was changed on the project page.",
+        "Project name, PO, or company was changed on the project page.",
+        "Current project contents are listed below.",
+      ],
+    });
+
+    return redirectToProject(request, projectId, shop);
+  }
+
+  if (intent === "update-project-delivery") {
+    if (!canEdit) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+
+    const trim = (k: string) => String(formData.get(k) || "").trim();
+    const shipAddress1 = trim("shipAddress1") || null;
+    const shipCity = trim("shipCity") || null;
+    const shipProvince = trim("shipProvince") || null;
+    const shipPostal = trim("shipPostal") || null;
+    const shipCountry = trim("shipCountry") || "Canada";
+
+    const addressComplete = Boolean(
+      shipAddress1?.trim() &&
+        shipCity?.trim() &&
+        shipProvince?.trim() &&
+        shipPostal?.trim(),
+    );
+
+    /** Derive mode from submitted fields so a stale hidden pickup flag cannot wipe a full address. */
+    let receiveMode: "pickup" | "delivery";
+    if (addressComplete) {
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          receiveMode: "delivery",
+          shipAddress1,
+          shipAddress2: null,
+          shipCity,
+          shipProvince,
+          shipPostal,
+          shipCountry,
+        },
+      });
+      receiveMode = "delivery";
+    } else {
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          receiveMode: "pickup",
+          shipAddress1,
+          shipAddress2: null,
+          shipCity,
+          shipProvince,
+          shipPostal,
+          shipCountry: trim("shipCountry") || null,
+        },
+      });
+      receiveMode = "pickup";
+    }
+
+    await emailProjectStatusSnapshot({
+      shop,
+      projectId,
+      actorCustomerId: customerId,
+      headline: "Delivery settings updated",
+      introLines: [
+        receiveMode === "pickup"
+          ? "This project was set to store pickup ($0 project delivery fee)."
+          : "The delivery address or receive mode for this project was changed on the project page.",
         "Current project contents are listed below.",
       ],
     });
@@ -1485,6 +2492,40 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return new Response("Unsupported action", { status: 400 });
 };
 
+/** Shopify order ref (shown under PO on the total row when linked). */
+function OrderFootShopifyCell(job: JobView) {
+  const rawOrder = job.orderName != null ? String(job.orderName).trim() : "";
+  if (!rawOrder) return null;
+  const shopifyParen = `(${rawOrder})`;
+  return (
+    <div className="project-clad-order-foot-stack">
+      <div className="project-clad-order-foot-line">
+        <span className="project-clad-order-foot-label">Shopify order</span>{" "}
+        <span className="project-clad-order-foot-order-name">{shopifyParen}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Same ink as grey nav / menu pills (--pc-btn-neu-fg); inline beats many theme rules on app proxy. */
+const JOB_EDIT_ORDER_LABEL_STYLE: CSSProperties = {
+  fontFamily: '"Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif',
+  fontWeight: 400,
+  fontSize: "0.68rem",
+  letterSpacing: "0.05em",
+  color: "var(--pc-btn-neu-fg)",
+  WebkitFontSmoothing: "antialiased",
+};
+
+const JOB_EDIT_ORDER_INPUT_STYLE: CSSProperties = {
+  fontFamily: '"Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif',
+  fontWeight: 400,
+  fontSize: "calc(0.8rem * var(--pc-text-scale))",
+  letterSpacing: "0.03em",
+  color: "var(--pc-btn-neu-fg)",
+  WebkitFontSmoothing: "antialiased",
+};
+
 export default function ProjectDetailPage() {
   const {
     proxyStylesCss,
@@ -1501,11 +2542,33 @@ export default function ProjectDetailPage() {
     memberLookupError,
     variantLookupError,
     shop,
-    navButtons,
+    storefrontAppNav,
     logoDataUrl,
     backgroundLogoDataUrl,
     themeStyles,
+    viewerCanFulfill,
+    viewerHasNATag,
+    navAccountInitial,
   } = useLoaderData<typeof loader>();
+
+  const orderLifecycleLabel = (status: string) => {
+    switch (status) {
+      case "draft":
+        return "Draft";
+      case "pending_review":
+        return "Pending review";
+      case "ready_to_order":
+        return "Ready to order";
+      case "ordered":
+        return "Ordered";
+      case "delivered":
+        return "Delivered";
+      case "paid":
+        return "Order complete";
+      default:
+        return status;
+    }
+  };
 
   const getApprovalStatus = (jobId: string, itemId: string) => {
     const r = approvalRequests.find(
@@ -1520,11 +2583,12 @@ export default function ProjectDetailPage() {
     (r) => !r.approvedAt && !r.jobId && !r.itemId,
   );
 
-  const isOrderAwaitingApproval = (jobId: string) =>
-    hasProjectLevelApprovalPending || getApprovalStatus(jobId, "") === "awaiting";
-
-  /** NA buyers use the approval flow; app admins (staff) can submit orders for review too. */
-  const showApprovalSubmitFlow = hideAddToCart || viewerIsAdmin;
+  const isJobPendingStaffApproval = (job: JobView) => {
+    const st = getApprovalStatus(job.id, "");
+    if (st === "approved") return false;
+    if (st === "awaiting") return true;
+    return job.orderLifecycleStatus === "pending_review";
+  };
 
   const getJobApprovalInfo = (jobId: string) => {
     const r = approvalRequests.find(
@@ -1536,13 +2600,58 @@ export default function ProjectDetailPage() {
       approvedBy: r.approvedBy,
     };
   };
+
+  const hasCompleteDeliveryAddress = Boolean(
+    project.shipAddress1?.trim() &&
+      project.shipCity?.trim() &&
+      project.shipProvince?.trim() &&
+      project.shipPostal?.trim(),
+  );
+
+  /** Saved project mode + address: required when ordering for delivery at checkout. */
+  const isDeliveryCompleteForOrderNow =
+    project.receiveMode === "delivery" && hasCompleteDeliveryAddress;
+
+  const deliveryFeeForJob = (job: JobView) => {
+    if (job.fulfillmentMethod === "delivery") return PROJECT_DELIVERY_FEE;
+    if (job.fulfillmentMethod === "pickup") return 0;
+    return isDeliveryCompleteForOrderNow ? PROJECT_DELIVERY_FEE : 0;
+  };
+
+  const [orderNowSubmittingJobId, setOrderNowSubmittingJobId] = useState<
+    string | null
+  >(null);
+
   const actionData = useActionData<typeof action>();
+
+  const [preferredDeliveryDateMinYmd, setPreferredDeliveryDateMinYmd] =
+    useState<string | undefined>(undefined);
+  useEffect(() => {
+    const updateMin = () => {
+      setPreferredDeliveryDateMinYmd(
+        minPreferredDeliveryYmd(PREFERRED_DELIVERY_MIN_DAY_OFFSET_FROM_TODAY),
+      );
+    };
+    updateMin();
+    const onVis = () => {
+      if (document.visibilityState === "visible") updateMin();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
   const pricingUnlocked =
     canViewPricing ||
     (actionData &&
       typeof actionData === "object" &&
       "pricingUnlocked" in actionData &&
       Boolean(actionData.pricingUnlocked));
+  /** Tax on rolled-up line subtotals; delivery is per order (see order footers). */
+  const projectDisplayTax = orderTaxFromSubtotal(project.subtotal, {
+    pricesIncludeTax: false,
+  });
+  const projectSubtotalPlusTax = orderTotalWithTax(project.subtotal, {
+    pricesIncludeTax: false,
+  });
   const actionError =
     actionData && typeof actionData === "object" && "error" in actionData
       ? (actionData.error as string)
@@ -1556,21 +2665,28 @@ export default function ProjectDetailPage() {
       ? (actionData.memberError as string)
       : null;
   const location = useLocation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const selectedJobId = searchParams.get("job");
   const approveMode = searchParams.get("approve") === "1";
   const approveJobId = searchParams.get("approveJobId") || "";
   const approveItemId = searchParams.get("approveItemId") || "";
   const [jobs, setJobs] = useState(project.jobs);
-  const [cartPrompt, setCartPrompt] = useState<{
-    items: JobItemView[];
-    jobName: string;
-    destination: "cart" | "checkout";
-  } | null>(null);
-  const [cartLoading, setCartLoading] = useState(false);
-  const [cartError, setCartError] = useState<string | null>(null);
+  const projectOrderDeliveryFeesTotal = jobs.reduce(
+    (sum, job) => sum + deliveryFeeForJob(job),
+    0,
+  );
+  const projectTotalWithDisplayTax =
+    projectSubtotalPlusTax + projectOrderDeliveryFeesTotal;
   const dragItemId = useRef<string | null>(null);
   const dragJobId = useRef<string | null>(null);
+
+  const isOrderAwaitingApproval = (jobId: string) => {
+    if (hasProjectLevelApprovalPending) return true;
+    if (getApprovalStatus(jobId, "") === "awaiting") return true;
+    return jobs.some(
+      (j) => j.id === jobId && j.orderLifecycleStatus === "pending_review",
+    );
+  };
 
   useEffect(() => {
     if (!selectedJobId) return;
@@ -1590,106 +2706,6 @@ export default function ProjectDetailPage() {
       document.cookie = createPricingCookie();
     }
   }, [actionData]);
-
-  const addItemsToCart = async (
-    items: JobItemView[],
-    mode: "add" | "replace",
-  ) => {
-    if (items.length === 0) {
-      throw new Error("No items available to add to the cart.");
-    }
-    const lineItems = items.map((item) => {
-      const base = { id: item.variantId, quantity: item.quantity };
-      if (item.properties && item.properties.length > 0) {
-        const props = Object.fromEntries(
-          item.properties.map((p) => [p.name, p.value]),
-        );
-        return { ...base, properties: props };
-      }
-      return base;
-    });
-
-    if (mode === "replace") {
-      await fetch("/cart/clear.js", { method: "POST" });
-    }
-
-    const response = await fetch("/cart/add.js", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({ items: lineItems }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Unable to add items to cart.");
-    }
-  };
-
-  const handleAddItemsClick = async (
-    job: JobView,
-    form: HTMLFormElement | null,
-    destination: "cart" | "checkout",
-  ) => {
-    if (job.items.length === 0) {
-      return;
-    }
-
-    const purchasable = job.items.filter(isJobItemPurchasable);
-    if (purchasable.length === 0) {
-      setCartError(
-        job.items.some((i) => i.quantity > 0)
-          ? "One or more items are no longer available in the store and cannot be added to the cart. Please contact us for help."
-          : "No items to add to cart.",
-      );
-      return;
-    }
-
-    setCartError(null);
-    setCartLoading(true);
-
-    try {
-      const response = await fetch("/cart.js", {
-        headers: { Accept: "application/json" },
-      });
-      if (!response.ok) {
-        throw new Error("Unable to read cart.");
-      }
-      const cart = (await response.json()) as { item_count?: number };
-      if ((cart.item_count || 0) > 0) {
-        setCartPrompt({ items: purchasable, jobName: job.name, destination });
-      } else {
-        await addItemsToCart(purchasable, "add");
-        window.location.href = destination === "checkout" ? "/checkout" : "/cart";
-      }
-    } catch (error) {
-      setCartError(
-        error instanceof Error ? error.message : "Unable to add items to cart.",
-      );
-      setCartPrompt({ items: purchasable, jobName: job.name, destination });
-    } finally {
-      setCartLoading(false);
-    }
-  };
-
-  const handleCartChoice = async (mode: "add" | "replace") => {
-    if (!cartPrompt) return;
-    setCartLoading(true);
-    setCartError(null);
-
-    try {
-      await addItemsToCart(cartPrompt.items, mode);
-      window.location.href = cartPrompt.destination === "checkout" ? "/checkout" : "/cart";
-    } catch (error) {
-      setCartError(
-        error instanceof Error ? error.message : "Unable to add items to cart.",
-      );
-    } finally {
-      setCartLoading(false);
-      setCartPrompt(null);
-    }
-  };
 
   const reorderItems = async (jobId: string, overItemId: string) => {
     if (!canEdit || !dragItemId.current || dragItemId.current === overItemId) {
@@ -1719,7 +2735,7 @@ export default function ProjectDetailPage() {
       dragItemId.current = null;
       return;
     }
-    await fetch(`/apps/project-clad/project?id=${project.id}`, {
+    await fetch(`${location.pathname}${location.search}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1727,6 +2743,7 @@ export default function ProjectDetailPage() {
         jobId,
         itemIds: reordered,
       }),
+      credentials: "include",
     });
 
     dragItemId.current = null;
@@ -1756,17 +2773,110 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    await fetch(`/apps/project-clad/project?id=${project.id}`, {
+    await fetch(`${location.pathname}${location.search}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         intent: "reorder-jobs",
         jobIds: reordered,
       }),
+      credentials: "include",
     });
 
     dragJobId.current = null;
   };
+
+  /**
+   * Order now lives in <summary>; use capture on document + stopImmediatePropagation so the
+   * browser still delivers the interaction, then confirm() and POST confirm-order-now (→ ordered).
+   */
+  useLayoutEffect(() => {
+    const path = `${location.pathname}${location.search}`;
+    const onCaptureClick = (event: MouseEvent) => {
+      let node: Node | null =
+        event.target instanceof Node ? event.target : null;
+      if (node?.nodeType === Node.TEXT_NODE && node.parentElement) {
+        node = node.parentElement;
+      }
+      if (!(node instanceof Element)) return;
+      const btn = node.closest("[data-projectclad-order-now-submit]");
+      if (!(btn instanceof HTMLButtonElement)) return;
+      if (btn.disabled) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      const jobId = btn.getAttribute("data-job-id") ?? "";
+      if (!jobId) return;
+      if (
+        !window.confirm(
+          "Are you sure you want to place this order? This will mark it as ordered.",
+        )
+      ) {
+        return;
+      }
+      const hasDelivery = btn.getAttribute("data-has-delivery") === "1";
+      const fulfillmentMethod = hasDelivery ? "delivery" : "pickup";
+      setOrderNowSubmittingJobId(jobId);
+      void (async () => {
+        try {
+          const res = await fetch(path, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              intent: "confirm-order-now",
+              jobId,
+              fulfillmentMethod,
+            }),
+          });
+          const text = await res.text();
+          let payload: Record<string, unknown> | null = null;
+          if (text) {
+            try {
+              payload = JSON.parse(text) as Record<string, unknown>;
+            } catch {
+              payload = null;
+            }
+          }
+          if (payload && typeof payload.redirectTo === "string") {
+            window.location.href = payload.redirectTo;
+            return;
+          }
+          const fromPayload =
+            payload &&
+            (typeof payload.error === "string"
+              ? payload.error
+              : typeof payload.message === "string"
+                ? payload.message
+                : null);
+          let errLine = fromPayload;
+          if (!errLine && text) {
+            const em = text.match(/"error"\s*:\s*"([^"]*)"/);
+            if (em) errLine = em[1];
+          }
+          if (!res.ok || errLine) {
+            window.alert(
+              errLine ||
+                (res.status ? `Request failed (${res.status}).` : "") ||
+                "Unable to confirm order.",
+            );
+            return;
+          }
+          window.location.reload();
+        } catch {
+          window.alert("Unable to confirm order.");
+        } finally {
+          setOrderNowSubmittingJobId(null);
+        }
+      })();
+    };
+    document.addEventListener("click", onCaptureClick, true);
+    return () =>
+      document.removeEventListener("click", onCaptureClick, true);
+  }, [location.pathname, location.search]);
 
   const inlineStyles = themeStyles?.styles || [];
 
@@ -1775,51 +2885,6 @@ export default function ProjectDetailPage() {
       {(themeStyles?.urls ?? []).map((href: string) => (
         <link key={href} rel="stylesheet" href={href} />
       ))}
-      {cartPrompt && (
-        <div
-          className="project-clad-modal-backdrop"
-          onClick={() => setCartPrompt(null)}
-          role="presentation"
-        >
-          <div
-            className="project-clad-card project-clad-modal"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2>Add items to cart</h2>
-            <p className="project-clad-muted">
-              Your cart already has items. Choose how to update it for{" "}
-              {cartPrompt.jobName}.
-            </p>
-            {cartError && <p className="project-clad-muted">{cartError}</p>}
-            <div className="project-clad-actions">
-              <button
-                type="button"
-                className="project-clad-button"
-                onClick={() => handleCartChoice("add")}
-                disabled={cartLoading}
-              >
-                Add to cart
-              </button>
-              <button
-                type="button"
-                className="project-clad-button"
-                onClick={() => handleCartChoice("replace")}
-                disabled={cartLoading}
-              >
-                Replace cart
-              </button>
-              <button
-                type="button"
-                className="project-clad-button"
-                onClick={() => setCartPrompt(null)}
-                disabled={cartLoading}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       <div
         className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
         data-projectclad-reject-modal
@@ -1924,7 +2989,14 @@ export default function ProjectDetailPage() {
           >
             ×
           </button>
-          <h2 id="edit-project-modal-title" data-projectclad-section-underline>Edit project details</h2>
+          <h2 id="edit-project-modal-title" data-projectclad-section-underline>Edit project</h2>
+          <h3
+            className="project-clad-section-title"
+            style={{ marginTop: "0.5rem", marginBottom: "0.5rem", fontSize: "1rem" }}
+            data-projectclad-section-underline
+          >
+            Project details
+          </h3>
           <Form
             method="post"
             action={`/apps/project-clad/project?id=${project.id}`}
@@ -1960,17 +3032,28 @@ export default function ProjectDetailPage() {
             />
             <div className="project-clad-actions" style={{ marginTop: "0.75rem", gap: "0.5rem" }}>
               <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
-                Save
-              </button>
-              <button
-                type="button"
-                className="project-clad-button project-clad-reject-modal-btn"
-                data-projectclad-edit-project-cancel
-              >
-                Cancel
+                Save project details
               </button>
             </div>
           </Form>
+
+          <EditProjectDeliveryAddressForm
+            projectId={project.id}
+            shipAddress1={project.shipAddress1}
+            shipCity={project.shipCity}
+            shipProvince={project.shipProvince}
+            shipPostal={project.shipPostal}
+          />
+
+          <div className="project-clad-actions" style={{ marginTop: "1rem", gap: "0.5rem" }}>
+            <button
+              type="button"
+              className="project-clad-button project-clad-reject-modal-btn"
+              data-projectclad-edit-project-cancel
+            >
+              Cancel
+            </button>
+          </div>
 
           {canEdit && (
             <>
@@ -2246,20 +3329,151 @@ export default function ProjectDetailPage() {
         }
       >
         <div className="page-width project-clad-container project-clad-container--full-width" data-projectclad-project-id={project.id}>
-          {logoDataUrl && (
-            <div className="project-clad-logo">
-              <a href={getProjectsPath()} className="project-clad-logo__link">
-                <img
-                  src={logoDataUrl}
-                  alt="Logo"
-                  className="project-clad-logo__img"
-                />
-              </a>
+          {searchParams.get("scheduleDateError") === "1" ? (
+            <div
+              role="alert"
+              className="project-clad-card"
+              style={{
+                marginBottom: "1rem",
+                padding: "0.85rem 1rem",
+                borderColor: "#b71c1c",
+                background: "rgba(183, 28, 28, 0.06)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.45 }}>
+                The <strong>date</strong> cannot be today or tomorrow on the Ottawa (Eastern) calendar. Pick a
+                later date and save again. The time window is not restricted by this rule.
+              </p>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                style={{ marginTop: "0.65rem" }}
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete("scheduleDateError");
+                  setSearchParams(next, { replace: true });
+                }}
+              >
+                Dismiss
+              </button>
             </div>
-          )}
+          ) : null}
+          {searchParams.get("scheduleLocked") === "1" ? (
+            <div
+              role="alert"
+              className="project-clad-card"
+              style={{
+                marginBottom: "1rem",
+                padding: "0.85rem 1rem",
+                borderColor: "#b71c1c",
+                background: "rgba(183, 28, 28, 0.06)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.45 }}>
+                The delivery schedule cannot be changed for this order in its current status.
+              </p>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                style={{ marginTop: "0.65rem" }}
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete("scheduleLocked");
+                  setSearchParams(next, { replace: true });
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+          {searchParams.get("scheduleWindowNeedsDate") === "1" ? (
+            <div
+              role="alert"
+              className="project-clad-card"
+              style={{
+                marginBottom: "1rem",
+                padding: "0.85rem 1rem",
+                borderColor: "#b71c1c",
+                background: "rgba(183, 28, 28, 0.06)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.45 }}>
+                Choose a <strong>day</strong> before selecting a time.
+              </p>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                style={{ marginTop: "0.65rem" }}
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete("scheduleWindowNeedsDate");
+                  setSearchParams(next, { replace: true });
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+          {searchParams.get("scheduleWindowPastError") === "1" ? (
+            <div
+              role="alert"
+              className="project-clad-card"
+              style={{
+                marginBottom: "1rem",
+                padding: "0.85rem 1rem",
+                borderColor: "#b71c1c",
+                background: "rgba(183, 28, 28, 0.06)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.45 }}>
+                That time window has already ended for the selected day (Ottawa time). Pick a later window or
+                another date.
+              </p>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                style={{ marginTop: "0.65rem" }}
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete("scheduleWindowPastError");
+                  setSearchParams(next, { replace: true });
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+          {searchParams.get("statusPhotoRequired") === "1" ? (
+            <div
+              role="alert"
+              className="project-clad-card"
+              style={{
+                marginBottom: "1rem",
+                padding: "0.85rem 1rem",
+                borderColor: "#b71c1c",
+                background: "rgba(183, 28, 28, 0.06)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.45 }}>
+                You cannot set status to <strong>delivered</strong> until a fulfillment photo is uploaded.
+              </p>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                style={{ marginTop: "0.65rem" }}
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete("statusPhotoRequired");
+                  setSearchParams(next, { replace: true });
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
           <header className="project-clad-header">
-            <div className="project-clad-header-row">
-              {canAdminMembers ? (
+            {canAdminMembers ? (
+              <div className="project-clad-header-toolbar">
                 <div className="project-clad-header-slot project-clad-header-slot--left">
                   <button
                     type="button"
@@ -2322,15 +3536,17 @@ export default function ProjectDetailPage() {
                     </Form>
                   </div>
                 </div>
-              ) : null}
-              <nav className="project-clad-nav">
-                {navButtons.map((btn, i) => (
-                  <a key={i} href={btn.url} className="project-clad-button">
-                    {btn.label}
-                  </a>
-                ))}
-              </nav>
-            </div>
+              </div>
+            ) : null}
+            <ProjectCladStorefrontNav
+              logoDataUrl={logoDataUrl}
+              logoHref="/"
+              links={storefrontAppNav.links}
+              cartUrl={storefrontAppNav.cartUrl}
+              searchUrl={storefrontAppNav.searchUrl}
+              accountUrl={storefrontAppNav.accountUrl}
+              accountInitial={navAccountInitial}
+            />
           </header>
 
           {!hideAddToCart && (() => {
@@ -2389,37 +3605,62 @@ export default function ProjectDetailPage() {
                 type="button"
                 className="project-clad-project-meta-chip"
                 aria-labelledby="project-clad-project-meta-name"
+                aria-describedby="project-clad-delivery-summary"
               >
                 <span className="project-clad-project-meta-chip__inner">
-                  <span className="project-clad-project-meta-chip__title">
-                    <span className="project-clad-project-meta-chip__label">Project Name:</span>{" "}
-                    <span
-                      id="project-clad-project-meta-name"
-                      className="project-clad-project-meta-chip__name-text"
-                    >
-                      {project.name}
+                  <span className="project-clad-project-meta-chip__row">
+                    <span className="project-clad-project-meta-chip__title">
+                      <span className="project-clad-project-meta-chip__label">Project Name:</span>{" "}
+                      <span
+                        id="project-clad-project-meta-name"
+                        className="project-clad-project-meta-chip__name-text"
+                      >
+                        {project.name}
+                      </span>
+                    </span>
+                    <span className="project-clad-project-meta-chip__dot" aria-hidden="true">
+                      •
+                    </span>
+                    <span className="project-clad-project-meta-chip__part">
+                      <span className="project-clad-project-meta-chip__label">Project #:</span>{" "}
+                      {project.poNumber || "—"}
+                    </span>
+                    <span className="project-clad-project-meta-chip__dot" aria-hidden="true">
+                      •
+                    </span>
+                    <span className="project-clad-project-meta-chip__part">
+                      <span className="project-clad-project-meta-chip__label">Company name:</span>{" "}
+                      {project.companyName || "—"}
+                    </span>
+                    <span className="project-clad-project-meta-chip__dot" aria-hidden="true">
+                      •
+                    </span>
+                    <span className="project-clad-project-meta-chip__part">
+                      <span className="project-clad-project-meta-chip__label">Created:</span>{" "}
+                      {new Date(project.createdAt).toLocaleDateString()}
                     </span>
                   </span>
-                  <span className="project-clad-project-meta-chip__dot" aria-hidden="true">
-                    •
-                  </span>
-                  <span className="project-clad-project-meta-chip__part">
-                    <span className="project-clad-project-meta-chip__label">Project #:</span>{" "}
-                    {project.poNumber || "—"}
-                  </span>
-                  <span className="project-clad-project-meta-chip__dot" aria-hidden="true">
-                    •
-                  </span>
-                  <span className="project-clad-project-meta-chip__part">
-                    <span className="project-clad-project-meta-chip__label">Company name:</span>{" "}
-                    {project.companyName || "—"}
-                  </span>
-                  <span className="project-clad-project-meta-chip__dot" aria-hidden="true">
-                    •
-                  </span>
-                  <span className="project-clad-project-meta-chip__part">
-                    <span className="project-clad-project-meta-chip__label">Created:</span>{" "}
-                    {new Date(project.createdAt).toLocaleDateString()}
+                  <span
+                    className="project-clad-project-meta-chip__delivery"
+                    id="project-clad-delivery-summary"
+                  >
+                    <span className="project-clad-project-meta-chip__label">
+                      Delivery details:
+                    </span>{" "}
+                    {project.receiveMode === "pickup"
+                      ? "Store pickup"
+                      : (() => {
+                          const lines = [
+                            project.shipAddress1,
+                            project.shipCity,
+                            project.shipProvince,
+                            project.shipPostal,
+                          ].filter(Boolean);
+                          if (!lines.length) return "—";
+                          return [...lines, project.shipCountry || "Canada"].join(
+                            ", ",
+                          );
+                        })()}
                   </span>
                 </span>
               </button>
@@ -2432,7 +3673,10 @@ export default function ProjectDetailPage() {
               {project.jobs.length === 0 ? (
                 <p className="project-clad-muted">No orders saved yet.</p>
               ) : (
-                <div className="project-clad-grid project-clad-orders-shell__list">
+                <div
+                  id="project-clad-orders-font-scope"
+                  className="project-clad-grid project-clad-orders-shell__list"
+                >
                   {jobs.map((job) => {
                     const workOrderShellClass =
                       getJobApprovalInfo(job.id) &&
@@ -2442,6 +3686,30 @@ export default function ProjectDetailPage() {
                           : "project-clad-work-order--unread"
                         : "";
                     const totalQty = job.items.reduce((sum, item) => sum + item.quantity, 0);
+                    const jobDisplayTax = orderTaxFromSubtotal(job.subtotal, {
+                      pricesIncludeTax: false,
+                    });
+                    const jobSubtotalPlusTax = orderTotalWithTax(job.subtotal, {
+                      pricesIncludeTax: false,
+                    });
+                    const jobDeliveryFeeAmount = deliveryFeeForJob(job);
+                    const jobTotalWithDisplayTax =
+                      jobSubtotalPlusTax + jobDeliveryFeeAmount;
+                    const totalOrderQtyLabel = `Total Order Quantity: ${totalQty}`;
+                    const orderFootShopify = OrderFootShopifyCell(job);
+                    const jobSummaryDisplayName = jobNameForOrderSummary(
+                      job.name,
+                      job.orderName,
+                    );
+                    const poFooterDisplay =
+                      jobPurchaseOrderDisplay(
+                        job.name,
+                        job.purchaseOrderNumber,
+                      ) || "—";
+                    const poDefault = jobPurchaseOrderDisplay(
+                      job.name,
+                      job.purchaseOrderNumber,
+                    );
                     return (
                   <details
                     key={job.id}
@@ -2453,7 +3721,11 @@ export default function ProjectDetailPage() {
                         "project-clad-order-row",
                         "project-clad-details",
                         canEdit && selectedJobId === job.id && "project-clad-draggable",
-                        !hideAddToCart && getApprovalStatus(job.id, "") === "awaiting" && "project-clad-approval-pending",
+                        ((job.orderLifecycleStatus === "pending_review" &&
+                          getApprovalStatus(job.id, "") !== "approved") ||
+                          (!hideAddToCart &&
+                            getApprovalStatus(job.id, "") === "awaiting")) &&
+                          "project-clad-approval-pending",
                         workOrderShellClass,
                       ]
                         .filter(Boolean)
@@ -2474,86 +3746,227 @@ export default function ProjectDetailPage() {
                       event.preventDefault();
                       reorderJobs(job.id);
                     }}
+                    onToggle={(e) => {
+                      const el = e.currentTarget;
+                      if (!(el instanceof HTMLDetailsElement)) return;
+                      if (el.open) {
+                        setSearchParams(
+                          (prev) => {
+                            const next = new URLSearchParams(prev);
+                            next.set("job", job.id);
+                            return next;
+                          },
+                          { replace: true },
+                        );
+                      } else {
+                        setSearchParams(
+                          (prev) => {
+                            if (prev.get("job") !== job.id) return prev;
+                            const next = new URLSearchParams(prev);
+                            next.delete("job");
+                            return next;
+                          },
+                          { replace: true },
+                        );
+                      }
+                    }}
                   >
                     <summary className="project-clad-summary">
                       <div className="project-clad-summary-row project-clad-order-summary-head-row">
                         <div className="project-clad-order-summary-padded">
                           <h3 className="project-clad-title">
-                            {job.name}
+                            {jobSummaryDisplayName}
                           </h3>
-                          <input
-                            type="text"
-                            defaultValue={job.name}
-                            data-projectclad-job-name-input
-                            data-job-id={job.id}
-                            data-original-job-name={job.name}
-                            placeholder="Order name"
-                            aria-label="Order name"
-                            className="project-clad-job-name-input"
-                          />
+                          <div className="project-clad-job-name-field project-clad-job-edit-field">
+                            <label
+                              className="project-clad-job-edit-label"
+                              style={JOB_EDIT_ORDER_LABEL_STYLE}
+                              htmlFor={`projectclad-job-name-${job.id}`}
+                            >
+                              Order name
+                            </label>
+                            <input
+                              id={`projectclad-job-name-${job.id}`}
+                              type="text"
+                              defaultValue={jobSummaryDisplayName}
+                              data-projectclad-job-name-input
+                              data-job-id={job.id}
+                              data-original-job-name={jobSummaryDisplayName}
+                              placeholder="Order name"
+                              aria-label="Order name"
+                              className="project-clad-job-name-input project-clad-job-edit-input"
+                              style={JOB_EDIT_ORDER_INPUT_STYLE}
+                            />
+                          </div>
+                          <div className="project-clad-job-po-field project-clad-job-edit-field">
+                            <label
+                              className="project-clad-job-edit-label"
+                              style={JOB_EDIT_ORDER_LABEL_STYLE}
+                              htmlFor={`projectclad-po-order-${job.id}`}
+                            >
+                              PURCHASE ORDER #
+                            </label>
+                            <input
+                              id={`projectclad-po-order-${job.id}`}
+                              type="text"
+                              defaultValue={poDefault}
+                              data-projectclad-purchase-order-input
+                              data-job-id={job.id}
+                              data-original-purchase-order={poDefault}
+                              placeholder="Optional"
+                              aria-label="PURCHASE ORDER #"
+                              className="project-clad-job-po-input project-clad-job-edit-input"
+                              style={JOB_EDIT_ORDER_INPUT_STYLE}
+                            />
+                          </div>
                         </div>
-                        {showApprovalSubmitFlow ? (
-                          (() => {
-                            const status = getApprovalStatus(job.id, "");
-                            if (status === "approved") {
-                              return <span className="project-clad-muted">Order approved</span>;
-                            }
-                            const intent = status === "awaiting" ? "cancel-approval-request" : "submit-for-approval";
-                            const label = status === "awaiting" ? "Confirming order" : "Send for review";
-                            return (
-                              <form
-                                method="get"
-                                action="/apps/project-clad/api/project-actions"
-                                className="project-clad-inline-form"
-                                data-projectclad-ajax
-                                data-projectclad-intent={intent}
-                                data-projectclad-project-id={project.id}
-                                onPointerDownCapture={(event) => event.stopPropagation()}
+                        <div className="project-clad-order-summary-head-end">
+                          <div className="project-clad-order-summary-head-row__subtotal">
+                            <span className="project-clad-muted">Total: </span>
+                            {pricingUnlocked ? (
+                              <span
+                                className="project-clad-order-summary-qty__sub-amount"
+                                data-projectclad-price
+                                data-price={jobTotalWithDisplayTax.toFixed(2)}
                               >
-                                <input type="hidden" name="jobId" value={job.id} />
-                                <button
-                                  type="submit"
-                                  className="project-clad-button"
+                                {formatPrice(jobTotalWithDisplayTax.toFixed(2))}
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                className="project-clad-hidden-link"
+                                data-projectclad-show-price
+                              >
+                                Hidden
+                              </button>
+                            )}
+                          </div>
+                          {canEdit ? (
+                            (() => {
+                              const ls = job.orderLifecycleStatus;
+                              const approval = getApprovalStatus(job.id, "");
+                              if (ls === "paid") {
+                                return (
+                                  <button type="button" className="project-clad-button" disabled>
+                                    Order complete
+                                  </button>
+                                );
+                              }
+                              if (ls === "delivered") {
+                                return (
+                                  <button type="button" className="project-clad-button" disabled>
+                                    Delivered
+                                  </button>
+                                );
+                              }
+                              if (ls === "ordered") {
+                                return (
+                                  <button type="button" className="project-clad-button" disabled>
+                                    Ordered
+                                  </button>
+                                );
+                              }
+                              if (
+                                ls === "ready_to_order" &&
+                                approval === "approved"
+                              ) {
+                                return (
+                                  <div
+                                    className="project-clad-inline-form"
+                                    style={{
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      alignItems: "flex-start",
+                                      gap: "0.35rem",
+                                    }}
+                                  >
+                                    <button
+                                      type="button"
+                                      className="project-clad-button"
+                                      data-projectclad-order-now-submit
+                                      data-job-id={job.id}
+                                      data-has-delivery={
+                                        isDeliveryCompleteForOrderNow
+                                          ? "1"
+                                          : "0"
+                                      }
+                                      disabled={
+                                        orderNowSubmittingJobId === job.id
+                                      }
+                                    >
+                                      {orderNowSubmittingJobId === job.id
+                                        ? "Placing…"
+                                        : "Order now"}
+                                    </button>
+                                    {project.receiveMode === "delivery" &&
+                                    !hasCompleteDeliveryAddress ? (
+                                      <span
+                                        className="project-clad-muted"
+                                        style={{
+                                          maxWidth: "16rem",
+                                          fontSize: "0.82rem",
+                                          lineHeight: 1.4,
+                                        }}
+                                      >
+                                        No delivery details on file — order will
+                                        be placed as{" "}
+                                        <strong>store pickup</strong>.
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                );
+                              }
+                              const intent =
+                                approval === "awaiting"
+                                  ? "cancel-approval-request"
+                                  : "submit-for-approval";
+                              const label =
+                                approval === "awaiting"
+                                  ? "Confirming order"
+                                  : "Send for review";
+                              return (
+                                <form
+                                  method="get"
+                                  action="/apps/project-clad/api/project-actions"
+                                  className="project-clad-inline-form"
+                                  data-projectclad-ajax
+                                  data-projectclad-intent={intent}
+                                  data-projectclad-project-id={project.id}
+                                  onPointerDownCapture={(event) => event.stopPropagation()}
                                 >
-                                  {label}
-                                </button>
-                                <span
-                                  className="project-clad-muted"
-                                  data-projectclad-form-message
-                                />
-                              </form>
-                            );
-                          })()
-                        ) : null}
-                        <div className="project-clad-summary-action project-clad-order-summary-head-row__subtotal">
-                          <span className="project-clad-muted">Order subtotal: </span>
-                          {pricingUnlocked ? (
-                            <span
-                              className="project-clad-order-summary-qty__sub-amount"
-                              data-projectclad-price
-                              data-price={job.subtotal.toFixed(2)}
-                            >
-                              {formatPrice(job.subtotal.toFixed(2))}
-                            </span>
+                                  <input type="hidden" name="jobId" value={job.id} />
+                                  <button
+                                    type="submit"
+                                    className="project-clad-button"
+                                  >
+                                    {label}
+                                  </button>
+                                  <span
+                                    className="project-clad-muted"
+                                    data-projectclad-form-message
+                                  />
+                                </form>
+                              );
+                            })()
                           ) : (
-                            <button
-                              type="button"
-                              className="project-clad-hidden-link"
-                              data-projectclad-show-price
-                            >
-                              Hidden
-                            </button>
+                            <span className="project-clad-muted">
+                              {orderLifecycleLabel(job.orderLifecycleStatus)}
+                            </span>
                           )}
                         </div>
                       </div>
                     </summary>
-                    <div className="project-clad-stack">
+                    <div className="project-clad-stack" style={{ position: "relative" }}>
                       {job.items.length === 0 ? (
                         <div className="project-clad-order-empty-with-totals">
                           <p className="project-clad-muted">No items saved.</p>
                           <div className="project-clad-order-empty-with-totals__row">
-                            <span className="project-clad-muted">
-                              Order quantity: {totalQty}
+                            <span
+                              className="project-clad-muted"
+                              aria-hidden
+                              style={{ visibility: "hidden", userSelect: "none" }}
+                            >
+                              {totalOrderQtyLabel}
                             </span>
                             <span className="project-clad-muted">Subtotal</span>
                             <span
@@ -2563,6 +3976,64 @@ export default function ProjectDetailPage() {
                             >
                               {pricingUnlocked ? (
                                 formatPrice(job.subtotal.toFixed(2))
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="project-clad-hidden-link"
+                                  data-projectclad-show-price
+                                >
+                                  Hidden
+                                </button>
+                              )}
+                            </span>
+                          </div>
+                          <div className="project-clad-order-empty-with-totals__row">
+                            <span className="project-clad-muted">
+                              {totalOrderQtyLabel}
+                            </span>
+                            <span className="project-clad-muted">
+                              Tax ({Math.round(ORDER_DISPLAY_TAX_RATE * 100)}%)
+                            </span>
+                            <span
+                              className="project-clad-table-right"
+                              data-projectclad-price
+                              data-price={jobDisplayTax.toFixed(2)}
+                            >
+                              {pricingUnlocked ? (
+                                formatPrice(jobDisplayTax.toFixed(2))
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="project-clad-hidden-link"
+                                  data-projectclad-show-price
+                                >
+                                  Hidden
+                                </button>
+                              )}
+                            </span>
+                          </div>
+                          <div className="project-clad-order-empty-with-totals__row">
+                            <div className="project-clad-muted project-clad-order-empty-with-totals__total-lead">
+                              <div className="project-clad-order-tfoot-po-total-line">
+                                PURCHASE ORDER #{" "}
+                                <span className="project-clad-order-tfoot-po-value">
+                                  {poFooterDisplay}
+                                </span>
+                              </div>
+                              {orderFootShopify ? (
+                                <div className="project-clad-order-tfoot-shopify-with-total">
+                                  {orderFootShopify}
+                                </div>
+                              ) : null}
+                            </div>
+                            <span className="project-clad-muted">Total</span>
+                            <span
+                              className="project-clad-table-right"
+                              data-projectclad-price
+                              data-price={jobTotalWithDisplayTax.toFixed(2)}
+                            >
+                              {pricingUnlocked ? (
+                                formatPrice(jobTotalWithDisplayTax.toFixed(2))
                               ) : (
                                 <button
                                   type="button"
@@ -2842,24 +4313,7 @@ export default function ProjectDetailPage() {
                                 {canEdit && !job.isLocked && (
                                   <td className="project-clad-table-right">
                                     <div className="project-clad-stack">
-                                      <div className="project-clad-normal-view" data-projectclad-item-actions>
-                                        {!hideAddToCart &&
-                                          item.quantity > 0 &&
-                                          item.variantDisplaySource !== "unknown" &&
-                                          !isOrderAwaitingApproval(job.id) && (
-                                          <div className="project-clad-actions" style={{ gap: "0.5rem" }}>
-                                            <form method="post" action="/cart/add" style={{ display: "inline" }}>
-                                              <input type="hidden" name="items[0][id]" value={item.variantId} />
-                                              <input type="hidden" name="items[0][quantity]" value={item.quantity} />
-                                              {item.properties?.map((p, i) => (
-                                                <input key={i} type="hidden" name={`items[0][properties][${p.name}]`} value={p.value} />
-                                              ))}
-                                              <input type="hidden" name="return_to" value="/cart" />
-                                              <button type="submit" className="project-clad-button">Add to cart</button>
-                                            </form>
-                                          </div>
-                                        )}
-                                      </div>
+                                      <div className="project-clad-normal-view" data-projectclad-item-actions />
                                       <div className="project-clad-edit-view" style={{ display: "none" }} data-projectclad-item-actions>
                                         <Form
                                           method="post"
@@ -2885,10 +4339,8 @@ export default function ProjectDetailPage() {
                             ))}
                           </tbody>
                         <tfoot>
-                          <tr>
-                            <td className="project-clad-muted">
-                              Order quantity: {totalQty}
-                            </td>
+                          <tr className="project-clad-order-tfoot-row project-clad-order-tfoot-row--subtotal">
+                            <td className="project-clad-muted project-clad-order-tfoot-lead--empty" aria-hidden="true" />
                             <td className="project-clad-table-right">Subtotal</td>
                             <td
                               className="project-clad-table-right"
@@ -2897,6 +4349,93 @@ export default function ProjectDetailPage() {
                             >
                               {pricingUnlocked ? (
                                 formatPrice(job.subtotal.toFixed(2))
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="project-clad-hidden-link"
+                                  data-projectclad-show-price
+                                >
+                                  Hidden
+                                </button>
+                              )}
+                            </td>
+                            {canEdit && !job.isLocked && <td />}
+                          </tr>
+                          <tr className="project-clad-order-tfoot-row project-clad-order-tfoot-row--tax">
+                            <td className="project-clad-muted project-clad-order-tfoot-qty-cell">
+                              {totalOrderQtyLabel}
+                            </td>
+                            <td className="project-clad-table-right">
+                              Tax ({Math.round(ORDER_DISPLAY_TAX_RATE * 100)}%)
+                            </td>
+                            <td
+                              className="project-clad-table-right"
+                              data-projectclad-price
+                              data-price={jobDisplayTax.toFixed(2)}
+                            >
+                              {pricingUnlocked ? (
+                                formatPrice(jobDisplayTax.toFixed(2))
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="project-clad-hidden-link"
+                                  data-projectclad-show-price
+                                >
+                                  Hidden
+                                </button>
+                              )}
+                            </td>
+                            {canEdit && !job.isLocked && <td />}
+                          </tr>
+                          <tr className="project-clad-order-tfoot-row project-clad-order-tfoot-row--delivery">
+                            <td
+                              className="project-clad-muted project-clad-order-tfoot-lead--empty"
+                              aria-hidden="true"
+                            />
+                            <td className="project-clad-table-right">Delivery</td>
+                            <td
+                              className="project-clad-table-right"
+                              data-projectclad-price
+                              data-price={jobDeliveryFeeAmount.toFixed(2)}
+                            >
+                              {pricingUnlocked ? (
+                                formatPrice(jobDeliveryFeeAmount.toFixed(2))
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="project-clad-hidden-link"
+                                  data-projectclad-show-price
+                                >
+                                  Hidden
+                                </button>
+                              )}
+                            </td>
+                            {canEdit && !job.isLocked && <td />}
+                          </tr>
+                          <tr className="project-clad-order-tfoot-row project-clad-order-tfoot-row--total">
+                            <td className="project-clad-muted project-clad-order-tfoot-order-ref-cell project-clad-order-tfoot-total-lead-cell">
+                              <div className="project-clad-order-tfoot-total-lead-stack">
+                                <div className="project-clad-order-tfoot-po-total-line">
+                                  PURCHASE ORDER #{" "}
+                                  <span className="project-clad-order-tfoot-po-value">
+                                    {poFooterDisplay}
+                                  </span>
+                                </div>
+                                {orderFootShopify ? (
+                                  <div className="project-clad-order-tfoot-shopify-with-total">
+                                    {orderFootShopify}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </td>
+                            <td className="project-clad-table-right">Total</td>
+                            <td
+                              className="project-clad-table-right"
+                              data-projectclad-price
+                              data-price={jobTotalWithDisplayTax.toFixed(2)}
+                            >
+                              {pricingUnlocked ? (
+                                formatPrice(jobTotalWithDisplayTax.toFixed(2))
                               ) : (
                                 <button
                                   type="button"
@@ -2920,7 +4459,6 @@ export default function ProjectDetailPage() {
                       >
                         <h4 className="project-clad-title" style={{ marginTop: 0 }}>
                           Receipt
-                          {job.orderName ? ` (${job.orderName})` : ""}
                         </h4>
                         {(() => {
                           const snap = job.receiptSnapshot;
@@ -2945,7 +4483,7 @@ export default function ProjectDetailPage() {
                           if (lines.length === 0) {
                             return (
                               <p className="project-clad-muted">
-                                Paid {new Date(job.paidAt).toLocaleString()}
+                                Order complete {new Date(job.paidAt).toLocaleString()}
                               </p>
                             );
                           }
@@ -3014,7 +4552,7 @@ export default function ProjectDetailPage() {
                         })()}
                       </div>
                     ) : null}
-                    {!hideAddToCart && getApprovalStatus(job.id, "") === "awaiting" && (
+                    {!hideAddToCart && isJobPendingStaffApproval(job) && (
                       <div className="project-clad-approval-buttons" style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #000" }}>
                         <form
                           method="get"
@@ -3055,16 +4593,94 @@ export default function ProjectDetailPage() {
                         </div>
                       </div>
                     )}
-                    {!isOrderAwaitingApproval(job.id) && (
+                    {(() => {
+                      const preferredDeliveryLine = formatOrderDeliveryFootline({
+                        orderLifecycleStatus: job.orderLifecycleStatus,
+                        paidAt: job.paidAt,
+                        completedAt: job.completedAt,
+                        scheduledDeliveryDate: job.scheduledDeliveryDate,
+                        scheduledDeliveryWindow: job.scheduledDeliveryWindow,
+                        fulfillmentMethod: job.fulfillmentMethod,
+                        projectReceiveMode: project.receiveMode,
+                      });
+                      const awaiting = isOrderAwaitingApproval(job.id);
+                      const showLineItemEditPanel = !awaiting || viewerCanFulfill;
+                      const showEditOrderButton =
+                        (canEdit || viewerCanFulfill) &&
+                        !job.isLocked &&
+                        (!awaiting || viewerCanFulfill);
+                      const showPreferredDeliveryOptions =
+                        project.receiveMode === "delivery" &&
+                        job.orderLifecycleStatus !== "delivered" &&
+                        job.orderLifecycleStatus !== "paid";
+                      const deliveryScheduleForm =
+                        (canEdit || viewerCanFulfill) && showPreferredDeliveryOptions ? (
+                          <Form
+                            method="post"
+                            action={`/apps/project-clad/project?id=${project.id}`}
+                            className="project-clad-stack project-clad-preferred-delivery-form"
+                            data-projectclad-preferred-delivery
+                            style={{
+                              width: "100%",
+                              boxSizing: "border-box",
+                            }}
+                          >
+                            <input type="hidden" name="intent" value="save-order-schedule" />
+                            <input type="hidden" name="jobId" value={job.id} />
+                            {viewerCanFulfill ? (
+                              <input type="hidden" name="staffSchedule" value="1" />
+                            ) : null}
+                            <PreferredDeliveryScheduleFields
+                              job={job}
+                              minYmd={preferredDeliveryDateMinYmd}
+                            />
+                            <button
+                              type="submit"
+                              className="project-clad-button project-clad-preferred-delivery-submit"
+                            >
+                              Save
+                            </button>
+                          </Form>
+                        ) : null;
+                      return (
                     <div
                       className="project-clad-actions project-clad-order-actions"
                       data-projectclad-order-section
                       data-job-id={job.id}
-                      style={{ marginTop: "1rem", paddingTop: "1rem" }}
+                      style={{
+                        marginTop: "1rem",
+                        paddingTop: "1rem",
+                        borderTop: "1px solid rgba(0,0,0,0.12)",
+                        flexDirection: "column",
+                        alignItems: "stretch",
+                        gap: "0.75rem",
+                      }}
                     >
-                      <div className="project-clad-normal-view">
-                        {canEdit && !job.isLocked && (
-                          <div className="project-clad-actions project-clad-order-actions-left" style={{ flexWrap: "wrap", gap: "0.75rem" }}>
+                      <div
+                        className="project-clad-normal-view project-clad-order-actions-top-row"
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          alignItems: "center",
+                          justifyContent: preferredDeliveryLine
+                            ? "space-between"
+                            : "flex-end",
+                          gap: "0.75rem",
+                          width: "100%",
+                        }}
+                      >
+                        {preferredDeliveryLine ? (
+                          <div className="project-clad-order-schedule-summary">
+                            <span className="project-clad-order-schedule-summary__line">
+                              {preferredDeliveryLine}
+                            </span>
+                          </div>
+                        ) : null}
+                        {showEditOrderButton ? (
+                          <div
+                            className="project-clad-actions project-clad-order-actions-left"
+                            style={{ flexWrap: "wrap", gap: "0.75rem", flex: "0 0 auto" }}
+                          >
                             <button
                               type="button"
                               className="project-clad-button"
@@ -3075,59 +4691,133 @@ export default function ProjectDetailPage() {
                               Edit order
                             </button>
                           </div>
-                        )}
-                        {!hideAddToCart &&
-                          job.items.filter(isJobItemPurchasable).length > 0 && (
-                          <div className="project-clad-actions project-clad-order-actions-add-to-cart" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
-                            <form method="post" action="/cart/add" style={{ display: "inline" }} onPointerDownCapture={(e) => e.stopPropagation()} data-projectclad-add-all-to-cart data-job-name={job.name} onSubmit={(e) => { e.preventDefault(); handleAddItemsClick(job, e.currentTarget as HTMLFormElement, "cart"); }}>
-                              {job.items.filter(isJobItemPurchasable).map((item, index) => (
-                                <input key={`${job.id}-${item.id}-id-${index}`} type="hidden" name={`items[${index}][id]`} value={item.variantId} />
-                              ))}
-                              {job.items.filter(isJobItemPurchasable).map((item, index) => (
-                                <input key={`${job.id}-${item.id}-qty-${index}`} type="hidden" name={`items[${index}][quantity]`} value={item.quantity} />
-                              ))}
-                              {job.items.filter(isJobItemPurchasable).map((item, index) =>
-                                item.properties?.map((p, pi) => (
-                                  <input key={`${job.id}-${item.id}-p-${pi}-${index}`} type="hidden" name={`items[${index}][properties][${p.name}]`} value={p.value} />
-                                )),
-                              )}
-                              {job.items.filter(isJobItemPurchasable).map((item, index) => (
-                                <input
-                                  key={`${job.id}-${item.id}-price-${index}`}
-                                  type="hidden"
-                                  name={`items[${index}][properties][_projectclad_price_snapshot]`}
-                                  value={item.priceSnapshot}
-                                />
-                              ))}
-                              <input type="hidden" name="return_to" value="/cart" />
-                              <button type="submit" className="project-clad-button" data-projectclad-add-all-btn>
-                                Add all items to cart
-                              </button>
-                            </form>
+                        ) : null}
+                      </div>
+                      {!showLineItemEditPanel ? deliveryScheduleForm : null}
+                      {showLineItemEditPanel ? (
+                      <div
+                        className="project-clad-edit-view project-clad-order-edit-panel"
+                        style={{
+                          display: "none",
+                          flexDirection: "column",
+                          gap: "1rem",
+                          alignItems: "stretch",
+                          width: "100%",
+                        }}
+                      >
+                        {deliveryScheduleForm}
+                        {viewerCanFulfill ? (
+                          <div
+                            className="project-clad-staff-fulfillment"
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "0.75rem",
+                              maxWidth: "32rem",
+                            }}
+                          >
+                            <Form
+                              method="post"
+                              action={`/apps/project-clad/project?id=${project.id}`}
+                              className="project-clad-staff-fulfillment-status-form"
+                            >
+                              <input type="hidden" name="intent" value="staff-set-order-lifecycle" />
+                              <input type="hidden" name="jobId" value={job.id} />
+                              <div className="project-clad-staff-fulfillment-status-row">
+                                <label
+                                  className="project-clad-staff-fulfillment__label--tile"
+                                  htmlFor={`project-clad-staff-status-${job.id}`}
+                                >
+                                  Order status
+                                </label>
+                                <select
+                                  id={`project-clad-staff-status-${job.id}`}
+                                  name="lifecycleStatus"
+                                  defaultValue={job.orderLifecycleStatus}
+                                  className="project-clad-staff-fulfillment__status"
+                                >
+                                  <option value="draft">New</option>
+                                  <option value="pending_review">Review</option>
+                                  <option value="ready_to_order">Order now</option>
+                                  <option value="ordered">Ordered</option>
+                                  <option
+                                    value="delivered"
+                                    disabled={!job.hasFulfillmentPhoto}
+                                  >
+                                    {job.hasFulfillmentPhoto
+                                      ? "Delivered"
+                                      : "Delivered (photo required)"}
+                                  </option>
+                                  <option value="paid">Order complete</option>
+                                </select>
+                                <button type="submit" className="project-clad-button">
+                                  Apply
+                                </button>
+                              </div>
+                            </Form>
+                            {job.orderLifecycleStatus === "ordered" ? (
+                              <StaffFulfillmentPhotoUpload job={job} projectId={project.id} />
+                            ) : null}
+                            {job.orderLifecycleStatus === "delivered" ? (
+                              <Form
+                                method="post"
+                                action={`/apps/project-clad/project?id=${project.id}`}
+                              >
+                                <input type="hidden" name="intent" value="staff-mark-order-paid" />
+                                <input type="hidden" name="jobId" value={job.id} />
+                                <button type="submit" className="project-clad-button">
+                                  Mark paid
+                                </button>
+                              </Form>
+                            ) : null}
                           </div>
-                        )}
+                        ) : null}
+                        {canEdit || viewerCanFulfill ? (
+                          <div
+                            className="project-clad-actions"
+                            style={{ flexWrap: "wrap", gap: "0.75rem", paddingTop: "0.25rem" }}
+                          >
+                            {canEdit && !job.isLocked ? (
+                              <button
+                                type="button"
+                                className="project-clad-button"
+                                data-projectclad-delete-order-btn
+                                data-job-id={job.id}
+                              >
+                                Delete order
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="project-clad-button"
+                              data-projectclad-edit-order
+                              data-job-id={job.id}
+                              data-project-id={project.id}
+                            >
+                              Back
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="project-clad-edit-view project-clad-actions" style={{ display: "none" }}>
-                        <button
-                          type="button"
-                          className="project-clad-button"
-                          data-projectclad-delete-order-btn
-                          data-job-id={job.id}
-                        >
-                          Delete order
-                        </button>
-                        <button
-                          type="button"
-                          className="project-clad-button"
-                          data-projectclad-edit-order
-                          data-job-id={job.id}
-                          data-project-id={project.id}
-                        >
-                          Back
-                        </button>
-                      </div>
+                      ) : null}
                     </div>
-                    )}
+                    );
+                    })()}
+                    {job.hasFulfillmentPhoto &&
+                    job.fulfillmentPhotoUrl &&
+                    job.orderLifecycleStatus !== "ordered" &&
+                    (!viewerHasNATag || viewerIsAdmin) ? (
+                      <div style={{ marginTop: "1rem", textAlign: "right" }}>
+                        <a
+                          href={job.fulfillmentPhotoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="project-clad-button"
+                        >
+                          View delivery photo
+                        </a>
+                      </div>
+                    ) : null}
                     </div>
                   </details>
                 );
@@ -3137,7 +4827,10 @@ export default function ProjectDetailPage() {
               <div className="project-clad-orders-shell__footer">
                 <div className="project-clad-summary-row">
                   <div>
-                    <h2 className="project-clad-title project-clad-neon-title" style={{ marginBottom: 0 }}>
+                    <h2
+                      className="project-clad-title project-clad-project-footer-metric-label"
+                      style={{ marginBottom: 0 }}
+                    >
                       Project subtotal
                     </h2>
                   </div>
@@ -3148,6 +4841,60 @@ export default function ProjectDetailPage() {
                   >
                     {pricingUnlocked ? (
                       formatPrice(project.subtotal.toFixed(2))
+                    ) : (
+                      <button
+                        type="button"
+                        className="project-clad-hidden-link"
+                        data-projectclad-show-price
+                      >
+                        Hidden
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="project-clad-summary-row project-clad-project-footer-tax-row">
+                  <div>
+                    <h2
+                      className="project-clad-title project-clad-project-footer-metric-label"
+                      style={{ marginBottom: 0 }}
+                    >
+                      Tax ({Math.round(ORDER_DISPLAY_TAX_RATE * 100)}%)
+                    </h2>
+                  </div>
+                  <div
+                    className="project-clad-summary-action"
+                    data-projectclad-price
+                    data-price={projectDisplayTax.toFixed(2)}
+                  >
+                    {pricingUnlocked ? (
+                      formatPrice(projectDisplayTax.toFixed(2))
+                    ) : (
+                      <button
+                        type="button"
+                        className="project-clad-hidden-link"
+                        data-projectclad-show-price
+                      >
+                        Hidden
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="project-clad-summary-row project-clad-project-footer-total-row">
+                  <div>
+                    <h2
+                      className="project-clad-title project-clad-project-footer-metric-label"
+                      style={{ marginBottom: 0 }}
+                    >
+                      Total
+                    </h2>
+                  </div>
+                  <div
+                    className="project-clad-summary-action"
+                    data-projectclad-price
+                    data-price={projectTotalWithDisplayTax.toFixed(2)}
+                  >
+                    {pricingUnlocked ? (
+                      formatPrice(projectTotalWithDisplayTax.toFixed(2))
                     ) : (
                       <button
                         type="button"
@@ -3260,7 +5007,7 @@ export default function ProjectDetailPage() {
                         className="project-clad-button"
                         data-projectclad-edit-project-details
                       >
-                        Edit project details
+                        Edit project
                       </button>
                     </div>
                   )}
@@ -3317,6 +5064,9 @@ export default function ProjectDetailPage() {
   }
 
   function closeEditProjectModal() {
+    try {
+      window.dispatchEvent(new CustomEvent('projectclad-edit-project-modal-closed'));
+    } catch (e) {}
     var modal = document.querySelector('[data-projectclad-edit-project-modal]');
     if (!(modal instanceof HTMLElement)) return;
     if (editProjectModalCloseTimer) {
@@ -3653,11 +5403,16 @@ export default function ProjectDetailPage() {
       if (nameInput instanceof HTMLInputElement) {
         jobName = nameInput.value.trim();
       }
+      let purchaseOrderNumber = '';
+      const poInput = details?.querySelector?.('[data-projectclad-purchase-order-input]');
+      if (poInput instanceof HTMLInputElement) {
+        purchaseOrderNumber = poInput.value.trim();
+      }
       try {
-        const res = await fetch('/apps/project-clad/project?id=' + encodeURIComponent(projectId), {
+        const res = await fetch(window.location.pathname + window.location.search, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ intent: 'save-order-edit', jobId, jobName: jobName, removeItemIds: [], itemUpdates: itemUpdates, deleteJob: deleteJob }),
+          body: JSON.stringify({ intent: 'save-order-edit', jobId, jobName: jobName, purchaseOrderNumber: purchaseOrderNumber, removeItemIds: [], itemUpdates: itemUpdates, deleteJob: deleteJob }),
           credentials: 'include',
         });
         const payload = await res.json().catch(() => ({}));
@@ -3692,6 +5447,11 @@ export default function ProjectDetailPage() {
           if (nameInput instanceof HTMLInputElement) {
             const origName = nameInput.getAttribute('data-original-job-name');
             if (origName !== null) nameInput.value = origName;
+          }
+          const poInputRestore = details.querySelector('[data-projectclad-purchase-order-input]');
+          if (poInputRestore instanceof HTMLInputElement) {
+            const origPo = poInputRestore.getAttribute('data-original-purchase-order');
+            if (origPo !== null) poInputRestore.value = origPo;
           }
         }
         const deleteBtn = details?.querySelector('[data-projectclad-delete-order-btn]');
@@ -3767,6 +5527,70 @@ export default function ProjectDetailPage() {
   };
 
   document.addEventListener('click', (event) => {
+    var tOnow = event.target;
+    if (tOnow && tOnow.nodeType === 3 && tOnow.parentElement) {
+      tOnow = tOnow.parentElement;
+    }
+    var onowBtn =
+      tOnow && tOnow.closest && tOnow.closest('[data-projectclad-order-now-submit]');
+    if (onowBtn instanceof HTMLButtonElement && !onowBtn.disabled) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      if (
+        !window.confirm(
+          'Are you sure you want to place this order? This will mark it as ordered.',
+        )
+      ) {
+        return;
+      }
+      var onowJobId = onowBtn.getAttribute('data-job-id') || '';
+      if (!onowJobId) return;
+      var onowHasDel = onowBtn.getAttribute('data-has-delivery') === '1';
+      var onowMethod = onowHasDel ? 'delivery' : 'pickup';
+      var onowPath = window.location.pathname + window.location.search;
+      onowBtn.disabled = true;
+      fetch(onowPath, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          intent: 'confirm-order-now',
+          jobId: onowJobId,
+          fulfillmentMethod: onowMethod,
+        }),
+      })
+        .then(function (res) {
+          return res.text().then(function (text) {
+            return { res: res, text: text };
+          });
+        })
+        .then(function (o) {
+          var payload = null;
+          try {
+            payload = o.text ? JSON.parse(o.text) : null;
+          } catch (e) {}
+          if (payload && payload.redirectTo) {
+            window.location.href = payload.redirectTo;
+            return;
+          }
+          var errLine = (payload && payload.error) || null;
+          if (!o.res.ok || errLine) {
+            window.alert(errLine || 'Unable to confirm order.');
+            onowBtn.disabled = false;
+            return;
+          }
+          window.location.reload();
+        })
+        .catch(function () {
+          window.alert('Unable to confirm order.');
+          onowBtn.disabled = false;
+        });
+      return;
+    }
     const addMemberToggle = event.target?.closest?.('[data-projectclad-add-member-popover-toggle]');
     if (addMemberToggle instanceof HTMLElement) {
       event.preventDefault();
