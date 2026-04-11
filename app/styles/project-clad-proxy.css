@@ -129,6 +129,8 @@ body.project-clad-leaving .project-clad-page {
     inset -20px -20px 42px #ffffff;
   /* CodePen caesura / QWNjvOX — https://codepen.io/caesura/pen/QWNjvOX */
   --pc-caesura-bg: #ebecf0;
+  /* Slightly lighter than tray — convex pills in storefront nav flyout read as raised */
+  --pc-caesura-raised: #f1f2f6;
   --pc-caesura-fg: #6c7587;
   --pc-caesura-dark: #484f60;
   --pc-caesura-light: #ffffff;
@@ -138,6 +140,11 @@ body.project-clad-leaving .project-clad-page {
   --pc-caesura-inset:
     inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
     inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5);
+  /* Same stack as theme --cc-header-tray-shadow (canadian-clad-neumorphic.css): inset tray + bottom lip */
+  --pc-storefront-nav-tray-shadow:
+    var(--pc-caesura-inset),
+    inset 0 -5px 14px -4px rgba(255, 255, 255, 0.62),
+    inset 0 -2px 4px -1px rgba(255, 255, 255, 0.42);
   --pc-caesura-border: 3px solid transparent;
   --pc-caesura-border-hover: rgba(255, 255, 255, 0.5);
   --color-1: #c40000;
@@ -236,7 +243,9 @@ body.project-clad-leaving .project-clad-page {
 
 /* Base */
 .project-clad-page {
-  overflow-x: hidden;
+  /* clip: avoid horizontal scroll without forcing overflow-y:auto (which clips absolute flyouts) */
+  overflow-x: clip;
+  overflow-y: visible;
   padding: 2.5rem 0;
   font-family: Helvetica, "Helvetica Neue", Arial, sans-serif;
   font-weight: 400;
@@ -2213,8 +2222,8 @@ html:has(.project-clad-page--projects) body {
 }
 
 /*
- * Storefront header bar: same raised neu “chrome” as .project-clad-page--projects .project-clad-card
- * (gradient face, deep soft shadow stack, --pc-card-radius, light noise) — not a separate stadium pill.
+ * Storefront header bar: inset caesura tray — matches theme header row + pressed tiles
+ * (see theme --cc-header-tray-shadow; flat --pc-caesura-bg face, not raised card stack).
  */
 .project-clad-storefront-nav {
   --pc-storefront-nav-icon: 38px;
@@ -2237,38 +2246,14 @@ html:has(.project-clad-page--projects) body {
   gap: var(--pc-storefront-nav-cluster-gap) 0.75rem;
   padding: max(0.35rem, calc((var(--pc-storefront-nav-icon) + 8px - 1.25rem) / 2)) 0.85rem
     max(0.35rem, calc((var(--pc-storefront-nav-icon) + 8px - 1.25rem) / 2)) 1rem;
-  border-radius: var(--pc-card-radius);
+  border-radius: 9999px;
   box-sizing: border-box;
   border: none;
   /* visible: flyout panel extends below the bar */
   overflow: visible;
-  background: linear-gradient(168deg, #eef0f2 0%, var(--pc-btn-neu-bg) 38%, #dcdee3 100%);
-  box-shadow:
-    0 2px 0 rgba(255, 255, 255, 0.95) inset,
-    0 -4px 10px rgba(0, 0, 0, 0.08) inset,
-    1px 0 0 rgba(255, 255, 255, 0.28),
-    -1px 0 1px rgba(0, 0, 0, 0.05),
-    0 3px 0 rgba(255, 255, 255, 0.42),
-    0 24px 50px rgba(0, 0, 0, 0.14),
-    0 10px 24px rgba(0, 0, 0, 0.1),
-    0 46px 82px -18px rgba(0, 0, 0, 0.2);
-  transform: scale(1);
-  transform-origin: center center;
-  transition: box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1), filter 0.3s cubic-bezier(0.23, 1, 0.32, 1),
-    transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-/* Match project card grain (.project-clad-page--projects .project-clad-card::after) */
-.project-clad-storefront-nav__shell::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' fill='%23808080'/%3E%3C/svg%3E");
-  background-repeat: repeat;
-  opacity: 0.04;
-  pointer-events: none;
-  z-index: 0;
-  border-radius: inherit;
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-storefront-nav-tray-shadow);
+  transition: box-shadow 250ms ease-in-out;
 }
 
 .project-clad-storefront-nav__shell > * {
@@ -2276,9 +2261,9 @@ html:has(.project-clad-page--projects) body {
   z-index: 1;
 }
 
-/* Projects list: tiles use --pc-neu-radius; match that bar radius on the same pages */
-.project-clad-page--projects:not(.project-clad-page--detail) .project-clad-storefront-nav__shell {
-  border-radius: var(--pc-neu-radius);
+/* Drawer + logo cluster must paint above shell-extra / tools so the wide flyout isn’t covered by those flex tracks. */
+.project-clad-storefront-nav__shell > .project-clad-storefront-nav__left {
+  z-index: 3;
 }
 
 .project-clad-storefront-nav__left {
@@ -2335,6 +2320,8 @@ html:has(.project-clad-page--projects) body {
   border-radius: 50%;
   cursor: pointer;
   list-style: none;
+  appearance: none;
+  -webkit-appearance: none;
   color: var(--pc-caesura-dark);
   border: var(--pc-caesura-border);
   border-color: transparent;
@@ -2352,6 +2339,11 @@ html:has(.project-clad-page--projects) body {
   content: "";
 }
 
+.project-clad-storefront-nav__menu-btn:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.35);
+  outline-offset: 3px;
+}
+
 .project-clad-storefront-nav__menu-btn:hover {
   border-color: var(--pc-caesura-border-hover);
   color: var(--pc-caesura-hover-red-text);
@@ -2362,6 +2354,7 @@ html:has(.project-clad-page--projects) body {
   box-shadow: var(--pc-btn-neu-shadow-active);
 }
 
+/* Native <details>: browser hides this block when closed — keep panel fully opaque when open (no transition). */
 .project-clad-storefront-nav__drawer-panel {
   position: absolute;
   top: calc(100% + 0.4rem);
@@ -2440,12 +2433,12 @@ html:has(.project-clad-page--projects) body {
   -moz-osx-font-smoothing: grayscale !important;
   border: var(--pc-caesura-border, 3px solid transparent) !important;
   border-color: transparent !important;
-  background: var(--pc-caesura-bg, #ebecf0) !important;
-  /* Inset wells — same language as caesura inputs / neu-finder, not raised pills */
+  background: var(--pc-caesura-raised, #f1f2f6) !important;
+  /* Raised pills — outer caesura drop (flyout menu), not inset fields */
   box-shadow: var(
-    --pc-caesura-inset,
-    inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
-    inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5)
+    --pc-btn-neu-shadow,
+    8px 8px 12px -2px rgba(72, 79, 96, 0.4),
+    -6px -6px 12px -1px rgba(255, 255, 255, 1)
   ) !important;
   transition: var(
     --pc-btn-neu-transition,
@@ -2462,7 +2455,7 @@ html:has(.project-clad-page--projects) body {
   letter-spacing: inherit !important;
 }
 
-/* Flyout: re-assert typography + inset chrome (theme sometimes targets menu `a` after our sheet) */
+/* Flyout: re-assert typography + raised chrome (theme sometimes targets menu `a` after our sheet) */
 .project-clad-page .project-clad-storefront-nav__drawer-panel a.project-clad-storefront-nav__link {
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
   font-size: calc(0.9rem * var(--pc-text-scale, 1.53)) !important;
@@ -2479,10 +2472,11 @@ html:has(.project-clad-page--projects) body {
   ) !important;
   -webkit-font-smoothing: antialiased !important;
   -moz-osx-font-smoothing: grayscale !important;
+  background: var(--pc-caesura-raised, #f1f2f6) !important;
   box-shadow: var(
-    --pc-caesura-inset,
-    inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
-    inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5)
+    --pc-btn-neu-shadow,
+    8px 8px 12px -2px rgba(72, 79, 96, 0.4),
+    -6px -6px 12px -1px rgba(255, 255, 255, 1)
   ) !important;
 }
 
@@ -2490,14 +2484,14 @@ html:has(.project-clad-page--projects) body {
   border-color: var(--pc-caesura-border-hover, rgba(255, 255, 255, 0.5)) !important;
   color: var(--pc-caesura-hover-red-text, #c40000) !important;
   text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
-  /* Same “rim” treatment as caesura inputs on focus — lifts out of the well slightly */
+  /* Flat face + white rim (grey .project-clad-button hover) */
   box-shadow: none !important;
   filter: none !important;
 }
 
 .project-clad-page a.project-clad-storefront-nav__link:active {
   box-shadow: var(
-    --pc-caesura-inset,
+    --pc-btn-neu-shadow-active,
     inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
     inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5)
   ) !important;
@@ -2603,6 +2597,10 @@ html:has(.project-clad-page--projects) body {
 
 .project-clad-header {
   margin-bottom: 2rem;
+  /* Flyout menu is position:absolute; later siblings (e.g. project cards) paint on top unless we stack above them. */
+  position: relative;
+  z-index: 50;
+  overflow: visible;
 }
 
 .project-clad-header-row {
