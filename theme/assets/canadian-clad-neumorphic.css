@@ -1,0 +1,260 @@
+/**
+ * Canadian Cladding — neumorphic / “caesura” storefront layer (Horizon-compatible).
+ * Scoped with body.cc-store-neu. Rebuilt from documented PDP/header/gallery fixes.
+ * Mirror: Desktop “Canadian Cladding Neumorphic” theme asset of the same name.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Bakbak+One&display=swap");
+
+body.cc-store-neu {
+  /* CodePen caesura palette — matches Project Clad app proxy */
+  --pc-caesura-bg: #ebecf0;
+  --pc-caesura-fg: #6c7587;
+  --pc-caesura-dark: #484f60;
+  --pc-caesura-light: #ffffff;
+  --pc-caesura-drop:
+    8px 8px 12px -2px rgba(72, 79, 96, 0.4),
+    -6px -6px 12px -1px rgba(255, 255, 255, 1);
+  --pc-caesura-inset:
+    inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
+    inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5);
+  --pc-caesura-border: 3px solid transparent;
+  --pc-caesura-border-hover: rgba(255, 255, 255, 0.5);
+  --color-1: #c40000;
+  --pc-caesura-hover-red-text: var(--color-1);
+  --pc-caesura-hover-red-text-glow:
+    0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 6px rgba(196, 0, 0, 0.22),
+    0 0 14px rgba(196, 0, 0, 0.12);
+  --pc-caesura-transition:
+    box-shadow 250ms ease-in-out, border-color 250ms ease-in-out, color 250ms ease-in-out,
+    filter 250ms ease-in-out, background 250ms ease-in-out;
+  --pc-btn-neu-transition: var(--pc-caesura-transition);
+  --pc-btn-neu-fg: var(--pc-caesura-dark);
+  --pc-btn-neu-shadow: var(--pc-caesura-drop);
+  --pc-btn-neu-shadow-hover: none;
+  --pc-btn-neu-shadow-active: var(--pc-caesura-inset);
+  --pc-neu-radius: 24px;
+  --pc-button-font-size: 0.9rem;
+  --pc-button-line-height: 1.25;
+  --pc-button-min-height: 44px;
+  --pc-button-padding-y: 0.5rem;
+  --pc-button-padding-x: 1.25rem;
+}
+
+/* --- Header: actions (search / account / cart) share one flex row cleanly --- */
+body.cc-store-neu header-actions {
+  display: contents;
+}
+
+/* Center column can shrink / scroll when zoomed instead of crushing icons */
+body.cc-store-neu #header-component .header__column--center {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+body.cc-store-neu #header-component .header__column--center::-webkit-scrollbar {
+  height: 4px;
+}
+
+/* --- Product section: caesura canvas --- */
+body.cc-store-neu .section-background:has(+ .product-information.section),
+body.cc-store-neu .shopify-section:has(> .product-information.section) > .section-background {
+  background-color: var(--pc-caesura-bg) !important;
+}
+
+body.cc-store-neu .shopify-section:has(.product-information.section) {
+  background-color: var(--pc-caesura-bg);
+}
+
+body.cc-store-neu .product-information.section {
+  --color-background: var(--pc-caesura-bg);
+  --color-background-rgb: 235 236 240;
+  --color-foreground: var(--pc-caesura-dark);
+  --color-foreground-rgb: 72 79 96;
+  --color-input-background: var(--pc-caesura-bg);
+  --color-input-border: transparent;
+  --color-input-text: var(--pc-caesura-dark);
+  --color-input-hover-background: var(--pc-caesura-bg);
+  background-color: var(--pc-caesura-bg) !important;
+}
+
+/*
+ * PDP gallery: raised tile. Do not set min-width:0 on .product-information__media — Horizon
+ * uses width:0 + min-width:100% for the grid column.
+ */
+body.cc-store-neu .product-information .product-information__media:has(media-gallery) {
+  box-sizing: border-box !important;
+  padding: 0.65rem !important;
+  border: var(--pc-caesura-border) !important;
+  border-radius: var(--pc-neu-radius) !important;
+  background: var(--pc-caesura-light) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-caesura-transition) !important;
+  overflow: visible;
+}
+
+body.cc-store-neu .product-information .product-information__media:has(media-gallery) media-gallery {
+  display: block !important;
+  width: 100% !important;
+}
+
+body.cc-store-neu .product-information .product-details {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media screen and (min-width: 750px) {
+  body.cc-store-neu
+    .product-information__grid:not(:has(.product-information__media:empty))
+    > .product-information__media {
+    min-width: 100% !important;
+  }
+
+  body.cc-store-neu
+    .product-information__grid:not(:has(.product-information__media:empty))
+    > .product-details {
+    min-width: 0;
+  }
+}
+
+body.cc-store-neu .product-details .product-form-buttons {
+  min-width: 0;
+}
+
+body.cc-store-neu .product-details .product-form-buttons > *:not(.quantity-selector, .quantity-rules, .quantity-label) {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 min(185px, 100%);
+}
+
+body.cc-store-neu .product-information .product-information__media:has(media-gallery) .product-media-container {
+  background-color: var(--pc-caesura-light) !important;
+}
+
+/*
+ * PDP gallery (single or carousel): natural drawing proportions inside the neu tile.
+ * Multi-image products kept theme aspect-ratio + constrain-height and looked like a narrow card.
+ */
+body.cc-store-neu
+  .product-information
+  .product-information__media:has(media-gallery)
+  slideshow-component
+  slideshow-slide
+  > .product-media-container {
+  width: 100% !important;
+  aspect-ratio: unset !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+body.cc-store-neu
+  .product-information
+  .product-information__media:has(media-gallery)
+  slideshow-component
+  .product-media-container.constrain-height {
+  --constrained-height: none !important;
+}
+
+body.cc-store-neu
+  .product-information
+  .product-information__media:has(media-gallery)
+  slideshow-component
+  .product-media__image {
+  width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  aspect-ratio: unset !important;
+  object-fit: contain !important;
+}
+
+/* Add to cart + secondary — Bakbak + caesura pill */
+body.cc-store-neu .product-details .product-form-buttons .add-to-cart-button.button,
+body.cc-store-neu .product-details .product-form-buttons .add-to-cart-button.button-secondary {
+  position: relative;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: var(--pc-button-font-size) !important;
+  letter-spacing: 0.03em !important;
+  line-height: var(--pc-button-line-height) !important;
+  text-transform: uppercase !important;
+  min-height: var(--pc-button-min-height) !important;
+  padding: var(--pc-button-padding-y) calc(var(--pc-button-padding-x) + 0.35rem) !important;
+  border: var(--pc-caesura-border) !important;
+  border-radius: 9999px !important;
+  background: var(--pc-caesura-bg) !important;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: none !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-caesura-transition) !important;
+  outline: none !important;
+  box-sizing: border-box;
+}
+
+body.cc-store-neu .product-details .product-form-buttons .add-to-cart-button.button:hover:not(:disabled),
+body.cc-store-neu .product-details .product-form-buttons .add-to-cart-button.button-secondary:hover:not(:disabled) {
+  box-shadow: var(--pc-btn-neu-shadow-hover) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+  background: var(--pc-caesura-bg) !important;
+}
+
+body.cc-store-neu .product-details .product-form-buttons .add-to-cart-button.button:active:not(:disabled),
+body.cc-store-neu .product-details .product-form-buttons .add-to-cart-button.button-secondary:active:not(:disabled) {
+  box-shadow: var(--pc-btn-neu-shadow-active) !important;
+  border-color: transparent !important;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+body.cc-store-neu .product-details .product-form-buttons .add-to-cart-button .svg-wrapper {
+  color: inherit;
+}
+
+/* Quantity — match ATC neu */
+body.cc-store-neu .product-details .quantity-selector {
+  --quantity-selector-width: 132px;
+  border: var(--pc-caesura-border) !important;
+  border-radius: 9999px !important;
+  background: var(--pc-caesura-bg) !important;
+  color: var(--pc-btn-neu-fg) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-caesura-transition) !important;
+}
+
+body.cc-store-neu .product-details .quantity-selector:hover {
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-btn-neu-shadow-hover) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+}
+
+body.cc-store-neu .product-details .quantity-selector :is(.quantity-minus, .quantity-plus) {
+  color: inherit !important;
+  border-radius: 9999px !important;
+  transition: var(--pc-caesura-transition) !important;
+}
+
+body.cc-store-neu .product-details .quantity-selector :is(.quantity-minus, .quantity-plus):hover:not(:disabled) {
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+}
+
+body.cc-store-neu .product-details .quantity-selector :is(.quantity-minus, .quantity-plus):active:not(:disabled) .svg-wrapper {
+  transform: scale(0.96);
+}
+
+body.cc-store-neu .product-details .quantity-selector input[type="number"] {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.cc-store-neu .product-details .quantity-selector,
+  body.cc-store-neu .product-details .product-form-buttons .add-to-cart-button.button,
+  body.cc-store-neu .product-details .product-form-buttons .add-to-cart-button.button-secondary {
+    transition-duration: 0.01ms !important;
+  }
+}
