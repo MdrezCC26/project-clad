@@ -1,0 +1,13 @@
+---
+description: Canonical visual reference for caesura / neumorphic storefront (Canadian Cladding)
+globs: theme/**/*.css, theme/**/*.liquid, app/styles/project-clad-proxy.css
+alwaysApply: false
+---
+
+# Caesura neumorphic reference
+
+When adjusting **soft neu** styling (convex vs inset, shadow diffusion, pill radii, hover lift, red accent behavior), treat this CodePen as the **primary design source**, not ad-hoc tweaks:
+
+**https://codepen.io/caesura/pen/QWNjvOX**
+
+Implementation lives mainly in `theme/assets/canadian-clad-neumorphic.css` (mirrored to the Desktop Horizon theme copy). Prefer matching **token values and shadow structure** from the pen before inventing new ones.

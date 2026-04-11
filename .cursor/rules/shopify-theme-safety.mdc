@@ -1,0 +1,16 @@
+---
+description: Keep local + store theme safe; publishing does not delete files
+alwaysApply: true
+---
+
+# Shopify theme safety
+
+- **Publishing** (making a theme live in Admin) does **not** delete your local theme folder, Git history, or other themes in the library. It only switches which theme the storefront uses.
+
+- **`shopify theme pull`** replaces local files with the store copy. Do **not** recommend it without warning: it can wipe uncommitted local work. Before pull: `git commit` or zip/Download backup.
+
+- Do **not** recommend `git reset --hard` or `git clean -fd` on a theme directory without an explicit user request **and** a backup (commit, duplicate theme, or download zip).
+
+- Before destructive or sync operations, prefer: duplicate theme in **Admin → Themes**, **`git add -A && git commit`**, or **Download theme file**.
+
+- **`shopify theme push`** uploads local files to a theme on the shop; it does not delete the local project. Publishing is a separate step in Admin after the user verifies the preview theme.
