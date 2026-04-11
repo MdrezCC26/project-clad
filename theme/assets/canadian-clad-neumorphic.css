@@ -1,14 +1,19 @@
 /**
  * Canadian Cladding — neumorphic / “caesura” storefront layer (Horizon-compatible).
- * Scoped with body.cc-store-neu. Rebuilt from documented PDP/header/gallery fixes.
+ * Scoped with body.cc-store-neu.
+ *
+ * Canonical visual reference (shadows, radii, convex/inset balance, interactions):
+ *   https://codepen.io/caesura/pen/QWNjvOX
  * Mirror: Desktop “Canadian Cladding Neumorphic” theme asset of the same name.
  */
 
 @import url("https://fonts.googleapis.com/css2?family=Bakbak+One&display=swap");
 
 body.cc-store-neu {
-  /* CodePen caesura palette — matches Project Clad app proxy */
+  /* project-clad-proxy .project-clad-page / .project-clad-modal-backdrop (exact caesura tokens) */
   --pc-caesura-bg: #ebecf0;
+  /* Slightly lighter than tray so convex pills/icons read as separate tiles */
+  --pc-caesura-raised: #f1f2f6;
   --pc-caesura-fg: #6c7587;
   --pc-caesura-dark: #484f60;
   --pc-caesura-light: #ffffff;
@@ -18,14 +23,48 @@ body.cc-store-neu {
   --pc-caesura-inset:
     inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
     inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5);
+  /* project-clad-proxy --pc-btn-neu-label-shadow (ADD MEMBER–style type fringe) */
+  --pc-btn-neu-label-shadow:
+    -0.45px 0 0 rgba(255, 118, 64, 0.22),
+    0.45px 0 0 rgba(72, 168, 255, 0.2);
   --pc-caesura-border: 3px solid transparent;
+  /* project-clad-proxy .project-clad-button:hover */
   --pc-caesura-border-hover: rgba(255, 255, 255, 0.5);
+  /*
+   * project-clad-proxy .project-clad-neu-finder-input:focus-within: box-shadow none + white border rim.
+   * Extra outer layers: on #e9ebf0 the rim alone is subtle — this matches the visible “white glow” in the app.
+   */
+  --pc-caesura-field-focus-outer:
+    0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 0 16px 4px rgba(255, 255, 255, 0.62),
+    0 0 32px 10px rgba(255, 255, 255, 0.28),
+    8px 10px 22px rgba(72, 79, 96, 0.08),
+    -6px -6px 18px rgba(255, 255, 255, 0.38);
+  /*
+   * White product tiles on #ebecf0: same idea as grey .project-clad-button:hover (flat + rim) but the face is #fff,
+   * so the halo is stronger than --pc-caesura-field-focus-outer so the outline still reads.
+   */
+  --pc-neu-white-tile-hover-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.85),
+    0 0 24px 12px rgba(255, 255, 255, 0.95),
+    0 0 52px 20px rgba(255, 255, 255, 0.5),
+    10px 14px 30px -8px rgba(72, 79, 96, 0.12),
+    -8px -10px 26px rgba(255, 255, 255, 0.55);
   --color-1: #c40000;
   --pc-caesura-hover-red-text: var(--color-1);
   --pc-caesura-hover-red-text-glow:
     0 1px 0 rgba(255, 255, 255, 0.28),
     0 0 6px rgba(196, 0, 0, 0.22),
     0 0 14px rgba(196, 0, 0, 0.12);
+  /* project-clad-proxy [data-projectclad-add-member-popover-toggle][aria-expanded="true"] label */
+  --pc-pill-text-glow-hover: var(--color-1);
+  --pc-accent-heading-shadow:
+    0.75px 0.75px 0 rgba(255, 255, 255, 0.78),
+    -0.65px -0.65px 0 rgba(72, 79, 96, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.38),
+    0 3px 10px rgba(0, 0, 0, 0.14),
+    0 0 14px rgba(196, 0, 0, 0.22),
+    0 0 28px rgba(196, 0, 0, 0.09);
   --pc-caesura-transition:
     box-shadow 250ms ease-in-out, border-color 250ms ease-in-out, color 250ms ease-in-out,
     filter 250ms ease-in-out, background 250ms ease-in-out;
@@ -34,20 +73,355 @@ body.cc-store-neu {
   --pc-btn-neu-shadow: var(--pc-caesura-drop);
   --pc-btn-neu-shadow-hover: none;
   --pc-btn-neu-shadow-active: var(--pc-caesura-inset);
+  /* project-clad-proxy (nested cards / gradients — not used by split tiles) */
+  --pc-btn-neu-bg: #e8eaed;
+  --pc-neu-face-gradient: linear-gradient(
+    163deg,
+    #f4f5f6 0%,
+    #eeeff2 24%,
+    #e8eaed 52%,
+    #dfe1e5 100%
+  );
+  --pc-neu-raise:
+    0 1px 0 rgba(255, 255, 255, 0.58) inset,
+    0 -1px 1px rgba(0, 0, 0, 0.065) inset,
+    20px 20px 42px #bbbbbb,
+    -20px -20px 42px #ffffff;
+  --pc-neu-raise-hover:
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 -1px 1px rgba(0, 0, 0, 0.07) inset,
+    22px 22px 48px #b0b0b0,
+    -22px -22px 48px #ffffff;
   --pc-neu-radius: 24px;
   --pc-button-font-size: 0.9rem;
   --pc-button-line-height: 1.25;
   --pc-button-min-height: 44px;
   --pc-button-padding-y: 0.5rem;
   --pc-button-padding-x: 1.25rem;
+  /* Circular actions + nav pill min-height (tray + icon buttons) */
+  --cc-header-nav-icon: 40px;
+  /*
+   * Header tray: base caesura inset + strong bottom inner highlight (CodePen-style “sunken” lip).
+   * Without the bottom band, the pill reads flat against the same #e9ebf0 page field.
+   */
+  --cc-header-tray-shadow:
+    var(--pc-caesura-inset),
+    inset 0 -5px 14px -4px rgba(255, 255, 255, 0.62),
+    inset 0 -2px 4px -1px rgba(255, 255, 255, 0.42);
+  /* Gap under browser UI; must match transparent header `top` (see header block below) */
+  --cc-header-top-air: clamp(1rem, 2.8vw, 1.65rem);
+  background-color: var(--pc-caesura-bg) !important;
+  color: var(--pc-caesura-dark);
+  min-height: 100%;
 }
 
-/* --- Header: actions (search / account / cart) share one flex row cleanly --- */
+/*
+ * Horizon menu/drawer/mega-menu use --menu-*-font-family (see menu-font-styles + submenu-font-styles).
+ * Point all levels at Bakbak so theme “body/heading” link settings don’t override the storefront.
+ */
+body.cc-store-neu #header-component {
+  --menu-top-level-font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  --menu-parent-font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  --menu-child-font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Bottom / alternate mobile strip uses .menu-list__item, not .menu-list__link */
+body.cc-store-neu #header-component .menu-list--mobile a.menu-list__item {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.025em !important;
+  text-transform: uppercase !important;
+}
+
+/* Same off-white field as Project Clad app (.project-clad-page) site-wide */
+html:has(body.cc-store-neu) {
+  background-color: var(--pc-caesura-bg);
+}
+
+body.cc-store-neu #MainContent.content-for-layout {
+  background-color: var(--pc-caesura-bg) !important;
+}
+
+body.cc-store-neu > footer {
+  /* Stacking: hero fixed media is z-index:0; main sections get z-index:2 via hero.liquid, but footer is outside #MainContent and would otherwise sit under that layer. */
+  position: relative;
+  z-index: 2;
+  background-color: var(--pc-caesura-bg) !important;
+}
+
+body.cc-store-neu .section-background {
+  background-color: var(--pc-caesura-bg) !important;
+}
+
+/*
+ * Fixed hero (data-cc-hero-fixed): media is position:fixed under the page. Empty color schemes can still read as “holes”.
+ * Force an opaque caesura sheet on section backgrounds after the hero and in the theme footer.
+ */
+body.cc-store-neu .shopify-section:has([data-cc-hero-fixed]) ~ .shopify-section > .section-background,
+body.cc-store-neu footer .shopify-section .section-background {
+  background: var(--pc-caesura-bg) !important;
+  background-color: var(--pc-caesura-bg) !important;
+}
+
+/*
+ * Transparent header + fixed hero: theme “Large” is only ~80svh, so the next section can show at the bottom of the fold.
+ * Complements sections/hero.liquid --hero-height-offset: 0 when #header-component[transparent].
+ */
+@media screen and (min-width: 750px) {
+  body.cc-store-neu:has(#header-component[transparent])
+    .content-for-layout
+    > .shopify-section.hero-wrapper:first-child
+    .hero[data-cc-hero-fixed]:not([data-shopify-visual-preview]) {
+    min-height: 100svh !important;
+  }
+}
+
+/* Full caesura field under fixed hero (and everywhere in main): kills transparent “holes” / scheme gradients */
+body.cc-store-neu #MainContent .shopify-section .section-background {
+  background: var(--pc-caesura-bg) !important;
+  background-color: var(--pc-caesura-bg) !important;
+}
+
+/*
+ * Horizon sections use color-scheme tokens on .section; align default “page field” to caesura
+ * (raised tiles / cards keep their own surfaces).
+ */
+body.cc-store-neu #header-group .shopify-section .section,
+body.cc-store-neu #MainContent .shopify-section .section,
+body.cc-store-neu > footer .shopify-section .section {
+  --color-background: var(--pc-caesura-bg);
+  /* #ebecf0 — keep rgb in sync with --pc-caesura-bg for rgba() scheme surfaces */
+  --color-background-rgb: 235 236 240;
+  --color-foreground: var(--pc-caesura-dark);
+  --color-foreground-rgb: 72 79 96;
+}
+
+/* --- Header: inset caesura “tray” (full pill) + circular icon actions --- */
+/*
+ * Horizon: #header-group:has(#header-component[sticky]) { display: contents; } — the group box
+ * is not laid out, so padding/margin on #header-group does nothing. Put gutters on .header-section.
+ * Non-transparent: padding-block-start offsets the bar. Transparent: Horizon uses #header-component { position:absolute; top:0 }
+ * — parent padding does not move absolute children, so we set top on #header-component separately.
+ */
+body.cc-store-neu #header-group {
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  background-color: transparent;
+}
+
+body.cc-store-neu #header-group .header-section {
+  overflow: visible !important;
+}
+
+/* Transparent / hero: section behind top padding must not paint opaque scheme (white bar above tray) */
+body.cc-store-neu #header-group > .shopify-section,
+body.cc-store-neu #header-group .shopify-section-group {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Match reference: clear air under browser chrome (sticky header uses display:contents on #header-group) */
+body.cc-store-neu #header-group .header-section:first-of-type,
+body.cc-store-neu #header-group > .shopify-section.header-section,
+body.cc-store-neu #header-group .shopify-section-group .shopify-section.header-section {
+  padding-inline: max(var(--page-margin, 16px), 1rem) !important;
+  padding-block-start: var(--cc-header-top-air) !important;
+  padding-block-end: 0.5rem !important;
+  box-sizing: border-box;
+  margin-bottom: 0.85rem !important;
+}
+
+/* Transparent header (e.g. home): theme pins bar with top:0 — override for caesura “air” under chrome / notch */
+body.cc-store-neu #header-component.header[transparent] {
+  top: max(var(--cc-header-top-air), env(safe-area-inset-top, 0px)) !important;
+}
+
+body.cc-store-neu #header-component .header__row--top {
+  background: transparent !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+/* Stop transparent-header hover/focus from painting a solid row behind the tray */
+body.cc-store-neu #header-component .header__row--top,
+body.cc-store-neu #header-component .header__row--top:hover,
+body.cc-store-neu #header-component .header__row--top:focus-within {
+  background: transparent !important;
+}
+
+body.cc-store-neu #header-component .header__row--top .header__column {
+  background: transparent !important;
+}
+
+body.cc-store-neu #header-component .header__row--top .header__columns {
+  --cc-header-tray-pad-block: 7px;
+  position: relative;
+  z-index: 1;
+  align-items: center;
+  border-radius: 9999px;
+  padding: var(--cc-header-tray-pad-block) 1rem;
+  gap: 0.45rem 0.55rem !important;
+  overflow: visible;
+  box-sizing: border-box;
+  min-height: calc(var(--cc-header-nav-icon) + 2 * var(--cc-header-tray-pad-block));
+  border: none !important;
+  outline: none !important;
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--cc-header-tray-shadow) !important;
+  transition: box-shadow 250ms ease-in-out;
+}
+
+/* Theme default 60px makes the hamburger row taller than the neu tray */
+body.cc-store-neu #header-component .header__drawer {
+  min-height: var(--cc-header-nav-icon) !important;
+  align-items: center !important;
+}
+
+@media screen and (max-width: 749px) {
+  body.cc-store-neu {
+    --cc-header-top-air: clamp(0.35rem, 1.5vw, 0.7rem);
+    --cc-header-nav-icon: 36px;
+  }
+
+  body.cc-store-neu #header-group .header-section:first-of-type,
+  body.cc-store-neu #header-group > .shopify-section.header-section,
+  body.cc-store-neu #header-group .shopify-section-group .shopify-section.header-section {
+    padding-block-start: var(--cc-header-top-air) !important;
+    padding-block-end: 0.35rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  body.cc-store-neu #header-component .header__row--top .header__columns {
+    --cc-header-tray-pad-block: 5px;
+    padding: var(--cc-header-tray-pad-block) 0.65rem !important;
+    gap: 0.35rem 0.25rem !important;
+  }
+}
+
+@media screen and (min-width: 750px) {
+  /*
+   * Horizon often puts logo + horizontal menu in the same .header__column--left (menu_position: left).
+   * Theme gap here was ~0.55rem — far too tight for neumorphic pills beside the logo.
+   */
+  body.cc-store-neu #header-component .header__row--top .header__column--left {
+    gap: 1.35rem !important;
+  }
+
+  body.cc-store-neu #header-component .header__row--top .header__column--left .header-logo {
+    margin-inline-end: 0.25rem !important;
+  }
+
+  body.cc-store-neu #header-component .header__row--top .header__column--center {
+    gap: 0.55rem !important;
+  }
+
+  body.cc-store-neu #header-component .header__row--top .header__columns {
+    column-gap: 1.5rem !important;
+    row-gap: 0.55rem !important;
+  }
+
+  /* Inset nav when menu lives in center column */
+  body.cc-store-neu #header-component .header__row--top .header__column--center:has(header-menu) {
+    padding-inline-start: clamp(0.75rem, 2vw, 1.35rem) !important;
+    box-sizing: border-box;
+  }
+
+  /* Theme pulls the action cluster inward; restore even pill padding (reference) */
+  body.cc-store-neu .header__column--right header-actions {
+    margin-inline-start: 0 !important;
+  }
+
+  /* Logo vs tray (~40px nav pills); keep width:auto so wordmark scales proportionally */
+  body.cc-store-neu #header-component .header-logo .header-logo__image,
+  body.cc-store-neu #header-component .header-logo img {
+    max-height: clamp(36px, 5.2vw, 44px) !important;
+    width: auto !important;
+    height: auto !important;
+  }
+}
+
+/* Same tray when mega-menu / row is hovered — avoids flash, shift, or re-painted backgrounds */
+body.cc-store-neu #header-component .header__row--top:is(:hover, :focus-within) .header__columns,
+body.cc-store-neu
+  #header-component:has(.menu-list__link:is(:hover, [aria-expanded="true"]))
+  .header__row--top
+  .header__columns,
+body.cc-store-neu
+  #header-component:has(.menu-list__list-item[slot="overflow"] .menu-list__link:is(:hover, [aria-expanded="true"]))
+  .header__row--top
+  .header__columns {
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--cc-header-tray-shadow) !important;
+}
+
+body.cc-store-neu #header-component[transparent] .header__row--top .header__columns {
+  background: rgb(235 236 240 / 0.92) !important;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--cc-header-tray-shadow) !important;
+}
+
+body.cc-store-neu #header-component[transparent] .header__row--top:is(:hover, :focus-within) .header__columns,
+body.cc-store-neu
+  #header-component[transparent]:has(.menu-list__link:is(:hover, [aria-expanded="true"]))
+  .header__row--top
+  .header__columns {
+  background: rgb(235 236 240 / 0.92) !important;
+  box-shadow: var(--cc-header-tray-shadow) !important;
+}
+
+body.cc-store-neu #header-component .header__row--top .header__columns::after {
+  display: none;
+}
+
+body.cc-store-neu #header-component .header__row--top .header__columns > * {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * Transparent header normally swaps logo ↔ inverse on menu hover (Horizon --header-logo-* vars).
+ * That reflows the tray and fights the cursor. Neu tray is always a light surface → keep the primary logo only.
+ */
+body.cc-store-neu #header-component.header[transparent],
+body.cc-store-neu #header-component.header[transparent]:hover,
+body.cc-store-neu #header-component.header[transparent]:focus-within,
+body.cc-store-neu #header-component.header[transparent]:has(.menu-list__link:hover),
+body.cc-store-neu #header-component.header[transparent]:has(.menu-list__link[aria-expanded="true"]),
+body.cc-store-neu #header-component.header[transparent]:has(.mega-menu__list:hover) {
+  --header-logo-display: block !important;
+  --header-logo-inverse-display: none !important;
+}
+
+body.cc-store-neu #header-component.header[transparent] .header-logo:has(.header-logo__image-container--inverse) .header-logo__image-container--original {
+  display: block !important;
+}
+
+body.cc-store-neu #header-component.header[transparent] .header-logo .header-logo__image-container--inverse {
+  display: none !important;
+}
+
+/*
+ * Icon cluster: Horizon defaults to display:contents so each action lands in the drawer grid;
+ * that collapses flex gap between search / account / cart. Use a flex wrapper on the top row only.
+ */
 body.cc-store-neu header-actions {
   display: contents;
 }
 
-/* Center column can shrink / scroll when zoomed instead of crushing icons */
+body.cc-store-neu #header-component .header__row--top header-actions:not(.header-actions--text) {
+  display: inline-flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: clamp(0.72rem, 2.2vw, 1.12rem) !important;
+}
+
+body.cc-store-neu #header-component[data-menu-style='drawer'] .header__row--top header-actions:not(.header-actions--text) {
+  justify-self: end !important;
+}
+
 body.cc-store-neu #header-component .header__column--center {
   min-width: 0;
   overflow-x: auto;
@@ -56,6 +430,732 @@ body.cc-store-neu #header-component .header__column--center {
 
 body.cc-store-neu #header-component .header__column--center::-webkit-scrollbar {
   height: 4px;
+}
+
+/* Hamburger: circular neu (drawer) */
+body.cc-store-neu #header-component .menu-drawer-container .header__icon--summary {
+  width: var(--cc-header-nav-icon) !important;
+  height: var(--cc-header-nav-icon) !important;
+  min-width: var(--cc-header-nav-icon) !important;
+  min-height: var(--cc-header-nav-icon) !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  box-sizing: border-box !important;
+  color: var(--pc-caesura-dark) !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  background: var(--pc-caesura-raised) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-caesura-transition) !important;
+}
+
+/* Match project-clad-proxy grey .project-clad-button:hover (flat + white rim, not extra outer shadow) */
+body.cc-store-neu #header-component .menu-drawer-container .header__icon--summary:hover {
+  z-index: 1 !important;
+  box-shadow: none !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  background: var(--pc-caesura-bg) !important;
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+}
+
+body.cc-store-neu #header-component .menu-drawer-container .header__icon--summary:active {
+  box-shadow: var(--pc-btn-neu-shadow-active) !important;
+  border-color: transparent !important;
+  text-shadow: none !important;
+  color: var(--pc-btn-neu-fg) !important;
+}
+
+/*
+ * Search, account, cart: neu circles on the top row (icon mode).
+ * Cart with cart_type=page is <a class="action__cart"> — not inside cart-drawer-component; include it here.
+ * Text mode: exclude .header-actions__text-style / .account-button--text.
+ */
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  search-button
+  button.header-actions__action.button-unstyled:not(.header-actions__text-style),
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  cart-drawer-component
+  > button.header-actions__action.button-unstyled:not(.header-actions__text-style),
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  a.header-actions__action.action__cart:not(.header-actions__text-style),
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  .account-button.header-actions__action:not(.account-button--text) {
+  width: var(--cc-header-nav-icon) !important;
+  height: var(--cc-header-nav-icon) !important;
+  min-width: var(--cc-header-nav-icon) !important;
+  min-height: var(--cc-header-nav-icon) !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 50% !important;
+  box-sizing: border-box !important;
+  color: var(--pc-caesura-dark) !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  background: var(--pc-caesura-raised) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-caesura-transition) !important;
+}
+
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  a.header-actions__action.action__cart:not(.header-actions__text-style) {
+  text-decoration: none !important;
+}
+
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  search-button
+  button.header-actions__action.button-unstyled:not(.header-actions__text-style):hover,
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  cart-drawer-component
+  > button.header-actions__action.button-unstyled:not(.header-actions__text-style):hover,
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  a.header-actions__action.action__cart:not(.header-actions__text-style):hover,
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  .account-button.header-actions__action:not(.account-button--text):hover {
+  z-index: 1 !important;
+  box-shadow: none !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  background: var(--pc-caesura-bg) !important;
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+}
+
+/* Cart bag: red only on hover/focus (count badge stays accent via .cart-bubble__background below) */
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  cart-drawer-component
+  > button.header-actions__action:not(.header-actions__text-style):is(:hover, :focus-visible)
+  .header-actions__cart-icon
+  .svg-wrapper,
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  cart-drawer-component
+  > button.header-actions__action:not(.header-actions__text-style):is(:hover, :focus-visible)
+  .header-actions__cart-icon
+  .svg-wrapper
+  svg,
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  a.header-actions__action.action__cart:not(.header-actions__text-style):is(:hover, :focus-visible)
+  .header-actions__cart-icon
+  .svg-wrapper,
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  a.header-actions__action.action__cart:not(.header-actions__text-style):is(:hover, :focus-visible)
+  .header-actions__cart-icon
+  .svg-wrapper
+  svg {
+  color: var(--pc-caesura-hover-red-text) !important;
+}
+
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  search-button
+  button.header-actions__action.button-unstyled:not(.header-actions__text-style):active,
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  cart-drawer-component
+  > button.header-actions__action.button-unstyled:not(.header-actions__text-style):active,
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  a.header-actions__action.action__cart:not(.header-actions__text-style):active,
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  .account-button.header-actions__action:not(.account-button--text):active {
+  box-shadow: var(--pc-btn-neu-shadow-active) !important;
+  border-color: transparent !important;
+  text-shadow: none !important;
+  color: var(--pc-btn-neu-fg) !important;
+}
+
+body.cc-store-neu #header-component .header__row--top cart-drawer-component button .header-actions__cart-icon,
+body.cc-store-neu #header-component .header__row--top a.action__cart .header-actions__cart-icon {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Cart bag: clear stroke on soft convex circle (CodePen caesura) */
+body.cc-store-neu #header-component .header__row--top .header-actions__action .svg-wrapper svg {
+  stroke-width: 1.45px !important;
+}
+
+/* Count badge on neu cart circle (Horizon uses --cart-bubble-* from header-actions.liquid) */
+body.cc-store-neu #header-component .header__row--top .header-actions__cart-icon {
+  --cart-bubble-size: 22px;
+  --cart-bubble-top: -1px;
+  --cart-bubble-right: -3px;
+}
+
+body.cc-store-neu #header-component .header__row--top .header-actions__cart-icon .cart-bubble__text {
+  font-size: 0.6875rem !important;
+  font-weight: 700 !important;
+}
+
+/* cart-bubble.liquid uses color: var(--color-primary-button-text); transparent home header inherits dark text */
+body.cc-store-neu #header-component .header__row--top .header-actions__cart-icon .cart-bubble,
+body.cc-store-neu #header-component .header__row--top .header-actions__cart-icon .cart-bubble__text,
+body.cc-store-neu #header-component .header__row--top .header-actions__cart-icon .cart-bubble__text-count {
+  color: #fff !important;
+}
+
+body.cc-store-neu #header-component .header__row--top .header-actions__cart-icon--has-cart .cart-bubble__background {
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.95),
+    4px 5px 12px rgba(72, 79, 96, 0.36) !important;
+}
+
+body.cc-store-neu #header-component .header__row--top .account-button:not(.account-button--text) shopify-account {
+  width: 100%;
+  height: 100%;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Signed-out person glyph: slot + non-square viewBox read low/right without flex + line-height:0 */
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  .account-button:not(.account-button--text)
+  shopify-account
+  [slot="signed-out-avatar"]:has(.account-button__icon) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 0 !important;
+  width: 100%;
+  height: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+body.cc-store-neu
+  #header-component
+  .header__row--top
+  .account-button:not(.account-button--text)
+  .account-button__icon {
+  display: block !important;
+  vertical-align: middle;
+  transform: translate(-0.5px, -1px);
+}
+
+/*
+ * Horizon underlays paint the full header width with --color-scheme-top-row (often white). The neu tray
+ * lives in the section--page-width center column, so empty grid gutters + underlay read as big white side
+ * blocks on interior pages. Home avoids this via transparent header. Collapse closed underlay everywhere
+ * and tint the open underlay with the caesura field so mega-menu backdrops match the storefront.
+ */
+body.cc-store-neu #header-component {
+  --closed-underlay-height: 0px !important;
+}
+
+body.cc-store-neu #header-component .header__underlay-closed {
+  background: transparent !important;
+}
+
+body.cc-store-neu #header-component .header__underlay-open {
+  background: linear-gradient(
+    var(--pc-caesura-bg) 0 var(--top-row-height),
+    var(--pc-caesura-bg) var(--top-row-height) var(--header-height),
+    var(--color-submenu) var(--header-height) 100%
+  ) !important;
+}
+
+body.cc-store-neu #header-component[data-submenu-overlap-bottom-row] .header__underlay-open {
+  background: linear-gradient(
+    var(--pc-caesura-bg) 0 var(--top-row-height),
+    var(--color-submenu) var(--top-row-height) 100%
+  ) !important;
+}
+
+/* Cart count badge stays accent when line items exist; bag glyph uses default dark until hover (see above) */
+body.cc-store-neu .header-actions__cart-icon--has-cart .cart-bubble__background {
+  background: var(--color-1) !important;
+}
+
+/* Compact neumorphic nav drawer only (not cart / facet drawers) */
+body.cc-store-neu header-drawer .menu-drawer {
+  width: min(288px, 86vw) !important;
+  max-width: 288px !important;
+  border-radius: 0 var(--pc-neu-radius) var(--pc-neu-radius) 0 !important;
+  border-right: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  background-color: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+}
+
+@media screen and (min-width: 750px) {
+  body.cc-store-neu header-drawer .menu-drawer {
+    width: min(300px, 88vw) !important;
+    max-width: 300px !important;
+  }
+}
+
+body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--mainlist,
+body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--child {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: 0.9rem !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.03em !important;
+  text-transform: uppercase !important;
+  color: var(--pc-btn-neu-fg) !important;
+  border-radius: 9999px !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-btn-neu-transition) !important;
+  justify-content: center !important;
+  margin-block: 0.4rem !important;
+}
+
+/* Drawer: current page — same soft pressed read as desktop pills */
+body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--mainlist.menu-drawer__menu-item--active,
+body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--child.menu-drawer__menu-item--active,
+body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--mainlist[aria-current="page"],
+body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--child[aria-current="page"] {
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-btn-neu-shadow-active) !important;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: none !important;
+  border-color: transparent !important;
+}
+
+body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--mainlist:hover,
+body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--child:hover {
+  z-index: 1 !important;
+  box-shadow: none !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  background: var(--pc-caesura-bg) !important;
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+}
+
+body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--mainlist:active,
+body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--child:active {
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-btn-neu-shadow-active) !important;
+  border-color: transparent !important;
+  text-shadow: none !important;
+  color: var(--pc-btn-neu-fg) !important;
+}
+
+body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--parent {
+  background: var(--pc-caesura-bg) !important;
+  border-radius: 9999px !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-caesura-transition) !important;
+}
+
+body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--parent:hover {
+  z-index: 1 !important;
+  box-shadow: none !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  background: var(--pc-caesura-bg) !important;
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.cc-store-neu #header-component .menu-drawer-container .header__icon--summary,
+  body.cc-store-neu
+    #header-component
+    .header__row--top
+    search-button
+    button.header-actions__action.button-unstyled:not(.header-actions__text-style),
+  body.cc-store-neu
+    #header-component
+    .header__row--top
+    cart-drawer-component
+    > button.header-actions__action.button-unstyled:not(.header-actions__text-style),
+  body.cc-store-neu
+    #header-component
+    .header__row--top
+    a.header-actions__action.action__cart:not(.header-actions__text-style),
+  body.cc-store-neu
+    #header-component
+    .header__row--top
+    .account-button.header-actions__action:not(.account-button--text),
+  body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--mainlist,
+  body.cc-store-neu header-drawer .menu-drawer__navigation a.menu-drawer__menu-item--child {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/*
+ * Desktop horizontal menu: equal-width pills, single line, no horizontal scroll.
+ * Center grid track must not use minmax(0,1fr) — that allows a 0-width center; avoid container-type on .header-menu__inner (breaks width in flex/grid).
+ */
+@media screen and (min-width: 750px) {
+  /* Extra width for nav: 2fr vs 1fr sides + floor so equal pills aren’t narrower than the labels */
+  body.cc-store-neu #header-component .header__row--top .header__columns:has(.header__column--center header-menu) {
+    --header-center: minmax(22rem, 2fr);
+  }
+
+  @media screen and (min-width: 990px) {
+    body.cc-store-neu #header-component .header__row--top .header__columns:has(.header__column--center header-menu) {
+      --header-center: minmax(30rem, 2fr);
+    }
+  }
+
+  body.cc-store-neu #header-component .header__column--center {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  body.cc-store-neu #header-component .header__column--center header-menu.header-menu {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  body.cc-store-neu #header-component .header-menu__inner {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  body.cc-store-neu #header-component .header-menu nav.menu-list {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  body.cc-store-neu #header-component overflow-list.overflow-menu {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  body.cc-store-neu #header-component overflow-list.overflow-menu::part(list) {
+    gap: 0.5rem 0.65rem !important;
+    column-gap: 0.65rem !important;
+    align-items: stretch !important;
+    width: 100%;
+    flex-wrap: nowrap !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+  }
+
+  /* min-width: 0 (old) let flex shrink pills below the label — clips nowrap text. auto = respect content minimum. */
+  body.cc-store-neu #header-component overflow-list.overflow-menu > li.menu-list__list-item:not([slot="more"]) {
+    flex: 1 1 0;
+    overflow: visible !important;
+  }
+
+  body.cc-store-neu #header-component overflow-list.overflow-menu > li.menu-list__list-item[slot="more"] {
+    flex: 0 0 auto;
+    align-self: center;
+  }
+
+  body.cc-store-neu
+    #header-component
+    overflow-list.overflow-menu
+    > li.menu-list__list-item:not([slot="more"])
+    .menu-list__link {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* project-clad-proxy .project-clad-button (grey): flat caesura face + outer drop */
+  body.cc-store-neu #header-component .header-menu .menu-list__link {
+    position: relative !important;
+    transform: translateZ(0);
+    z-index: 0;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: 100% !important;
+    min-height: var(--cc-header-nav-icon) !important;
+    align-self: stretch !important;
+    border-radius: 9999px !important;
+    border: var(--pc-caesura-border) !important;
+    border-color: transparent !important;
+    background: var(--pc-caesura-bg) !important;
+    box-shadow: var(--pc-btn-neu-shadow) !important;
+    transition: var(--pc-btn-neu-transition) !important;
+    font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+    font-size: clamp(0.82rem, 0.48rem + 0.65vw, 1.05rem) !important;
+    font-weight: 400 !important;
+    letter-spacing: 0.025em !important;
+    text-transform: uppercase !important;
+    color: var(--pc-btn-neu-fg) !important;
+    text-shadow: none !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+    padding-inline: 0.35rem !important;
+  }
+
+  body.cc-store-neu #header-component .header-menu .menu-list__link--active,
+  body.cc-store-neu #header-component .header-menu a.menu-list__link[aria-current="page"] {
+    background: var(--pc-caesura-bg) !important;
+    box-shadow: var(--pc-btn-neu-shadow-active) !important;
+    color: var(--pc-btn-neu-fg) !important;
+    text-shadow: none !important;
+    border: var(--pc-caesura-border) !important;
+    border-color: transparent !important;
+  }
+
+  body.cc-store-neu #header-component .header-menu .menu-list__link .menu-list__link-title {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    padding-block: 0.28rem !important;
+    padding-inline: 0.5rem !important;
+    text-align: center;
+    white-space: nowrap;
+    line-height: 1.15;
+    overflow: visible !important;
+  }
+
+  body.cc-store-neu #header-component .header-menu .menu-list__list-item[slot='overflow'] .menu-list__link {
+    min-height: var(--cc-header-nav-icon) !important;
+  }
+
+  body.cc-store-neu #header-component .header-menu .menu-list .menu-list__list-item:hover .menu-list__link,
+  body.cc-store-neu #header-component .header-menu .menu-list .menu-list__list-item:focus-within .menu-list__link {
+    z-index: 1 !important;
+    box-shadow: none !important;
+    border-color: var(--pc-caesura-border-hover) !important;
+    background: var(--pc-caesura-bg) !important;
+    color: var(--pc-caesura-hover-red-text) !important;
+    text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+  }
+
+  /*
+   * Horizon blocks/_header-menu.liquid subdues ALL .menu-list__link when :has(hover|focus-within|active).
+   * That block stylesheet loads after this file — re-assert full label color on non-hovered pills.
+   */
+  body.cc-store-neu
+    #header-component
+    .header-menu
+    nav.menu-list
+    .menu-list__list-item:not(:hover):not(:focus-within):not(:has(.menu-list__link[aria-expanded="true"]))
+    > .menu-list__link {
+    color: var(--pc-btn-neu-fg) !important;
+  }
+
+  body.cc-store-neu #header-component .header-menu .menu-list .menu-list__list-item .menu-list__link:active {
+    background: var(--pc-caesura-bg) !important;
+    box-shadow: var(--pc-btn-neu-shadow-active) !important;
+    border-color: transparent !important;
+    color: var(--pc-btn-neu-fg) !important;
+    text-shadow: none !important;
+  }
+
+  /* project-clad-proxy add-member open: same 3px border box as default/hover (2px caused 1px layout twitch) */
+  body.cc-store-neu #header-component .header-menu .menu-list__list-item:has(.menu-list__link[aria-expanded="true"]) > .menu-list__link {
+    z-index: 2 !important;
+    box-shadow: none !important;
+    border: 3px solid rgba(255, 255, 255, 0.92) !important;
+    background: var(--pc-caesura-bg) !important;
+    color: var(--pc-pill-text-glow-hover) !important;
+    text-shadow: var(--pc-accent-heading-shadow) !important;
+  }
+
+  body.cc-store-neu #header-component .header-menu .menu-list__link:focus-visible {
+    outline: 2px solid var(--pc-caesura-dark);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.cc-store-neu #header-component .header-menu .menu-list__link {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --- Search: inset caesura pills (predictive / modal / search page) --- */
+body.cc-store-neu .predictive-search-form__header-inner {
+  border-radius: 9999px !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-caesura-inset) !important;
+  transition: box-shadow 250ms ease-in-out, border-color 250ms ease-in-out !important;
+}
+
+body.cc-store-neu .predictive-search-form__header-inner:focus-within {
+  /* project-clad-proxy .project-clad-neu-finder-input:focus-within + --pc-caesura-field-focus-outer */
+  box-shadow: var(--pc-caesura-field-focus-outer) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  outline: none !important;
+}
+
+body.cc-store-neu .predictive-search-form__header {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+body.cc-store-neu .dialog-modal .predictive-search-form__header {
+  border-bottom: none !important;
+  background: transparent !important;
+}
+
+body.cc-store-neu input.search-input {
+  background: transparent !important;
+  color: var(--pc-caesura-dark) !important;
+}
+
+body.cc-store-neu input.search-input:focus,
+body.cc-store-neu input.search-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+body.cc-store-neu input.search-input::placeholder {
+  color: rgb(72 79 96 / 0.5) !important;
+}
+
+body.cc-store-neu .predictive-search .predictive-search__icon {
+  color: var(--pc-caesura-fg) !important;
+}
+
+body.cc-store-neu .predictive-search .predictive-search__reset-button {
+  color: var(--pc-caesura-dark) !important;
+}
+
+body.cc-store-neu .search-page-input {
+  border-radius: 9999px !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-caesura-inset) !important;
+  color: var(--pc-caesura-dark) !important;
+  transition: box-shadow 250ms ease-in-out, border-color 250ms ease-in-out !important;
+}
+
+body.cc-store-neu .search-page-input:focus,
+body.cc-store-neu .search-page-input:focus-visible {
+  outline: none !important;
+  box-shadow: var(--pc-caesura-field-focus-outer) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+}
+
+body.cc-store-neu .search-page-input::placeholder {
+  color: rgb(72 79 96 / 0.5) !important;
+}
+
+/* iTunes coverflow filter: same trough + transparent field as predictive-search header inner */
+body.cc-store-neu .itunes-cflow__input-wrap {
+  border-radius: 9999px !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-caesura-inset) !important;
+  transition: box-shadow 250ms ease-in-out, border-color 250ms ease-in-out !important;
+}
+
+body.cc-store-neu .itunes-cflow__input-wrap:focus-within {
+  box-shadow: var(--pc-caesura-field-focus-outer) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  outline: none !important;
+}
+
+body.cc-store-neu .itunes-cflow__input {
+  background: transparent !important;
+  color: var(--pc-caesura-dark) !important;
+  box-shadow: none !important;
+}
+
+body.cc-store-neu .itunes-cflow__input:focus,
+body.cc-store-neu .itunes-cflow__input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+body.cc-store-neu .itunes-cflow__input::placeholder {
+  color: rgb(72 79 96 / 0.5) !important;
+}
+
+body.cc-store-neu search-page-input-component {
+  background: transparent !important;
+}
+
+body.cc-store-neu search-page-input-component .search__icon,
+body.cc-store-neu search-page-input-component .search__reset-button {
+  color: var(--pc-caesura-fg) !important;
+}
+
+body.cc-store-neu .predictive-search-form__footer .predictive-search__search-button.button {
+  border-radius: 9999px !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  color: var(--pc-btn-neu-fg) !important;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: 0.9rem !important;
+  letter-spacing: 0.03em !important;
+  text-transform: uppercase !important;
+  transition: var(--pc-caesura-transition) !important;
+}
+
+body.cc-store-neu .predictive-search-form__footer .predictive-search__search-button.button:hover {
+  box-shadow: var(--pc-btn-neu-shadow-hover) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+}
+
+body.cc-store-neu .predictive-search-form__footer .predictive-search__search-button.button:active {
+  box-shadow: var(--pc-btn-neu-shadow-active) !important;
+  border-color: transparent !important;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.cc-store-neu .predictive-search-form__header-inner,
+  body.cc-store-neu .search-page-input,
+  body.cc-store-neu .predictive-search-form__footer .predictive-search__search-button.button {
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* --- Product section: caesura canvas --- */
@@ -257,4 +1357,458 @@ body.cc-store-neu .product-details .quantity-selector input[type="number"] {
   body.cc-store-neu .product-details .product-form-buttons .add-to-cart-button.button-secondary {
     transition-duration: 0.01ms !important;
   }
+}
+
+/* --- Product cards: white convex tile on caesura field; hover = flat + white rim + glow (like neu buttons) --- */
+body.cc-store-neu .product-grid__item {
+  border: none !important;
+}
+
+body.cc-store-neu .product-card {
+  box-sizing: border-box;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  border-radius: var(--pc-neu-radius) !important;
+  background: var(--pc-caesura-light) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-caesura-transition) !important;
+  overflow: hidden;
+  --color-foreground: var(--pc-caesura-dark);
+  --color-foreground-rgb: 72 79 96;
+}
+
+/*
+ * Horizon puts .border-style on .product-card__content — that inner border hides the outer neu rim.
+ * Neu frame + hover outline live only on product-card (same as .menu-list__link / .project-clad-button).
+ */
+body.cc-store-neu .product-card .product-card__content,
+body.cc-store-neu .product-card .product-card__content.border-style,
+body.cc-store-neu .product-card .product-grid__card {
+  --color-background: transparent !important;
+  --color-background-rgb: 255 255 255 !important;
+  background: transparent !important;
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+body.cc-store-neu .product-card:hover,
+body.cc-store-neu .product-card:focus-within {
+  z-index: 1;
+  background: var(--pc-caesura-light) !important;
+  box-shadow: var(--pc-neu-white-tile-hover-shadow) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+}
+
+/* Lift/scale card hover would move the tile; keep it planted like neu buttons */
+body.cc-store-neu.card-hover-effect-lift .product-card:hover,
+body.cc-store-neu.card-hover-effect-lift .product-card:focus-within,
+body.cc-store-neu.card-hover-effect-scale .product-card:hover,
+body.cc-store-neu.card-hover-effect-scale .product-card:focus-within {
+  transform: none !important;
+}
+
+body.cc-store-neu [product-grid-view='zoom-out'] .product-card {
+  border-radius: clamp(10px, 2.5vw, 18px) !important;
+}
+
+/* Predictive search / recently viewed: resource-card, not <product-card> */
+body.cc-store-neu .predictive-search-results__card--product .resource-card,
+body.cc-store-neu .recently-viewed-wrapper .predictive-search-results__card--product .resource-card {
+  position: relative;
+  z-index: 0;
+  box-sizing: border-box;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  border-radius: var(--pc-neu-radius) !important;
+  background: var(--pc-caesura-light) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-caesura-transition) !important;
+  overflow: hidden;
+}
+
+body.cc-store-neu .predictive-search-results__card--product:hover .resource-card,
+body.cc-store-neu .recently-viewed-wrapper .predictive-search-results__card--product:hover .resource-card,
+body.cc-store-neu .predictive-search-results__card--product:focus-within .resource-card,
+body.cc-store-neu .recently-viewed-wrapper .predictive-search-results__card--product:focus-within .resource-card {
+  z-index: 1;
+  background: var(--pc-caesura-light) !important;
+  box-shadow: var(--pc-neu-white-tile-hover-shadow) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+}
+
+/* Theme hovers add padding/margin on the <li>; keep layout fixed so the neu tile reads cleanly */
+body.cc-store-neu .predictive-search-results__card--product:hover,
+body.cc-store-neu .recently-viewed-wrapper .predictive-search-results__card--product:hover {
+  background-color: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+}
+
+body.cc-store-neu
+  .predictive-search-results__card--product:is(
+    [aria-selected='true'].keyboard-focus,
+    :focus-visible,
+    :has(.resource-card:focus-visible)
+  ),
+body.cc-store-neu
+  .recently-viewed-wrapper
+  .predictive-search-results__card--product:is(
+    [aria-selected='true'].keyboard-focus,
+    :focus-visible,
+    :has(.resource-card:focus-visible)
+  ) {
+  background-color: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  outline: none !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.cc-store-neu .product-card,
+  body.cc-store-neu .predictive-search-results__card--product .resource-card,
+  body.cc-store-neu .recently-viewed-wrapper .predictive-search-results__card--product .resource-card {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --- Homepage Shop / Custom split: caesura tiles (section setting: cc_neu_showcase_tiles) --- */
+body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) {
+  /* Let tile shadows render; reserve space so the next section doesn’t visually “slice” the pills */
+  overflow: visible;
+  isolation: isolate;
+  padding-bottom: clamp(0.35rem, 1.2vw, 0.85rem);
+  /* Rounds the section shell where it meets the hero above (pairs with .section-background) */
+  border-radius: var(--pc-neu-radius) var(--pc-neu-radius) 0 0;
+}
+
+/* Flat caesura through the boundary — avoids a darker/lighter seam from scheme gradients or tints */
+body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase),
+body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) + .shopify-section {
+  background-color: var(--pc-caesura-bg) !important;
+  background-image: none !important;
+}
+
+body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) > .section-background,
+body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) + .shopify-section > .section-background {
+  background: var(--pc-caesura-bg) !important;
+  background-color: var(--pc-caesura-bg) !important;
+  background-image: none !important;
+}
+
+body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) + .shopify-section > .section {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+/* Kill hairline / tint mismatch at the join with the email band */
+body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) + .shopify-section,
+body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) + .shopify-section .section,
+body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) + .shopify-section .custom-section-content {
+  --color-background: var(--pc-caesura-bg) !important;
+  --color-background-rgb: 235 236 240 !important;
+}
+
+body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) + .shopify-section .custom-section-content.border-style {
+  background-color: transparent !important;
+  background: transparent !important;
+  background-image: none !important;
+  border-top-width: 0 !important;
+  box-shadow: none !important;
+}
+
+body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) + .shopify-section {
+  margin-top: -1px;
+}
+
+body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) > .section-background {
+  /* Hero/media: rounded top only; bottom stays square so it meets the tray below */
+  border-radius: var(--pc-neu-radius) var(--pc-neu-radius) 0 0 !important;
+  overflow: hidden;
+  box-shadow: none !important;
+}
+
+/*
+ * When this section owns background media, Horizon’s .background-image-container is position:absolute
+ * against .section — it covers the tray too and hides the tray’s top radius. Pin media to the first grid row.
+ */
+body.cc-store-neu
+  .section.cc-neu-split-showcase:has(.custom-section-background .background-image-container),
+body.cc-store-neu .section.cc-neu-split-showcase:has(.custom-section-background video-background-component) {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+body.cc-store-neu
+  .section.cc-neu-split-showcase:has(.custom-section-background .background-image-container)
+  .custom-section-background,
+body.cc-store-neu
+  .section.cc-neu-split-showcase:has(.custom-section-background video-background-component)
+  .custom-section-background {
+  grid-row: 1;
+  position: relative;
+  min-height: 0;
+  border-radius: var(--pc-neu-radius) var(--pc-neu-radius) 0 0;
+  overflow: hidden;
+  z-index: 0;
+}
+
+body.cc-store-neu
+  .section.cc-neu-split-showcase:has(.custom-section-background .background-image-container)
+  .custom-section-content.border-style,
+body.cc-store-neu
+  .section.cc-neu-split-showcase:has(.custom-section-background video-background-component)
+  .custom-section-content.border-style {
+  grid-row: 2;
+  position: relative;
+  z-index: 1;
+}
+
+body.cc-store-neu .section.cc-neu-split-showcase {
+  overflow: visible;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+body.cc-store-neu .section.cc-neu-split-showcase .custom-section-content.border-style {
+  /* Tray inset left/right = inset top (tile-to-tray); tile gap uses the same value */
+  --cc-split-pad-block-start: 0.85rem;
+  --cc-split-pad-block-end: 0.85rem;
+  --cc-split-gutter: var(--cc-split-pad-block-start);
+  overflow: visible !important;
+  --border-radius: var(--pc-neu-radius) var(--pc-neu-radius) 0 0 !important;
+  border-radius: var(--pc-neu-radius) var(--pc-neu-radius) 0 0 !important;
+  padding-block-start: var(--cc-split-pad-block-start) !important;
+  padding-block-end: var(--cc-split-pad-block-end) !important;
+  padding-inline: var(--cc-split-pad-block-start) !important;
+  box-sizing: border-box;
+  background: var(--pc-caesura-bg) !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  /* Tray: side/top inset only; bottom feather uses caesura fill to hide a line vs next section */
+  box-shadow:
+    inset 0 2px 4px -2px rgba(255, 255, 255, 0.32),
+    inset 2px 0 7px -2px rgba(72, 79, 96, 0.16),
+    inset -2px 0 7px -2px rgba(255, 255, 255, 0.2),
+    inset 0 -14px 18px -14px var(--pc-caesura-bg) !important;
+}
+
+body.cc-store-neu .section.cc-neu-split-showcase .section-content-wrapper.layout-panel-flex--row {
+  gap: var(--cc-split-gutter) !important;
+  align-items: stretch !important;
+  width: 100% !important;
+}
+
+/* Equal-width tiles: fill the tray (theme width:fill + flex:1 can still shrink wrong with short content) */
+body.cc-store-neu .section.cc-neu-split-showcase .section-content-wrapper.layout-panel-flex--row > .group-block--width-fill {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+}
+
+/*
+ * Split tiles = project-clad-proxy projects LIST cards:
+ * .project-clad-page--projects:not(.project-clad-page--detail) .project-clad-card (…)
+ */
+body.cc-store-neu .section.cc-neu-split-showcase .group-block {
+  --border-radius: var(--pc-neu-radius) !important;
+  border-radius: var(--pc-neu-radius) !important;
+  overflow: visible !important;
+  --border-width: 0px !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  background-color: var(--pc-caesura-bg) !important;
+  background-image: none !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-btn-neu-transition) !important;
+  transform: scale(1);
+  filter: none;
+}
+
+body.cc-store-neu .section.cc-neu-split-showcase .group-block:hover {
+  z-index: 2 !important;
+  transform: scale(1);
+  filter: none;
+  box-shadow: var(--pc-btn-neu-shadow-hover) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  background-color: var(--pc-caesura-bg) !important;
+  background-image: none !important;
+}
+
+body.cc-store-neu .section.cc-neu-split-showcase .group-block:has(.group-block__link:active) {
+  z-index: 2 !important;
+  transform: scale(1);
+  filter: none;
+  border-radius: var(--pc-neu-radius) !important;
+  border-color: transparent !important;
+  background-color: var(--pc-caesura-bg) !important;
+  background-image: none !important;
+  box-shadow: var(--pc-btn-neu-shadow-active) !important;
+}
+
+body.cc-store-neu .section.cc-neu-split-showcase .group-block:has(.group-block__link:focus-visible) {
+  z-index: 2 !important;
+  transform: scale(1);
+  filter: none;
+  box-shadow: var(--pc-btn-neu-shadow-hover) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  background-color: var(--pc-caesura-bg) !important;
+  background-image: none !important;
+  outline: none;
+}
+
+body.cc-store-neu .section.cc-neu-split-showcase .group-block-content :is(h1, h2, h3, h4, h5, h6, .h1, .h2, .h3) {
+  font-style: italic !important;
+  font-weight: 700 !important;
+  /* Scheme foreground is often pure black; use caesura type color for both tiles at rest */
+  color: var(--pc-caesura-dark) !important;
+}
+
+/* Match project pill hover: headline shifts to red + glow */
+body.cc-store-neu .section.cc-neu-split-showcase .group-block:hover .group-block-content :is(h1, h2, h3, h4, h5, h6, .h1, .h2, .h3) {
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+  transition: color 250ms ease-in-out, text-shadow 250ms ease-in-out;
+}
+
+body.cc-store-neu .section.cc-neu-split-showcase .group-block:has(.group-block__link:active) .group-block-content :is(h1, h2, h3, h4, h5, h6, .h1, .h2, .h3) {
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.cc-store-neu .section.cc-neu-split-showcase .group-block,
+  body.cc-store-neu .section.cc-neu-split-showcase .group-block:hover .group-block-content :is(h1, h2, h3, h4, h5, h6, .h1, .h2, .h3) {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Room for focus halo so section overflow doesn’t clip the glow */
+body.cc-store-neu .email-signup-block:has(.email-signup__input-group--arrow) {
+  overflow: visible !important;
+  padding-block: 0.65rem !important;
+  margin-block: 0.2rem !important;
+}
+
+body.cc-store-neu .custom-section-content.border-style:has(.email-signup__input-group--arrow) {
+  overflow: visible !important;
+}
+
+/* Email signup (arrow layout): inset pill + raised circular send — matches app neu */
+body.cc-store-neu .email-signup__input-group--arrow:not(.email-signup__input-group--integrated):not(.email-signup__input-group--underline) {
+  padding: 0.35rem 0.45rem 0.35rem 1.15rem !important;
+  border-radius: 9999px !important;
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-caesura-inset) !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  gap: 0.5rem !important;
+  align-items: center !important;
+  transition: var(--pc-caesura-transition) !important;
+}
+
+body.cc-store-neu
+  .email-signup__input-group--arrow:not(.email-signup__input-group--integrated):not(.email-signup__input-group--underline):focus-within {
+  /* project-clad-proxy .project-clad-neu-finder-input:focus-within */
+  box-shadow: var(--pc-caesura-field-focus-outer) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  outline: none !important;
+}
+
+body.cc-store-neu .email-signup__input-group--arrow:not(.email-signup__input-group--integrated) .email-signup__input {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding-block: 0.5rem !important;
+  padding-inline: 0 !important;
+}
+
+body.cc-store-neu .email-signup__input-group--arrow .email-signup__input:focus,
+body.cc-store-neu .email-signup__input-group--arrow .email-signup__input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+body.cc-store-neu .email-signup__input-group--arrow:not(.email-signup__input-group--integrated) .email-signup__button--arrow {
+  flex-shrink: 0 !important;
+  border-radius: 50% !important;
+  border: 3px solid transparent !important;
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-caesura-transition) !important;
+}
+
+body.cc-store-neu .email-signup__input-group--arrow:not(.email-signup__input-group--integrated) .email-signup__button--arrow:hover {
+  box-shadow: var(--pc-btn-neu-shadow-hover) !important;
+  color: var(--pc-caesura-hover-red-text) !important;
+}
+
+/*
+ * Horizon “Email signup” section preset uses arrow + integrated_button: one pill with inset field.
+ * Previous rules used :not(.integrated), so the bar stayed flat white. Match predictive-search inset pill.
+ */
+body.cc-store-neu
+  .email-signup__input-group--arrow.email-signup__input-group--integrated:not(.email-signup__input-group--underline) {
+  border-radius: 9999px !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-caesura-inset) !important;
+  transition: var(--pc-caesura-transition) !important;
+  align-items: center !important;
+}
+
+body.cc-store-neu
+  .email-signup__input-group--arrow.email-signup__input-group--integrated:not(.email-signup__input-group--underline):focus-within {
+  box-shadow: var(--pc-caesura-field-focus-outer) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  outline: none !important;
+}
+
+body.cc-store-neu
+  .email-signup__input-group--arrow.email-signup__input-group--integrated:not(.email-signup__input-group--underline)
+  .email-signup__input {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--pc-caesura-dark) !important;
+}
+
+body.cc-store-neu
+  .email-signup__input-group--arrow.email-signup__input-group--integrated:not(.email-signup__input-group--underline)
+  .email-signup__input::placeholder {
+  color: rgb(72 79 96 / 0.5) !important;
+}
+
+body.cc-store-neu
+  .email-signup__input-group--arrow.email-signup__input-group--integrated
+  .email-signup__button--arrow.email-signup__button--integrated {
+  flex-shrink: 0 !important;
+  border-radius: 50% !important;
+  border: 3px solid transparent !important;
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-caesura-transition) !important;
+  color: var(--pc-caesura-fg) !important;
+}
+
+body.cc-store-neu
+  .email-signup__input-group--arrow.email-signup__input-group--integrated
+  .email-signup__button--arrow.email-signup__button--integrated:hover {
+  box-shadow: var(--pc-btn-neu-shadow-hover) !important;
+  color: var(--pc-caesura-hover-red-text) !important;
+}
+
+body.cc-store-neu
+  .email-signup__input-group--arrow.email-signup__input-group--integrated
+  .email-signup__button--arrow.email-signup__button--integrated:active {
+  box-shadow: var(--pc-btn-neu-shadow-active) !important;
 }

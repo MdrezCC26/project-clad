@@ -58,14 +58,16 @@
             <label class="itunes-cflow__search-label visually-hidden" for="itunes-cflow-search-{{ block.id }}">
               {{ section.settings.search_label | escape }}
             </label>
-            <input
-              type="search"
-              id="itunes-cflow-search-{{ block.id }}"
-              class="itunes-cflow__input"
-              placeholder="{{ section.settings.search_placeholder | escape }}"
-              autocomplete="off"
-              data-itunes-cflow-search
-            />
+            <div class="itunes-cflow__input-wrap">
+              <input
+                type="search"
+                id="itunes-cflow-search-{{ block.id }}"
+                class="itunes-cflow__input"
+                placeholder="{{ section.settings.search_placeholder | escape }}"
+                autocomplete="off"
+                data-itunes-cflow-search
+              />
+            </div>
             <button type="button" class="itunes-cflow__btn itunes-cflow__btn--small" data-itunes-cflow-search-btn>
               {{ section.settings.search_button_label | escape }}
             </button>
@@ -182,6 +184,14 @@
       0 0 6px rgba(196, 0, 0, 0.22),
       0 0 14px rgba(196, 0, 0, 0.12)
     );
+    --itunes-neu-field-focus-outer: var(
+      --pc-caesura-field-focus-outer,
+      0 0 0 1px rgba(255, 255, 255, 0.5),
+      0 0 16px 4px rgba(255, 255, 255, 0.62),
+      0 0 32px 10px rgba(255, 255, 255, 0.28),
+      8px 10px 22px rgba(72, 79, 96, 0.08),
+      -6px -6px 18px rgba(255, 255, 255, 0.38)
+    );
     /* Filled portion of range track (set by JS as 0–100 for WebKit) */
     --itunes-range-pct: 0;
     /* Red fill (track has no glow — stays locked to thumb) */
@@ -210,8 +220,10 @@
   .itunes-cflow__tab {
     padding: 0.45rem 1rem;
     border-radius: 999px;
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    background: transparent;
+    border: var(--itunes-neu-border);
+    border-color: transparent;
+    background: var(--itunes-neu-bg);
+    box-shadow: var(--itunes-neu-drop);
     cursor: pointer;
     font-family: system-ui, 'Segoe UI', Roboto, Helvetica, 'Helvetica Neue', Arial, sans-serif;
     font-size: max(14px, 0.875rem);
@@ -219,12 +231,53 @@
     letter-spacing: 0.04em;
     text-transform: uppercase;
     line-height: 1.2;
-    color: inherit;
+    color: var(--itunes-neu-dark);
+    text-shadow: none;
+    transition: var(--itunes-neu-trans);
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .itunes-cflow__tab:hover:not(.itunes-cflow__tab--active) {
+    z-index: 1;
+    position: relative;
+    box-shadow: none;
+    border-color: var(--itunes-neu-border-hover);
+    color: var(--itunes-neu-red);
+    text-shadow: var(--itunes-neu-red-glow);
+    background: var(--itunes-neu-bg);
+  }
+  .itunes-cflow__tab:active:not(.itunes-cflow__tab--active) {
+    box-shadow: var(--itunes-neu-inset);
+    border-color: transparent;
+    color: var(--itunes-neu-dark);
+    text-shadow: none;
   }
   .itunes-cflow__tab--active {
-    background: #111;
-    color: #fff;
-    border-color: #111;
+    z-index: 0;
+    box-shadow: var(--itunes-neu-inset);
+    border-color: transparent;
+    background: var(--itunes-neu-bg);
+    color: var(--itunes-neu-dark);
+    text-shadow: none;
+  }
+  .itunes-cflow__tab--active:hover {
+    z-index: 1;
+    position: relative;
+    box-shadow: none;
+    border-color: var(--itunes-neu-border-hover);
+    color: var(--itunes-neu-red);
+    text-shadow: var(--itunes-neu-red-glow);
+    background: var(--itunes-neu-bg);
+  }
+  .itunes-cflow__tab--active:active {
+    box-shadow: var(--itunes-neu-inset);
+    border-color: transparent;
+    color: var(--itunes-neu-dark);
+    text-shadow: none;
+  }
+  .itunes-cflow__tab:focus-visible {
+    outline: 2px solid var(--itunes-neu-dark);
+    outline-offset: 2px;
   }
   .itunes-cflow__panel--hidden {
     display: none;
@@ -237,29 +290,54 @@
     justify-content: center;
     margin-bottom: 0.35rem;
   }
-  .itunes-cflow__input {
+  /* Match predictive-search / search-page-input: trough on wrapper, transparent field inside (no double rim). */
+  .itunes-cflow__input-wrap {
     flex: 1 1 200px;
     max-width: 320px;
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    box-sizing: border-box;
+    border-radius: 9999px;
+    border: var(--itunes-neu-border);
+    border-color: transparent;
+    background: var(--itunes-neu-bg);
+    box-shadow: var(--itunes-neu-inset);
+    transition: box-shadow 250ms ease-in-out, border-color 250ms ease-in-out;
+  }
+  .itunes-cflow__input-wrap:focus-within {
+    outline: none;
+    box-shadow: var(--itunes-neu-field-focus-outer);
+    border-color: var(--itunes-neu-border-hover);
+  }
+  .itunes-cflow__input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    margin: 0;
     padding: 0.5rem 1rem;
     min-height: 44px;
     box-sizing: border-box;
-    border: var(--itunes-neu-border);
+    border: none;
     border-radius: 9999px;
-    background-color: var(--itunes-neu-bg);
+    background-color: transparent;
     color: var(--itunes-neu-dark);
-    box-shadow: var(--itunes-neu-inset);
-    transition: var(--itunes-neu-trans);
+    box-shadow: none;
+    transition: color 250ms ease-in-out;
     outline: none;
     font: inherit;
     font-size: max(16px, 1rem);
+    -webkit-appearance: none;
+    appearance: none;
   }
   .itunes-cflow__input::placeholder {
     color: var(--itunes-neu-fg);
     opacity: 1;
   }
+  .itunes-cflow__input:focus,
   .itunes-cflow__input:focus-visible {
+    outline: none;
     box-shadow: none;
-    border-color: var(--itunes-neu-border-hover);
   }
   .itunes-cflow__btn {
     padding: 0.5rem 1.15rem;
@@ -601,6 +679,7 @@
     .itunes-cflow__item {
       transition-duration: 0.01ms;
     }
+    .itunes-cflow__input-wrap,
     .itunes-cflow__input,
     .itunes-cflow__btn,
     .itunes-cflow__nav-btn,
