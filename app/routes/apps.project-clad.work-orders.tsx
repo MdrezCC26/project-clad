@@ -58,10 +58,10 @@ export default function StorefrontWorkOrdersInfo() {
       {(data.themeStyles?.urls ?? []).map((href: string) => (
         <link key={href} rel="stylesheet" href={href} />
       ))}
-      <style dangerouslySetInnerHTML={{ __html: data.proxyStylesCss }} />
       {inlineStyles.map((css, index) => (
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
+      <style dangerouslySetInnerHTML={{ __html: data.proxyStylesCss }} />
       <main
         className={`project-clad-page project-clad-page--projects${data.backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
         style={

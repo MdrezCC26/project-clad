@@ -2211,13 +2211,40 @@ html:has(.project-clad-page--projects) body {
 .project-clad-storefront-nav {
   --pc-storefront-nav-icon: 38px;
   --pc-storefront-nav-cluster-gap: 0.55rem;
+  /* Neon halo (.project-clad-storefront-nav::before) — warm red + cool rim */
+  --pc-storefront-shell-glow-hot: rgba(255, 72, 88, 0.85);
+  --pc-storefront-shell-glow-mid: rgba(255, 40, 52, 0.6);
+  --pc-storefront-shell-glow-deep: rgba(196, 0, 0, 0.45);
+  --pc-storefront-shell-glow-cool: rgba(56, 189, 248, 0.35);
+  --pc-storefront-shell-glow-amber: rgba(255, 200, 120, 0.28);
   width: 100%;
   max-width: 100%;
   margin: 0 0 1.25rem;
   box-sizing: border-box;
+  overflow: visible;
+  position: relative;
+}
+
+/* Neon sits on the wrapper so it isn’t hidden behind the shell’s opaque gradient */
+.project-clad-storefront-nav::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 9999px;
+  z-index: 0;
+  pointer-events: none;
+  box-shadow:
+    0 0 24px 6px var(--pc-storefront-shell-glow-hot),
+    0 0 50px 14px var(--pc-storefront-shell-glow-mid),
+    0 0 84px 24px var(--pc-storefront-shell-glow-deep),
+    0 0 120px 34px var(--pc-storefront-shell-glow-cool),
+    0 0 150px 44px var(--pc-storefront-shell-glow-amber);
+  animation: pc-storefront-shell-glow-pulse 2.75s ease-in-out infinite;
 }
 
 .project-clad-storefront-nav__shell {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -2228,12 +2255,35 @@ html:has(.project-clad-page--projects) body {
   border-radius: 9999px;
   box-sizing: border-box;
   background: linear-gradient(165deg, #eceef1 0%, #e4e6ea 45%, #dcdfe3 100%);
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 220, 224, 0.55);
   box-shadow:
     0 2px 0 rgba(255, 255, 255, 0.75) inset,
     0 -2px 8px rgba(0, 0, 0, 0.05) inset,
     0 10px 28px rgba(0, 0, 0, 0.08),
-    0 2px 8px rgba(0, 0, 0, 0.04);
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 0 0 1px rgba(255, 160, 170, 0.22),
+    0 0 24px rgba(255, 60, 72, 0.35),
+    0 0 48px rgba(255, 40, 50, 0.22);
+}
+
+@keyframes pc-storefront-shell-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.82;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-clad-storefront-nav::before {
+    animation: none;
+    opacity: 0.95;
+    filter: none;
+  }
 }
 
 .project-clad-storefront-nav__left {
@@ -2242,6 +2292,33 @@ html:has(.project-clad-page--projects) body {
   gap: var(--pc-storefront-nav-cluster-gap);
   flex-shrink: 0;
   min-width: 0;
+}
+
+/* Between logo and tool icons (e.g. Add member on project detail) */
+.project-clad-storefront-nav__shell-extra {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  gap: 0.5rem;
+}
+
+.project-clad-storefront-nav__shell-extra .project-clad-header-slot--left {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.project-clad-storefront-nav__shell-extra .project-clad-button {
+  flex-shrink: 0;
+}
+
+/* Popover: anchor to trailing edge so it stays on-screen beside search/cart */
+.project-clad-storefront-nav__shell-extra .project-clad-add-member-popover {
+  left: auto;
+  right: 0;
 }
 
 /* Hamburger + flyout: same as theme compact header at all breakpoints */
@@ -2334,42 +2411,70 @@ html:has(.project-clad-page--projects) body {
 }
 
 .project-clad-storefront-nav__logo-fallback {
-  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
   font-size: 0.75rem;
   letter-spacing: 0.06em;
   color: var(--pc-caesura-dark);
 }
 
-.project-clad-storefront-nav__link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.4rem 0.65rem;
-  border-radius: 999px;
-  text-decoration: none;
-  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
-  font-size: calc(0.58rem * var(--pc-text-scale));
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--pc-caesura-dark);
-  line-height: 1.2;
-  border: var(--pc-caesura-border);
-  border-color: transparent;
-  background: var(--pc-caesura-bg);
-  box-shadow: var(--pc-btn-neu-shadow);
-  transition: var(--pc-btn-neu-transition);
+.project-clad-page a.project-clad-storefront-nav__link {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  /* Same shell + type scale as grey .project-clad-button (e.g. ADD MEMBER) */
+  padding: var(--pc-button-padding-y, 0.5rem) calc(var(--pc-button-padding-x, 1.25rem) + 0.35rem) !important;
+  min-height: var(--pc-button-min-height, 40px) !important;
+  box-sizing: border-box !important;
+  border-radius: 9999px !important;
+  text-decoration: none !important;
+  /* !important: beats .project-clad-page * { Helvetica } and theme `a` rules */
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: var(--pc-button-font-size, calc(0.9rem * 1.53)) !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.03em !important;
+  text-transform: uppercase !important;
+  color: var(--pc-btn-neu-fg, #484f60) !important;
+  line-height: var(--pc-button-line-height, 1.25) !important;
+  border: var(--pc-caesura-border, 3px solid transparent) !important;
+  border-color: transparent !important;
+  background: var(--pc-caesura-bg, #ebecf0) !important;
+  box-shadow: var(
+    --pc-btn-neu-shadow,
+    8px 8px 12px -2px rgba(72, 79, 96, 0.4),
+    -6px -6px 12px -1px rgba(255, 255, 255, 1)
+  ) !important;
+  transition: var(
+    --pc-btn-neu-transition,
+    box-shadow 250ms ease-in-out,
+    border-color 250ms ease-in-out,
+    color 250ms ease-in-out
+  ) !important;
 }
 
-.project-clad-storefront-nav__link:hover {
-  border-color: var(--pc-caesura-border-hover);
-  color: var(--pc-caesura-hover-red-text);
-  text-shadow: var(--pc-caesura-hover-red-text-glow);
-  box-shadow: var(--pc-btn-neu-shadow-hover);
+.project-clad-page .project-clad-storefront-nav__link * {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
 }
 
-.project-clad-storefront-nav__link:active {
-  box-shadow: var(--pc-btn-neu-shadow-active);
+.project-clad-page a.project-clad-storefront-nav__link:hover {
+  border-color: var(--pc-caesura-border-hover, rgba(255, 255, 255, 0.5)) !important;
+  color: var(--pc-caesura-hover-red-text, #c40000) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+  box-shadow: var(--pc-btn-neu-shadow-hover, none) !important;
+}
+
+.project-clad-page a.project-clad-storefront-nav__link:active {
+  box-shadow: var(
+    --pc-btn-neu-shadow-active,
+    inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
+    inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5)
+  ) !important;
+  border-color: transparent !important;
+  text-shadow: none !important;
+}
+
+.project-clad-page a.project-clad-storefront-nav__link:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.35) !important;
+  outline-offset: 3px !important;
 }
 
 .project-clad-storefront-nav__tools {
@@ -2412,7 +2517,7 @@ html:has(.project-clad-page--projects) body {
 }
 
 .project-clad-storefront-nav__account-initial {
-  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
   font-size: 0.95rem;
   font-weight: 400;
   line-height: 1;
@@ -2511,7 +2616,7 @@ html:has(.project-clad-page--projects) body {
   z-index: 0;
 }
 
-/* Project detail: Add member toolbar above storefront nav; popover anchored to button */
+/* Legacy: toolbar-only layout if reused elsewhere */
 .project-clad-page--projects.project-clad-page--detail .project-clad-header-toolbar .project-clad-header-slot--left {
   position: relative;
   display: block;

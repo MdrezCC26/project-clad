@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { StorefrontAppNavLink } from "../types/storefrontAppNav";
 
 function IconMenu({ className }: { className?: string }) {
@@ -52,6 +52,8 @@ export function ProjectCladStorefrontNav({
   accountUrl = "/account",
   accountInitial = null,
   cartItemCount = 0,
+  /** Renders inside the raised nav capsule between the logo cluster and search/account/cart. */
+  shellExtra = null,
 }: {
   logoDataUrl: string | null;
   logoAlt?: string;
@@ -64,6 +66,7 @@ export function ProjectCladStorefrontNav({
   accountInitial?: string | null;
   /** When greater than 0, shows a red count badge on the cart icon. */
   cartItemCount?: number;
+  shellExtra?: ReactNode;
 }) {
   const initial = accountInitial?.trim().charAt(0).toUpperCase() ?? "";
   const drawerRef = useRef<HTMLDetailsElement>(null);
@@ -142,6 +145,10 @@ export function ProjectCladStorefrontNav({
             )}
           </a>
         </div>
+
+        {shellExtra ? (
+          <div className="project-clad-storefront-nav__shell-extra">{shellExtra}</div>
+        ) : null}
 
         <div className="project-clad-storefront-nav__tools">
           <a

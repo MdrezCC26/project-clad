@@ -3314,10 +3314,10 @@ export default function ProjectDetailPage() {
           </Form>
         </div>
       </div>
-      <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       {inlineStyles.map((css, index) => (
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
+      <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       <main
         className={`project-clad-page project-clad-page--detail project-clad-page--projects${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
         style={
@@ -3472,72 +3472,6 @@ export default function ProjectDetailPage() {
             </div>
           ) : null}
           <header className="project-clad-header">
-            {canAdminMembers ? (
-              <div className="project-clad-header-toolbar">
-                <div className="project-clad-header-slot project-clad-header-slot--left">
-                  <button
-                    type="button"
-                    className="project-clad-button"
-                    data-projectclad-add-member-popover-toggle
-                    aria-haspopup="dialog"
-                    aria-expanded="false"
-                    aria-controls="projectclad-add-member-popover"
-                  >
-                    Add member
-                  </button>
-                  <div
-                    id="projectclad-add-member-popover"
-                    className="project-clad-add-member-popover"
-                    data-projectclad-add-member-popover
-                    role="dialog"
-                    aria-label="Add project member"
-                    aria-hidden="true"
-                  >
-                    <Form
-                      id="projectclad-add-member-form-header"
-                      method="post"
-                      action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
-                      className="project-clad-inline-form"
-                      data-projectclad-member-form
-                      data-projectclad-member-intent="add-member"
-                      data-projectclad-project-id={project.id}
-                      data-projectclad-ajax
-                      data-projectclad-intent="add-member"
-                    >
-                      <input type="hidden" name="intent" value="add-member" />
-                      <label htmlFor="member-email-header">Email</label>
-                      <div className="project-clad-neu-finder-input">
-                        <div className="project-clad-neu-finder-input__well">
-                          <input
-                            id="member-email-header"
-                            name="email"
-                            type="email"
-                            className="project-clad-neu-finder-input__field"
-                            placeholder="customer@example.com"
-                            required
-                            autoComplete="email"
-                            aria-label="Customer email"
-                          />
-                        </div>
-                      </div>
-                      <label htmlFor="member-role-header-role-edit">Project member role</label>
-                      <MemberRoleSelect idPrefix="member-role-header" defaultValue="edit" />
-                      <button
-                        type="submit"
-                        className="project-clad-button project-clad-reject-modal-btn"
-                      >
-                        Add
-                      </button>
-                      <span
-                        className="project-clad-muted"
-                        data-projectclad-form-message
-                        style={{ margin: 0, minHeight: "1.25em" }}
-                      />
-                    </Form>
-                  </div>
-                </div>
-              </div>
-            ) : null}
             <ProjectCladStorefrontNav
               logoDataUrl={logoDataUrl}
               logoHref="/"
@@ -3546,6 +3480,72 @@ export default function ProjectDetailPage() {
               searchUrl={storefrontAppNav.searchUrl}
               accountUrl={storefrontAppNav.accountUrl}
               accountInitial={navAccountInitial}
+              shellExtra={
+                canAdminMembers ? (
+                  <div className="project-clad-header-slot project-clad-header-slot--left">
+                    <button
+                      type="button"
+                      className="project-clad-button"
+                      data-projectclad-add-member-popover-toggle
+                      aria-haspopup="dialog"
+                      aria-expanded="false"
+                      aria-controls="projectclad-add-member-popover"
+                    >
+                      Add member
+                    </button>
+                    <div
+                      id="projectclad-add-member-popover"
+                      className="project-clad-add-member-popover"
+                      data-projectclad-add-member-popover
+                      role="dialog"
+                      aria-label="Add project member"
+                      aria-hidden="true"
+                    >
+                      <Form
+                        id="projectclad-add-member-form-header"
+                        method="post"
+                        action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+                        className="project-clad-inline-form"
+                        data-projectclad-member-form
+                        data-projectclad-member-intent="add-member"
+                        data-projectclad-project-id={project.id}
+                        data-projectclad-ajax
+                        data-projectclad-intent="add-member"
+                      >
+                        <input type="hidden" name="intent" value="add-member" />
+                        <label htmlFor="member-email-header">Email</label>
+                        <div className="project-clad-neu-finder-input">
+                          <div className="project-clad-neu-finder-input__well">
+                            <input
+                              id="member-email-header"
+                              name="email"
+                              type="email"
+                              className="project-clad-neu-finder-input__field"
+                              placeholder="customer@example.com"
+                              required
+                              autoComplete="email"
+                              aria-label="Customer email"
+                            />
+                          </div>
+                        </div>
+                        <label htmlFor="member-role-header-role-edit">Project member role</label>
+                        <MemberRoleSelect idPrefix="member-role-header" defaultValue="edit" />
+                        <button
+                          type="submit"
+                          className="project-clad-button project-clad-reject-modal-btn"
+                        >
+                          Add
+                        </button>
+                        <span
+                          className="project-clad-muted"
+                          data-projectclad-form-message
+                          style={{ margin: 0, minHeight: "1.25em" }}
+                        />
+                      </Form>
+                    </div>
+                  </div>
+                ) : null
+              }
             />
           </header>
 

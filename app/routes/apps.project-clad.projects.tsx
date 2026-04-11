@@ -365,10 +365,11 @@ export default function ProjectsPage() {
       {(themeStyles?.urls ?? []).map((href: string) => (
         <link key={href} rel="stylesheet" href={href} />
       ))}
-      <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       {inlineStyles.map((css, index) => (
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
+      {/* After theme inlines so Project Clad rules win over storefront base.css */}
+      <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       <main
         className={`project-clad-page project-clad-page--projects${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
         style={

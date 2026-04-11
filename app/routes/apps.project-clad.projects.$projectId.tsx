@@ -753,10 +753,10 @@ export default function ProjectDetailPage() {
           </Form>
         </div>
       </div>
-      <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       {inlineStyles.map((css, index) => (
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
+      <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       <main
         className={`project-clad-page project-clad-page--detail project-clad-page--projects${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
         style={
