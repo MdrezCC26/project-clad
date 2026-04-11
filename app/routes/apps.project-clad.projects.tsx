@@ -15,7 +15,6 @@ import {
   resolveVariantDisplayInfo,
 } from "../utils/variantInfo.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
-import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
 import {
@@ -552,6 +551,5 @@ export default function ProjectsPage() {
   );
 }
 
-export const links: LinksFunction = () => [
-  { rel: "stylesheet", href: proxyStylesUrl },
-];
+/* Proxy CSS is inlined in-document (after theme) — do not also <link> the same file or a cached copy can override fresh rules */
+export const links: LinksFunction = () => [];

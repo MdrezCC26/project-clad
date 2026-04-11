@@ -349,14 +349,22 @@ body.project-clad-leaving .project-clad-page {
   box-sizing: border-box;
 }
 
-/* All Project Clad pages: full-width container, equal padding, so logo/nav center correctly */
+/* All Project Clad pages: full-width container, equal padding, so logo/nav center correctly.
+ * Match Horizon-style gutters: theme sets --page-margin (16px / 40px); otherwise mirror those values
+ * so project tiles are not flush to the viewport while the grid gap stays unchanged. */
 .project-clad-page .project-clad-container--full-width,
 .project-clad-page .page-width.project-clad-container--full-width {
   max-width: none;
   width: 100%;
-  padding-left: 1rem;
-  padding-right: 1rem;
+  padding-inline: max(1rem, var(--page-margin, 16px));
   box-sizing: border-box;
+}
+
+@media screen and (min-width: 750px) {
+  .project-clad-page .project-clad-container--full-width,
+  .project-clad-page .page-width.project-clad-container--full-width {
+    padding-inline: max(1rem, var(--page-margin, 40px));
+  }
 }
 
 /* Order page: order cards full width (single column), no side-scroll */
@@ -2205,41 +2213,18 @@ html:has(.project-clad-page--projects) body {
 }
 
 /*
- * Storefront-style header (Canadian Cladding theme): raised stadium pill, hamburger + logo,
- * circular search / account / cart + cart badge — compact bar like the live storefront.
+ * Storefront header bar: same raised neu “chrome” as .project-clad-page--projects .project-clad-card
+ * (gradient face, deep soft shadow stack, --pc-card-radius, light noise) — not a separate stadium pill.
  */
 .project-clad-storefront-nav {
   --pc-storefront-nav-icon: 38px;
   --pc-storefront-nav-cluster-gap: 0.55rem;
-  /* Neon halo (.project-clad-storefront-nav::before) — warm red + cool rim */
-  --pc-storefront-shell-glow-hot: rgba(255, 72, 88, 0.85);
-  --pc-storefront-shell-glow-mid: rgba(255, 40, 52, 0.6);
-  --pc-storefront-shell-glow-deep: rgba(196, 0, 0, 0.45);
-  --pc-storefront-shell-glow-cool: rgba(56, 189, 248, 0.35);
-  --pc-storefront-shell-glow-amber: rgba(255, 200, 120, 0.28);
   width: 100%;
   max-width: 100%;
   margin: 0 0 1.25rem;
   box-sizing: border-box;
   overflow: visible;
   position: relative;
-}
-
-/* Neon sits on the wrapper so it isn’t hidden behind the shell’s opaque gradient */
-.project-clad-storefront-nav::before {
-  content: "";
-  position: absolute;
-  inset: -8px;
-  border-radius: 9999px;
-  z-index: 0;
-  pointer-events: none;
-  box-shadow:
-    0 0 24px 6px var(--pc-storefront-shell-glow-hot),
-    0 0 50px 14px var(--pc-storefront-shell-glow-mid),
-    0 0 84px 24px var(--pc-storefront-shell-glow-deep),
-    0 0 120px 34px var(--pc-storefront-shell-glow-cool),
-    0 0 150px 44px var(--pc-storefront-shell-glow-amber);
-  animation: pc-storefront-shell-glow-pulse 2.75s ease-in-out infinite;
 }
 
 .project-clad-storefront-nav__shell {
@@ -2250,40 +2235,50 @@ html:has(.project-clad-page--projects) body {
   align-items: center;
   justify-content: space-between;
   gap: var(--pc-storefront-nav-cluster-gap) 0.75rem;
-  padding: max(0.35rem, calc((var(--pc-storefront-nav-icon) + 8px - 1.25rem) / 2)) 0.65rem
-    max(0.35rem, calc((var(--pc-storefront-nav-icon) + 8px - 1.25rem) / 2)) 0.85rem;
-  border-radius: 9999px;
+  padding: max(0.35rem, calc((var(--pc-storefront-nav-icon) + 8px - 1.25rem) / 2)) 0.85rem
+    max(0.35rem, calc((var(--pc-storefront-nav-icon) + 8px - 1.25rem) / 2)) 1rem;
+  border-radius: var(--pc-card-radius);
   box-sizing: border-box;
-  background: linear-gradient(165deg, #eceef1 0%, #e4e6ea 45%, #dcdfe3 100%);
-  border: 1px solid rgba(255, 220, 224, 0.55);
+  border: none;
+  /* visible: flyout panel extends below the bar */
+  overflow: visible;
+  background: linear-gradient(168deg, #eef0f2 0%, var(--pc-btn-neu-bg) 38%, #dcdee3 100%);
   box-shadow:
-    0 2px 0 rgba(255, 255, 255, 0.75) inset,
-    0 -2px 8px rgba(0, 0, 0, 0.05) inset,
-    0 10px 28px rgba(0, 0, 0, 0.08),
-    0 2px 8px rgba(0, 0, 0, 0.04),
-    0 0 0 1px rgba(255, 160, 170, 0.22),
-    0 0 24px rgba(255, 60, 72, 0.35),
-    0 0 48px rgba(255, 40, 50, 0.22);
+    0 2px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -4px 10px rgba(0, 0, 0, 0.08) inset,
+    1px 0 0 rgba(255, 255, 255, 0.28),
+    -1px 0 1px rgba(0, 0, 0, 0.05),
+    0 3px 0 rgba(255, 255, 255, 0.42),
+    0 24px 50px rgba(0, 0, 0, 0.14),
+    0 10px 24px rgba(0, 0, 0, 0.1),
+    0 46px 82px -18px rgba(0, 0, 0, 0.2);
+  transform: scale(1);
+  transform-origin: center center;
+  transition: box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1), filter 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-@keyframes pc-storefront-shell-glow-pulse {
-  0%,
-  100% {
-    opacity: 0.82;
-    filter: brightness(1);
-  }
-  50% {
-    opacity: 1;
-    filter: brightness(1.12);
-  }
+/* Match project card grain (.project-clad-page--projects .project-clad-card::after) */
+.project-clad-storefront-nav__shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' fill='%23808080'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: inherit;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .project-clad-storefront-nav::before {
-    animation: none;
-    opacity: 0.95;
-    filter: none;
-  }
+.project-clad-storefront-nav__shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Projects list: tiles use --pc-neu-radius; match that bar radius on the same pages */
+.project-clad-page--projects:not(.project-clad-page--detail) .project-clad-storefront-nav__shell {
+  border-radius: var(--pc-neu-radius);
 }
 
 .project-clad-storefront-nav__left {
@@ -2429,19 +2424,28 @@ html:has(.project-clad-page--projects) body {
   text-decoration: none !important;
   /* !important: beats .project-clad-page * { Helvetica } and theme `a` rules */
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
-  font-size: var(--pc-button-font-size, calc(0.9rem * 1.53)) !important;
-  font-weight: 400 !important;
+  /* Mirror --pc-button-font-size without nested var() (some contexts resolve it smaller) */
+  font-size: calc(0.9rem * var(--pc-text-scale, 1.53)) !important;
+  font-weight: 700 !important;
   letter-spacing: 0.03em !important;
   text-transform: uppercase !important;
   color: var(--pc-btn-neu-fg, #484f60) !important;
   line-height: var(--pc-button-line-height, 1.25) !important;
+  text-shadow: var(
+    --pc-btn-neu-label-shadow,
+    -0.45px 0 0 rgba(255, 118, 64, 0.26),
+    0.45px 0 0 rgba(72, 168, 255, 0.24)
+  ) !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
   border: var(--pc-caesura-border, 3px solid transparent) !important;
   border-color: transparent !important;
   background: var(--pc-caesura-bg, #ebecf0) !important;
+  /* Inset wells — same language as caesura inputs / neu-finder, not raised pills */
   box-shadow: var(
-    --pc-btn-neu-shadow,
-    8px 8px 12px -2px rgba(72, 79, 96, 0.4),
-    -6px -6px 12px -1px rgba(255, 255, 255, 1)
+    --pc-caesura-inset,
+    inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
+    inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5)
   ) !important;
   transition: var(
     --pc-btn-neu-transition,
@@ -2453,22 +2457,52 @@ html:has(.project-clad-page--projects) body {
 
 .project-clad-page .project-clad-storefront-nav__link * {
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: inherit !important;
+  font-size: inherit !important;
+  letter-spacing: inherit !important;
+}
+
+/* Flyout: re-assert typography + inset chrome (theme sometimes targets menu `a` after our sheet) */
+.project-clad-page .project-clad-storefront-nav__drawer-panel a.project-clad-storefront-nav__link {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.9rem * var(--pc-text-scale, 1.53)) !important;
+  font-weight: 700 !important;
+  font-style: normal !important;
+  letter-spacing: 0.03em !important;
+  line-height: var(--pc-button-line-height, 1.25) !important;
+  text-transform: uppercase !important;
+  color: var(--pc-btn-neu-fg, #484f60) !important;
+  text-shadow: var(
+    --pc-btn-neu-label-shadow,
+    -0.45px 0 0 rgba(255, 118, 64, 0.26),
+    0.45px 0 0 rgba(72, 168, 255, 0.24)
+  ) !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  box-shadow: var(
+    --pc-caesura-inset,
+    inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
+    inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5)
+  ) !important;
 }
 
 .project-clad-page a.project-clad-storefront-nav__link:hover {
   border-color: var(--pc-caesura-border-hover, rgba(255, 255, 255, 0.5)) !important;
   color: var(--pc-caesura-hover-red-text, #c40000) !important;
   text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
-  box-shadow: var(--pc-btn-neu-shadow-hover, none) !important;
+  /* Same “rim” treatment as caesura inputs on focus — lifts out of the well slightly */
+  box-shadow: none !important;
+  filter: none !important;
 }
 
 .project-clad-page a.project-clad-storefront-nav__link:active {
   box-shadow: var(
-    --pc-btn-neu-shadow-active,
+    --pc-caesura-inset,
     inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
     inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5)
   ) !important;
   border-color: transparent !important;
+  filter: brightness(0.97);
   text-shadow: none !important;
 }
 
@@ -2505,16 +2539,7 @@ html:has(.project-clad-page--projects) body {
   box-sizing: border-box;
 }
 
-.project-clad-storefront-nav__icon-btn--avatar {
-  background: var(--pc-caesura-dark);
-  color: #fff;
-}
-
-.project-clad-storefront-nav__icon-btn--avatar:hover {
-  color: #fff;
-  border-color: var(--pc-caesura-border-hover);
-  box-shadow: var(--pc-btn-neu-shadow-hover);
-}
+/* Initial uses same raised neu as other icon pills (.project-clad-storefront-nav__icon-btn); no dark inset disc */
 
 .project-clad-storefront-nav__account-initial {
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
@@ -2552,10 +2577,6 @@ html:has(.project-clad-page--projects) body {
   border-color: var(--pc-caesura-border-hover);
   color: var(--pc-caesura-hover-red-text);
   box-shadow: var(--pc-btn-neu-shadow-hover);
-}
-
-.project-clad-storefront-nav__icon-btn--avatar:hover {
-  color: #fff;
 }
 
 .project-clad-storefront-nav__icon-btn:active {

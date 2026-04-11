@@ -24,7 +24,6 @@ import {
 } from "../utils/projectAccess.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
-import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
@@ -1071,6 +1070,4 @@ export default function ProjectDetailPage() {
   );
 }
 
-export const links: LinksFunction = () => [
-  { rel: "stylesheet", href: proxyStylesUrl },
-];
+export const links: LinksFunction = () => [];
