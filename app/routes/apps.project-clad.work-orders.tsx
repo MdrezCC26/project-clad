@@ -8,7 +8,7 @@ import { getThemeStyles } from "../utils/themeAssets.server";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
-import { getStorefrontAppNav } from "../utils/storefrontAppNav.server";
+import { getStorefrontAppNav } from "../utils/storefrontAppNav";
 
 /**
  * Work orders are managed from the embedded Shopify admin app (staff), not the storefront.

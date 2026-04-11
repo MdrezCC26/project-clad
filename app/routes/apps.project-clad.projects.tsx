@@ -29,7 +29,7 @@ import {
   shopStringFilter,
 } from "../utils/projectAccess.server";
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
-import { getStorefrontAppNav } from "../utils/storefrontAppNav.server";
+import { getStorefrontAppNav } from "../utils/storefrontAppNav";
 
 type ProjectListItem = {
   id: string;

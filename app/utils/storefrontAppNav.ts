@@ -1,6 +1,6 @@
 /**
  * Storefront-style nav for app-proxy pages: same relative URLs as the Shopify storefront
- * (e.g. /, /cart, /search, /account) so navigation behaves like the theme.
+ * (e.g. /, /cart, /search, /account). Shared module (not .server) so admin settings UI can import it.
  */
 
 import type { StorefrontAppNavLink } from "../types/storefrontAppNav";

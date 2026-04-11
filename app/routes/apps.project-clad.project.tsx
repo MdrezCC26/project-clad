@@ -44,7 +44,7 @@ import proxyStylesUrl from "../styles/project-clad-proxy.css?url";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
-import { getStorefrontAppNav } from "../utils/storefrontAppNav.server";
+import { getStorefrontAppNav } from "../utils/storefrontAppNav";
 import { logProjectActivity } from "../utils/projectActivity.server";
 import { sendProjectStatusNotificationEmail } from "../utils/orderCreatedEmail.server";
 import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";

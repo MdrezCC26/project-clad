@@ -21,7 +21,7 @@ import {
 import {
   parseStorefrontNavLinksJson,
   STOREFRONT_APP_NAV_JSON_PLACEHOLDER,
-} from "../utils/storefrontAppNav.server";
+} from "../utils/storefrontAppNav";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
