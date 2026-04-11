@@ -18,6 +18,22 @@ export default async function handleRequest(
   reactRouterContext: EntryContext
 ) {
   addDocumentResponseHeaders(request, responseHeaders);
+
+  // App-proxy HTML must not be cached by intermediaries or the browser, or customers
+  // keep an old shell (nav, CSS) after deploy until a hard refresh.
+  try {
+    const url = new URL(request.url);
+    if (url.pathname.startsWith("/apps/project-clad")) {
+      responseHeaders.set(
+        "Cache-Control",
+        "private, no-store, no-cache, max-age=0, must-revalidate",
+      );
+      responseHeaders.set("Pragma", "no-cache");
+    }
+  } catch {
+    // ignore malformed request URL
+  }
+
   const userAgent = request.headers.get("user-agent");
   const callbackName = isbot(userAgent ?? '')
     ? "onAllReady"
