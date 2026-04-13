@@ -2240,7 +2240,7 @@ html:has(.project-clad-page--projects) body {
   position: relative;
   z-index: 1;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--pc-storefront-nav-cluster-gap) 0.75rem;
@@ -2270,7 +2270,7 @@ html:has(.project-clad-page--projects) body {
   display: flex;
   align-items: center;
   gap: var(--pc-storefront-nav-cluster-gap);
-  flex-shrink: 0;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -2580,6 +2580,80 @@ html:has(.project-clad-page--projects) body {
 .project-clad-storefront-nav__icon {
   display: block;
   flex-shrink: 0;
+}
+
+/*
+ * Narrow viewports: one row — menu, logo, Add member (if any), search / account / cart.
+ * Slightly smaller circles + gaps + compact Add member pill so nothing wraps.
+ */
+@media (max-width: 749px) {
+  .project-clad-storefront-nav {
+    --pc-storefront-nav-icon: 34px;
+    --pc-storefront-nav-cluster-gap: 0.32rem;
+  }
+
+  .project-clad-storefront-nav__shell {
+    flex-wrap: nowrap;
+    column-gap: 0.4rem;
+    row-gap: 0;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .project-clad-storefront-nav__left {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .project-clad-storefront-nav__logo-link {
+    max-width: min(132px, 36vw);
+  }
+
+  .project-clad-storefront-nav__shell-extra {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-end;
+    overflow: visible;
+  }
+
+  .project-clad-storefront-nav__shell-extra .project-clad-header-slot--left {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .project-clad-storefront-nav__shell-extra .project-clad-button {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    padding-left: 0.55rem !important;
+    padding-right: 0.55rem !important;
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+    min-height: calc(var(--pc-storefront-nav-icon) + 2px) !important;
+    font-size: calc(0.62rem * var(--pc-text-scale, 1.53)) !important;
+    letter-spacing: 0.02em !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .project-clad-storefront-nav__shell-extra .project-clad-add-member-popover {
+    left: auto;
+    right: 0;
+    transform: translateY(-6px) scale(0.985);
+    transform-origin: top right;
+  }
+
+  .project-clad-storefront-nav__shell-extra
+    .project-clad-add-member-popover.project-clad-add-member-popover--open {
+    transform: translateY(0) scale(1);
+  }
+
+  .project-clad-storefront-nav__tools {
+    flex-shrink: 0;
+    gap: var(--pc-storefront-nav-cluster-gap);
+  }
 }
 
 .project-clad-header-toolbar {

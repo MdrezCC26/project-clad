@@ -135,7 +135,7 @@ body.cc-store-neu #header-component .menu-list--mobile a.menu-list__item {
 
 /* Same off-white field as Project Clad app (.project-clad-page) site-wide */
 html:has(body.cc-store-neu) {
-  background-color: var(--pc-caesura-bg);
+  background-color: var(--pc-caesura-bg) !important;
 }
 
 body.cc-store-neu #MainContent.content-for-layout {
@@ -298,6 +298,105 @@ body.cc-store-neu #header-component .header__drawer {
     padding: var(--cc-header-tray-pad-block) 0.65rem !important;
     gap: 0.35rem 0.25rem !important;
   }
+
+  /*
+   * Mobile: the block above re-applies header-section top padding. Transparent header MUST win here by
+   * source order — otherwise the “white strip” under the status bar / above the hero returns on phones.
+   */
+  body.cc-store-neu:has(#header-component[transparent]) #header-group .header-section:first-of-type,
+  body.cc-store-neu:has(#header-component[transparent]) #header-group > .shopify-section.header-section,
+  body.cc-store-neu:has(#header-component[transparent])
+    #header-group
+    .shopify-section-group
+    .shopify-section.header-section {
+    padding-block-start: 0 !important;
+    /*
+     * Horizon’s --header-group-height sums child offsetHeight (margins excluded). The theme’s
+     * margin-bottom here left a thin band above the hero/main seam that reads as a “white strip” on phones.
+     */
+    padding-block-end: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Pull first main section under the floating tray; +1px kills subpixel hairlines under the header stack */
+  body.cc-store-neu:has(#header-component[transparent]) .content-for-layout > .shopify-section:first-child {
+    margin-top: calc(-1 * var(--header-group-height, 0px) - 1px) !important;
+  }
+
+  /*
+   * First-paint hero: own compositor layer so scroll + rubber-band doesn’t thrash repaints with the
+   * header overlap margin (pairs with debounced --header-group-height in header.js).
+   */
+  body.cc-store-neu .content-for-layout > .shopify-section.hero-wrapper:first-child .hero__media-grid {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+  }
+
+  /*
+   * Extend the first section’s theme background into the notch/safe-area so the hero isn’t framed by
+   * a flat white/grey band (mobile + transparent header).
+   */
+  body.cc-store-neu:has(#header-component[transparent])
+    .content-for-layout
+    > .shopify-section:first-child
+    > .section-background {
+    top: calc(-1 * env(safe-area-inset-top, 0px)) !important;
+  }
+
+  /* Pull the seam tight so a thin gap doesn’t flash #MainContent / scheme-1 white next to the hero */
+  body.cc-store-neu .content-for-layout > .shopify-section:first-child + .shopify-section {
+    margin-top: -6px !important;
+  }
+
+  /*
+   * hero.liquid raises all following sections to z-index:2 for fixed-hero desktop stacking. On mobile the
+   * hero media is not fixed, but that rule still runs and can produce a harsh “white shelf” behind
+   * rounded group cards (anti-alias + scheme-1 fills). Natural document order is enough on narrow viewports.
+   */
+  body.cc-store-neu .shopify-section:has([data-cc-hero-fixed]) ~ .shopify-section {
+    z-index: auto !important;
+  }
+
+  /*
+   * Transparent + sticky (Horizon sets transparent="not-sticky"): full-width underlays use the top
+   * color scheme (often white) behind the neumorphic pill. Kill them on mobile for every sticky phase
+   * (inactive / active) so rubber-banding and IO toggles never flash a bright sheet.
+   */
+  body.cc-store-neu #header-component[transparent] .header__underlay-closed,
+  body.cc-store-neu #header-component[transparent] .header__underlay-open {
+    background: transparent !important;
+    background-image: none !important;
+  }
+
+  body.cc-store-neu #header-component[transparent] .header__underlay-open::after {
+    display: none !important;
+  }
+
+  /* Bounce overscroll: avoid default “paper white” above the page on many mobile browsers */
+  html:has(body.cc-store-neu) {
+    overscroll-behavior-y: none;
+  }
+
+  body.cc-store-neu {
+    overscroll-behavior-y: none;
+  }
+}
+
+/*
+ * Transparent + hero: header-section padding-block-start duplicated the tray’s top offset and left a
+ * strip above the hero. The tray already uses top: max(--cc-header-top-air, safe-area); zeroing
+ * section top padding lets base.css margin-top: calc(-1 * --header-group-height) pull the hero up.
+ */
+/* Use [transparent] on the host — do not require .header (avoids :has() misses on some builds). */
+body.cc-store-neu:has(#header-component[transparent]) #header-group .header-section:first-of-type,
+body.cc-store-neu:has(#header-component[transparent]) #header-group > .shopify-section.header-section,
+body.cc-store-neu:has(#header-component[transparent])
+  #header-group
+  .shopify-section-group
+  .shopify-section.header-section {
+  padding-block-start: 0 !important;
+  padding-block-end: 0 !important;
+  margin-bottom: 0 !important;
 }
 
 @media screen and (min-width: 750px) {
@@ -641,6 +740,11 @@ body.cc-store-neu #header-component .header__row--top .header-actions__cart-icon
     4px 5px 12px rgba(72, 79, 96, 0.36) !important;
 }
 
+/* Cart count badge: red disc + white type when line items exist */
+body.cc-store-neu .header-actions__cart-icon--has-cart .cart-bubble__background {
+  background: var(--color-1) !important;
+}
+
 body.cc-store-neu #header-component .header__row--top .account-button:not(.account-button--text) shopify-account {
   width: 100%;
   height: 100%;
@@ -703,11 +807,6 @@ body.cc-store-neu #header-component[data-submenu-overlap-bottom-row] .header__un
     var(--pc-caesura-bg) 0 var(--top-row-height),
     var(--color-submenu) var(--top-row-height) 100%
   ) !important;
-}
-
-/* Cart count badge stays accent when line items exist; bag glyph uses default dark until hover (see above) */
-body.cc-store-neu .header-actions__cart-icon--has-cart .cart-bubble__background {
-  background: var(--color-1) !important;
 }
 
 /* Compact neumorphic nav drawer only (not cart / facet drawers) */
@@ -1113,6 +1212,74 @@ body.cc-store-neu .itunes-cflow__input::placeholder {
   color: rgb(72 79 96 / 0.5) !important;
 }
 
+/*
+ * Coverflow range: inset trough on .itunes-cflow__range-shell; native track transparent so no white UA chrome.
+ */
+body.cc-store-neu .itunes-cflow__range-shell {
+  background: var(--pc-caesura-bg) !important;
+  box-shadow:
+    inset 3px 3px 6px rgb(72 79 96 / 0.26),
+    inset -2px -2px 5px rgb(255 255 255 / 0.18) !important;
+}
+
+body.cc-store-neu .itunes-cflow__range-shell:focus-within {
+  outline: none !important;
+  box-shadow:
+    inset 3px 3px 6px rgb(72 79 96 / 0.26),
+    inset -2px -2px 5px rgb(255 255 255 / 0.18),
+    0 0 0 1px rgb(255 255 255 / 0.55),
+    0 0 16px 5px rgb(255 255 255 / 0.48),
+    0 0 32px 12px rgb(255 255 255 / 0.2) !important;
+}
+
+body.cc-store-neu .itunes-cflow__range:focus-visible::-webkit-slider-thumb,
+body.cc-store-neu .itunes-cflow__range:active::-webkit-slider-thumb {
+  border-color: rgb(255 255 255 / 0.55) !important;
+  box-shadow:
+    0 0 0 2px rgb(255 255 255 / 0.78),
+    0 0 12px 4px rgb(255 255 255 / 0.5),
+    0 0 26px 10px rgb(255 255 255 / 0.22) !important;
+}
+
+body.cc-store-neu .itunes-cflow__range:focus-visible::-moz-range-thumb,
+body.cc-store-neu .itunes-cflow__range:active::-moz-range-thumb {
+  border-color: rgb(255 255 255 / 0.55) !important;
+  box-shadow:
+    0 0 0 2px rgb(255 255 255 / 0.78),
+    0 0 12px 4px rgb(255 255 255 / 0.5),
+    0 0 26px 10px rgb(255 255 255 / 0.22) !important;
+}
+
+body.cc-store-neu .itunes-cflow__range {
+  accent-color: #b91c1c !important;
+  color-scheme: light !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+body.cc-store-neu .itunes-cflow__range::-webkit-slider-container {
+  background: transparent !important;
+}
+
+body.cc-store-neu .itunes-cflow__range::-webkit-slider-runnable-track {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  background-image: var(--itunes-range-fill) !important;
+  background-size: calc(var(--itunes-range-pct) * 1%) 100% !important;
+  background-repeat: no-repeat !important;
+  background-position: 0 50% !important;
+  box-shadow: none !important;
+}
+
+body.cc-store-neu .itunes-cflow__range::-moz-range-track {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
 body.cc-store-neu search-page-input-component {
   background: transparent !important;
 }
@@ -1156,6 +1323,130 @@ body.cc-store-neu .predictive-search-form__footer .predictive-search__search-but
   body.cc-store-neu .predictive-search-form__footer .predictive-search__search-button.button {
     transition-duration: 0.01ms !important;
   }
+}
+
+/*
+ * Search modal (dialog): match caesura field + raised shell.
+ * Horizon’s bundled rules strip .predictive-search-form__header-inner border on desktop inside .dialog-modal.
+ */
+body.cc-store-neu .search-modal__content.dialog-modal[open] {
+  background: var(--pc-caesura-bg) !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  color: var(--pc-caesura-dark) !important;
+}
+
+@media screen and (min-width: 750px) {
+  body.cc-store-neu .search-modal__content.dialog-modal[open] {
+    border-radius: var(--pc-neu-radius) !important;
+  }
+}
+
+@media screen and (min-width: 750px) {
+  body.cc-store-neu .search-modal__content.dialog-modal::backdrop {
+    background: rgb(72 79 96 / 0.2);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+}
+
+body.cc-store-neu .search-modal__content.dialog-modal .predictive-search {
+  background-color: transparent !important;
+}
+
+body.cc-store-neu .search-modal__content.dialog-modal .predictive-search-form__header {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-bottom: none !important;
+  border-radius: 0 !important;
+}
+
+@media screen and (min-width: 750px) {
+  body.cc-store-neu .search-modal__content.dialog-modal .predictive-search-form__header {
+    padding: var(--padding-2xs, 0.25rem) var(--padding-sm, 0.75rem) var(--padding-xs, 0.5rem) !important;
+  }
+}
+
+body.cc-store-neu .search-modal__content.dialog-modal .predictive-search-form__header-inner {
+  border-radius: 9999px !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-caesura-inset) !important;
+  transition: box-shadow 250ms ease-in-out, border-color 250ms ease-in-out !important;
+}
+
+body.cc-store-neu .search-modal__content.dialog-modal .predictive-search-form__header-inner:focus-within {
+  box-shadow: var(--pc-caesura-field-focus-outer) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  outline: none !important;
+}
+
+body.cc-store-neu .search-modal__content.dialog-modal .predictive-search-form__header::before {
+  display: none !important;
+}
+
+body.cc-store-neu .search-modal__content.dialog-modal .predictive-search-form__content,
+body.cc-store-neu .search-modal__content.dialog-modal .predictive-search-form__content-wrapper {
+  background-color: var(--pc-caesura-bg) !important;
+}
+
+@media screen and (min-width: 750px) {
+  body.cc-store-neu .search-modal__content.dialog-modal .predictive-search-form__content-wrapper {
+    border-radius: 0 0 var(--pc-neu-radius) var(--pc-neu-radius) !important;
+  }
+}
+
+body.cc-store-neu .search-modal__content.dialog-modal .predictive-search-form__footer {
+  --to-top-gradient-background: linear-gradient(
+    to top,
+    rgb(235 236 240 / 0.96),
+    rgb(235 236 240 / 0.9),
+    rgb(235 236 240 / 0.42),
+    transparent
+  ) !important;
+}
+
+body.cc-store-neu .search-modal__content.dialog-modal .predictive-search__close-modal-button.button {
+  width: var(--cc-header-nav-icon) !important;
+  height: var(--cc-header-nav-icon) !important;
+  min-width: var(--cc-header-nav-icon) !important;
+  min-height: var(--cc-header-nav-icon) !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  background: var(--pc-caesura-raised) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  color: var(--pc-caesura-dark) !important;
+  transition: var(--pc-caesura-transition) !important;
+}
+
+body.cc-store-neu .search-modal__content.dialog-modal .predictive-search__close-modal-button.button:hover {
+  z-index: 1 !important;
+  box-shadow: none !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  background: var(--pc-caesura-bg) !important;
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+}
+
+body.cc-store-neu .search-modal__content.dialog-modal .predictive-search__close-modal-button.button:active {
+  box-shadow: var(--pc-btn-neu-shadow-active) !important;
+  border-color: transparent !important;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: none !important;
+}
+
+/* Thumbnail radius inside search cards (inline theme style on component — needs !important) */
+body.cc-store-neu #search-modal predictive-search-component.predictive-search {
+  --product-corner-radius: 10px !important;
 }
 
 /* --- Product section: caesura canvas --- */
@@ -1359,6 +1650,111 @@ body.cc-store-neu .product-details .quantity-selector input[type="number"] {
   }
 }
 
+/* Cart / cart drawer line: quantity pill + circular remove — match PDP quantity + header icon circles */
+body.cc-store-neu .cart-items .quantity-selector {
+  border: var(--pc-caesura-border) !important;
+  border-radius: 9999px !important;
+  background: var(--pc-caesura-bg) !important;
+  color: var(--pc-btn-neu-fg) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-caesura-transition) !important;
+}
+
+body.cc-store-neu .cart-items .quantity-selector:hover {
+  background: var(--pc-caesura-bg) !important;
+  box-shadow: var(--pc-btn-neu-shadow-hover) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+}
+
+body.cc-store-neu .cart-items .quantity-selector :is(.quantity-minus, .quantity-plus) {
+  color: inherit !important;
+  border-radius: 9999px !important;
+  transition: var(--pc-caesura-transition) !important;
+}
+
+body.cc-store-neu .cart-items .quantity-selector :is(.quantity-minus, .quantity-plus):hover:not(:disabled) {
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+}
+
+body.cc-store-neu .cart-items .quantity-selector :is(.quantity-minus, .quantity-plus):active:not(:disabled) .svg-wrapper {
+  transform: scale(0.96);
+}
+
+body.cc-store-neu .cart-items .quantity-selector input[type="number"] {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+body.cc-store-neu .cart-items .cart-items__remove {
+  flex-shrink: 0;
+  border-radius: 50% !important;
+  border: var(--pc-caesura-border) !important;
+  border-color: transparent !important;
+  background: var(--pc-caesura-raised) !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  color: var(--pc-btn-neu-fg) !important;
+  transition: var(--pc-caesura-transition) !important;
+}
+
+body.cc-store-neu .cart-items .cart-items__remove:hover {
+  z-index: 1;
+  box-shadow: none !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  background: var(--pc-caesura-bg) !important;
+  color: var(--pc-caesura-hover-red-text) !important;
+}
+
+body.cc-store-neu .cart-items .cart-items__remove:active {
+  box-shadow: var(--pc-btn-neu-shadow-active) !important;
+  border-color: transparent !important;
+  text-shadow: none !important;
+  color: var(--pc-btn-neu-fg) !important;
+}
+
+/* Empty cart page + drawer: Continue shopping — same neu pill as PDP add to cart */
+body.cc-store-neu a.button.cart-items__empty-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-decoration: none !important;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: var(--pc-button-font-size) !important;
+  letter-spacing: 0.03em !important;
+  line-height: var(--pc-button-line-height) !important;
+  text-transform: uppercase !important;
+  min-height: var(--pc-button-min-height) !important;
+  padding: var(--pc-button-padding-y) calc(var(--pc-button-padding-x) + 0.35rem) !important;
+  border: var(--pc-caesura-border) !important;
+  border-radius: 9999px !important;
+  background: var(--pc-caesura-bg) !important;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: none !important;
+  box-shadow: var(--pc-btn-neu-shadow) !important;
+  transition: var(--pc-caesura-transition) !important;
+  outline: none !important;
+  box-sizing: border-box !important;
+}
+
+body.cc-store-neu a.button.cart-items__empty-button:hover {
+  box-shadow: var(--pc-btn-neu-shadow-hover) !important;
+  border-color: var(--pc-caesura-border-hover) !important;
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+  background: var(--pc-caesura-bg) !important;
+}
+
+body.cc-store-neu a.button.cart-items__empty-button:active {
+  box-shadow: var(--pc-btn-neu-shadow-active) !important;
+  border-color: transparent !important;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: none !important;
+}
+
+body.cc-store-neu a.button.cart-items__empty-button .button-text {
+  color: inherit !important;
+}
+
 /* --- Product cards: white convex tile on caesura field; hover = flat + white rim + glow (like neu buttons) --- */
 body.cc-store-neu .product-grid__item {
   border: none !important;
@@ -1375,6 +1771,13 @@ body.cc-store-neu .product-card {
   overflow: hidden;
   --color-foreground: var(--pc-caesura-dark);
   --color-foreground-rgb: 72 79 96;
+}
+
+@media screen and (max-width: 749px) {
+  /* Narrow columns: 24px radius reads huge and clips rectangular product art */
+  body.cc-store-neu .product-card {
+    border-radius: clamp(6px, 2vw, 11px) !important;
+  }
 }
 
 /*
@@ -1414,6 +1817,18 @@ body.cc-store-neu [product-grid-view='zoom-out'] .product-card {
   border-radius: clamp(10px, 2.5vw, 18px) !important;
 }
 
+@media screen and (max-width: 749px) {
+  body.cc-store-neu [product-grid-view='zoom-out'] .product-card {
+    border-radius: clamp(6px, 2vw, 11px) !important;
+  }
+}
+
+/* Search product rows: image only — title/price/extras hidden (full-card link still has .visually-hidden title for a11y) */
+body.cc-store-neu .predictive-search-results__wrapper-products .resource-card[data-resource-type='product'] .resource-card__content,
+body.cc-store-neu .recently-viewed-wrapper .resource-card[data-resource-type='product'] .resource-card__content {
+  display: none !important;
+}
+
 /* Predictive search / recently viewed: resource-card, not <product-card> */
 body.cc-store-neu .predictive-search-results__card--product .resource-card,
 body.cc-store-neu .recently-viewed-wrapper .predictive-search-results__card--product .resource-card {
@@ -1422,11 +1837,19 @@ body.cc-store-neu .recently-viewed-wrapper .predictive-search-results__card--pro
   box-sizing: border-box;
   border: var(--pc-caesura-border) !important;
   border-color: transparent !important;
-  border-radius: var(--pc-neu-radius) !important;
+  /* Tighter than main neu cards (--pc-neu-radius); matches dense search grids */
+  border-radius: clamp(6px, 1.2vw, 10px) !important;
   background: var(--pc-caesura-light) !important;
   box-shadow: var(--pc-btn-neu-shadow) !important;
   transition: var(--pc-caesura-transition) !important;
   overflow: hidden;
+}
+
+@media screen and (max-width: 749px) {
+  body.cc-store-neu .predictive-search-results__card--product .resource-card,
+  body.cc-store-neu .recently-viewed-wrapper .predictive-search-results__card--product .resource-card {
+    border-radius: clamp(4px, 1.8vw, 8px) !important;
+  }
 }
 
 body.cc-store-neu .predictive-search-results__card--product:hover .resource-card,
@@ -1484,7 +1907,7 @@ body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) {
   isolation: isolate;
   padding-bottom: clamp(0.35rem, 1.2vw, 0.85rem);
   /* Rounds the section shell where it meets the hero above (pairs with .section-background) */
-  border-radius: var(--pc-neu-radius) var(--pc-neu-radius) 0 0;
+  border-radius: var(--pc-neu-radius) var(--pc-neu-radius) 0 0 !important;
 }
 
 /* Flat caesura through the boundary — avoids a darker/lighter seam from scheme gradients or tints */
@@ -1494,8 +1917,15 @@ body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) + .shopif
   background-image: none !important;
 }
 
-body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) > .section-background,
-body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) + .shopify-section > .section-background {
+/*
+ * Split showcase: .section-background is omitted in snippets/section.liquid when cc_neu_showcase_tiles.
+ * Fallback: hide any stray node (editor preview, cached HTML) — transparent still composites; display:none does not.
+ */
+body.cc-store-neu #MainContent .shopify-section:has(.section.cc-neu-split-showcase) > .section-background {
+  display: none !important;
+}
+
+body.cc-store-neu #MainContent .shopify-section:has(.section.cc-neu-split-showcase) + .shopify-section > .section-background {
   background: var(--pc-caesura-bg) !important;
   background-color: var(--pc-caesura-bg) !important;
   background-image: none !important;
@@ -1525,13 +1955,6 @@ body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) + .shopif
 
 body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) + .shopify-section {
   margin-top: -1px;
-}
-
-body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) > .section-background {
-  /* Hero/media: rounded top only; bottom stays square so it meets the tray below */
-  border-radius: var(--pc-neu-radius) var(--pc-neu-radius) 0 0 !important;
-  overflow: hidden;
-  box-shadow: none !important;
 }
 
 /*
@@ -1598,6 +2021,38 @@ body.cc-store-neu .section.cc-neu-split-showcase .custom-section-content.border-
     inset 2px 0 7px -2px rgba(72, 79, 96, 0.16),
     inset -2px 0 7px -2px rgba(255, 255, 255, 0.2),
     inset 0 -14px 18px -14px var(--pc-caesura-bg) !important;
+}
+
+@media screen and (max-width: 749px) {
+  /*
+   * Mobile / WebKit: the visible caesura shell is often the .shopify-section fill (section-background
+   * sits at z-index: -2 under that paint). Longhands + a composited layer restore top radii above the hero seam.
+   */
+  body.cc-store-neu .shopify-section:has(.section.cc-neu-split-showcase) {
+    border-top-left-radius: var(--pc-neu-radius) !important;
+    border-top-right-radius: var(--pc-neu-radius) !important;
+  }
+
+  body.cc-store-neu .section.cc-neu-split-showcase .custom-section-content.border-style {
+    border-top-left-radius: var(--pc-neu-radius) !important;
+    border-top-right-radius: var(--pc-neu-radius) !important;
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+
+  body.cc-store-neu
+    .section.cc-neu-split-showcase:has(.custom-section-background .background-image-container)
+    .custom-section-background,
+  body.cc-store-neu
+    .section.cc-neu-split-showcase:has(.custom-section-background video-background-component)
+    .custom-section-background {
+    border-top-left-radius: var(--pc-neu-radius) !important;
+    border-top-right-radius: var(--pc-neu-radius) !important;
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
 }
 
 body.cc-store-neu .section.cc-neu-split-showcase .section-content-wrapper.layout-panel-flex--row {
@@ -1811,4 +2266,98 @@ body.cc-store-neu
   .email-signup__input-group--arrow.email-signup__input-group--integrated
   .email-signup__button--arrow.email-signup__button--integrated:active {
   box-shadow: var(--pc-btn-neu-shadow-active) !important;
+}
+
+/* =============================================================================
+ * Tail overrides (loaded end of <body> in theme.liquid — after content_for_header + bundles)
+ * ============================================================================= */
+
+/* Hero bottom border reads as a white strip above the next section on light schemes (mobile + desktop) */
+body.cc-store-neu .content-for-layout > .shopify-section:first-child:has(+ .shopify-section) .hero__container {
+  border-bottom: none !important;
+  border-bottom-width: 0 !important;
+}
+
+@media screen and (max-width: 749px) {
+  /* Same hairline issue when first section is slideshow / full-bleed media (not .hero__container) */
+  body.cc-store-neu .content-for-layout > .shopify-section:first-child:has(+ .shopify-section) .slideshow-section {
+    box-shadow: none !important;
+    border-bottom: none !important;
+  }
+
+  /*
+   * Second main section (below hero/slideshow): square top on mobile so the shell matches the full-bleed
+   * .section-background sheet — avoids mismatched “rounded tray vs square layer” at the seam.
+   * Inner blocks (e.g. group cards) keep their own border-radius from theme settings.
+   */
+  body.cc-store-neu .content-for-layout > .shopify-section:first-child + .shopify-section {
+    border-radius: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    background-color: var(--pc-caesura-bg) !important;
+  }
+
+  body.cc-store-neu .content-for-layout > .shopify-section:first-child + .shopify-section > .section-background {
+    border-radius: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    clip-path: none !important;
+    overflow: visible !important;
+    background-color: var(--pc-caesura-bg) !important;
+    background-image: none !important;
+    transform: none;
+    -webkit-backface-visibility: visible;
+    backface-visibility: visible;
+  }
+
+  body.cc-store-neu
+    .content-for-layout
+    > .shopify-section:first-child
+    + .shopify-section
+    > .section {
+    border-radius: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.cc-store-neu
+    .content-for-layout
+    > .shopify-section:first-child
+    + .shopify-section
+    .section
+    .custom-section-content.border-style {
+    border-radius: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    overflow: visible !important;
+    /*
+     * Spacer / flex gaps sit above the first .group-block; without a fill, scheme-1 (#fff) from nested
+     * cards reads as a “white bar” behind rounded corners. Match the section sheet to caesura.
+     */
+    background-color: var(--pc-caesura-bg) !important;
+    background-image: none !important;
+  }
+
+  body.cc-store-neu
+    #MainContent.content-for-layout
+    > .shopify-section:first-child
+    + .shopify-section
+    .section-content-wrapper {
+    background-color: var(--pc-caesura-bg) !important;
+  }
+
+  /* Coverflow: section `{% stylesheet %}` can win without !important — force mobile radii */
+  body.cc-store-neu .itunes-cflow__card {
+    border-radius: clamp(4px, 1.4vw, 7px) !important;
+  }
+
+  body.cc-store-neu .itunes-cflow__media {
+    padding: 6px !important;
+    box-sizing: border-box !important;
+  }
+
+  body.cc-store-neu .itunes-cflow__stage {
+    border-radius: clamp(6px, 2vw, 10px) !important;
+  }
 }

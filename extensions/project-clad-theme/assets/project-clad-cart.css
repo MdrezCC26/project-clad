@@ -1,5 +1,65 @@
+@import url("https://fonts.googleapis.com/css2?family=Bakbak+One&display=swap");
+
+/* Tokens aligned with app `project-clad-proxy.css` (.project-clad-button / caesura + red neu) */
 .projectclad-cart-actions {
   margin-top: 1rem;
+  --pc-card-radius: 16px;
+  --pc-btn-neu-bg: #e8eaed;
+  --pc-pill-text-glow-hover: #c40000;
+  --pc-accent-heading-shadow:
+    0.75px 0.75px 0 rgba(255, 255, 255, 0.78),
+    -0.65px -0.65px 0 rgba(72, 79, 96, 0.16),
+    0 1px 0 rgba(255, 255, 255, 0.38),
+    0 2px 8px rgba(0, 0, 0, 0.1),
+    0 0 14px rgba(196, 0, 0, 0.22),
+    0 0 28px rgba(196, 0, 0, 0.09);
+  --pc-caesura-bg: #ebecf0;
+  --pc-caesura-fg: #6c7587;
+  --pc-caesura-dark: #484f60;
+  --pc-caesura-inset: inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
+    inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5);
+  --pc-caesura-transition: box-shadow 250ms ease-in-out, border-color 250ms ease-in-out, color 250ms ease-in-out,
+    filter 250ms ease-in-out, background 250ms ease-in-out;
+  --pc-caesura-border: 3px solid transparent;
+  --pc-caesura-border-hover: rgba(255, 255, 255, 0.5);
+  --pc-btn-neu-shadow: 8px 8px 12px -2px rgba(72, 79, 96, 0.4), -6px -6px 12px -1px rgba(255, 255, 255, 1);
+  --pc-btn-neu-shadow-active: inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
+    inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5);
+  --pc-caesura-hover-red-text: #c40000;
+  --pc-caesura-hover-red-text-glow: 0 1px 0 rgba(255, 255, 255, 0.28), 0 0 6px rgba(196, 0, 0, 0.22),
+    0 0 14px rgba(196, 0, 0, 0.12);
+  /* Match app `.project-clad-button--approve` hover (`project-clad-proxy.css`, --color-2) */
+  --pc-approve-hover-text: #00c462;
+  --pc-approve-hover-glow: 0 1px 0 rgba(255, 255, 255, 0.28), 0 0 6px rgba(28, 186, 28, 0.28),
+    0 0 14px rgba(28, 186, 28, 0.16);
+  /* Modal copy: match toolbar / caesura label color */
+  --pc-modal-label-text: var(--pc-caesura-dark);
+  --pc-modal-field-text: var(--pc-caesura-dark);
+  --pc-modal-placeholder: rgba(72, 79, 96, 0.48);
+  /* Modal heading: dark grey + light letterpress (no red fill) */
+  --pc-modal-title-shadow:
+    0.6px 0.6px 0 rgba(255, 255, 255, 0.85),
+    -0.45px -0.45px 0 rgba(72, 79, 96, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.06);
+  /* Same as outside cart CTAs — reused inside modals */
+  --pc-cart-toolbar-btn-font: clamp(1.15rem, 3.6vw, 1.45rem);
+  --pc-cart-toolbar-btn-line-height: 1.15;
+  --pc-cart-toolbar-btn-min-height: 48px;
+  --pc-cart-toolbar-btn-padding-y: 0.6rem;
+  --pc-cart-toolbar-btn-padding-x: calc(1.35rem + 0.35rem);
+  /* Modal main heading + matching field/section titles */
+  --pc-modal-red-title-size: clamp(1.2rem, 4.2vw, 1.85rem);
+  --pc-btn-neu-transition: box-shadow 250ms ease-in-out, border-color 250ms ease-in-out, color 250ms ease-in-out,
+    filter 250ms ease-in-out, background 250ms ease-in-out, transform 250ms ease-in-out, text-shadow 250ms ease-in-out;
+  --pc-btn-active-blur: 0.6px;
+  --pc-btn-neu-red-shadow: 0 1px 0 rgba(255, 255, 255, 0.32) inset, 0 -1px 1px rgba(0, 0, 0, 0.18) inset,
+    20px 20px 42px rgba(0, 0, 0, 0.32), -20px -20px 42px rgba(255, 180, 180, 0.42);
+  --pc-btn-neu-red-shadow-hover: 0 1px 0 rgba(255, 255, 255, 0.38) inset, 0 -1px 1px rgba(0, 0, 0, 0.2) inset,
+    22px 22px 48px rgba(0, 0, 0, 0.36), -22px -22px 48px rgba(255, 195, 195, 0.46);
+  --pc-btn-neu-red-shadow-active: inset 0 2px 4px rgba(0, 0, 0, 0.22), inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+    inset 20px 20px 42px rgba(0, 0, 0, 0.34), inset -20px -20px 42px rgba(255, 210, 210, 0.28);
+  --pc-text-deboss-on-red: 0 -1px 0 rgba(0, 0, 0, 0.52), 0 1px 0 rgba(255, 255, 255, 0.14);
+  --pc-red-button-hover-label-glow: 0 0 10px rgba(255, 235, 235, 0.55), 0 0 22px rgba(255, 200, 200, 0.28);
 }
 
 .projectclad-cart-actions__buttons {
@@ -8,99 +68,106 @@
   flex-wrap: wrap;
 }
 
-/* Neumorphic buttons — same language as app proxy (Uiverse jolly-robin-0) */
-.projectclad-button {
-  --pc-btn-neu-transition: all 300ms cubic-bezier(0.23, 1, 0.32, 1);
-  --pc-btn-active-blur: 0.6px;
-  --pc-btn-neu-bg: #eaeaea;
-  --pc-btn-neu-fg: rgba(0, 0, 0, 0.9);
-  --pc-btn-neu-shadow:
-    0 15px 25px -4px rgba(0, 0, 0, 0.5),
-    inset 0 -3px 4px -1px rgba(0, 0, 0, 0.2),
-    0 -10px 15px -1px rgba(255, 255, 255, 0.6),
-    inset 0 3px 4px -1px rgba(255, 255, 255, 0.2),
-    inset 0 0 5px 1px rgba(255, 255, 255, 0.8),
-    inset 0 20px 30px 0 rgba(255, 255, 255, 0.2);
-  --pc-btn-neu-shadow-hover:
-    0 18px 28px -4px rgba(0, 0, 0, 0.48),
-    inset 0 -2px 4px -1px rgba(0, 0, 0, 0.18),
-    0 -11px 16px -1px rgba(255, 255, 255, 0.65),
-    inset 0 4px 5px -1px rgba(255, 255, 255, 0.28),
-    inset 0 0 6px 1px rgba(255, 255, 255, 0.85),
-    inset 0 22px 32px 0 rgba(255, 255, 255, 0.25);
-  --pc-btn-neu-shadow-active:
-    0 12px 25px -4px rgba(0, 0, 0, 0.4),
-    inset 0 -8px 30px 1px rgba(255, 255, 255, 0.9),
-    0 -10px 15px -1px rgba(255, 255, 255, 0.6),
-    inset 0 8px 25px 0 rgba(0, 0, 0, 0.4),
-    inset 0 0 10px 1px rgba(255, 255, 255, 0.6);
-
+/* Grey: raised (default) → hover (flat + white rim + red label) → active (inset / indented) */
+.projectclad-cart-actions .projectclad-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 1.2rem;
-  border: none;
-  border-radius: 999px;
-  background: var(--pc-btn-neu-bg);
-  color: var(--pc-btn-neu-fg);
+  padding: 0.5rem calc(1.25rem + 0.35rem);
+  border: var(--pc-caesura-border);
+  border-radius: 9999px;
+  background: var(--pc-caesura-bg);
+  color: var(--pc-caesura-dark);
   text-decoration: none;
   cursor: pointer;
   height: auto;
   min-height: 40px;
   min-width: 160px;
   text-transform: uppercase;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  font-size: 0.9rem;
+  letter-spacing: 0.03em;
+  line-height: 1.25;
   box-shadow: var(--pc-btn-neu-shadow);
   transition: var(--pc-btn-neu-transition);
   box-sizing: border-box;
+  text-shadow: none;
+  filter: none;
+  transform: scale(1);
+  -webkit-font-smoothing: antialiased;
 }
 
-.projectclad-button:hover {
-  box-shadow: var(--pc-btn-neu-shadow-hover);
-  filter: brightness(1.02);
+/* View Projects / Save Order / Clear cart — larger type */
+.projectclad-cart-actions__buttons .projectclad-button {
+  font-size: var(--pc-cart-toolbar-btn-font);
+  line-height: var(--pc-cart-toolbar-btn-line-height);
+  min-height: var(--pc-cart-toolbar-btn-min-height);
+  padding: var(--pc-cart-toolbar-btn-padding-y) var(--pc-cart-toolbar-btn-padding-x);
+  letter-spacing: 0.02em;
 }
 
-.projectclad-button:active {
-  filter: blur(var(--pc-btn-active-blur));
+.projectclad-cart-actions .projectclad-button:not(.projectclad-button--primary):not(.projectclad-button--approve):hover {
+  z-index: 1;
+  box-shadow: none;
+  border-color: var(--pc-caesura-border-hover);
+  color: var(--pc-caesura-hover-red-text);
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+}
+
+.projectclad-cart-actions .projectclad-button:not(.projectclad-button--primary):not(.projectclad-button--approve):active {
   box-shadow: var(--pc-btn-neu-shadow-active);
+  border-color: transparent;
+  color: var(--pc-caesura-dark);
+  text-shadow: none;
 }
 
-.projectclad-button:focus-visible {
+/* Same neu face as grey buttons; hover = green label + glow (app approve pattern) */
+.projectclad-cart-actions .projectclad-button.projectclad-button--approve:hover:not(:disabled) {
+  z-index: 1;
+  box-shadow: none;
+  border-color: var(--pc-caesura-border-hover);
+  color: var(--pc-approve-hover-text);
+  text-shadow: var(--pc-approve-hover-glow);
+}
+
+.projectclad-cart-actions .projectclad-button.projectclad-button--approve:active:not(:disabled) {
+  box-shadow: var(--pc-btn-neu-shadow-active);
+  border-color: transparent;
+  color: var(--pc-caesura-dark);
+  text-shadow: none;
+}
+
+.projectclad-cart-actions .projectclad-button:focus-visible {
   outline: 2px solid rgba(0, 0, 0, 0.35);
   outline-offset: 3px;
 }
 
-.projectclad-button--primary {
-  background: #c62828;
+/* Primary (Save order): red neu — raised / stronger raised + label glow / inset pressed */
+.projectclad-cart-actions .projectclad-button--primary {
+  background: linear-gradient(168deg, #e53935 0%, #c62828 46%, #b71c1c 100%);
   color: #fff;
-  box-shadow:
-    0 15px 25px -4px rgba(0, 0, 0, 0.5),
-    inset 0 -3px 4px -1px rgba(0, 0, 0, 0.35),
-    0 -10px 15px -1px rgba(255, 120, 120, 0.22),
-    inset 0 3px 4px -1px rgba(255, 255, 255, 0.18),
-    inset 0 0 5px 1px rgba(255, 200, 200, 0.35),
-    inset 0 18px 28px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: var(--pc-btn-neu-red-shadow);
+  text-shadow: var(--pc-text-deboss-on-red);
 }
 
-.projectclad-button--primary:hover {
-  background: #b71c1c;
-  box-shadow:
-    0 18px 28px -4px rgba(0, 0, 0, 0.48),
-    inset 0 -2px 4px -1px rgba(0, 0, 0, 0.3),
-    0 -11px 16px -1px rgba(255, 140, 140, 0.25),
-    inset 0 4px 5px -1px rgba(255, 255, 255, 0.22),
-    inset 0 0 6px 1px rgba(255, 210, 210, 0.4),
-    inset 0 20px 30px 0 rgba(255, 255, 255, 0.14);
+.projectclad-cart-actions .projectclad-button--primary:hover {
+  z-index: 1;
+  background: linear-gradient(168deg, #ef5350 0%, #c62828 42%, #b71c1c 100%);
+  box-shadow: var(--pc-btn-neu-red-shadow-hover);
+  border-color: var(--pc-caesura-border);
+  color: #fff;
+  text-shadow: var(--pc-text-deboss-on-red), var(--pc-red-button-hover-label-glow);
 }
 
-.projectclad-button--primary:active {
+.projectclad-cart-actions .projectclad-button--primary:active {
+  background: linear-gradient(168deg, #b71c1c 0%, #a31818 100%);
+  box-shadow: var(--pc-btn-neu-red-shadow-active);
+  border-color: transparent;
   filter: blur(var(--pc-btn-active-blur));
-  box-shadow:
-    0 12px 25px -4px rgba(0, 0, 0, 0.45),
-    inset 0 8px 22px 0 rgba(0, 0, 0, 0.35),
-    inset 0 -8px 26px 1px rgba(255, 255, 255, 0.12),
-    inset 0 0 10px 1px rgba(255, 200, 200, 0.25);
+  transform: scale(0.99);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.62), 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .projectclad-modal[hidden] {
@@ -116,48 +183,128 @@
   z-index: 10000001;
 }
 
+/* Backdrop: match app edit-project modal (fade to dim when open) */
 .projectclad-modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0);
+  transition: background-color 0.3s cubic-bezier(0.23, 1, 0.32, 1);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 1.5rem;
   z-index: 50;
+  box-sizing: border-box;
 }
 
+.projectclad-modal:not([hidden]) {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projectclad-modal {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Neu panel — same stack as app `.project-clad-card.project-clad-modal` (project-clad-proxy.css) */
 .projectclad-modal__content {
-  background: #fff;
-  padding: 1.5rem;
-  border-radius: 8px;
-  width: min(480px, 90vw);
   position: relative;
+  overflow-x: hidden;
+  z-index: 0;
+  width: 100%;
+  max-width: 520px;
+  border: none;
+  border-radius: var(--pc-card-radius);
+  padding: 1.5rem;
+  background: linear-gradient(168deg, #eef0f2 0%, var(--pc-btn-neu-bg) 38%, #dcdee3 100%);
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -4px 10px rgba(0, 0, 0, 0.08) inset,
+    1px 0 0 rgba(255, 255, 255, 0.28),
+    -1px 0 1px rgba(0, 0, 0, 0.05),
+    0 3px 0 rgba(255, 255, 255, 0.42),
+    0 24px 50px rgba(0, 0, 0, 0.14),
+    0 10px 24px rgba(0, 0, 0, 0.1),
+    0 46px 82px -18px rgba(0, 0, 0, 0.2);
   display: grid;
   gap: 0.75rem;
-  max-height: 90vh;
-  overflow-y: auto;
+  box-sizing: border-box;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  color: var(--pc-caesura-dark);
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y;
 }
 
+.projectclad-reject-modal {
+  max-height: 85vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.projectclad-reject-modal::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 .projectclad-modal__content h2 {
+  margin: 0.35rem 0 0 0;
+  padding: 0.15rem 0;
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  font-size: var(--pc-modal-red-title-size);
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  color: var(--pc-caesura-dark);
+  text-shadow: var(--pc-modal-title-shadow);
   text-transform: uppercase;
+  text-decoration: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.projectclad-modal__content [data-projectclad-section-underline] {
+  text-decoration: none;
+}
+
+.projectclad-modal__lede {
+  margin: 0;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  color: var(--pc-modal-field-text);
+  font-size: clamp(1rem, 3.2vw, 1.35rem);
+  line-height: 1.35;
+  font-weight: 400;
 }
 
 .projectclad-modal__close {
   position: absolute;
   top: 0.75rem;
   right: 0.75rem;
+  z-index: 2;
   border: none;
   background: transparent;
-  font-size: 1.5rem;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  color: var(--pc-caesura-dark);
+  font-size: 1.65rem;
+  line-height: 1;
   cursor: pointer;
+  padding: 0;
+  transition: color 0.25s ease, text-shadow 0.25s ease;
+}
+
+.projectclad-modal__close:hover {
+  color: var(--pc-modal-label-text);
+  text-shadow: var(--pc-modal-title-shadow);
 }
 
 .projectclad-section {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.65rem;
 }
 
 /* Only show fields for the selected save mode; hide others completely (no greyed-out state) */
@@ -173,36 +320,186 @@
 
 .projectclad-field {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.45rem;
 }
 
-/* Prevent iOS Safari zoom on focus */
-.projectclad-modal__content input,
-.projectclad-modal__content select,
-.projectclad-modal__content textarea {
-  font-size: 16px;
+/* Field / section titles — same optical size as red modal heading */
+.projectclad-modal__content label:not(.projectclad-fieldset__choice) {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--pc-modal-red-title-size);
+  line-height: 1.2;
+  color: var(--pc-modal-label-text);
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
-.projectclad-fieldset {
-  border: 1px solid #000;
-  padding: 0.75rem;
-  border-radius: 6px;
-}
-
-/* Spacing between form content (e.g. quantity mode) and save order buttons */
-.projectclad-modal-buttons {
-  margin-top: 1.5rem;
+/* Form column + full-width fields (edit project modal) */
+.projectclad-modal__content .projectclad-inline-form {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.75rem;
 }
 
-.projectclad-duplicate-message {
-  margin: 0 0 1rem 0;
+.projectclad-modal__content .projectclad-pricing-form .projectclad-pricing-password-input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
+.projectclad-pricing-form > .projectclad-modal-buttons {
+  margin-top: 1.25rem;
+}
+
+/* Caesura inset inputs / selects — match app `.project-clad-modal-backdrop` fields */
+.projectclad-modal__content
+  input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not(
+    [type="hidden"]
+  ),
+.projectclad-modal__content select,
+.projectclad-modal__content textarea {
+  border: var(--pc-caesura-border);
+  background-color: var(--pc-caesura-bg);
+  color: var(--pc-modal-field-text);
+  box-shadow: var(--pc-caesura-inset);
+  transition: var(--pc-caesura-transition);
+  outline: none;
+  padding: 0.65rem 1.15rem;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-size: max(16px, clamp(1rem, 3.2vw, 1.2rem));
+  font-weight: 400;
+}
+
+.projectclad-modal__content
+  input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not(
+    [type="hidden"]
+  ),
+.projectclad-modal__content select {
+  border-radius: 9999px;
+}
+
+.projectclad-modal__content textarea {
+  border-radius: var(--pc-card-radius);
+}
+
+.projectclad-modal__content input:focus-visible,
+.projectclad-modal__content select:focus-visible,
+.projectclad-modal__content textarea:focus-visible {
+  box-shadow: none;
+  border-color: var(--pc-caesura-border-hover);
+}
+
+.projectclad-modal__content input::placeholder,
+.projectclad-modal__content textarea::placeholder {
+  color: var(--pc-modal-placeholder);
+  opacity: 1;
+}
+
+.projectclad-modal__content select option {
+  color: var(--pc-modal-field-text);
+  background-color: #fff;
+}
+
+.projectclad-modal__content input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not(
+    [type="radio"]
+  ):not([type="hidden"]),
+.projectclad-modal__content select,
+.projectclad-modal__content textarea {
+  text-transform: none;
+}
+
+/* Inset tray for radio groups (quantity / fulfillment) */
+.projectclad-fieldset {
+  margin: 0.25rem 0 0;
+  padding: 0.85rem 1rem;
+  border: none;
+  border-radius: var(--pc-card-radius);
+  background: var(--pc-caesura-bg);
+  box-shadow: var(--pc-caesura-inset), inset 0 -5px 14px -4px rgba(255, 255, 255, 0.62),
+    inset 0 -2px 4px -1px rgba(255, 255, 255, 0.42);
+  min-inline-size: 0;
+}
+
+.projectclad-fieldset--radios {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1rem 1.05rem 1.05rem;
+  margin-top: 0.5rem;
+}
+
+/* Keep legend in normal flow so it does not overlap the tray lip (fieldset/legend quirk) */
+.projectclad-fieldset--radios legend {
+  float: none;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  margin: 0 0 0.15rem 0;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--pc-modal-red-title-size);
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--pc-modal-label-text);
+}
+
+.projectclad-fieldset__choice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-size: max(16px, clamp(1rem, 3.2vw, 1.25rem));
+  font-weight: 400;
+  line-height: 1.25;
+  color: var(--pc-modal-field-text);
+  cursor: pointer;
+}
+
+.projectclad-fieldset__choice input[type="radio"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--pc-caesura-dark);
+  flex-shrink: 0;
+}
+
+/* Modal actions: match `.project-clad-modal .project-clad-actions` */
+.projectclad-modal-buttons,
+.projectclad-modal__content .projectclad-actions,
 .projectclad-duplicate-buttons {
+  margin-top: 0.5rem;
+  margin-bottom: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Modal footer + duplicate actions: match outside pill button type size */
+.projectclad-modal__content .projectclad-button {
+  font-size: var(--pc-cart-toolbar-btn-font);
+  line-height: var(--pc-cart-toolbar-btn-line-height);
+  min-height: var(--pc-cart-toolbar-btn-min-height);
+  padding: var(--pc-cart-toolbar-btn-padding-y) var(--pc-cart-toolbar-btn-padding-x) !important;
+  letter-spacing: 0.02em;
+}
+
+.projectclad-duplicate-message {
+  margin: 0;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  color: var(--pc-modal-field-text);
+  font-size: clamp(1rem, 3.2vw, 1.35rem);
+  line-height: 1.4;
+  font-weight: 400;
+}
+
+.projectclad-modal__content .projectclad-cart-notice {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  color: var(--pc-caesura-dark);
+  font-size: clamp(1rem, 3.2vw, 1.3rem);
+  line-height: 1.4;
+  font-weight: 400;
 }

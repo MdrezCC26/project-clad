@@ -12,6 +12,7 @@
   class="itunes-cflow"
   id="itunes-cflow-{{ section.id }}"
   data-itunes-cflow-root
+  data-itunes-cflow-build="20260412"
   data-autoplay="{{ section.settings.enable_autoplay }}"
   data-autoplay-ms="{{ section.settings.autoplay_interval | times: 1000 }}"
 >
@@ -79,18 +80,20 @@
               <label class="itunes-cflow__slider-label" for="itunes-cflow-range-{{ block.id }}">
                 {{ section.settings.slider_label | escape }}
               </label>
-              <input
-                type="range"
-                id="itunes-cflow-range-{{ block.id }}"
-                class="itunes-cflow__range"
-                min="0"
-                max="0"
-                value="0"
-                data-itunes-cflow-range
-                aria-valuemin="0"
-                aria-valuemax="0"
-                aria-valuenow="0"
-              />
+              <div class="itunes-cflow__range-shell">
+                <input
+                  type="range"
+                  id="itunes-cflow-range-{{ block.id }}"
+                  class="itunes-cflow__range"
+                  min="0"
+                  max="0"
+                  value="0"
+                  data-itunes-cflow-range
+                  aria-valuemin="0"
+                  aria-valuemax="0"
+                  aria-valuenow="0"
+                />
+              </div>
             </div>
             <div class="itunes-cflow__nav">
               <button type="button" class="itunes-cflow__nav-btn" data-itunes-cflow-prev aria-label="{{ section.settings.prev_label | escape }}">
@@ -196,6 +199,22 @@
     --itunes-range-pct: 0;
     /* Red fill (track has no glow — stays locked to thumb) */
     --itunes-range-fill: linear-gradient(90deg, #6b0f14 0%, #b91c1c 32%, #dc2626 58%, #b91c1c 100%);
+    /*
+     * Thin bar: --pc-caesura-inset uses full white and reads as a harsh outer halo on the track.
+     * Softer, lower-contrast depth only (no third outer drop shadow).
+     */
+    --itunes-range-track-inset:
+      inset 3px 3px 6px rgba(72, 79, 96, 0.26),
+      inset -2px -2px 5px rgba(255, 255, 255, 0.18);
+    /* Thumb / shell focus & drag: white rim + glow (replaces grey browser outline) */
+    --itunes-range-thumb-glow:
+      0 0 0 2px rgba(255, 255, 255, 0.78),
+      0 0 12px 4px rgba(255, 255, 255, 0.5),
+      0 0 26px 10px rgba(255, 255, 255, 0.22);
+    --itunes-range-shell-focus-glow:
+      0 0 0 1px rgba(255, 255, 255, 0.55),
+      0 0 16px 5px rgba(255, 255, 255, 0.48),
+      0 0 32px 12px rgba(255, 255, 255, 0.2);
     padding: 1.5rem 0 2rem;
   }
   .itunes-cflow__heading {
@@ -411,6 +430,23 @@
     border-radius: 0;
     box-shadow: none;
     box-sizing: border-box;
+    overflow: visible;
+  }
+  /* Trough lives on the shell; native track stays transparent so no white browser chrome shows through. */
+  .itunes-cflow__range-shell {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 5px 8px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: var(--itunes-neu-bg);
+    box-shadow: var(--itunes-range-track-inset);
+  }
+  .itunes-cflow__range-shell:focus-within {
+    outline: none;
+    box-shadow: var(--itunes-range-track-inset), var(--itunes-range-shell-focus-glow);
   }
   .itunes-cflow__slider-label {
     display: block;
@@ -419,44 +455,46 @@
     color: var(--itunes-neu-dark);
   }
   .itunes-cflow__range {
+    flex: 1;
     width: 100%;
-    height: 26px;
+    min-width: 0;
+    height: 24px;
     margin: 0;
     padding: 0;
+    border: none;
     background: transparent;
+    box-shadow: none;
     -webkit-appearance: none;
     appearance: none;
     cursor: pointer;
+    accent-color: #b91c1c;
+    color-scheme: light;
   }
   .itunes-cflow__range:focus {
     outline: none;
   }
   .itunes-cflow__range:focus-visible {
-    outline: 2px solid rgba(0, 0, 0, 0.35);
-    outline-offset: 4px;
-    border-radius: 999px;
+    outline: none;
   }
   .itunes-cflow__range::-webkit-slider-runnable-track {
-    height: 16px;
+    height: 12px;
     border-radius: 999px;
     border: none;
-    box-shadow:
-      inset 2px 2px 5px rgba(72, 79, 96, 0.38),
-      inset -2px -2px 6px rgba(255, 255, 255, 0.75),
-      0 1px 6px rgba(72, 79, 96, 0.08);
-    background-color: rgba(0, 0, 0, 0.09);
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
     background-image: var(--itunes-range-fill);
     background-size: calc(var(--itunes-range-pct) * 1%) 100%;
     background-repeat: no-repeat;
     background-position: 0 50%;
-    background-clip: border-box;
+    box-shadow: none;
   }
   .itunes-cflow__range::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 26px;
-    height: 26px;
-    margin-top: -5px;
+    width: 24px;
+    height: 24px;
+    margin-top: -6px;
     border-radius: 50%;
     background: var(--itunes-neu-bg);
     border: var(--itunes-neu-border);
@@ -467,28 +505,30 @@
     box-shadow: none;
     border-color: var(--itunes-neu-border-hover);
   }
+  .itunes-cflow__range:focus-visible::-webkit-slider-thumb {
+    border-color: rgba(255, 255, 255, 0.55);
+    box-shadow: var(--itunes-range-thumb-glow);
+  }
   .itunes-cflow__range:active::-webkit-slider-thumb {
-    box-shadow: var(--itunes-neu-inset);
-    border-color: transparent;
+    border-color: rgba(255, 255, 255, 0.55);
+    box-shadow: var(--itunes-range-thumb-glow);
   }
   .itunes-cflow__range::-moz-range-track {
-    height: 16px;
+    height: 12px;
     border-radius: 999px;
-    background: rgba(0, 0, 0, 0.09);
+    background: transparent;
     border: none;
-    box-shadow:
-      inset 2px 2px 5px rgba(72, 79, 96, 0.38),
-      inset -2px -2px 6px rgba(255, 255, 255, 0.75),
-      0 1px 6px rgba(72, 79, 96, 0.08);
+    box-shadow: none;
   }
   .itunes-cflow__range::-moz-range-progress {
-    height: 16px;
+    height: 12px;
     border-radius: 999px;
     background: var(--itunes-range-fill);
+    box-shadow: none;
   }
   .itunes-cflow__range::-moz-range-thumb {
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: var(--itunes-neu-bg);
     border: var(--itunes-neu-border);
@@ -499,9 +539,13 @@
     box-shadow: none;
     border-color: var(--itunes-neu-border-hover);
   }
+  .itunes-cflow__range:focus-visible::-moz-range-thumb {
+    border-color: rgba(255, 255, 255, 0.55);
+    box-shadow: var(--itunes-range-thumb-glow);
+  }
   .itunes-cflow__range:active::-moz-range-thumb {
-    box-shadow: var(--itunes-neu-inset);
-    border-color: transparent;
+    border-color: rgba(255, 255, 255, 0.55);
+    box-shadow: var(--itunes-range-thumb-glow);
   }
   .itunes-cflow__stage-wrap {
     position: relative;
@@ -525,10 +569,37 @@
     user-select: none;
     -webkit-user-select: none;
     cursor: grab;
-    /* Allow horizontal swipe + wheel; vertical still scrolls the page when gesture is mostly vertical */
-    touch-action: pan-x pan-y;
+    /* pan-y: page scroll; horizontal swipe handled in JS (avoid pan-x stealing taps with pointer capture) */
+    touch-action: pan-y;
     overflow: hidden;
     border-radius: 16px;
+  }
+  /* Phones: 52vw caps ~200px tall while images can be much taller — stage clips the card. */
+  @media screen and (max-width: 749px) {
+    .itunes-cflow__stage-wrap {
+      padding-bottom: 0.75rem;
+    }
+    .itunes-cflow__stage {
+      min-height: max(380px, min(68vh, 560px));
+      height: max(380px, min(68vh, 560px));
+      perspective-origin: 50% 42%;
+      /* Softer outer shell vs card so diagrams aren’t double-clipped at the seam */
+      border-radius: clamp(6px, 2vw, 10px);
+    }
+    /*
+     * Cards are narrower than desktop (~72vw); fixed 12px reads proportionally huge and clips
+     * rectangular product drawings at the corners. Tighten radius + tiny media inset to match desktop feel.
+     */
+    .itunes-cflow__card {
+      border-radius: clamp(4px, 1.4vw, 7px);
+    }
+    .itunes-cflow__media {
+      padding: 6px;
+      box-sizing: border-box;
+    }
+    .itunes-cflow__img {
+      max-height: min(62vh, 520px);
+    }
   }
   .itunes-cflow__stage.itunes-cflow__stage--dragging {
     cursor: grabbing;
@@ -579,8 +650,11 @@
   }
   .itunes-cflow__card {
     display: block;
+    position: relative;
+    z-index: 1;
     text-decoration: none;
     color: inherit;
+    cursor: pointer;
     border-radius: 12px;
     overflow: hidden;
     box-shadow:
@@ -897,17 +971,35 @@
         });
       }
 
-      if (stage) {
-        stage.addEventListener(
+      items.forEach(function (item) {
+        var link = item.querySelector('a.itunes-cflow__card');
+        if (!link) return;
+        link.addEventListener(
           'click',
           function (e) {
-            if (!suppressStageClick) return;
+            if (suppressStageClick) {
+              e.preventDefault();
+              e.stopPropagation();
+              suppressStageClick = false;
+              return;
+            }
+            if (e.defaultPrevented) return;
+            if (e.button !== 0) return;
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+            var href = link.getAttribute('href');
+            if (!href || href === '#') return;
             e.preventDefault();
             e.stopPropagation();
-            suppressStageClick = false;
+            window.location.assign(href);
           },
-          true
+          false
         );
+      });
+
+      if (stage) {
+        stage.addEventListener('focusin', function () {
+          suppressStageClick = false;
+        });
         stage.addEventListener('pointerdown', function (e) {
           if (e.button !== 0 && e.pointerType === 'mouse') return;
           /* Include drags starting on product cards; swipe uses horizontal delta, tap still opens product */
@@ -917,9 +1009,7 @@
           dragStartX = e.clientX;
           dragStartY = e.clientY;
           stage.classList.add('itunes-cflow__stage--dragging');
-          try {
-            stage.setPointerCapture(e.pointerId);
-          } catch (err) {}
+          /* Do not setPointerCapture: it retargets events to the stage and breaks clicks on <a> (esp. mobile). */
         });
         stage.addEventListener('pointermove', function (e) {
           if (!dragging) return;
@@ -929,9 +1019,6 @@
           if (!dragging) return;
           dragging = false;
           stage.classList.remove('itunes-cflow__stage--dragging');
-          try {
-            stage.releasePointerCapture(e.pointerId);
-          } catch (err) {}
           var dx = e.clientX - dragStartX;
           var dy = e.clientY - dragStartY;
           if (moved && Math.abs(dx) > 40 && Math.abs(dx) >= Math.abs(dy)) {
@@ -939,6 +1026,8 @@
             suppressStageClick = true;
             if (dx < 0) go(1);
             else go(-1);
+          } else {
+            suppressStageClick = false;
           }
         });
         stage.addEventListener('pointercancel', function () {

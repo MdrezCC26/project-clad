@@ -23,7 +23,7 @@
       hidden
     >
       <div
-        class="projectclad-modal__content"
+        class="projectclad-modal__content projectclad-reject-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="projectclad-checkout-fulfill-title"
@@ -36,29 +36,29 @@
         >
           &times;
         </button>
-        <h2 id="projectclad-checkout-fulfill-title">Receive this order</h2>
-        <p class="projectclad-cart-notice" style="margin: 0">
+        <h2 id="projectclad-checkout-fulfill-title" data-projectclad-section-underline>Receive this order</h2>
+        <p class="projectclad-cart-notice projectclad-modal__lede">
           Choose store pickup or delivery before checkout.
         </p>
-        <div class="projectclad-fieldset" style="border: 1px solid #ccc; padding: 0.75rem; border-radius: 6px; margin-top: 0.5rem">
-          <label style="display: block; margin-bottom: 0.5rem">
+        <fieldset class="projectclad-fieldset projectclad-fieldset--radios" aria-label="Fulfillment method">
+          <label class="projectclad-fieldset__choice">
             <input type="radio" name="projectclad-checkout-fulfill" value="pickup" checked />
             Store pickup
           </label>
-          <label style="display: block">
+          <label class="projectclad-fieldset__choice">
             <input type="radio" name="projectclad-checkout-fulfill" value="delivery" />
             Delivery
           </label>
-        </div>
-        <div class="projectclad-modal-buttons">
+        </fieldset>
+        <div class="projectclad-modal-buttons projectclad-actions">
           <button
             type="button"
-            class="projectclad-button projectclad-button--primary"
+            class="projectclad-button projectclad-button--primary projectclad-reject-modal-btn"
             data-projectclad-checkout-fulfill-continue
           >
             Continue to checkout
           </button>
-          <button type="button" class="projectclad-button" data-projectclad-checkout-fulfill-cancel">
+          <button type="button" class="projectclad-button projectclad-reject-modal-btn" data-projectclad-checkout-fulfill-cancel">
             Cancel
           </button>
         </div>
@@ -77,7 +77,7 @@
       <p class="projectclad-cart-notice">Your cart contains custom parts. Checkout is blocked until parts are created.</p>
     {% endif %}
     {% if cart.item_count > 0 %}
-      <button class="projectclad-button projectclad-button--primary" type="button" data-projectclad-save>
+      <button class="projectclad-button" type="button" data-projectclad-save>
         Save Order
       </button>
       <form method="post" action="/cart/clear" style="display:inline;">
@@ -89,13 +89,18 @@
     {% endif %}
   </div>
 
-    <div class="projectclad-modal" data-projectclad-modal hidden>
-      <div class="projectclad-modal__content" role="dialog" aria-modal="true" aria-label="Save cart as order">
-        <button class="projectclad-modal__close" type="button" data-projectclad-close>&times;</button>
-        <h2>Save cart to project</h2>
-        <form data-projectclad-form>
+    <div class="projectclad-modal" data-projectclad-modal data-projectclad-save-cart-modal hidden>
+      <div
+        class="projectclad-modal__content projectclad-reject-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="projectclad-save-modal-title"
+      >
+        <button class="projectclad-modal__close" type="button" data-projectclad-close aria-label="Close">&times;</button>
+        <h2 id="projectclad-save-modal-title" data-projectclad-section-underline>Save cart to project</h2>
+        <form class="projectclad-inline-form projectclad-pricing-form" data-projectclad-form>
           <label for="projectclad-mode">Save mode</label>
-          <select id="projectclad-mode" data-projectclad-mode>
+          <select id="projectclad-mode" class="projectclad-pricing-password-input" data-projectclad-mode>
             <option value="newProject">Create new project</option>
             <option value="existingProject">Save to existing project</option>
             <option value="existingJob">Save to existing order</option>
@@ -103,18 +108,35 @@
 
           <div class="projectclad-section" data-projectclad-section="newProject">
             <label for="projectclad-project-name">Project name *</label>
-            <input id="projectclad-project-name" type="text" data-projectclad-project-name required />
+            <input
+              id="projectclad-project-name"
+              class="projectclad-pricing-password-input"
+              type="text"
+              data-projectclad-project-name
+              required
+            />
           </div>
 
           <div class="projectclad-section" data-projectclad-section="newProject">
             <div class="projectclad-field-row">
               <div class="projectclad-field">
                 <label for="projectclad-po-number-new">Project #</label>
-                <input id="projectclad-po-number-new" type="text" data-projectclad-po />
+                <input
+                  id="projectclad-po-number-new"
+                  class="projectclad-pricing-password-input"
+                  type="text"
+                  data-projectclad-po
+                />
               </div>
               <div class="projectclad-field">
                 <label for="projectclad-job-name">Order name *</label>
-                <input id="projectclad-job-name" type="text" data-projectclad-job-name required />
+                <input
+                  id="projectclad-job-name"
+                  class="projectclad-pricing-password-input"
+                  type="text"
+                  data-projectclad-job-name
+                  required
+                />
               </div>
             </div>
             <div class="projectclad-field-row">
@@ -122,28 +144,45 @@
                 <label for="projectclad-company-name-new">Company name</label>
                 <input
                   id="projectclad-company-name-new"
+                  class="projectclad-pricing-password-input"
                   type="text"
                   data-projectclad-company
                 />
               </div>
               <div class="projectclad-field">
                 <label for="projectclad-order-number">PURCHASE ORDER #</label>
-                <input id="projectclad-order-number" type="text" data-projectclad-order-number />
+                <input
+                  id="projectclad-order-number"
+                  class="projectclad-pricing-password-input"
+                  type="text"
+                  data-projectclad-order-number
+                />
               </div>
             </div>
           </div>
 
           <div class="projectclad-section" data-projectclad-section="existingProject" hidden>
             <label for="projectclad-project-select">Project *</label>
-            <select id="projectclad-project-select" data-projectclad-project required></select>
+            <select id="projectclad-project-select" class="projectclad-pricing-password-input" data-projectclad-project required></select>
             <div class="projectclad-field-row">
               <div class="projectclad-field">
                 <label for="projectclad-po-number-existing">Project #</label>
-                <input id="projectclad-po-number-existing" type="text" data-projectclad-po />
+                <input
+                  id="projectclad-po-number-existing"
+                  class="projectclad-pricing-password-input"
+                  type="text"
+                  data-projectclad-po
+                />
               </div>
               <div class="projectclad-field">
                 <label for="projectclad-job-name-existing">Order name *</label>
-                <input id="projectclad-job-name-existing" type="text" data-projectclad-job-name required />
+                <input
+                  id="projectclad-job-name-existing"
+                  class="projectclad-pricing-password-input"
+                  type="text"
+                  data-projectclad-job-name
+                  required
+                />
               </div>
             </div>
             <div class="projectclad-field-row">
@@ -151,54 +190,70 @@
                 <label for="projectclad-company-name-existing">Company name</label>
                 <input
                   id="projectclad-company-name-existing"
+                  class="projectclad-pricing-password-input"
                   type="text"
                   data-projectclad-company
                 />
               </div>
               <div class="projectclad-field">
                 <label for="projectclad-order-number-existing">PURCHASE ORDER #</label>
-                <input id="projectclad-order-number-existing" type="text" data-projectclad-order-number />
+                <input
+                  id="projectclad-order-number-existing"
+                  class="projectclad-pricing-password-input"
+                  type="text"
+                  data-projectclad-order-number
+                />
               </div>
             </div>
           </div>
 
           <div class="projectclad-section" data-projectclad-section="existingJob" hidden>
             <label for="projectclad-project-select-job">Project *</label>
-            <select id="projectclad-project-select-job" data-projectclad-project required></select>
+            <select id="projectclad-project-select-job" class="projectclad-pricing-password-input" data-projectclad-project required></select>
             <div class="projectclad-field-row">
               <div class="projectclad-field">
                 <label for="projectclad-po-number-job">Project #</label>
-                <input id="projectclad-po-number-job" type="text" data-projectclad-po />
+                <input
+                  id="projectclad-po-number-job"
+                  class="projectclad-pricing-password-input"
+                  type="text"
+                  data-projectclad-po
+                />
               </div>
               <div class="projectclad-field">
                 <label for="projectclad-company-name-job">Company name</label>
                 <input
                   id="projectclad-company-name-job"
+                  class="projectclad-pricing-password-input"
                   type="text"
                   data-projectclad-company
                 />
               </div>
             </div>
             <label for="projectclad-job-select">Order *</label>
-            <select id="projectclad-job-select" data-projectclad-job required></select>
-            <fieldset class="projectclad-fieldset">
+            <select id="projectclad-job-select" class="projectclad-pricing-password-input" data-projectclad-job required></select>
+            <fieldset class="projectclad-fieldset projectclad-fieldset--radios">
               <legend>Quantity mode</legend>
-              <label>
+              <label class="projectclad-fieldset__choice">
                 <input type="radio" name="projectclad-quantity" value="add" checked />
                 Add quantities
               </label>
-              <label>
+              <label class="projectclad-fieldset__choice">
                 <input type="radio" name="projectclad-quantity" value="replace" />
                 Replace quantities
               </label>
             </fieldset>
           </div>
 
-          <div class="projectclad-modal-buttons">
-            <button class="projectclad-button projectclad-button--primary" type="submit" data-projectclad-clear>
+          <div class="projectclad-modal-buttons projectclad-actions">
+            <button
+              class="projectclad-button projectclad-button--approve projectclad-reject-modal-btn"
+              type="submit"
+              data-projectclad-clear
+            >
               Save order & Clear cart
             </button>
-            <button class="projectclad-button" type="submit">
+            <button class="projectclad-button projectclad-reject-modal-btn" type="submit">
               Save order
             </button>
           </div>
@@ -207,12 +262,19 @@
     </div>
 
     <div class="projectclad-modal projectclad-modal--duplicate" data-projectclad-duplicate-modal hidden>
-      <div class="projectclad-modal__content" role="dialog" aria-modal="true" aria-label="Duplicate project name">
+      <div
+        class="projectclad-modal__content projectclad-reject-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="projectclad-duplicate-title"
+      >
+        <button type="button" class="projectclad-modal__close" data-projectclad-duplicate-dismiss aria-label="Close">&times;</button>
+        <h2 id="projectclad-duplicate-title" data-projectclad-section-underline>Duplicate project</h2>
         <p class="projectclad-duplicate-message">You already have a project with this name, are you sure you want to save another?</p>
-        <div class="projectclad-duplicate-buttons">
-          <button type="button" class="projectclad-button projectclad-button--primary" data-projectclad-duplicate-yes>Yes</button>
-          <button type="button" class="projectclad-button" data-projectclad-duplicate-no>No</button>
-          <button type="button" class="projectclad-button" data-projectclad-duplicate-merge>Merge projects</button>
+        <div class="projectclad-duplicate-buttons projectclad-actions">
+          <button type="button" class="projectclad-button projectclad-button--primary projectclad-reject-modal-btn" data-projectclad-duplicate-yes>Yes</button>
+          <button type="button" class="projectclad-button projectclad-reject-modal-btn" data-projectclad-duplicate-no>No</button>
+          <button type="button" class="projectclad-button projectclad-reject-modal-btn" data-projectclad-duplicate-merge>Merge projects</button>
         </div>
       </div>
     </div>

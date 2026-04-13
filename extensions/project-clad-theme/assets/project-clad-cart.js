@@ -226,6 +226,7 @@
   const duplicateYesBtn = root.querySelector("[data-projectclad-duplicate-yes]");
   const duplicateNoBtn = root.querySelector("[data-projectclad-duplicate-no]");
   const duplicateMergeBtn = root.querySelector("[data-projectclad-duplicate-merge]");
+  const duplicateDismissBtn = root.querySelector("[data-projectclad-duplicate-dismiss]");
 
   const sections = Array.from(
     root.querySelectorAll("[data-projectclad-section]"),
@@ -680,23 +681,24 @@
 
   let pendingDuplicate = null;
 
-  duplicateNoBtn?.addEventListener("click", () => {
+  const closeDuplicateModal = () => {
     if (duplicateModal) duplicateModal.hidden = true;
     pendingDuplicate = null;
-  });
+  };
+
+  duplicateNoBtn?.addEventListener("click", closeDuplicateModal);
+  duplicateDismissBtn?.addEventListener("click", closeDuplicateModal);
 
   duplicateModal?.addEventListener("pointerdown", (event) => {
     if (event.target === duplicateModal) {
-      duplicateModal.hidden = true;
-      pendingDuplicate = null;
+      closeDuplicateModal();
     }
   });
 
   duplicateYesBtn?.addEventListener("click", async () => {
     if (!pendingDuplicate) return;
     const { payload, clearCart } = pendingDuplicate;
-    pendingDuplicate = null;
-    if (duplicateModal) duplicateModal.hidden = true;
+    closeDuplicateModal();
     payload.projectName = getUniqueProjectName(payload.projectName);
     await performSave(payload, clearCart);
   });
@@ -704,8 +706,7 @@
   duplicateMergeBtn?.addEventListener("click", async () => {
     if (!pendingDuplicate) return;
     const { payload, clearCart, matchingProject } = pendingDuplicate;
-    pendingDuplicate = null;
-    if (duplicateModal) duplicateModal.hidden = true;
+    closeDuplicateModal();
     const mergePayload = {
       mode: "existingProject",
       poNumber: payload.poNumber,
