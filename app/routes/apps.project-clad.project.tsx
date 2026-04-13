@@ -3484,13 +3484,29 @@ export default function ProjectDetailPage() {
                   <div className="project-clad-header-slot project-clad-header-slot--left">
                     <button
                       type="button"
-                      className="project-clad-button"
+                      className="project-clad-storefront-nav__icon-btn project-clad-storefront-nav__icon-btn--add-member"
                       data-projectclad-add-member-popover-toggle
+                      aria-label="Add member"
                       aria-haspopup="dialog"
                       aria-expanded="false"
                       aria-controls="projectclad-add-member-popover"
                     >
-                      Add member
+                      <svg
+                        className="project-clad-storefront-nav__icon"
+                        width={20}
+                        height={20}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="9" cy="7" r="3.5" />
+                        <path d="M4 20v-0.5C4 16.5 6.5 14 10 14s6 2.5 6 5.5V20" />
+                        <path d="M19 8v6M16 11h6" />
+                      </svg>
                     </button>
                     <div
                       id="projectclad-add-member-popover"
@@ -5507,6 +5523,47 @@ export default function ProjectDetailPage() {
     popover instanceof HTMLElement &&
     popover.classList.contains('project-clad-add-member-popover--open');
 
+  function clearAddMemberPopoverMobileLayout(pop) {
+    if (!(pop instanceof HTMLElement)) return;
+    pop.style.removeProperty('position');
+    pop.style.removeProperty('top');
+    pop.style.removeProperty('left');
+    pop.style.removeProperty('right');
+    pop.style.removeProperty('width');
+    pop.style.removeProperty('max-width');
+    pop.style.removeProperty('transform');
+  }
+
+  function applyAddMemberPopoverMobileLayout(pop, toggle) {
+    if (!(pop instanceof HTMLElement) || !(toggle instanceof HTMLElement)) return;
+    clearAddMemberPopoverMobileLayout(pop);
+    if (window.matchMedia && window.matchMedia('(min-width: 750px)').matches) return;
+    var rect = toggle.getBoundingClientRect();
+    var vw = window.innerWidth;
+    var margin = 12;
+    var maxW = Math.min(352, vw - margin * 2);
+    var left = rect.left + rect.width / 2 - maxW / 2;
+    left = Math.max(margin, Math.min(left, vw - margin - maxW));
+    var top = rect.bottom + 8;
+    pop.style.setProperty('position', 'fixed', 'important');
+    pop.style.setProperty('top', top + 'px', 'important');
+    pop.style.setProperty('left', left + 'px', 'important');
+    pop.style.setProperty('width', maxW + 'px', 'important');
+    pop.style.setProperty('right', 'auto', 'important');
+    pop.style.setProperty('transform', 'none', 'important');
+  }
+
+  var pcAddMemberResizeTimer = null;
+  window.addEventListener('resize', function () {
+    var pop = document.querySelector('[data-projectclad-add-member-popover]');
+    var tgl = document.querySelector('[data-projectclad-add-member-popover-toggle]');
+    if (!isAddMemberPopoverOpen(pop)) return;
+    if (pcAddMemberResizeTimer) clearTimeout(pcAddMemberResizeTimer);
+    pcAddMemberResizeTimer = setTimeout(function () {
+      applyAddMemberPopoverMobileLayout(pop, tgl);
+    }, 60);
+  });
+
   const openAddMemberPopover = (popover, toggle) => {
     if (!(popover instanceof HTMLElement)) return;
     popover.classList.add('project-clad-add-member-popover--open');
@@ -5514,10 +5571,12 @@ export default function ProjectDetailPage() {
     if (toggle instanceof HTMLElement) {
       toggle.setAttribute('aria-expanded', 'true');
     }
+    applyAddMemberPopoverMobileLayout(popover, toggle);
   };
 
   const closeAddMemberPopover = (popover, toggle) => {
     if (!(popover instanceof HTMLElement)) return;
+    clearAddMemberPopoverMobileLayout(popover);
     popover.classList.remove('project-clad-add-member-popover--open');
     popover.setAttribute('aria-hidden', 'true');
     if (toggle instanceof HTMLElement) {

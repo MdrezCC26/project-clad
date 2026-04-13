@@ -2291,7 +2291,7 @@ html:has(.project-clad-page--projects) body {
   min-width: 0;
 }
 
-.project-clad-storefront-nav__shell-extra .project-clad-button {
+.project-clad-storefront-nav__shell-extra .project-clad-storefront-nav__icon-btn--add-member {
   flex-shrink: 0;
 }
 
@@ -2622,33 +2622,7 @@ html:has(.project-clad-page--projects) body {
     max-width: 100%;
   }
 
-  .project-clad-storefront-nav__shell-extra .project-clad-button {
-    flex: 0 1 auto;
-    min-width: 0;
-    max-width: 100%;
-    padding-left: 0.55rem !important;
-    padding-right: 0.55rem !important;
-    padding-top: 0.35rem !important;
-    padding-bottom: 0.35rem !important;
-    min-height: calc(var(--pc-storefront-nav-icon) + 2px) !important;
-    font-size: calc(0.62rem * var(--pc-text-scale, 1.53)) !important;
-    letter-spacing: 0.02em !important;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .project-clad-storefront-nav__shell-extra .project-clad-add-member-popover {
-    left: auto;
-    right: 0;
-    transform: translateY(-6px) scale(0.985);
-    transform-origin: top right;
-  }
-
-  .project-clad-storefront-nav__shell-extra
-    .project-clad-add-member-popover.project-clad-add-member-popover--open {
-    transform: translateY(0) scale(1);
-  }
+  /* Add-member popover position on narrow screens: JS applies fixed + clamped left (see project page script). */
 
   .project-clad-storefront-nav__tools {
     flex-shrink: 0;
