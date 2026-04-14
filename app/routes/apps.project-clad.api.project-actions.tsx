@@ -290,6 +290,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   if (intent === "submit-for-approval") {
+    if (!viewerHasNATag && !viewerIsAppAdmin) {
+      return Response.json(
+        {
+          error:
+            "Submit for review is only for NA-tagged customers. You can place the order when it is ready.",
+        },
+        { status: 403 },
+      );
+    }
     if (!isEmailConfigured()) {
       return Response.json(
         { error: "Email is not configured. Approval requests cannot be sent." },
@@ -443,6 +452,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (intent === "cancel-approval-request") {
     if (!canEdit) {
       return Response.json({ error: "Forbidden." }, { status: 403 });
+    }
+    if (!viewerHasNATag && !viewerIsAppAdmin) {
+      return Response.json(
+        { error: "Only the customer who requested review can cancel that request." },
+        { status: 403 },
+      );
     }
     const jobId = url.searchParams.get("jobId") || "";
     const itemId = url.searchParams.get("itemId") || "";

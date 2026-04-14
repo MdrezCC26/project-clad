@@ -53,7 +53,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
   const hasNA = tags.some((t) => String(t).trim().toUpperCase() === "NA");
   const isStaff = viewerIsAppAdmin || hasStaffStorefrontTag(tags);
-  if (hasNA && !isStaff) {
+  const naMayViewPhoto =
+    job.orderLifecycleStatus === "delivered" ||
+    job.orderLifecycleStatus === "paid";
+  if (hasNA && !isStaff && !naMayViewPhoto) {
     return new Response("Forbidden", { status: 403 });
   }
 

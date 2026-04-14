@@ -4466,16 +4466,26 @@ details.project-clad-edit-mode
   object-fit: contain;
 }
 
-.project-clad-orders-table .project-clad-thumb,
+/* Real images: cap width only — height follows intrinsic aspect ratio (drawings are often tall). */
+.project-clad-orders-table .project-clad-thumb:not(.project-clad-thumb--placeholder) {
+  flex-shrink: 1;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  max-width: min(100%, var(--pc-order-thumb-size));
+  max-height: min(70vh, calc(var(--pc-order-thumb-size) * 2.5));
+  object-fit: contain;
+  display: block;
+}
+
 .project-clad-orders-table .project-clad-thumb--placeholder {
   flex-shrink: 1;
   width: var(--pc-order-thumb-size);
-  height: var(--pc-order-thumb-size);
-  min-width: 0;
-  min-height: 0;
   max-width: 100%;
   aspect-ratio: 1;
-  object-fit: contain;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
 }
 
 /* Project detail: smaller drawing + raised neu tile (matches nav pills, not flat white slab) */
@@ -4688,13 +4698,11 @@ details.project-clad-edit-mode
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:nth-child(3),
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:nth-child(4) {
     vertical-align: top;
-    /* 1lh: center of qty/price/button line with variant row; 1.35em fallback where lh unsupported */
-    padding-top: calc(0.75rem + (var(--pc-order-thumb-size) - 1.35em) / 2);
-    padding-top: calc(0.75rem + (var(--pc-order-thumb-size) - 1lh) / 2);
+    padding-top: 0.75rem;
   }
 
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-item-link {
-    align-items: center;
+    align-items: flex-start;
   }
 }
 
@@ -4878,15 +4886,14 @@ details.project-clad-edit-mode .project-clad-edit-view {
     width: 100%;
   }
 
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb,
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb--placeholder {
-    width: min(100%, 240px);
-    max-width: 240px;
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb:not(.project-clad-thumb--placeholder) {
+    width: auto;
+    height: auto;
+    max-width: min(100%, 240px);
+    max-height: min(55vh, 360px);
     margin-inline: auto;
     flex-shrink: 0;
-    aspect-ratio: 1;
     object-fit: contain;
-    height: auto;
     display: block;
     background: var(--pc-card-bg);
     padding: 0.4rem;
@@ -4896,11 +4903,20 @@ details.project-clad-edit-mode .project-clad-edit-view {
     box-sizing: border-box;
   }
 
-  /* Empty placeholder span has no intrinsic height without aspect-ratio / min-height */
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb--placeholder {
-    min-height: 160px;
+    width: min(100%, 240px);
+    max-width: 240px;
+    margin-inline: auto;
+    flex-shrink: 0;
+    aspect-ratio: 1;
+    display: block;
     background: var(--pc-card-bg);
+    padding: 0.4rem;
     border-radius: var(--pc-neu-radius);
+    border: var(--pc-caesura-border);
+    box-shadow: var(--pc-caesura-drop);
+    box-sizing: border-box;
+    min-height: 160px;
   }
 
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td.project-clad-table-right {

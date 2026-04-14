@@ -922,7 +922,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         fulfillmentMethod: job.fulfillmentMethod ?? null,
         hasFulfillmentPhoto: Boolean(job.fulfillmentPhotoStorageKey),
         fulfillmentPhotoUrl: job.fulfillmentPhotoStorageKey
-          ? !hasNATag || viewerIsAppAdmin
+          ? !hasNATag ||
+            viewerIsAppAdmin ||
+            job.orderLifecycleStatus === "delivered" ||
+            job.orderLifecycleStatus === "paid"
             ? (buildSignedFulfillmentPhotoUrl({ jobId: job.id, shop }) ??
               `/apps/project-clad/fulfillment-photo?jobId=${encodeURIComponent(job.id)}`)
             : null
@@ -1443,7 +1446,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (!job) {
         return Response.json({ error: "Order not found." }, { status: 404 });
       }
-      if (job.orderLifecycleStatus !== "ready_to_order") {
+      let viewerTagsForOrder: string[] = [];
+      try {
+        const vid = normalizeStorefrontCustomerId(customerId);
+        const customerInfo = await getCustomersByIds(shop, [vid]);
+        viewerTagsForOrder = customerInfo[vid]?.tags ?? [];
+      } catch {
+        viewerTagsForOrder = [];
+      }
+      const viewerHasNATagForOrder = viewerTagsForOrder.some(
+        (t) => String(t).trim().toUpperCase() === "NA",
+      );
+      const orderNowSkipsApprovalReview =
+        !viewerHasNATagForOrder || viewerIsAppAdmin;
+
+      if (
+        job.orderLifecycleStatus !== "ready_to_order" &&
+        !(
+          orderNowSkipsApprovalReview &&
+          job.orderLifecycleStatus === "draft"
+        )
+      ) {
         return Response.json(
           { error: "This order is not ready for Order now." },
           { status: 400 },
@@ -1469,7 +1492,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         },
       });
       const approvedAt = arJob?.approvedAt ?? arProject?.approvedAt;
-      if (!approvedAt) {
+      if (!orderNowSkipsApprovalReview && !approvedAt) {
         return Response.json(
           { error: "Staff approval is required before ordering." },
           { status: 400 },
@@ -2808,7 +2831,7 @@ export default function ProjectDetailPage() {
       if (!jobId) return;
       if (
         !window.confirm(
-          "Are you sure you want to place this order? This will mark it as ordered.",
+          'Please ensure all delivery details are accurate. You can update delivery information under "Edit Project Details", and modify order-specific information in "Edit Order."',
         )
       ) {
         return;
@@ -3860,6 +3883,9 @@ export default function ProjectDetailPage() {
                             (() => {
                               const ls = job.orderLifecycleStatus;
                               const approval = getApprovalStatus(job.id, "");
+                              /** Non-NA customers (and app admins) order without the review gate. */
+                              const skipReviewOrderFlow =
+                                !viewerHasNATag || viewerIsAdmin;
                               if (ls === "paid") {
                                 return (
                                   <button type="button" className="project-clad-button" disabled>
@@ -3882,8 +3908,10 @@ export default function ProjectDetailPage() {
                                 );
                               }
                               if (
-                                ls === "ready_to_order" &&
-                                approval === "approved"
+                                (ls === "ready_to_order" &&
+                                  (approval === "approved" ||
+                                    skipReviewOrderFlow)) ||
+                                (ls === "draft" && skipReviewOrderFlow)
                               ) {
                                 return (
                                   <div
@@ -3931,36 +3959,49 @@ export default function ProjectDetailPage() {
                                   </div>
                                 );
                               }
-                              const intent =
-                                approval === "awaiting"
-                                  ? "cancel-approval-request"
-                                  : "submit-for-approval";
-                              const label =
-                                approval === "awaiting"
-                                  ? "Confirming order"
-                                  : "Send for review";
-                              return (
-                                <form
-                                  method="get"
-                                  action="/apps/project-clad/api/project-actions"
-                                  className="project-clad-inline-form"
-                                  data-projectclad-ajax
-                                  data-projectclad-intent={intent}
-                                  data-projectclad-project-id={project.id}
-                                  onPointerDownCapture={(event) => event.stopPropagation()}
-                                >
-                                  <input type="hidden" name="jobId" value={job.id} />
-                                  <button
-                                    type="submit"
-                                    className="project-clad-button"
+                              if (
+                                viewerHasNATag &&
+                                ls !== "ready_to_order" &&
+                                ls !== "ordered" &&
+                                ls !== "delivered" &&
+                                ls !== "paid"
+                              ) {
+                                const intent =
+                                  approval === "awaiting"
+                                    ? "cancel-approval-request"
+                                    : "submit-for-approval";
+                                const label =
+                                  approval === "awaiting"
+                                    ? "Confirming order"
+                                    : "Send for review";
+                                return (
+                                  <form
+                                    method="get"
+                                    action="/apps/project-clad/api/project-actions"
+                                    className="project-clad-inline-form"
+                                    data-projectclad-ajax
+                                    data-projectclad-intent={intent}
+                                    data-projectclad-project-id={project.id}
+                                    onPointerDownCapture={(event) => event.stopPropagation()}
                                   >
-                                    {label}
-                                  </button>
-                                  <span
-                                    className="project-clad-muted"
-                                    data-projectclad-form-message
-                                  />
-                                </form>
+                                    <input type="hidden" name="jobId" value={job.id} />
+                                    <button
+                                      type="submit"
+                                      className="project-clad-button"
+                                    >
+                                      {label}
+                                    </button>
+                                    <span
+                                      className="project-clad-muted"
+                                      data-projectclad-form-message
+                                    />
+                                  </form>
+                                );
+                              }
+                              return (
+                                <span className="project-clad-muted">
+                                  {orderLifecycleLabel(ls)}
+                                </span>
                               );
                             })()
                           ) : (
@@ -4820,8 +4861,7 @@ export default function ProjectDetailPage() {
                     })()}
                     {job.hasFulfillmentPhoto &&
                     job.fulfillmentPhotoUrl &&
-                    job.orderLifecycleStatus !== "ordered" &&
-                    (!viewerHasNATag || viewerIsAdmin) ? (
+                    job.orderLifecycleStatus !== "ordered" ? (
                       <div style={{ marginTop: "1rem", textAlign: "right" }}>
                         <a
                           href={job.fulfillmentPhotoUrl}
@@ -5597,7 +5637,7 @@ export default function ProjectDetailPage() {
       event.stopImmediatePropagation();
       if (
         !window.confirm(
-          'Are you sure you want to place this order? This will mark it as ordered.',
+          'Please ensure all delivery details are accurate. You can update delivery information under "Edit Project Details", and modify order-specific information in "Edit Order."',
         )
       ) {
         return;
