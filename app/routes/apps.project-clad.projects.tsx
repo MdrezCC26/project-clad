@@ -3,6 +3,7 @@ import { Outlet, redirect, useLoaderData, useLocation } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import {
+  fetchCustomerTagsRest,
   getCustomersByIds,
   type CustomerInfo,
 } from "../utils/adminCustomers.server";
@@ -18,7 +19,7 @@ import { getThemeStyles } from "../utils/themeAssets.server";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
 import {
-  hasAdminTag,
+  hasTag,
   normalizeStorefrontCustomerId,
   viewerHasAdminTag,
 } from "../utils/customerTags.server";
@@ -122,14 +123,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let navAccountInitial: string | null = null;
   try {
     const numericId = normalizeStorefrontCustomerId(customerId);
-    const customerInfo = await getCustomersByIds(shop, [numericId]);
+    const [customerInfo, viewerTagsFromRest] = await Promise.all([
+      getCustomersByIds(shop, [numericId]),
+      fetchCustomerTagsRest(shop, numericId),
+    ]);
     const viewer =
       customerInfo[numericId] ?? customerInfo[customerId];
-    const viewerTags = viewer?.tags ?? [];
     hideAddToCart =
-      viewerTags.some(
-        (t: string) => String(t).trim().toUpperCase() === "NA",
-      ) && !hasAdminTag(viewerTags);
+      hasTag(viewerTagsFromRest, "NA") && !viewerIsAppAdmin;
     const fn = viewer?.firstName?.trim();
     navAccountInitial = fn
       ? fn.charAt(0).toUpperCase()
@@ -288,17 +289,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return new Response("Project not found", { status: 404 });
   }
 
-  let viewerHasNATag = false;
-  try {
-    const vid = normalizeStorefrontCustomerId(customerId);
-    const customerInfo = await getCustomersByIds(shop, [vid]);
-    const viewerTags = customerInfo[vid]?.tags ?? [];
-    viewerHasNATag = viewerTags.some(
-      (t: string) => String(t).trim().toUpperCase() === "NA",
-    );
-  } catch {
-    viewerHasNATag = false;
-  }
+  const vid = normalizeStorefrontCustomerId(customerId);
+  const viewerTagsForDelete = await fetchCustomerTagsRest(shop, vid);
+  const viewerHasNATag = hasTag(viewerTagsForDelete, "NA");
 
   const canAdminMembers = canAdminProjectMembers(
     project,

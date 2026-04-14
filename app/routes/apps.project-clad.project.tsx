@@ -24,9 +24,9 @@ import {
   resolveVariantDisplayInfo,
 } from "../utils/variantInfo.server";
 import {
+  fetchCustomerTagsRest,
   findCustomerIdByEmail,
   getCustomersByIds,
-  resolveViewerTagsFromCustomerInfoMap,
 } from "../utils/adminCustomers.server";
 import {
   hasStaffStorefrontTag,
@@ -764,9 +764,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       error instanceof Error ? error.message : "Member lookup failed.";
   }
 
-  const viewerTags = resolveViewerTagsFromCustomerInfoMap(
-    customerInfo,
-    customerId,
+  /** REST read of this customer only — matches Shopify Admin tags (avoids GraphQL batch map quirks). */
+  const viewerTags = await fetchCustomerTagsRest(
+    shop,
+    normalizeStorefrontCustomerId(customerId),
   );
 
   const isMember =
@@ -1443,17 +1444,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (!job) {
         return Response.json({ error: "Order not found." }, { status: 404 });
       }
-      let viewerTagsForOrder: string[] = [];
-      try {
-        const vid = normalizeStorefrontCustomerId(customerId);
-        const customerInfo = await getCustomersByIds(shop, [vid]);
-        viewerTagsForOrder = resolveViewerTagsFromCustomerInfoMap(
-          customerInfo,
-          customerId,
-        );
-      } catch {
-        viewerTagsForOrder = [];
-      }
+      const viewerTagsForOrder = await fetchCustomerTagsRest(
+        shop,
+        normalizeStorefrontCustomerId(customerId),
+      );
       const viewerHasNATagForOrder = hasTag(viewerTagsForOrder, "NA");
       const orderNowSkipsApprovalReview =
         !viewerHasNATagForOrder || viewerIsAppAdmin;
@@ -1601,17 +1595,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const isOwner = project.ownerCustomerId === customerId;
   const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
-  let viewerTagsForAction: string[] = [];
-  try {
-    const vid = normalizeStorefrontCustomerId(customerId);
-    const customerInfo = await getCustomersByIds(shop, [vid]);
-    viewerTagsForAction = resolveViewerTagsFromCustomerInfoMap(
-      customerInfo,
-      customerId,
-    );
-  } catch {
-    viewerTagsForAction = [];
-  }
+  const viewerTagsForAction = await fetchCustomerTagsRest(
+    shop,
+    normalizeStorefrontCustomerId(customerId),
+  );
   const viewerHasNATag = hasTag(viewerTagsForAction, "NA");
   const viewerCanFulfill =
     viewerIsAppAdmin || hasStaffStorefrontTag(viewerTagsForAction);
@@ -3341,7 +3328,7 @@ export default function ProjectDetailPage() {
       <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       <main
         className={`project-clad-page project-clad-page--detail project-clad-page--projects${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
-        data-pc-na-workflow={viewerHasNATag ? "1" : "0"}
+        data-pc-na-workflow={viewerHasNATag === true ? "1" : "0"}
         style={
           backgroundLogoDataUrl
             ? {
@@ -3883,9 +3870,12 @@ export default function ProjectDetailPage() {
                             (() => {
                               const ls = job.orderLifecycleStatus;
                               const approval = getApprovalStatus(job.id, "");
+                              /** Strict true — avoids truthy non-booleans from any serialization edge case. */
+                              const viewerUsesNAReviewFlow =
+                                viewerHasNATag === true;
                               /** Non-NA customers (and app admins) order without the review gate. */
                               const skipReviewOrderFlow =
-                                !viewerHasNATag || viewerIsAdmin;
+                                !viewerUsesNAReviewFlow || viewerIsAdmin;
                               if (ls === "paid") {
                                 return (
                                   <button type="button" className="project-clad-button" disabled>
@@ -3960,7 +3950,7 @@ export default function ProjectDetailPage() {
                                 );
                               }
                               if (
-                                viewerHasNATag &&
+                                viewerUsesNAReviewFlow &&
                                 ls !== "ready_to_order" &&
                                 ls !== "ordered" &&
                                 ls !== "delivered" &&

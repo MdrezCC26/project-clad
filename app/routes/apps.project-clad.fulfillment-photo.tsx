@@ -3,9 +3,10 @@ import * as path from "node:path";
 import type { LoaderFunctionArgs } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
-import { getCustomersByIds } from "../utils/adminCustomers.server";
+import { fetchCustomerTagsRest } from "../utils/adminCustomers.server";
 import {
   hasStaffStorefrontTag,
+  hasTag,
   normalizeStorefrontCustomerId,
   viewerHasAdminTag,
 } from "../utils/customerTags.server";
@@ -44,14 +45,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const vid = normalizeStorefrontCustomerId(customerId);
-  let tags: string[] = [];
-  try {
-    const info = await getCustomersByIds(shop, [vid]);
-    tags = info[vid]?.tags ?? [];
-  } catch {
-    tags = [];
-  }
-  const hasNA = tags.some((t) => String(t).trim().toUpperCase() === "NA");
+  const tags = await fetchCustomerTagsRest(shop, vid);
+  const hasNA = hasTag(tags, "NA");
   const isStaff = viewerIsAppAdmin || hasStaffStorefrontTag(tags);
   const naMayViewPhoto =
     job.orderLifecycleStatus === "delivered" ||

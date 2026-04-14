@@ -3,10 +3,12 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import {
+  fetchCustomerTagsRest,
   findCustomerIdByEmail,
   getCustomersByIds,
 } from "../utils/adminCustomers.server";
 import {
+  hasTag,
   normalizeStorefrontCustomerId,
   viewerHasAdminTag,
 } from "../utils/customerTags.server";
@@ -70,16 +72,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   );
 
   const vid = normalizeStorefrontCustomerId(customerId);
-  let viewerTags: string[] = [];
-  try {
-    const info = await getCustomersByIds(shop, [vid]);
-    viewerTags = info[vid]?.tags ?? [];
-  } catch {
-    viewerTags = [];
-  }
-  const viewerHasNATag = viewerTags.some(
-    (t: string) => String(t).trim().toUpperCase() === "NA",
-  );
+  const viewerTags = await fetchCustomerTagsRest(shop, vid);
+  const viewerHasNATag = hasTag(viewerTags, "NA");
 
   const isMember = isProjectMember(project, customerId, viewerIsAppAdmin);
   if (!isMember) {
