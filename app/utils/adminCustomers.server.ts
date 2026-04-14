@@ -1,5 +1,6 @@
 import prisma from "../db.server";
 import { sessionStorage } from "../shopify.server";
+import { customerIdsMatch } from "./projectAccess.server";
 
 const CUSTOMER_API_VERSION = "2024-10";
 
@@ -67,6 +68,25 @@ export type CustomerInfo = {
   lastName: string | null;
   tags: string[];
 };
+
+/**
+ * Tags for the storefront viewer when `getCustomersByIds` returned a map keyed by
+ * several id shapes (digits, GID, etc.). Avoids picking the wrong row when keys alias.
+ */
+export function resolveViewerTagsFromCustomerInfoMap(
+  map: Record<string, CustomerInfo>,
+  loggedInCustomerId: string,
+): string[] {
+  const seen = new Set<string>();
+  for (const row of Object.values(map)) {
+    if (!row || seen.has(row.id)) continue;
+    seen.add(row.id);
+    if (customerIdsMatch(row.id, loggedInCustomerId)) {
+      return row.tags ?? [];
+    }
+  }
+  return [];
+}
 
 const chunk = <T,>(items: T[], size: number) => {
   const result: T[][] = [];

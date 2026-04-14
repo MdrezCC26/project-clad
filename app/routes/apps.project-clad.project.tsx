@@ -26,9 +26,11 @@ import {
 import {
   findCustomerIdByEmail,
   getCustomersByIds,
+  resolveViewerTagsFromCustomerInfoMap,
 } from "../utils/adminCustomers.server";
 import {
   hasStaffStorefrontTag,
+  hasTag,
   normalizeStorefrontCustomerId,
   viewerHasAdminTag,
 } from "../utils/customerTags.server";
@@ -762,10 +764,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       error instanceof Error ? error.message : "Member lookup failed.";
   }
 
-  const viewerTags =
-    customerInfo[viewerNumericId]?.tags ??
-    customerInfo[customerId]?.tags ??
-    [];
+  const viewerTags = resolveViewerTagsFromCustomerInfoMap(
+    customerInfo,
+    customerId,
+  );
 
   const isMember =
     project.ownerCustomerId === customerId ||
@@ -811,13 +813,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     liveByVariantId: variantInfo,
   });
 
-  const hideAddToCart =
-    viewerTags.some(
-      (t: string) => String(t).trim().toUpperCase() === "NA",
-    ) && !viewerIsAppAdmin;
-  const hasNATag = viewerTags.some(
-    (t: string) => String(t).trim().toUpperCase() === "NA",
-  );
+  const hideAddToCart = hasTag(viewerTags, "NA") && !viewerIsAppAdmin;
+  const hasNATag = hasTag(viewerTags, "NA");
   const canAdminMembers = canAdminProjectMembers(
     project,
     customerId,
@@ -1450,13 +1447,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       try {
         const vid = normalizeStorefrontCustomerId(customerId);
         const customerInfo = await getCustomersByIds(shop, [vid]);
-        viewerTagsForOrder = customerInfo[vid]?.tags ?? [];
+        viewerTagsForOrder = resolveViewerTagsFromCustomerInfoMap(
+          customerInfo,
+          customerId,
+        );
       } catch {
         viewerTagsForOrder = [];
       }
-      const viewerHasNATagForOrder = viewerTagsForOrder.some(
-        (t) => String(t).trim().toUpperCase() === "NA",
-      );
+      const viewerHasNATagForOrder = hasTag(viewerTagsForOrder, "NA");
       const orderNowSkipsApprovalReview =
         !viewerHasNATagForOrder || viewerIsAppAdmin;
 
@@ -1607,13 +1605,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const vid = normalizeStorefrontCustomerId(customerId);
     const customerInfo = await getCustomersByIds(shop, [vid]);
-    viewerTagsForAction = customerInfo[vid]?.tags ?? [];
+    viewerTagsForAction = resolveViewerTagsFromCustomerInfoMap(
+      customerInfo,
+      customerId,
+    );
   } catch {
     viewerTagsForAction = [];
   }
-  const viewerHasNATag = viewerTagsForAction.some(
-    (t) => String(t).trim().toUpperCase() === "NA",
-  );
+  const viewerHasNATag = hasTag(viewerTagsForAction, "NA");
   const viewerCanFulfill =
     viewerIsAppAdmin || hasStaffStorefrontTag(viewerTagsForAction);
   const canAdminMembers = canAdminProjectMembers(
@@ -3342,6 +3341,7 @@ export default function ProjectDetailPage() {
       <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       <main
         className={`project-clad-page project-clad-page--detail project-clad-page--projects${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
+        data-pc-na-workflow={viewerHasNATag ? "1" : "0"}
         style={
           backgroundLogoDataUrl
             ? {
