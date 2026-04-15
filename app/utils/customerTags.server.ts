@@ -73,6 +73,14 @@ function emailMatchesGlobalStaffList(
   return parseGlobalStaffEmailsRaw(listRaw).includes(e);
 }
 
+/** True if normalized `customerEmail` appears in `listRaw` (comma / newline / semicolon separated). */
+export function customerEmailInConfiguredList(
+  customerEmail: string | null | undefined,
+  listRaw: string | null | undefined,
+): boolean {
+  return emailMatchesGlobalStaffList(customerEmail, listRaw);
+}
+
 function emailInGlobalStaffEnv(
   customerEmail: string | null | undefined,
 ): boolean {

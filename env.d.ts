@@ -22,6 +22,12 @@ declare namespace NodeJS {
      * (matched to signed `logged_in_customer_email`, case-insensitive).
      */
     PROJECTCLAD_GLOBAL_STAFF_EMAILS?: string;
+    /**
+     * Comma/newline/semicolon-separated emails allowed to change **line unit prices** on the
+     * storefront project page (`save-order-edit`). Must match signed-in customer email (case-insensitive).
+     * When unset, unit price changes are rejected until configured.
+     */
+    PROJECTCLAD_UNIT_PRICE_EDITOR_EMAILS?: string;
     /** Set to "1" to log staff-access checks (shop + viewer id) on the server. */
     PROJECTCLAD_DEBUG_STAFF?: string;
   }

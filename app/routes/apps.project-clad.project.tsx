@@ -28,6 +28,7 @@ import {
   getCustomersByIds,
 } from "../utils/adminCustomers.server";
 import {
+  customerEmailInConfiguredList,
   hasStaffStorefrontTag,
   hasTag,
   normalizeStorefrontCustomerId,
@@ -862,6 +863,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const isOwner = project.ownerCustomerId === customerId;
   const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
 
+  const unitPriceEditorAllowlist =
+    process.env.PROJECTCLAD_UNIT_PRICE_EDITOR_EMAILS?.trim();
+  const canEditLineUnitPrices =
+    Boolean(unitPriceEditorAllowlist) &&
+    customerEmailInConfiguredList(customerEmail, unitPriceEditorAllowlist);
+
   const shopQ = shopStringFilter(shop);
   const otherProjects = await prisma.project.findMany({
     where: viewerIsAppAdmin
@@ -1117,6 +1124,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     })),
     canViewPricing: !hideAddToCart || hasPricingAccess(request),
     canEdit,
+    canEditLineUnitPrices,
     isOwner,
     canAdminMembers,
     hideAddToCart,
@@ -1442,6 +1450,32 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return Response.json({ error: "Forbidden." }, { status: 403 });
       }
 
+      const unitPriceEditorAllowlist =
+        process.env.PROJECTCLAD_UNIT_PRICE_EDITOR_EMAILS?.trim();
+      const wantsUnitPriceChange = itemUpdates.some(
+        (u) => parseOptionalUnitPrice(u.unitPrice) !== null,
+      );
+      const allowUnitPricePersistence =
+        Boolean(unitPriceEditorAllowlist) &&
+        customerEmailInConfiguredList(customerEmail, unitPriceEditorAllowlist);
+      if (wantsUnitPriceChange) {
+        if (!unitPriceEditorAllowlist) {
+          return Response.json(
+            {
+              error:
+                "Line unit price edits require PROJECTCLAD_UNIT_PRICE_EDITOR_EMAILS on the app server.",
+            },
+            { status: 403 },
+          );
+        }
+        if (!allowUnitPricePersistence) {
+          return Response.json(
+            { error: "You are not allowed to change line unit prices." },
+            { status: 403 },
+          );
+        }
+      }
+
       if (jobId) {
         const job = await prisma.job.findFirst({
           where: { id: jobId, projectId },
@@ -1498,7 +1532,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 const quantity = u.quantity as number;
                 const row = job.items.find((i) => i.id === itemId);
                 if (!row || quantity < 0) continue;
-                const priceStr = parseOptionalUnitPrice(u.unitPrice);
+                const priceStr = allowUnitPricePersistence
+                  ? parseOptionalUnitPrice(u.unitPrice)
+                  : null;
                 const data: { quantity: number; priceSnapshot?: string } = {
                   quantity,
                 };
@@ -2668,6 +2704,7 @@ export default function ProjectDetailPage() {
     project,
     canViewPricing,
     canEdit,
+    canEditLineUnitPrices,
     canAdminMembers,
     hideAddToCart,
     approvalRequests,
@@ -4615,30 +4652,45 @@ export default function ProjectDetailPage() {
                                       style={{ display: "none" }}
                                     >
                                       {pricingUnlocked ? (
-                                        <>
-                                          <label
-                                            className="project-clad-sr-only"
-                                            htmlFor={`projectclad-unit-price-${job.id}-${item.id}`}
+                                        canEditLineUnitPrices ? (
+                                          <>
+                                            <label
+                                              className="project-clad-sr-only"
+                                              htmlFor={`projectclad-unit-price-${job.id}-${item.id}`}
+                                            >
+                                              Unit price for {item.displayName}
+                                            </label>
+                                            <input
+                                              id={`projectclad-unit-price-${job.id}-${item.id}`}
+                                              type="number"
+                                              inputMode="decimal"
+                                              step="0.01"
+                                              min={0}
+                                              defaultValue={Number(item.priceSnapshot).toFixed(2)}
+                                              data-original-unit-price={Number(
+                                                item.priceSnapshot,
+                                              ).toFixed(2)}
+                                              data-projectclad-unit-price-input
+                                              data-item-id={item.id}
+                                              data-job-id={job.id}
+                                              className="project-clad-unit-price-input"
+                                              aria-label={`Unit price for ${item.displayName}`}
+                                            />
+                                          </>
+                                        ) : (
+                                          <span
+                                            className="project-clad-muted"
+                                            style={{
+                                              fontSize: "0.82rem",
+                                              lineHeight: 1.35,
+                                              textAlign: "right",
+                                              display: "inline-block",
+                                              maxWidth: "12rem",
+                                            }}
                                           >
-                                            Unit price for {item.displayName}
-                                          </label>
-                                          <input
-                                            id={`projectclad-unit-price-${job.id}-${item.id}`}
-                                            type="number"
-                                            inputMode="decimal"
-                                            step="0.01"
-                                            min={0}
-                                            defaultValue={Number(item.priceSnapshot).toFixed(2)}
-                                            data-original-unit-price={Number(
-                                              item.priceSnapshot,
-                                            ).toFixed(2)}
-                                            data-projectclad-unit-price-input
-                                            data-item-id={item.id}
-                                            data-job-id={job.id}
-                                            className="project-clad-unit-price-input"
-                                            aria-label={`Unit price for ${item.displayName}`}
-                                          />
-                                        </>
+                                            Only designated staff can change unit prices.
+                                          </span>
+                                        )
                                       ) : (
                                         <span
                                           className="project-clad-muted"
