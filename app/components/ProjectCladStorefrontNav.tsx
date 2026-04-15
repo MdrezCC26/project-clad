@@ -1,7 +1,6 @@
 import {
   forwardRef,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type MutableRefObject,
@@ -63,30 +62,14 @@ function IconCart({ className }: { className?: string }) {
   );
 }
 
-const COMPACT_STOREFRONT_NAV_MQ = "(max-width: 749px)";
-
-function useCompactStorefrontNav(): boolean {
-  const [compact, setCompact] = useState(false);
-  useLayoutEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia(COMPACT_STOREFRONT_NAV_MQ);
-    const sync = () => setCompact(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-  return compact;
-}
-
 type InAppSearchMode = "projects" | "orders";
 
 const StorefrontNavInAppSearch = forwardRef<HTMLDetailsElement, {
   mode: InAppSearchMode;
-  compactNav: boolean;
   onCloseActionsMenuDrawer: () => void;
   onCloseStoreMenuDrawer: () => void;
 }>(function StorefrontNavInAppSearch(
-  { mode, compactNav, onCloseActionsMenuDrawer, onCloseStoreMenuDrawer },
+  { mode, onCloseActionsMenuDrawer, onCloseStoreMenuDrawer },
   ref,
 ) {
   const detailsEl = useRef<HTMLDetailsElement | null>(null);
@@ -123,7 +106,7 @@ const StorefrontNavInAppSearch = forwardRef<HTMLDetailsElement, {
       },
       { replace: true },
     );
-    if (compactNav) onCloseActionsMenuDrawer();
+    onCloseActionsMenuDrawer();
     onCloseStoreMenuDrawer();
     closeDetails();
   };
@@ -138,7 +121,7 @@ const StorefrontNavInAppSearch = forwardRef<HTMLDetailsElement, {
       },
       { replace: true },
     );
-    if (compactNav) onCloseActionsMenuDrawer();
+    onCloseActionsMenuDrawer();
     onCloseStoreMenuDrawer();
     closeDetails();
   };
@@ -243,7 +226,6 @@ export function ProjectCladStorefrontNav({
   const initial = accountInitial?.trim().charAt(0).toUpperCase() ?? "";
   const storeMenuDrawerRef = useRef<HTMLDetailsElement>(null);
   const searchDrawerRef = useRef<HTMLDetailsElement>(null);
-  const compactNav = useCompactStorefrontNav();
   const [liveCartCount, setLiveCartCount] = useState(() =>
     Math.max(0, Math.floor(Number(cartItemCount) || 0)),
   );
@@ -286,7 +268,6 @@ export function ProjectCladStorefrontNav({
         <StorefrontNavInAppSearch
           ref={searchDrawerRef}
           mode={inAppSearch}
-          compactNav={compactNav}
           onCloseActionsMenuDrawer={() => {}}
           onCloseStoreMenuDrawer={closeStoreMenuDrawer}
         />
@@ -382,32 +363,13 @@ export function ProjectCladStorefrontNav({
 
   return (
     <div className="project-clad-storefront-nav" data-projectclad-storefront-nav>
-      <div
-        className={`project-clad-storefront-nav__shell${compactNav ? " project-clad-storefront-nav__shell--compact-stacked" : ""}`}
-      >
-        {compactNav ? (
-          <>
-            <div className="project-clad-storefront-nav__brand-row">{logoBlock}</div>
-            <div className="project-clad-storefront-nav__icon-toolbar">
-              {storeMenuDrawer}
-              {shellExtra ? (
-                <div className="project-clad-storefront-nav__shell-extra project-clad-storefront-nav__shell-extra--compact-toolbar">
-                  {shellExtra}
-                </div>
-              ) : null}
-              {toolsRow}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="project-clad-storefront-nav__left">
-              {storeMenuDrawer}
-              {logoBlock}
-            </div>
-            {shellExtraSlot}
-            {toolsRow}
-          </>
-        )}
+      <div className="project-clad-storefront-nav__shell project-clad-storefront-nav__shell--flat">
+        <div className="project-clad-storefront-nav__shell-primary">
+          {storeMenuDrawer}
+          {logoBlock}
+        </div>
+        {shellExtraSlot}
+        {toolsRow}
       </div>
     </div>
   );

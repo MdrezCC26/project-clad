@@ -2318,56 +2318,19 @@ html:has(.project-clad-page--projects) body {
   transition: box-shadow 250ms ease-in-out;
 }
 
-/* ≤749px: logo row + single centered icon row (see ProjectCladStorefrontNav compact layout). */
-.project-clad-storefront-nav__shell--compact-stacked {
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 0.55rem 0.75rem;
-}
-
-.project-clad-storefront-nav__brand-row {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
-}
-
-.project-clad-storefront-nav__icon-toolbar {
+/*
+ * Flat shell (all viewports): one DOM for SSR + client — no JS breakpoint.
+ * Desktop: [ drawer+logo | extras | tools ]. Mobile: logo row, then drawer+extras+tools (see @media).
+ */
+.project-clad-storefront-nav__shell-primary {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
   align-items: center;
   gap: var(--pc-storefront-nav-cluster-gap);
-  width: 100%;
+  flex: 0 1 auto;
   min-width: 0;
   position: relative;
-  z-index: 4;
-}
-
-.project-clad-storefront-nav__icon-toolbar .project-clad-storefront-nav__drawer {
-  flex-shrink: 0;
-}
-
-.project-clad-storefront-nav__shell-extra--compact-toolbar {
-  flex: 0 0 auto;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.project-clad-storefront-nav__shell-extra--compact-toolbar .project-clad-header-slot--nav-tools {
-  display: flex !important;
-  flex-direction: row !important;
-  flex-wrap: wrap !important;
-  justify-content: center !important;
-  align-items: center !important;
-  gap: 0.5rem !important;
+  z-index: 3;
 }
 
 .project-clad-storefront-nav__shell > * {
@@ -2375,17 +2338,8 @@ html:has(.project-clad-page--projects) body {
   z-index: 1;
 }
 
-/* Drawer + logo cluster must paint above shell-extra / tools so the wide flyout isn’t covered by those flex tracks. */
-.project-clad-storefront-nav__shell > .project-clad-storefront-nav__left {
+.project-clad-storefront-nav__shell--flat > .project-clad-storefront-nav__shell-primary {
   z-index: 3;
-}
-
-.project-clad-storefront-nav__left {
-  display: flex;
-  align-items: center;
-  gap: var(--pc-storefront-nav-cluster-gap);
-  flex: 0 1 auto;
-  min-width: 0;
 }
 
 /* Between logo and tool icons (e.g. Add member on project detail) */
@@ -2831,7 +2785,8 @@ html:has(.project-clad-page--projects) body {
 
 /*
  * Narrow viewports: smaller icon hit targets + gaps.
- * Layout is stacked in DOM: centered logo row, then centered icon toolbar (see __shell--compact-stacked).
+ * Flat shell: `shell-primary` uses display:contents so drawer + logo become flex items of `__shell`;
+ * logo gets full first row; drawer + extras + tools wrap as one centered row.
  */
 @media (max-width: 749px) {
   .project-clad-storefront-nav {
@@ -2839,28 +2794,52 @@ html:has(.project-clad-page--projects) body {
     --pc-storefront-nav-cluster-gap: 0.32rem;
   }
 
-  /*
-   * Wide tray only. Stacked mobile shell (__shell--compact-stacked) needs row-gap between
-   * logo row and icon row; a global row-gap:0 here removed that gap and let scaled logos overlap buttons.
-   */
-  .project-clad-storefront-nav__shell:not(.project-clad-storefront-nav__shell--compact-stacked) {
-    flex-wrap: nowrap;
+  .project-clad-storefront-nav__shell.project-clad-storefront-nav__shell--flat {
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    align-content: center;
+    row-gap: 0.55rem;
     column-gap: 0.4rem;
-    row-gap: 0;
     padding-left: 0.5rem;
     padding-right: 0.5rem;
   }
 
-  .project-clad-storefront-nav__shell.project-clad-storefront-nav__shell--compact-stacked {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-    row-gap: 0.7rem;
-    align-items: stretch;
+  .project-clad-storefront-nav__shell--flat > .project-clad-storefront-nav__shell-primary {
+    display: contents;
   }
 
-  .project-clad-storefront-nav__left {
-    flex: 0 1 auto;
+  .project-clad-storefront-nav__shell--flat .project-clad-storefront-nav__logo-link {
+    order: -1;
+    flex: 1 0 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-width: min(132px, 36vw);
     min-width: 0;
+  }
+
+  .project-clad-page--projects .project-clad-storefront-nav__shell--flat .project-clad-storefront-nav__logo-link {
+    max-width: min(340px, 92vw);
+  }
+
+  .project-clad-storefront-nav__shell--flat .project-clad-storefront-nav__drawer {
+    flex-shrink: 0;
+    z-index: 4;
+  }
+
+  .project-clad-storefront-nav__shell--flat > .project-clad-storefront-nav__shell-extra {
+    flex: 0 1 auto;
+    justify-content: center;
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  .project-clad-storefront-nav__shell--flat > .project-clad-storefront-nav__shell-extra .project-clad-header-slot--left {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .project-clad-storefront-nav__logo-link {
@@ -2877,79 +2856,13 @@ html:has(.project-clad-page--projects) body {
     transform-origin: left center;
   }
 
-  .project-clad-storefront-nav__shell--compact-stacked .project-clad-storefront-nav__logo-link {
-    max-width: min(340px, 92vw);
-  }
-
-  .project-clad-page--projects .project-clad-storefront-nav__shell--compact-stacked .project-clad-storefront-nav__logo-img {
-    transform-origin: center center;
-  }
-
   /*
-   * Wide nav row only: middle slot pushes admin tools toward the trailing cluster.
-   * Do NOT apply to __shell--compact-stacked — same specificity as __shell-extra--compact-toolbar
-   * but this block comes later and was overriding justify-content:center (icons hugged the right).
+   * Projects mark on mobile: no transform scale in the tray — it does not expand layout and overlaps row 2.
    */
-  .project-clad-storefront-nav__shell:not(.project-clad-storefront-nav__shell--compact-stacked)
-    > .project-clad-storefront-nav__shell-extra {
-    flex: 1 1 auto;
-    min-width: 0;
-    justify-content: flex-end;
-    overflow: visible;
-  }
-
-  .project-clad-storefront-nav__shell:not(.project-clad-storefront-nav__shell--compact-stacked)
-    > .project-clad-storefront-nav__shell-extra
-    .project-clad-header-slot--left {
-    display: block;
-    min-width: 0;
-    max-width: 100%;
-  }
-
-  .project-clad-storefront-nav__shell--compact-stacked
-    .project-clad-storefront-nav__shell-extra.project-clad-storefront-nav__shell-extra--compact-toolbar {
-    flex: 0 1 auto;
-    justify-content: center;
-    width: 100%;
-    max-width: 100%;
-  }
-
-  /*
-   * Compact mobile: logo must stay on its own row. transform:scale() does not expand layout height,
-   * so the projects-page logo scale was painting over the centered icon row below.
-   */
-  .project-clad-page--projects
-    .project-clad-storefront-nav__shell--compact-stacked
-    .project-clad-storefront-nav__logo-img {
+  .project-clad-page--projects .project-clad-storefront-nav__shell--flat .project-clad-storefront-nav__logo-img {
     transform: none;
     max-height: min(48px, calc(var(--pc-storefront-nav-icon) + 14px));
-  }
-
-  .project-clad-storefront-nav__shell--compact-stacked .project-clad-storefront-nav__brand-row {
-    flex: 0 0 auto;
-    min-height: 0;
-    /* Reserve one line of tray height; logo scales inside box without overlapping row 2 */
-    align-items: center;
-    justify-content: center;
-  }
-
-  .project-clad-storefront-nav__shell--compact-stacked .project-clad-storefront-nav__icon-toolbar {
-    flex-wrap: nowrap;
-    justify-content: center;
-    align-items: center;
-    flex: 0 0 auto;
-    width: 100%;
-    max-width: 100%;
-    gap: var(--pc-storefront-nav-cluster-gap);
-    overflow-x: auto;
-    overflow-y: visible;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-
-  .project-clad-storefront-nav__shell--compact-stacked
-    .project-clad-storefront-nav__icon-toolbar::-webkit-scrollbar {
-    display: none;
+    transform-origin: center center;
   }
 
   /* Add-member popover position on narrow screens: JS applies fixed + clamped left (see project page script). */
