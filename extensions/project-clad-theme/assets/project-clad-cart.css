@@ -18,6 +18,19 @@
   --pc-caesura-dark: #484f60;
   --pc-caesura-inset: inset -4px -4px 6px -1px rgba(255, 255, 255, 1),
     inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5);
+  /* Same as theme `canadian-clad-neumorphic.css` search / finder fields — white rim + halo on focus */
+  --pc-caesura-field-focus-outer:
+    0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 0 16px 4px rgba(255, 255, 255, 0.62),
+    0 0 32px 10px rgba(255, 255, 255, 0.28),
+    8px 10px 22px rgba(72, 79, 96, 0.08),
+    -6px -6px 18px rgba(255, 255, 255, 0.38);
+  /* Soft outer glow while inset (default) — pairs with inset like storefront caesura pills */
+  --pc-caesura-field-ambient-outer:
+    0 0 0 1px rgba(255, 255, 255, 0.42),
+    0 0 12px 3px rgba(255, 255, 255, 0.48),
+    0 0 22px 6px rgba(255, 255, 255, 0.22),
+    -4px -4px 14px rgba(255, 255, 255, 0.28);
   --pc-caesura-transition: box-shadow 250ms ease-in-out, border-color 250ms ease-in-out, color 250ms ease-in-out,
     filter 250ms ease-in-out, background 250ms ease-in-out;
   --pc-caesura-border: 3px solid transparent;
@@ -49,6 +62,8 @@
   --pc-cart-toolbar-btn-padding-x: calc(1.35rem + 0.35rem);
   /* Modal main heading + matching field/section titles */
   --pc-modal-red-title-size: clamp(1.2rem, 4.2vw, 1.85rem);
+  /* Save-cart modal only: smaller labels / secondary copy */
+  --pc-modal-save-label-size: clamp(0.82rem, 2.85vw, 1.05rem);
   --pc-btn-neu-transition: box-shadow 250ms ease-in-out, border-color 250ms ease-in-out, color 250ms ease-in-out,
     filter 250ms ease-in-out, background 250ms ease-in-out, transform 250ms ease-in-out, text-shadow 250ms ease-in-out;
   --pc-btn-active-blur: 0.6px;
@@ -60,6 +75,16 @@
     inset 20px 20px 42px rgba(0, 0, 0, 0.34), inset -20px -20px 42px rgba(255, 210, 210, 0.28);
   --pc-text-deboss-on-red: 0 -1px 0 rgba(0, 0, 0, 0.52), 0 1px 0 rgba(255, 255, 255, 0.14);
   --pc-red-button-hover-label-glow: 0 0 10px rgba(255, 235, 235, 0.55), 0 0 22px rgba(255, 200, 200, 0.28);
+  /* Add-member role widget (mirrors app `project-clad-proxy.css`) */
+  --pc-add-member-control-h: 2.75rem;
+  --pc-btn-neu-fg: var(--pc-caesura-dark);
+  --pc-role-option-hover-glow:
+    0 1px 0 rgba(255, 255, 255, 0.32),
+    0 0 8px rgba(196, 0, 0, 0.68),
+    0 0 18px rgba(196, 0, 0, 0.52),
+    0 0 30px rgba(196, 0, 0, 0.38),
+    0 0 44px rgba(196, 0, 0, 0.22);
+  --pc-role-option-hover-fg: var(--pc-btn-neu-fg);
 }
 
 .projectclad-cart-actions__buttons {
@@ -183,27 +208,49 @@
   z-index: 10000001;
 }
 
-/* Backdrop: match app edit-project modal (fade to dim when open) */
+/*
+ * Modal shell: fade dim + panel slide/scale (matches app add-member popover + edit-project modal).
+ * JS toggles .projectclad-modal--open after removing [hidden].
+ */
 .projectclad-modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0);
-  transition: background-color 0.3s cubic-bezier(0.23, 1, 0.32, 1);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
   z-index: 50;
   box-sizing: border-box;
+  background: rgba(0, 0, 0, 0);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.24s ease,
+    visibility 0s linear 0.24s,
+    background-color 0.28s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.projectclad-modal:not([hidden]) {
+.projectclad-modal.projectclad-modal--open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
   background: rgba(0, 0, 0, 0.35);
+  transition:
+    opacity 0.24s ease,
+    visibility 0s,
+    background-color 0.28s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .projectclad-modal {
     transition-duration: 0.01ms !important;
+  }
+
+  .projectclad-modal:not(.projectclad-modal--open) .projectclad-modal__content,
+  .projectclad-modal.projectclad-modal--open .projectclad-modal__content {
+    opacity: 1;
+    transform: none;
   }
 }
 
@@ -217,6 +264,9 @@
   border: none;
   border-radius: var(--pc-card-radius);
   padding: 1.5rem;
+  transition:
+    opacity 0.22s ease,
+    transform 0.24s cubic-bezier(0.23, 1, 0.32, 1);
   background: linear-gradient(168deg, #eef0f2 0%, var(--pc-btn-neu-bg) 38%, #dcdee3 100%);
   box-shadow:
     0 2px 0 rgba(255, 255, 255, 0.95) inset,
@@ -236,6 +286,22 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y;
+}
+
+.projectclad-modal:not(.projectclad-modal--open) .projectclad-modal__content {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.98);
+}
+
+.projectclad-modal.projectclad-modal--open .projectclad-modal__content {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projectclad-modal__content {
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .projectclad-reject-modal {
@@ -502,4 +568,261 @@
   font-size: clamp(1rem, 3.2vw, 1.3rem);
   line-height: 1.4;
   font-weight: 400;
+}
+
+/*
+ * Save cart modal — match app “Orders” (.project-clad-neon-title): red fill + --pc-accent-heading-shadow.
+ * Fields: inset caesura + soft white outer glow (default); focus = same white halo as theme search bars.
+ */
+.projectclad-modal[data-projectclad-save-cart-modal] .projectclad-modal__content h2#projectclad-save-modal-title {
+  font-size: clamp(1.05rem, 3.8vw, 1.58rem);
+  line-height: 1.22;
+  letter-spacing: 0.02em;
+  color: var(--pc-pill-text-glow-hover) !important;
+  text-shadow: var(--pc-accent-heading-shadow);
+}
+
+.projectclad-modal[data-projectclad-save-cart-modal] .projectclad-modal__content label:not(.projectclad-fieldset__choice) {
+  font-size: var(--pc-modal-save-label-size);
+  line-height: 1.18;
+  letter-spacing: 0.035em;
+}
+
+.projectclad-modal[data-projectclad-save-cart-modal] .projectclad-fieldset--radios legend {
+  font-size: var(--pc-modal-save-label-size);
+  line-height: 1.18;
+}
+
+.projectclad-modal[data-projectclad-save-cart-modal] .projectclad-fieldset__choice {
+  font-size: max(16px, clamp(0.88rem, 2.85vw, 1.05rem));
+}
+
+.projectclad-modal[data-projectclad-save-cart-modal] .projectclad-modal__content select,
+.projectclad-modal[data-projectclad-save-cart-modal] .projectclad-modal__content
+  input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not(
+    [type="hidden"]
+  ) {
+  font-size: max(16px, clamp(0.92rem, 2.9vw, 1.06rem));
+  box-shadow: var(--pc-caesura-inset), var(--pc-caesura-field-ambient-outer);
+}
+
+.projectclad-modal[data-projectclad-save-cart-modal] .projectclad-modal__content textarea {
+  font-size: max(16px, clamp(0.92rem, 2.9vw, 1.06rem));
+  box-shadow: var(--pc-caesura-inset), var(--pc-caesura-field-ambient-outer);
+}
+
+.projectclad-modal[data-projectclad-save-cart-modal] .projectclad-modal__content select:focus-visible,
+.projectclad-modal[data-projectclad-save-cart-modal] .projectclad-modal__content
+  input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not(
+    [type="hidden"]
+  ):focus-visible,
+.projectclad-modal[data-projectclad-save-cart-modal] .projectclad-modal__content textarea:focus-visible {
+  box-shadow: var(--pc-caesura-field-focus-outer);
+  border-color: var(--pc-caesura-border-hover);
+}
+
+/* ── Add-member style animated <details> selects (save cart modal) ── */
+.projectclad-picker-wrap {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.projectclad-modal__content .project-clad-member-role-select {
+  --pc-role-select-pill-r: calc(var(--pc-add-member-control-h, 2.75rem) / 2);
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+.projectclad-modal__content .project-clad-member-role-select:not([open]) {
+  overflow: hidden;
+  border-radius: 9999px;
+}
+
+.projectclad-modal__content .project-clad-member-role-select[open] {
+  z-index: 80;
+  overflow: hidden;
+  border-radius: var(--pc-role-select-pill-r);
+  border: var(--pc-caesura-border);
+  border-color: rgba(60, 64, 67, 0.22);
+  background: var(--pc-caesura-bg);
+  box-shadow: var(--pc-caesura-inset);
+}
+
+.projectclad-modal__content .project-clad-member-role-select[open]:hover {
+  border-color: var(--pc-caesura-border-hover);
+}
+
+.projectclad-modal__content .project-clad-member-role-select__trigger {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--pc-add-member-control-h, 2.75rem);
+  padding: 0 0.85rem 0 1rem;
+  box-sizing: border-box;
+  border-radius: 9999px;
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+  background: var(--pc-caesura-bg);
+  color: var(--pc-btn-neu-fg);
+  cursor: pointer;
+  font-size: max(15px, clamp(0.88rem, 2.8vw, 1.05rem));
+  font-weight: 600 !important;
+  user-select: none;
+  box-shadow: var(--pc-caesura-inset);
+  text-shadow: none;
+  transition: var(--pc-caesura-transition);
+  outline: none;
+}
+
+.projectclad-modal__content .project-clad-member-role-select__trigger:focus-visible {
+  box-shadow: none;
+  border-color: var(--pc-caesura-border-hover);
+}
+
+.projectclad-modal__content
+  .project-clad-member-role-select:not([open]):hover
+  > .project-clad-member-role-select__trigger {
+  box-shadow: var(--pc-caesura-inset);
+  border-color: var(--pc-caesura-border-hover);
+}
+
+.projectclad-modal__content .project-clad-member-role-select__trigger::-webkit-details-marker {
+  display: none;
+}
+
+.projectclad-modal__content .project-clad-member-role-select__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+}
+
+.projectclad-modal__content .project-clad-member-role-select__chevron {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.72;
+  transition: transform 0.15s ease;
+}
+
+.projectclad-modal__content .project-clad-member-role-select[open] > .project-clad-member-role-select__trigger {
+  position: relative;
+  z-index: 2;
+  border-radius: var(--pc-role-select-pill-r) var(--pc-role-select-pill-r) 0 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  margin-bottom: -1px;
+}
+
+.projectclad-modal__content .project-clad-member-role-select[open] .project-clad-member-role-select__chevron {
+  transform: rotate(180deg);
+}
+
+.projectclad-modal__content .project-clad-member-role-select__panel {
+  overflow: hidden;
+  border-radius: 0 0 var(--pc-role-select-pill-r) var(--pc-role-select-pill-r);
+  background: transparent;
+  box-shadow: none;
+  transition: height 0.24s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.projectclad-modal__content .project-clad-member-role-select:not([open]) .project-clad-member-role-select__panel {
+  height: 0;
+}
+
+.projectclad-modal__content .project-clad-member-role-select__list {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-sizing: border-box;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.projectclad-modal__content .project-clad-member-role-select::details-content {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.projectclad-modal__content .project-clad-member-role-select:not([open])::details-content {
+  height: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+
+.projectclad-modal__content .project-clad-member-role-select[open]::details-content {
+  height: auto;
+  padding: 0;
+  overflow: hidden;
+}
+
+.projectclad-modal__content .project-clad-member-role-select__option {
+  display: block;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  font-size: max(15px, clamp(0.85rem, 2.8vw, 1.02rem));
+  font-weight: 600 !important;
+  color: var(--pc-caesura-dark);
+  background: transparent;
+  transition:
+    background 0.2s ease,
+    color 0.22s cubic-bezier(0.23, 1, 0.32, 1),
+    filter 0.2s ease;
+}
+
+.projectclad-modal__content
+  .project-clad-member-role-select__option:not(:has(input:checked)):hover
+  .project-clad-member-role-select__option-text {
+  color: var(--pc-role-option-hover-fg) !important;
+  text-shadow: var(--pc-role-option-hover-glow) !important;
+}
+
+.projectclad-modal__content
+  .project-clad-member-role-select__option:has(input:checked)
+  .project-clad-member-role-select__option-text {
+  color: var(--pc-caesura-hover-red-text) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+}
+
+.projectclad-modal__content .project-clad-member-role-select__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.projectclad-modal__content .project-clad-member-role-select__option-text {
+  display: block;
+  padding: 0.58rem 1rem;
+  pointer-events: auto;
+  transition:
+    color 0.22s cubic-bezier(0.23, 1, 0.32, 1),
+    text-shadow 0.32s cubic-bezier(0.23, 1, 0.32, 1);
 }

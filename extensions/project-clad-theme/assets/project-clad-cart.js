@@ -1,4 +1,184 @@
 (() => {
+  const MODAL_MOTION_MS = 300;
+  const PC_ROLE_PANEL_MS = 240;
+  const PC_ROLE_PANEL_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
+
+  function prefersReducedMotion() {
+    return (
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+  }
+
+  function openProjectcladModal(modal) {
+    if (!(modal instanceof HTMLElement)) return;
+    modal.hidden = false;
+    modal.setAttribute("aria-hidden", "false");
+    modal.classList.remove("projectclad-modal--open");
+    if (prefersReducedMotion()) {
+      modal.classList.add("projectclad-modal--open");
+      return;
+    }
+    void modal.offsetWidth;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        modal.classList.add("projectclad-modal--open");
+      });
+    });
+  }
+
+  function closeProjectcladModal(modal, after) {
+    if (!(modal instanceof HTMLElement)) return;
+    const done = () => {
+      modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+      modal.classList.remove("projectclad-modal--open");
+      if (typeof after === "function") after();
+    };
+    if (!modal.classList.contains("projectclad-modal--open")) {
+      done();
+      return;
+    }
+    if (prefersReducedMotion()) {
+      modal.classList.remove("projectclad-modal--open");
+      done();
+      return;
+    }
+    modal.classList.remove("projectclad-modal--open");
+    window.setTimeout(done, MODAL_MOTION_MS);
+  }
+
+  function syncRoleLabel(details) {
+    if (!(details instanceof HTMLDetailsElement)) return;
+    const labelEl = details.querySelector("[data-role-label]");
+    const checked = details.querySelector('input[type="radio"]:checked');
+    const opt = checked?.closest(".project-clad-member-role-select__option");
+    const textEl = opt?.querySelector(".project-clad-member-role-select__option-text");
+    const text = (textEl?.textContent || "").trim();
+    if (labelEl) labelEl.textContent = text || "—";
+  }
+
+  function pcMemberRolePanel(details) {
+    return details.querySelector(".project-clad-member-role-select__panel");
+  }
+
+  function pcMemberRoleList(details) {
+    return details.querySelector(".project-clad-member-role-select__list");
+  }
+
+  function pcAnimateMemberRoleOpen(details) {
+    const panel = pcMemberRolePanel(details);
+    const list = pcMemberRoleList(details);
+    if (!panel || !list) return;
+    const target = list.scrollHeight;
+    panel.style.overflow = "hidden";
+    panel.style.transition =
+      "height " + PC_ROLE_PANEL_MS / 1000 + "s " + PC_ROLE_PANEL_EASE;
+    panel.style.height = "0px";
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        panel.style.height = target + "px";
+      });
+    });
+    function settle() {
+      if (details.open) panel.style.height = "auto";
+    }
+    function onEnd(ev) {
+      if (ev.propertyName !== "height") return;
+      clearTimeout(tid);
+      settle();
+    }
+    const tid = setTimeout(settle, PC_ROLE_PANEL_MS + 100);
+    panel.addEventListener("transitionend", onEnd, { once: true });
+  }
+
+  function pcAnimateMemberRoleClose(details, done) {
+    const panel = pcMemberRolePanel(details);
+    const list = pcMemberRoleList(details);
+    if (!panel || !list) {
+      done();
+      return;
+    }
+    const h = list.scrollHeight;
+    panel.style.overflow = "hidden";
+    panel.style.transition =
+      "height " + PC_ROLE_PANEL_MS / 1000 + "s " + PC_ROLE_PANEL_EASE;
+    if (panel.style.height === "auto" || panel.style.height === "") {
+      panel.style.height = h + "px";
+    }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        panel.style.height = "0px";
+      });
+    });
+    let finished = false;
+    function finish() {
+      if (finished) return;
+      finished = true;
+      panel.removeEventListener("transitionend", onEnd);
+      clearTimeout(tid);
+      panel.style.transition = "";
+      panel.style.height = "";
+      done();
+    }
+    function onEnd(ev) {
+      if (ev.propertyName !== "height") return;
+      finish();
+    }
+    panel.addEventListener("transitionend", onEnd);
+    const tid = setTimeout(finish, PC_ROLE_PANEL_MS + 100);
+  }
+
+  function pcBindMemberRoleSelect(details) {
+    const sum = details.querySelector("summary.project-clad-member-role-select__trigger");
+    if (!(sum instanceof HTMLElement)) return;
+    sum.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (details.open) {
+        pcAnimateMemberRoleClose(details, () => {
+          details.open = false;
+        });
+      } else {
+        const p = pcMemberRolePanel(details);
+        if (p) {
+          p.style.transition = "none";
+          p.style.height = "0px";
+        }
+        details.open = true;
+        if (p) {
+          void p.offsetHeight;
+          p.style.transition = "";
+        }
+        pcAnimateMemberRoleOpen(details);
+      }
+    });
+  }
+
+  function bindAnimatedMemberRoleSelectsIn(host) {
+    if (!(host instanceof HTMLElement)) return;
+    host.querySelectorAll("[data-projectclad-member-role-select]").forEach((el) => {
+      if (!(el instanceof HTMLDetailsElement)) return;
+      if (el.dataset.projectcladRoleBind === "1") return;
+      el.dataset.projectcladRoleBind = "1";
+      syncRoleLabel(el);
+      pcBindMemberRoleSelect(el);
+      el.addEventListener("change", (ev) => {
+        const t = ev.target;
+        if (!(t instanceof HTMLInputElement) || t.type !== "radio") return;
+        if (!el.contains(t)) return;
+        syncRoleLabel(el);
+        if (el.hasAttribute("data-projectclad-save-mode-widget")) return;
+        if (el.open) {
+          pcAnimateMemberRoleClose(el, () => {
+            el.open = false;
+          });
+        } else {
+          el.open = false;
+        }
+      });
+    });
+  }
+
   function initCheckoutFulfillmentModal(root) {
     const modal = root.querySelector(
       "[data-projectclad-checkout-fulfillment-modal]",
@@ -19,17 +199,18 @@
     let pendingCheckout = null;
 
     const closeFulfill = () => {
-      modal.hidden = true;
-      pendingCheckout = null;
-      if (document.body.style.overflow === "hidden") {
-        document.body.style.overflow = "";
-      }
+      closeProjectcladModal(modal, () => {
+        pendingCheckout = null;
+        if (document.body.style.overflow === "hidden") {
+          document.body.style.overflow = "";
+        }
+      });
     };
 
     const openFulfill = (intent) => {
       pendingCheckout = intent;
-      modal.hidden = false;
       document.body.style.overflow = "hidden";
+      openProjectcladModal(modal);
     };
 
     const applyCartAttributeAndGo = async (method) => {
@@ -221,7 +402,7 @@
   const modalContent = modal?.querySelector(".projectclad-modal__content");
   const closeButton = root.querySelector("[data-projectclad-close]");
   const form = root.querySelector("[data-projectclad-form]");
-  const modeSelect = root.querySelector("[data-projectclad-mode]");
+  const modeHidden = root.querySelector("input[data-projectclad-mode]");
   const duplicateModal = root.querySelector("[data-projectclad-duplicate-modal]");
   const duplicateYesBtn = root.querySelector("[data-projectclad-duplicate-yes]");
   const duplicateNoBtn = root.querySelector("[data-projectclad-duplicate-no]");
@@ -231,17 +412,35 @@
   const sections = Array.from(
     root.querySelectorAll("[data-projectclad-section]"),
   );
-  const projectSelects = Array.from(
-    root.querySelectorAll("[data-projectclad-project]"),
-  );
-  const jobSelect = root.querySelector("[data-projectclad-job]");
   const poNumberInputs = root.querySelectorAll("[data-projectclad-po]");
   const companyNameInputs = root.querySelectorAll("[data-projectclad-company]");
   const orderNumberInputs = root.querySelectorAll(
     "[data-projectclad-order-number]",
   );
 
-  if (!saveButton || !modal || !form || !modeSelect) return;
+  if (!saveButton || !modal || !form || !(modeHidden instanceof HTMLInputElement)) {
+    return;
+  }
+
+  const getMode = () => modeHidden.value || "newProject";
+
+  const getVisibleProjectHidden = () => {
+    const wraps = root.querySelectorAll("[data-projectclad-project-wrap]");
+    for (const wrap of wraps) {
+      if (!(wrap instanceof HTMLElement)) continue;
+      if (wrap.closest("[hidden]")) continue;
+      const h = wrap.querySelector("input[data-projectclad-project]");
+      if (h instanceof HTMLInputElement) return h;
+    }
+    return null;
+  };
+
+  const getJobHidden = () => {
+    const wrap = root.querySelector("[data-projectclad-job-wrap]");
+    if (!(wrap instanceof HTMLElement) || wrap.closest("[hidden]")) return null;
+    const h = wrap.querySelector("input[data-projectclad-job]");
+    return h instanceof HTMLInputElement ? h : null;
+  };
 
   let cachedProjects = [];
   let cartRefreshTimer;
@@ -326,19 +525,66 @@
     updateFieldRequirements(mode);
   };
 
+  const buildProjectRadioList = (wrap) => {
+    const list = wrap.querySelector("[data-projectclad-project-options]");
+    const hidden = wrap.querySelector("input[data-projectclad-project]");
+    const details = wrap.querySelector("[data-projectclad-project-picker]");
+    if (
+      !(list instanceof HTMLElement) ||
+      !(hidden instanceof HTMLInputElement) ||
+      !(details instanceof HTMLDetailsElement)
+    ) {
+      return;
+    }
+    const radioName =
+      wrap.getAttribute("data-projectclad-project-radio-name") ||
+      "projectclad-project-existing";
+    const prev = hidden.value;
+    list.innerHTML = "";
+    const addOpt = (id, label) => {
+      const lid = `pc-proj-${radioName}-${id || "none"}`.replace(/[^a-zA-Z0-9_-]/g, "");
+      const lab = document.createElement("label");
+      lab.className = "project-clad-member-role-select__option";
+      lab.setAttribute("for", lid);
+      const inp = document.createElement("input");
+      inp.type = "radio";
+      inp.name = radioName;
+      inp.value = id;
+      inp.className = "project-clad-member-role-select__input";
+      inp.id = lid;
+      const span = document.createElement("span");
+      span.className = "project-clad-member-role-select__option-text";
+      span.textContent = label;
+      lab.appendChild(inp);
+      lab.appendChild(span);
+      list.appendChild(lab);
+    };
+    addOpt("", "Select project");
+    cachedProjects.forEach((project) => {
+      addOpt(project.id, project.name);
+    });
+    let matched = false;
+    if (prev) {
+      for (const input of list.querySelectorAll('input[type="radio"]')) {
+        if (input instanceof HTMLInputElement && input.value === prev) {
+          input.checked = true;
+          hidden.value = prev;
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (!matched) {
+      const ph = list.querySelector('input[type="radio"][value=""]');
+      if (ph instanceof HTMLInputElement) ph.checked = true;
+      hidden.value = "";
+    }
+    syncRoleLabel(details);
+  };
+
   const fillProjectOptions = () => {
-    projectSelects.forEach((select) => {
-      select.innerHTML = "";
-      const placeholder = document.createElement("option");
-      placeholder.value = "";
-      placeholder.textContent = "Select project";
-      select.appendChild(placeholder);
-      cachedProjects.forEach((project) => {
-        const option = document.createElement("option");
-        option.value = project.id;
-        option.textContent = project.name;
-        select.appendChild(option);
-      });
+    root.querySelectorAll("[data-projectclad-project-wrap]").forEach((wrap) => {
+      if (wrap instanceof HTMLElement) buildProjectRadioList(wrap);
     });
   };
 
@@ -355,39 +601,81 @@
   };
 
   const fillJobOptions = (projectId) => {
-    if (!jobSelect) return;
-    jobSelect.innerHTML = "";
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = "Select order";
-    jobSelect.appendChild(placeholder);
+    const wrap = root.querySelector("[data-projectclad-job-wrap]");
+    const list = wrap?.querySelector("[data-projectclad-job-options]");
+    const hidden = wrap?.querySelector("input[data-projectclad-job]");
+    const details = wrap?.querySelector("[data-projectclad-job-picker]");
+    if (
+      !(list instanceof HTMLElement) ||
+      !(hidden instanceof HTMLInputElement) ||
+      !(details instanceof HTMLDetailsElement)
+    ) {
+      return;
+    }
+    const prev = hidden.value;
+    list.innerHTML = "";
+    const addJob = (id, label) => {
+      const lid = `pc-job-${id || "none"}`.replace(/[^a-zA-Z0-9_-]/g, "");
+      const lab = document.createElement("label");
+      lab.className = "project-clad-member-role-select__option";
+      lab.setAttribute("for", lid);
+      const inp = document.createElement("input");
+      inp.type = "radio";
+      inp.name = "projectclad-job-pick";
+      inp.value = id;
+      inp.className = "project-clad-member-role-select__input";
+      inp.id = lid;
+      const span = document.createElement("span");
+      span.className = "project-clad-member-role-select__option-text";
+      span.textContent = label;
+      lab.appendChild(inp);
+      lab.appendChild(span);
+      list.appendChild(lab);
+    };
+    addJob("", "Select order");
     const project = cachedProjects.find((item) => item.id === projectId);
     if (!project) {
+      hidden.value = "";
+      const ph = list.querySelector('input[type="radio"][value=""]');
+      if (ph instanceof HTMLInputElement) ph.checked = true;
+      syncRoleLabel(details);
       orderNumberInputs.forEach((input) => {
         if (input instanceof HTMLInputElement) input.value = "";
       });
       return;
     }
     project.jobs.forEach((job) => {
-      const option = document.createElement("option");
-      option.value = job.id;
-      option.textContent = job.name + (job.isLocked ? " (Locked)" : "");
-      jobSelect.appendChild(option);
+      addJob(job.id, job.name + (job.isLocked ? " (Locked)" : ""));
     });
+    let matched = false;
+    if (prev) {
+      for (const input of list.querySelectorAll('input[type="radio"]')) {
+        if (input instanceof HTMLInputElement && input.value === prev) {
+          input.checked = true;
+          hidden.value = prev;
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (!matched) {
+      const ph = list.querySelector('input[type="radio"][value=""]');
+      if (ph instanceof HTMLInputElement) ph.checked = true;
+      hidden.value = "";
+    }
+    syncRoleLabel(details);
     orderNumberInputs.forEach((input) => {
       if (input instanceof HTMLInputElement) input.value = "";
     });
   };
 
   const syncPurchaseOrderFromSelectedJob = () => {
-    if (!(jobSelect instanceof HTMLSelectElement) || !jobSelect.value) return;
-    const activeProject =
-      projectSelects.find(
-        (select) => !select.closest("[hidden]") && select.value,
-      )?.value || "";
+    const jh = getJobHidden();
+    if (!jh?.value) return;
+    const activeProject = getVisibleProjectHidden()?.value || "";
     if (!activeProject) return;
     const project = cachedProjects.find((p) => p.id === activeProject);
-    const job = project?.jobs.find((j) => j.id === jobSelect.value);
+    const job = project?.jobs.find((j) => j.id === jh.value);
     if (!job) return;
     const po = (job.purchaseOrderNumber || "").trim();
     orderNumberInputs.forEach((input) => {
@@ -404,9 +692,6 @@
     });
     const projectNameInput = root.querySelector("[data-projectclad-project-name]");
     const jobNameInputs = root.querySelectorAll("[data-projectclad-job-name]");
-    const orderNumberInputs = root.querySelectorAll(
-      "[data-projectclad-order-number]",
-    );
     if (projectNameInput instanceof HTMLInputElement) {
       projectNameInput.value = "";
     }
@@ -420,19 +705,27 @@
         input.value = "";
       }
     });
-    projectSelects.forEach((select) => {
-      select.value = "";
+    root.querySelectorAll("input[data-projectclad-project]").forEach((h) => {
+      if (h instanceof HTMLInputElement) h.value = "";
     });
-    if (jobSelect instanceof HTMLSelectElement) {
-      jobSelect.value = "";
-    }
+    const jh = root.querySelector("input[data-projectclad-job]");
+    if (jh instanceof HTMLInputElement) jh.value = "";
+    fillProjectOptions();
+    fillJobOptions("");
+    const modeNew = root.querySelector(
+      'input[name="projectclad-save-mode"][value="newProject"]',
+    );
+    if (modeNew instanceof HTMLInputElement) modeNew.checked = true;
+    modeHidden.value = "newProject";
+    const modeWidget = root.querySelector("[data-projectclad-save-mode-widget]");
+    if (modeWidget instanceof HTMLDetailsElement) syncRoleLabel(modeWidget);
     const quantityAdd = root.querySelector(
       'input[name="projectclad-quantity"][value="add"]',
     );
     if (quantityAdd instanceof HTMLInputElement) {
       quantityAdd.checked = true;
     }
-    toggleSection(modeSelect.value);
+    toggleSection(getMode());
   };
 
   const loadProjects = async () => {
@@ -536,9 +829,9 @@
       return;
     }
     markRequiredFields();
-    modal.hidden = false;
     lockBodyScroll();
-    toggleSection(modeSelect.value);
+    openProjectcladModal(modal);
+    toggleSection(getMode());
     await loadProjects();
   });
 
@@ -560,16 +853,18 @@
   }
 
   closeButton?.addEventListener("click", () => {
-    modal.hidden = true;
-    unlockBodyScroll();
-    resetModal();
+    closeProjectcladModal(modal, () => {
+      unlockBodyScroll();
+      resetModal();
+    });
   });
 
   modal.addEventListener("pointerdown", (event) => {
     if (event.target === modal) {
-      modal.hidden = true;
-      unlockBodyScroll();
-      resetModal();
+      closeProjectcladModal(modal, () => {
+        unlockBodyScroll();
+        resetModal();
+      });
     }
   });
 
@@ -577,36 +872,64 @@
     event.stopPropagation();
   });
 
-  modeSelect.addEventListener("change", () => {
-    toggleSection(modeSelect.value);
-    if (modeSelect.value === "newProject") {
-      const poInput = getVisibleInput("[data-projectclad-po]");
-      const companyInput = getVisibleInput("[data-projectclad-company]");
-      if (poInput) poInput.value = "";
-      if (companyInput) companyInput.value = "";
+  root.addEventListener("change", (event) => {
+    const t = event.target;
+    if (!(t instanceof HTMLInputElement)) return;
+    if (t.name === "projectclad-save-mode") {
+      modeHidden.value = t.value;
+      toggleSection(t.value);
+      const modeWidget = root.querySelector("[data-projectclad-save-mode-widget]");
+      if (modeWidget instanceof HTMLDetailsElement && modeWidget.open) {
+        pcAnimateMemberRoleClose(modeWidget, () => {
+          modeWidget.open = false;
+        });
+      }
+      if (t.value === "newProject") {
+        const poInput = getVisibleInput("[data-projectclad-po]");
+        const companyInput = getVisibleInput("[data-projectclad-company]");
+        if (poInput) poInput.value = "";
+        if (companyInput) companyInput.value = "";
+        return;
+      }
+      const ph = getVisibleProjectHidden();
+      if (ph?.value) setProjectDetails(ph.value);
       return;
     }
-    const activeProject =
-      projectSelects.find(
-        (select) => !select.closest("[hidden]") && select.value,
-      )?.value || "";
-    if (activeProject) {
-      setProjectDetails(activeProject);
+    if (t.name === "projectclad-project-existing" || t.name === "projectclad-project-job") {
+      const wrap = t.closest("[data-projectclad-project-wrap]");
+      const hidden = wrap?.querySelector("input[data-projectclad-project]");
+      const det = wrap?.querySelector("[data-projectclad-project-picker]");
+      if (hidden instanceof HTMLInputElement) hidden.value = t.value;
+      if (det instanceof HTMLDetailsElement) syncRoleLabel(det);
+      fillJobOptions(t.value);
+      setProjectDetails(t.value);
+      return;
+    }
+    if (t.name === "projectclad-job-pick") {
+      const wrap = t.closest("[data-projectclad-job-wrap]");
+      const hidden = wrap?.querySelector("input[data-projectclad-job]");
+      const det = wrap?.querySelector("[data-projectclad-job-picker]");
+      if (hidden instanceof HTMLInputElement) hidden.value = t.value;
+      if (det instanceof HTMLDetailsElement) syncRoleLabel(det);
+      syncPurchaseOrderFromSelectedJob();
     }
   });
 
-  projectSelects.forEach((select) => {
-    select.addEventListener("change", (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLSelectElement)) return;
-      fillJobOptions(target.value);
-      setProjectDetails(target.value);
-    });
-  });
-
-  jobSelect?.addEventListener("change", () => {
-    syncPurchaseOrderFromSelectedJob();
-  });
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      const t = e.target;
+      if (!(t instanceof Node)) return;
+      root.querySelectorAll("details[data-projectclad-member-role-select][open]").forEach((d) => {
+        if (!(d instanceof HTMLDetailsElement)) return;
+        if (d.contains(t)) return;
+        pcAnimateMemberRoleClose(d, () => {
+          d.open = false;
+        });
+      });
+    },
+    true,
+  );
 
   const getUniqueProjectName = (baseName) => {
     const names = cachedProjects.map((p) => p.name);
@@ -682,8 +1005,10 @@
   let pendingDuplicate = null;
 
   const closeDuplicateModal = () => {
-    if (duplicateModal) duplicateModal.hidden = true;
     pendingDuplicate = null;
+    if (duplicateModal instanceof HTMLElement) {
+      closeProjectcladModal(duplicateModal, () => {});
+    }
   };
 
   duplicateNoBtn?.addEventListener("click", closeDuplicateModal);
@@ -728,7 +1053,7 @@
       return;
     }
 
-    const mode = modeSelect.value;
+    const mode = getMode();
     const projectNameInput = root.querySelector("[data-projectclad-project-name]");
     const jobNameInputs = root.querySelectorAll("[data-projectclad-job-name]");
     const quantityModeInput = root.querySelector(
@@ -755,13 +1080,9 @@
         ? orderNumberInput.value.trim()
         : "";
 
-    const selectedProject =
-      projectSelects.find(
-        (select) => !select.closest("[hidden]") && select.value,
-      )?.value || "";
+    const selectedProject = getVisibleProjectHidden()?.value || "";
 
-    const selectedJob =
-      jobSelect instanceof HTMLSelectElement ? jobSelect.value : "";
+    const selectedJob = getJobHidden()?.value || "";
 
     const payload = {
       mode,
@@ -796,7 +1117,9 @@
       });
       if (matchingProject) {
         pendingDuplicate = { payload, clearCart, matchingProject };
-        if (duplicateModal) duplicateModal.hidden = false;
+        if (duplicateModal instanceof HTMLElement) {
+          openProjectcladModal(duplicateModal);
+        }
         return;
       }
     }
@@ -814,5 +1137,6 @@
     cartRefreshTimer = setTimeout(refreshCartState, 500);
   });
 
+  bindAnimatedMemberRoleSelectsIn(root);
   refreshCartState();
 })();
