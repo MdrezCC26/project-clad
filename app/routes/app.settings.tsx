@@ -1399,6 +1399,9 @@ export default function Settings() {
                     {memberAdded && !memberError && (
                       <s-paragraph>Member added.</s-paragraph>
                     )}
+                    {memberRemoved && !memberError && (
+                      <s-paragraph>Member removed.</s-paragraph>
+                    )}
                     {memberError && <s-paragraph>{memberError}</s-paragraph>}
                   </s-stack>
                 </Form>

@@ -1,6 +1,9 @@
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "node:url";
 import { describe, beforeAll, test, expect } from "vitest";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { buildFunction, getFunctionInfo, loadSchema, loadInputQuery, loadFixture, validateTestAssets, runFunction } from "@shopify/shopify-function-test-helpers";
 
 describe("Default Integration Test", () => {

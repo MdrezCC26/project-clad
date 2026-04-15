@@ -4,12 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "react-router";
 import {
   Form,
-  Link,
+  redirect,
   useSearchParams,
   useActionData,
   useLoaderData,
 } from "react-router";
-import { redirect } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import { getCustomersByIds } from "../utils/adminCustomers.server";
@@ -555,7 +554,9 @@ export default function ProjectDetailPage() {
         if (navigator.clipboard?.writeText) {
           await navigator.clipboard.writeText(fullUrl);
         }
-      } catch {}
+      } catch {
+        void 0;
+      }
     };
     copy();
   }, [shareLink, shop]);
@@ -719,9 +720,10 @@ export default function ProjectDetailPage() {
         aria-labelledby="pricing-modal-title"
         style={{ display: "none" }}
       >
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal card: stop mousedown so backdrop logic ignores inner surface */}
         <div
           className="project-clad-card project-clad-modal project-clad-reject-modal"
-          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <h2 id="pricing-modal-title">Show price</h2>
           <Form method="post" className="project-clad-inline-form project-clad-pricing-form">
@@ -958,8 +960,8 @@ export default function ProjectDetailPage() {
                         <Form method="post" className="project-clad-inline-form">
                           <input type="hidden" name="intent" value="move-job" />
                           <input type="hidden" name="jobId" value={job.id} />
-                          <label>Move to</label>
-                          <select name="targetProjectId" required>
+                          <label htmlFor={`move-job-${job.id}`}>Move to</label>
+                          <select id={`move-job-${job.id}`} name="targetProjectId" required>
                             <option value="">Select project</option>
                             {otherProjects.map((projectOption) => (
                               <option
@@ -977,8 +979,8 @@ export default function ProjectDetailPage() {
                         <Form method="post" className="project-clad-inline-form">
                           <input type="hidden" name="intent" value="copy-job" />
                           <input type="hidden" name="jobId" value={job.id} />
-                          <label>Copy to</label>
-                          <select name="targetProjectId" required>
+                          <label htmlFor={`copy-job-${job.id}`}>Copy to</label>
+                          <select id={`copy-job-${job.id}`} name="targetProjectId" required>
                             <option value="">Select project</option>
                             {otherProjects.map((projectOption) => (
                               <option

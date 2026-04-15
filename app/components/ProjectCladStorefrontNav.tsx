@@ -166,9 +166,11 @@ const StorefrontNavInAppSearch = forwardRef<HTMLDetailsElement, {
       >
         <IconSearch className="project-clad-storefront-nav__icon" />
       </summary>
+      {/* Inner panel: stop mousedown from bubbling to details (avoids accidental close). Not a separate control. */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         className="project-clad-storefront-nav__search-panel"
-        onClick={(ev) => ev.stopPropagation()}
+        onMouseDown={(ev) => ev.stopPropagation()}
       >
         <label className="project-clad-sr-only" htmlFor="projectclad-storefront-nav-q">
           {aria}
@@ -240,7 +242,6 @@ export function ProjectCladStorefrontNav({
 }) {
   const initial = accountInitial?.trim().charAt(0).toUpperCase() ?? "";
   const storeMenuDrawerRef = useRef<HTMLDetailsElement>(null);
-  const actionsMenuDrawerRef = useRef<HTMLDetailsElement>(null);
   const searchDrawerRef = useRef<HTMLDetailsElement>(null);
   const compactNav = useCompactStorefrontNav();
   const [liveCartCount, setLiveCartCount] = useState(() =>
@@ -277,23 +278,16 @@ export function ProjectCladStorefrontNav({
     if (el) el.open = false;
   };
 
-  const closeActionsMenuDrawer = () => {
-    const el = actionsMenuDrawerRef.current;
-    if (el) el.open = false;
-  };
-
   const showCartBadge = liveCartCount > 0;
 
-  const toolsRow = (
-    <div
-      className={`project-clad-storefront-nav__tools${compactNav ? " project-clad-storefront-nav__tools--actions-drawer" : ""}`}
-    >
+  const toolsInner = (
+    <>
       {inAppSearch ? (
         <StorefrontNavInAppSearch
           ref={searchDrawerRef}
           mode={inAppSearch}
           compactNav={compactNav}
-          onCloseActionsMenuDrawer={closeActionsMenuDrawer}
+          onCloseActionsMenuDrawer={() => {}}
           onCloseStoreMenuDrawer={closeStoreMenuDrawer}
         />
       ) : (
@@ -301,7 +295,7 @@ export function ProjectCladStorefrontNav({
           href={searchUrl}
           className="project-clad-storefront-nav__icon-btn"
           aria-label="Search"
-          onClick={closeActionsMenuDrawer}
+          onClick={closeStoreMenuDrawer}
         >
           <IconSearch className="project-clad-storefront-nav__icon" />
         </a>
@@ -310,7 +304,7 @@ export function ProjectCladStorefrontNav({
         href={accountUrl}
         className={`project-clad-storefront-nav__icon-btn${initial ? " project-clad-storefront-nav__icon-btn--avatar" : ""}`}
         aria-label="Account"
-        onClick={closeActionsMenuDrawer}
+        onClick={closeStoreMenuDrawer}
       >
         {initial ? (
           <span className="project-clad-storefront-nav__account-initial" aria-hidden="true">
@@ -324,7 +318,7 @@ export function ProjectCladStorefrontNav({
         href={cartUrl}
         className={`project-clad-storefront-nav__icon-btn project-clad-storefront-nav__icon-btn--cart${showCartBadge ? " project-clad-storefront-nav__icon-btn--has-badge" : ""}`}
         aria-label={showCartBadge ? `Cart, ${liveCartCount} items` : "Cart"}
-        onClick={closeActionsMenuDrawer}
+        onClick={closeStoreMenuDrawer}
       >
         <IconCart className="project-clad-storefront-nav__icon" />
         {showCartBadge ? (
@@ -333,94 +327,83 @@ export function ProjectCladStorefrontNav({
           </span>
         ) : null}
       </a>
-    </div>
+    </>
+  );
+
+  const toolsRow = (
+    <div className="project-clad-storefront-nav__tools">{toolsInner}</div>
   );
 
   const shellExtraSlot = shellExtra ? (
     <div className="project-clad-storefront-nav__shell-extra">{shellExtra}</div>
   ) : null;
 
+  const storeMenuDrawer = (
+    <details
+      ref={storeMenuDrawerRef}
+      className="project-clad-storefront-nav__drawer"
+      onToggle={(e) => {
+        const el = e.currentTarget;
+        if (el instanceof HTMLDetailsElement && el.open) {
+          const s = searchDrawerRef.current;
+          if (s) s.open = false;
+        }
+      }}
+    >
+      <summary className="project-clad-storefront-nav__menu-btn" aria-label="Open menu">
+        <IconMenu className="project-clad-storefront-nav__icon" />
+      </summary>
+      <div className="project-clad-storefront-nav__drawer-panel">
+        <nav className="project-clad-storefront-nav__drawer-nav" aria-label="Store menu">
+          {links.map((btn, i) => (
+            <a
+              key={`drawer-${btn.url}-${i}`}
+              href={btn.url}
+              className="project-clad-storefront-nav__link project-clad-storefront-nav__link--drawer"
+              onClick={closeStoreMenuDrawer}
+            >
+              {btn.label}
+            </a>
+          ))}
+        </nav>
+      </div>
+    </details>
+  );
+
+  const logoBlock = (
+    <a href={logoHref} className="project-clad-storefront-nav__logo-link">
+      {logoDataUrl ? (
+        <img src={logoDataUrl} alt={logoAlt} className="project-clad-storefront-nav__logo-img" />
+      ) : (
+        <span className="project-clad-storefront-nav__logo-fallback">{logoAlt}</span>
+      )}
+    </a>
+  );
+
   return (
     <div className="project-clad-storefront-nav" data-projectclad-storefront-nav>
-      <div className="project-clad-storefront-nav__shell">
-        <div className="project-clad-storefront-nav__left">
-          <details
-            ref={storeMenuDrawerRef}
-            className="project-clad-storefront-nav__drawer"
-            onToggle={(e) => {
-              const el = e.currentTarget;
-              if (el instanceof HTMLDetailsElement && el.open) {
-                const other = actionsMenuDrawerRef.current;
-                if (other) other.open = false;
-                const s = searchDrawerRef.current;
-                if (s) s.open = false;
-              }
-            }}
-          >
-            <summary
-              className="project-clad-storefront-nav__menu-btn"
-              aria-label="Open menu"
-            >
-              <IconMenu className="project-clad-storefront-nav__icon" />
-            </summary>
-            <div className="project-clad-storefront-nav__drawer-panel">
-              <nav className="project-clad-storefront-nav__drawer-nav" aria-label="Store menu">
-                {links.map((btn, i) => (
-                  <a
-                    key={`drawer-${btn.url}-${i}`}
-                    href={btn.url}
-                    className="project-clad-storefront-nav__link project-clad-storefront-nav__link--drawer"
-                    onClick={closeStoreMenuDrawer}
-                  >
-                    {btn.label}
-                  </a>
-                ))}
-              </nav>
-            </div>
-          </details>
-
-          <a href={logoHref} className="project-clad-storefront-nav__logo-link">
-            {logoDataUrl ? (
-              <img
-                src={logoDataUrl}
-                alt={logoAlt}
-                className="project-clad-storefront-nav__logo-img"
-              />
-            ) : (
-              <span className="project-clad-storefront-nav__logo-fallback">{logoAlt}</span>
-            )}
-          </a>
-        </div>
-
+      <div
+        className={`project-clad-storefront-nav__shell${compactNav ? " project-clad-storefront-nav__shell--compact-stacked" : ""}`}
+      >
         {compactNav ? (
-          <details
-            ref={actionsMenuDrawerRef}
-            className="project-clad-storefront-nav__actions-drawer"
-            onToggle={(e) => {
-              const el = e.currentTarget;
-              if (el instanceof HTMLDetailsElement && el.open) {
-                const other = storeMenuDrawerRef.current;
-                if (other) other.open = false;
-                const s = searchDrawerRef.current;
-                if (s) s.open = false;
-              }
-            }}
-          >
-            <summary
-              className="project-clad-storefront-nav__menu-btn project-clad-storefront-nav__menu-btn--actions"
-              aria-label="Open quick actions"
-            >
-              <IconMenu className="project-clad-storefront-nav__icon" />
-            </summary>
-            <div className="project-clad-storefront-nav__actions-drawer-panel">
-              <div className="project-clad-storefront-nav__actions-drawer-inner">
-                {shellExtraSlot}
-                {toolsRow}
-              </div>
+          <>
+            <div className="project-clad-storefront-nav__brand-row">{logoBlock}</div>
+            <div className="project-clad-storefront-nav__icon-toolbar">
+              {storeMenuDrawer}
+              {shellExtra ? (
+                <div className="project-clad-storefront-nav__shell-extra project-clad-storefront-nav__shell-extra--compact-toolbar">
+                  {shellExtra}
+                </div>
+              ) : null}
+              {toolsRow}
             </div>
-          </details>
+          </>
         ) : (
           <>
+            <div className="project-clad-storefront-nav__left">
+              {storeMenuDrawer}
+              {logoBlock}
+            </div>
             {shellExtraSlot}
             {toolsRow}
           </>

@@ -19,10 +19,7 @@ import {
   shopStringFilter,
 } from "../utils/projectAccess.server";
 import { dedupeEmailAddresses, isEmailConfigured } from "../utils/email.server";
-import {
-  sendTransactionalEmail,
-  sendTransactionalEmailToRecipients,
-} from "../utils/transactionalEmail.server";
+import { sendTransactionalEmailToRecipients } from "../utils/transactionalEmail.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
 import {
@@ -332,7 +329,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       .filter(Boolean)
       .join(" ")
       .trim() || "A team member";
-    const projectLink = `https://${shop}/apps/project-clad/project?id=${projectId}`;
     const jobId = url.searchParams.get("jobId") || "";
     const itemId = url.searchParams.get("itemId") || "";
 
@@ -702,7 +698,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           .trim() || "A team member";
 
       let contextLabel = project.name;
-      let itemsToInclude: { jobName: string; displayName: string; quantity: number }[] = [];
+      const itemsToInclude: { jobName: string; displayName: string; quantity: number }[] = [];
 
       if (jobId) {
         const job = await prisma.job.findFirst({

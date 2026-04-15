@@ -6,13 +6,12 @@ import type { CSSProperties } from "react";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "react-router";
 import {
   Form,
-  Link,
+  redirect,
   useSearchParams,
   useActionData,
   useLoaderData,
   useLocation,
 } from "react-router";
-import { redirect } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import {
@@ -1625,7 +1624,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return redirectToProject(request, projectId, shop);
   }
 
-  const isOwner = project.ownerCustomerId === customerId;
   const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
   const viewerTagsForAction = await fetchCustomerTagsRest(
     shop,
@@ -2570,10 +2568,8 @@ export default function ProjectDetailPage() {
   const {
     proxyStylesCss,
     project,
-    otherProjects,
     canViewPricing,
     canEdit,
-    isOwner,
     canAdminMembers,
     hideAddToCart,
     approvalRequests,
@@ -2692,10 +2688,6 @@ export default function ProjectDetailPage() {
   const projectSubtotalPlusTax = orderTotalWithTax(project.subtotal, {
     pricesIncludeTax: false,
   });
-  const actionError =
-    actionData && typeof actionData === "object" && "error" in actionData
-      ? (actionData.error as string)
-      : null;
   const jobError =
     actionData && typeof actionData === "object" && "jobError" in actionData
       ? (actionData.jobError as string)
@@ -2707,9 +2699,6 @@ export default function ProjectDetailPage() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedJobId = searchParams.get("job");
-  const approveMode = searchParams.get("approve") === "1";
-  const approveJobId = searchParams.get("approveJobId") || "";
-  const approveItemId = searchParams.get("approveItemId") || "";
   const [jobs, setJobs] = useState(project.jobs);
   const orderListSearchQ = (searchParams.get("q") || "").trim();
   const visibleJobs = useMemo(() => {
@@ -3101,9 +3090,10 @@ export default function ProjectDetailPage() {
         aria-labelledby="reject-modal-title"
         style={{ display: "none" }}
       >
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal card: stop mousedown so backdrop logic ignores inner surface */}
         <div
           className="project-clad-card project-clad-modal project-clad-reject-modal"
-          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <h2 id="reject-modal-title">Reject order</h2>
           <p className="project-clad-muted">
@@ -3138,7 +3128,11 @@ export default function ProjectDetailPage() {
         aria-labelledby="pricing-modal-title"
         style={{ display: "none" }}
       >
-        <div className="project-clad-card project-clad-modal project-clad-reject-modal" onClick={(e) => e.stopPropagation()}>
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal card: stop mousedown so backdrop logic ignores inner surface */}
+        <div
+          className="project-clad-card project-clad-modal project-clad-reject-modal"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <h2 id="pricing-modal-title">Show price</h2>
           <Form
             method="post"
@@ -3185,9 +3179,10 @@ export default function ProjectDetailPage() {
         aria-hidden="true"
         style={{ display: "none" }}
       >
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal card: stop mousedown so backdrop logic ignores inner surface */}
         <div
           className="project-clad-card project-clad-modal project-clad-reject-modal"
-          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <button
             type="button"
@@ -3466,7 +3461,11 @@ export default function ProjectDetailPage() {
         aria-labelledby="edit-save-title-js"
         style={{ display: "none" }}
       >
-        <div className="project-clad-card project-clad-modal project-clad-reject-modal project-clad-edit-save-modal" onClick={(e) => e.stopPropagation()}>
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal card: stop mousedown so backdrop logic ignores inner surface */}
+        <div
+          className="project-clad-card project-clad-modal project-clad-reject-modal project-clad-edit-save-modal"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <h2 id="edit-save-title-js">Save changes?</h2>
           <div className="project-clad-actions project-clad-reject-modal-actions">
             <button type="button" className="project-clad-button project-clad-reject-modal-btn" data-projectclad-edit-save-yes>
@@ -3489,9 +3488,10 @@ export default function ProjectDetailPage() {
         aria-labelledby="delete-project-modal-title"
         style={{ display: "none" }}
       >
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal card: stop mousedown so backdrop logic ignores inner surface */}
         <div
           className="project-clad-card project-clad-modal project-clad-reject-modal"
-          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           <h2 id="delete-project-modal-title">Delete this project</h2>
           <p className="project-clad-muted" style={{ marginTop: "0.5rem" }}>

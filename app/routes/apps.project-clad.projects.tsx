@@ -88,19 +88,6 @@ function projectListItemMatchesQuery(project: ProjectListItem, qRaw: string): bo
   return parts.every((part) => hay.includes(part));
 }
 
-const buildProjectCartItems = (jobs: ProjectListItem["jobs"]) => {
-  const totals = new Map<string, number>();
-  jobs.forEach((job) => {
-    job.items.forEach((item) => {
-      totals.set(item.variantId, (totals.get(item.variantId) || 0) + item.quantity);
-    });
-  });
-  return Array.from(totals.entries()).map(([variantId, quantity]) => ({
-    variantId,
-    quantity,
-  }));
-};
-
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const proxyStylesCss = rewriteProjectCladProxyFontUrls(request);
   const { shop, customerId, customerEmail } = requireAppProxyCustomer(request);
@@ -544,6 +531,9 @@ export default function ProjectsPage() {
     document.body.classList.add('project-clad-leaving');
     setTimeout(function() { window.location.href = href; }, 180);
   }, true);
+  window.addEventListener('pageshow', function(ev) {
+    if (ev.persisted) window.location.reload();
+  });
 })();
           `,
         }}

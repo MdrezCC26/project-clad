@@ -5,7 +5,7 @@
 
 @import url("https://fonts.googleapis.com/css2?family=Bakbak+One&display=swap");
 
-/* Licensed webfont: public/fonts/nulshock/nulshock-bd.woff2 (+ optional .woff). */
+/* Licensed Nulshock: public/fonts/nulshock/nulshock-bd.woff2 — inlined as data: in app proxy CSS (CORS-safe on storefront). */
 @font-face {
   font-family: "Nulshock";
   src:
@@ -2874,16 +2874,38 @@ html:has(.project-clad-page--projects) body {
     transform-origin: center center;
   }
 
-  .project-clad-storefront-nav__shell-extra {
+  /*
+   * Wide nav row only: middle slot pushes admin tools toward the trailing cluster.
+   * Do NOT apply to __shell--compact-stacked — same specificity as __shell-extra--compact-toolbar
+   * but this block comes later and was overriding justify-content:center (icons hugged the right).
+   */
+  .project-clad-storefront-nav__shell:not(.project-clad-storefront-nav__shell--compact-stacked)
+    > .project-clad-storefront-nav__shell-extra {
     flex: 1 1 auto;
     min-width: 0;
     justify-content: flex-end;
     overflow: visible;
   }
 
-  .project-clad-storefront-nav__shell-extra .project-clad-header-slot--left {
+  .project-clad-storefront-nav__shell:not(.project-clad-storefront-nav__shell--compact-stacked)
+    > .project-clad-storefront-nav__shell-extra
+    .project-clad-header-slot--left {
     display: block;
     min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Mobile stacked bar: hamburger + optional admin icons + search/account/cart — centered under logo */
+  .project-clad-storefront-nav__shell--compact-stacked .project-clad-storefront-nav__icon-toolbar {
+    justify-content: center;
+    align-items: center;
+  }
+
+  .project-clad-storefront-nav__shell--compact-stacked
+    .project-clad-storefront-nav__shell-extra.project-clad-storefront-nav__shell-extra--compact-toolbar {
+    flex: 0 1 auto;
+    justify-content: center;
+    width: 100%;
     max-width: 100%;
   }
 
