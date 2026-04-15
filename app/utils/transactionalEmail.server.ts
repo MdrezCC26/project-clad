@@ -75,8 +75,8 @@ export function buildTransactionalHtmlAndAttachments(
 ): { html: string; attachments?: NonNullable<SendEmailOptions["attachments"]> } {
   const parsed = logoDataUrl ? parseDataUrlToInlineImage(logoDataUrl) : null;
   const logoBlock = parsed
-    ? `<p style="margin:0 0 20px 0;line-height:0"><img src="cid:${LOGO_CID}" alt="Canadian Cladding PROJECTS" width="260" style="max-width:100%;height:auto;border:0;display:block" /></p>`
-    : `<p style="margin:0 0 16px 0;font-size:14px;font-weight:600;color:#222;letter-spacing:0.02em">Canadian Cladding PROJECTS</p>`;
+    ? `<div style="margin:0 0 24px 0;text-align:center;line-height:0"><img src="cid:${LOGO_CID}" alt="Canadian Cladding PROJECTS" width="520" style="max-width:100%;width:520px;height:auto;border:0;display:inline-block;vertical-align:middle" /></div>`
+    : `<p style="margin:0 0 20px 0;text-align:center;font-size:18px;font-weight:600;color:#222;letter-spacing:0.02em">Canadian Cladding PROJECTS</p>`;
 
   const html = `<!DOCTYPE html>
 <html>
