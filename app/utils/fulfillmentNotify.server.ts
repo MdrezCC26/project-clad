@@ -14,6 +14,7 @@ import {
   type VariantDisplayInfo,
 } from "./variantInfo.server";
 import { shopStringFilter } from "./projectAccess.server";
+import { orderTaxFromSubtotal } from "./orderDisplayTax";
 
 function formatMoney(amount: number): string {
   if (Number.isNaN(amount)) return "$0.00";
@@ -21,6 +22,9 @@ function formatMoney(amount: number): string {
 }
 
 const DEFAULT_FINANCE_EMAIL = "michaeldrezin@canadiancladding.ca";
+
+/** Same flat fee as storefront `PROJECT_DELIVERY_FEE` / order-placed email. */
+const ORDER_DELIVERY_FEE = 15;
 
 /** Single finance mailbox for delivered / invoice mail (env may override first address only). */
 function financeDeliveryInvoiceRecipient(): string {
@@ -154,9 +158,13 @@ export async function sendFulfillmentPackageEmails(args: {
     live,
   });
 
-  const delivery = 0;
-  const tax = 0;
-  const total = subtotal + delivery + tax;
+  const projectUrl = `https://${args.shop}/apps/project-clad/project?id=${encodeURIComponent(args.projectId)}`;
+
+  const isDelivery =
+    String(job.fulfillmentMethod || "").trim().toLowerCase() === "delivery";
+  const deliveryFee = isDelivery ? ORDER_DELIVERY_FEE : 0;
+  const tax = orderTaxFromSubtotal(subtotal, { pricesIncludeTax: false });
+  const total = Math.round((subtotal + tax + deliveryFee) * 100) / 100;
 
   const prefLine = formatPreferredDeliveryDisplay(
     job.scheduledDeliveryDate,
@@ -164,10 +172,6 @@ export async function sendFulfillmentPackageEmails(args: {
   );
   const scheduleParts = prefLine ? [prefLine, ``] : [];
 
-  const projectUrl = `https://${args.shop}/apps/project-clad/project?id=${encodeURIComponent(args.projectId)}`;
-
-  const isDelivery =
-    String(job.fulfillmentMethod || "").trim().toLowerCase() === "delivery";
   const locationBlock = isDelivery
     ? [shippingBlock(project), ``]
     : [`Fulfillment: Store pickup`, ``];
@@ -188,7 +192,7 @@ export async function sendFulfillmentPackageEmails(args: {
     lineBlocks.join("\n\n") || "(none)",
     ``,
     `Subtotal: ${formatMoney(subtotal)}`,
-    `Delivery: ${formatMoney(delivery)}`,
+    `Delivery: ${formatMoney(deliveryFee)}`,
     `Tax: ${formatMoney(tax)}`,
     `Total: ${formatMoney(total)}`,
     ``,
@@ -239,7 +243,7 @@ export async function sendFulfillmentPackageEmails(args: {
     lineBlocks.join("\n\n") || "(none)",
     ``,
     `Subtotal: ${formatMoney(subtotal)}`,
-    `Delivery: ${formatMoney(delivery)}`,
+    `Delivery: ${formatMoney(deliveryFee)}`,
     `Tax: ${formatMoney(tax)}`,
     `Total: ${formatMoney(total)}`,
     ``,

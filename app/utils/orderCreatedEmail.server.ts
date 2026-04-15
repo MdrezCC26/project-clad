@@ -7,10 +7,7 @@ import {
   sendTransactionalEmailToRecipients,
 } from "./transactionalEmail.server";
 import { shopStringFilter } from "./projectAccess.server";
-import {
-  ORDER_LINE_PRICES_INCLUDE_DISPLAY_TAX,
-  orderTaxFromSubtotal,
-} from "./orderDisplayTax";
+import { orderTaxFromSubtotal } from "./orderDisplayTax";
 import { formatOrderDeliveryFootline } from "./preferredDeliveryFormat";
 import {
   buildVariantPresentation,
@@ -507,11 +504,9 @@ export async function sendOrderPlacedEmails(args: {
   );
   const deliveryFee =
     args.fulfillmentMethod === "delivery" ? ORDER_PLACED_DELIVERY_FEE : 0;
-  const pretaxPlusDelivery = subtotal + deliveryFee;
-  const tax = orderTaxFromSubtotal(pretaxPlusDelivery, {
-    pricesIncludeTax: ORDER_LINE_PRICES_INCLUDE_DISPLAY_TAX,
-  });
-  const total = Math.round((pretaxPlusDelivery + tax) * 100) / 100;
+  /** Match storefront order table: HST on line subtotal, then add flat delivery (not taxed here). */
+  const tax = orderTaxFromSubtotal(subtotal, { pricesIncludeTax: false });
+  const total = Math.round((subtotal + tax + deliveryFee) * 100) / 100;
 
   const projectUrl = `https://${args.shop}/apps/project-clad/project?id=${encodeURIComponent(args.projectId)}`;
 
