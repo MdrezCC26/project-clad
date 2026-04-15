@@ -13,8 +13,32 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/** `http(s)://…` spans in plain copy → `<a href>` so “Open project: https://…” is clickable. */
+const HTTPS_URL_IN_PLAIN = /(https?:\/\/[^\s<>'"]+)/gi;
+
+function linkifyPlainTextToHtml(plain: string): string {
+  const parts: string[] = [];
+  let lastIndex = 0;
+  HTTPS_URL_IN_PLAIN.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = HTTPS_URL_IN_PLAIN.exec(plain)) !== null) {
+    parts.push(escapeHtml(plain.slice(lastIndex, m.index)));
+    const url = m[1];
+    const safe = escapeHtml(url);
+    parts.push(
+      `<a href="${safe}" style="color:#0b57d0;text-decoration:underline" target="_blank" rel="noopener noreferrer">${safe}</a>`,
+    );
+    lastIndex = m.index + url.length;
+  }
+  parts.push(escapeHtml(plain.slice(lastIndex)));
+  return parts.join("");
+}
+
 function plainTextToHtmlBody(text: string): string {
-  return escapeHtml(text).replace(/\r\n/g, "\n").split("\n").join("<br />\n");
+  return linkifyPlainTextToHtml(text)
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .join("<br />\n");
 }
 
 function parseDataUrlToInlineImage(dataUrl: string): {
