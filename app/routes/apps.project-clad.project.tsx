@@ -37,6 +37,7 @@ import {
 import {
   canAdminProjectMembers,
   canEditProject,
+  customerIdsMatch,
   isProjectMember,
   shopStringFilter,
 } from "../utils/projectAccess.server";
@@ -186,6 +187,37 @@ function parseOptionalUnitPrice(raw: unknown): string | null {
     return n.toFixed(2);
   }
   return null;
+}
+
+/**
+ * App proxy often omits `logged_in_customer_email` from the signed query string; fall back to
+ * Admin API `getCustomersByIds` map (same source as member roster emails).
+ */
+function viewerEmailForPricingAllowlist(
+  proxyEmail: string | undefined,
+  customerId: string,
+  viewerNumericId: string,
+  customerInfo: Awaited<ReturnType<typeof getCustomersByIds>>,
+): string | undefined {
+  const fromProxy = proxyEmail?.trim();
+  if (fromProxy) return fromProxy;
+  for (const k of [
+    viewerNumericId,
+    customerId,
+    normalizeStorefrontCustomerId(customerId),
+  ]) {
+    if (!k) continue;
+    const row = customerInfo[k];
+    const e = row?.email?.trim();
+    if (e) return e;
+  }
+  for (const info of Object.values(customerInfo)) {
+    if (info?.id && customerIdsMatch(info.id, customerId)) {
+      const e = info.email?.trim();
+      if (e) return e;
+    }
+  }
+  return undefined;
 }
 
 type ActivityFeedItem = {
@@ -865,9 +897,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const unitPriceEditorAllowlist =
     process.env.PROJECTCLAD_UNIT_PRICE_EDITOR_EMAILS?.trim();
+  const viewerEmailResolved = viewerEmailForPricingAllowlist(
+    customerEmail,
+    customerId,
+    viewerNumericId,
+    customerInfo,
+  );
   const canEditLineUnitPrices =
     Boolean(unitPriceEditorAllowlist) &&
-    customerEmailInConfiguredList(customerEmail, unitPriceEditorAllowlist);
+    customerEmailInConfiguredList(viewerEmailResolved, unitPriceEditorAllowlist);
 
   const shopQ = shopStringFilter(shop);
   const otherProjects = await prisma.project.findMany({
@@ -1455,9 +1493,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const wantsUnitPriceChange = itemUpdates.some(
         (u) => parseOptionalUnitPrice(u.unitPrice) !== null,
       );
+      let viewerEmailResolved = customerEmail?.trim() || undefined;
+      if (!viewerEmailResolved && wantsUnitPriceChange && unitPriceEditorAllowlist) {
+        try {
+          const nid = normalizeStorefrontCustomerId(customerId);
+          const map = await getCustomersByIds(shop, [nid, customerId]);
+          viewerEmailResolved = viewerEmailForPricingAllowlist(
+            undefined,
+            customerId,
+            nid,
+            map,
+          );
+        } catch {
+          // ignore — allow check fails below
+        }
+      }
       const allowUnitPricePersistence =
         Boolean(unitPriceEditorAllowlist) &&
-        customerEmailInConfiguredList(customerEmail, unitPriceEditorAllowlist);
+        customerEmailInConfiguredList(viewerEmailResolved, unitPriceEditorAllowlist);
       if (wantsUnitPriceChange) {
         if (!unitPriceEditorAllowlist) {
           return Response.json(
