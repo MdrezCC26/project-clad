@@ -704,6 +704,9 @@
   flex: 1 1 auto;
   min-width: 0;
   text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
 }
 
 .projectclad-modal__content .project-clad-member-role-select__chevron {
@@ -822,6 +825,9 @@
   display: block;
   padding: 0.58rem 1rem;
   pointer-events: auto;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
   transition:
     color 0.22s cubic-bezier(0.23, 1, 0.32, 1),
     text-shadow 0.32s cubic-bezier(0.23, 1, 0.32, 1);
