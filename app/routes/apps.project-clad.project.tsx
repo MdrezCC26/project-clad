@@ -80,12 +80,58 @@ type JobItemView = {
   imageUrl: string | null;
   imageAlt: string | null;
   productUrl: string | null;
+  /** Upload Part line: customer file URL when stored as an http(s) property (used for link + PDF vs image). */
+  uploadPartFileUrl: string | null;
   /** live = Shopify API; snapshot = cached DB; unknown = no product data */
   variantDisplaySource: "live" | "snapshot" | "unknown";
   /** Immutable line snapshot from when the row was saved (may be null on older rows). */
   orderLineCapture: OrderLineCaptureV1 | null;
   properties?: { name: string; value: string }[] | null;
 };
+
+/** Cart / Files URLs usually end in `.pdf`; `<img>` cannot preview PDFs. */
+function isLikelyPdfUrl(url: string): boolean {
+  const t = url.trim();
+  if (!/^https?:\/\//i.test(t)) return false;
+  try {
+    const u = new URL(t);
+    return /\.pdf(\?|$)/i.test(u.pathname);
+  } catch {
+    return /\.pdf(\?|$)/i.test(t);
+  }
+}
+
+function PdfGlyphSvg({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 32 40"
+      width="32"
+      height="40"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        fill="var(--color-1, #c40000)"
+        d="M2 5a4 4 0 0 1 4-4h14.5L30 12.5V35a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V5z"
+      />
+      <path fill="#8f0000" d="M20.5 1H22l8 8v1.5H24a4 4 0 0 1-4-4V1z" />
+      <rect x="5" y="18" width="22" height="14" rx="2" fill="#fff" opacity="0.95" />
+      <path
+        fill="var(--color-1, #c40000)"
+        d="M8 22h4.2v1.6H8V22zm0 3.4h6.4v1.6H8v-1.6zm7.2-3.4H24l-1.4 4.2h-2.8l1.4-4.2z"
+      />
+    </svg>
+  );
+}
+
+function PdfThumbIcon({ label = "PDF document" }: { label?: string }) {
+  return (
+    <span className="project-clad-thumb project-clad-thumb--pdf" role="img" aria-label={label}>
+      <PdfGlyphSvg />
+    </span>
+  );
+}
 
 type JobView = {
   id: string;
@@ -122,6 +168,23 @@ function jobMatchesOrderSearch(job: JobView, qRaw: string): boolean {
     .join(" ")
     .toLowerCase();
   return parts.every((part) => hay.includes(part));
+}
+
+/** Optional per-line unit price from save-order-edit JSON (two decimals for Prisma `Decimal`). */
+function parseOptionalUnitPrice(raw: unknown): string | null {
+  if (raw === undefined) return null;
+  if (typeof raw === "number") {
+    if (!Number.isFinite(raw) || raw < 0 || raw > 99_999_999) return null;
+    return raw.toFixed(2);
+  }
+  if (typeof raw === "string") {
+    const t = raw.trim().replace(/,/g, "");
+    if (!t) return null;
+    const n = parseFloat(t);
+    if (!Number.isFinite(n) || n < 0 || n > 99_999_999) return null;
+    return n.toFixed(2);
+  }
+  return null;
 }
 
 type ActivityFeedItem = {
@@ -962,21 +1025,33 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
           let properties: { name: string; value: string }[] | null = null;
           let customImageUrl: string | null = null;
+          let uploadPartFileUrl: string | null = null;
+          const isUploadPartLine = displayName.toLowerCase().includes("upload part");
 
           if (item.customData && Array.isArray(item.customData)) {
             properties = item.customData as { name: string; value: string }[];
 
             // For the special "Upload Part" product, use any URL property as the main image
-            if (displayName.toLowerCase().includes("upload part")) {
+            if (isUploadPartLine) {
               const uploadProp = properties.find((p) => {
                 const v = (p.value || "").trim();
                 return v.startsWith("http://") || v.startsWith("https://");
               });
               if (uploadProp) {
-                customImageUrl = uploadProp.value.trim();
+                const raw = uploadProp.value.trim();
+                uploadPartFileUrl = raw;
+                if (!isLikelyPdfUrl(raw)) {
+                  customImageUrl = raw;
+                }
               }
             }
           }
+
+          const imageUrl =
+            customImageUrl ||
+            (isUploadPartLine && uploadPartFileUrl && isLikelyPdfUrl(uploadPartFileUrl)
+              ? null
+              : pres.imageUrl || null);
 
           return {
             id: item.id,
@@ -984,9 +1059,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             quantity: item.quantity,
             priceSnapshot: item.priceSnapshot.toString(),
             displayName,
-            imageUrl: customImageUrl || pres.imageUrl || null,
+            imageUrl,
             imageAlt: pres.imageAlt || null,
             productUrl,
+            uploadPartFileUrl,
             variantDisplaySource: pres.source,
             orderLineCapture,
             properties,
@@ -1205,7 +1281,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       jobIds?: string[];
       itemIds?: string[];
       removeItemIds?: string[];
-      itemUpdates?: Array<{ itemId: string; quantity: number }>;
+      itemUpdates?: Array<{
+        itemId: string;
+        quantity: number;
+        /** When set (and valid), updates `JobItem.priceSnapshot`. Omitted = leave price unchanged. */
+        unitPrice?: number | string;
+      }>;
       deleteJob?: boolean;
       fulfillmentMethod?: string;
     };
@@ -1331,8 +1412,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         ? payload.removeItemIds.filter((id): id is string => typeof id === "string")
         : [];
       const itemUpdates = Array.isArray(payload.itemUpdates)
-        ? (payload.itemUpdates as Array<{ itemId: string; quantity: number }>).filter(
-            (u) => typeof u?.itemId === "string" && typeof u?.quantity === "number" && u.quantity >= 0
+        ? (
+            payload.itemUpdates as Array<{
+              itemId?: unknown;
+              quantity?: unknown;
+              unitPrice?: unknown;
+            }>
+          ).filter(
+            (u) =>
+              typeof u?.itemId === "string" &&
+              typeof u?.quantity === "number" &&
+              u.quantity >= 0,
           )
         : [];
       const deleteJob = Boolean(payload.deleteJob);
@@ -1403,15 +1493,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 });
                 didChange = true;
               }
-              for (const { itemId, quantity } of itemUpdates) {
+              for (const u of itemUpdates) {
+                const itemId = u.itemId as string;
+                const quantity = u.quantity as number;
                 const row = job.items.find((i) => i.id === itemId);
-                if (row && quantity >= 0) {
-                  await prisma.jobItem.update({
-                    where: { id: itemId },
-                    data: { quantity },
-                  });
-                  didChange = true;
+                if (!row || quantity < 0) continue;
+                const priceStr = parseOptionalUnitPrice(u.unitPrice);
+                const data: { quantity: number; priceSnapshot?: string } = {
+                  quantity,
+                };
+                if (priceStr !== null) {
+                  data.priceSnapshot = priceStr;
                 }
+                await prisma.jobItem.update({
+                  where: { id: itemId },
+                  data,
+                });
+                didChange = true;
               }
               if (didChange) {
                 await emailProjectStatusSnapshot({
@@ -1420,7 +1518,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   actorCustomerId: customerId,
                   headline: "Order updated on project page",
                   introLines: [
-                    `Someone edited order "${jobTitleForMessage}" (quantities, name, or removed lines).`,
+                    `Someone edited order "${jobTitleForMessage}" (quantities, line unit prices, name, or removed lines).`,
                     "Open the project link below to review the current order contents.",
                   ],
                 });
@@ -4257,8 +4355,14 @@ export default function ProjectDetailPage() {
                                       .toLowerCase()
                                       .includes("upload part");
                                     const href = isUploadPart
-                                      ? item.imageUrl
+                                      ? item.uploadPartFileUrl || item.imageUrl
                                       : item.productUrl;
+                                    const showPdfThumb =
+                                      isUploadPart &&
+                                      Boolean(
+                                        item.uploadPartFileUrl &&
+                                          isLikelyPdfUrl(item.uploadPartFileUrl),
+                                      );
 
                                     if (href) {
                                       return (
@@ -4273,7 +4377,9 @@ export default function ProjectDetailPage() {
                                           className="project-clad-item-link"
                                           onClick={(event) => event.stopPropagation()}
                                         >
-                                          {item.imageUrl ? (
+                                          {showPdfThumb ? (
+                                            <PdfThumbIcon label="PDF attachment" />
+                                          ) : item.imageUrl ? (
                                             <img
                                               src={item.imageUrl}
                                               alt={item.imageAlt || item.displayName}
@@ -4296,7 +4402,9 @@ export default function ProjectDetailPage() {
 
                                     return (
                                       <div className="project-clad-item-link">
-                                        {item.imageUrl ? (
+                                        {showPdfThumb ? (
+                                          <PdfThumbIcon label="PDF attachment" />
+                                        ) : item.imageUrl ? (
                                           <img
                                             src={item.imageUrl}
                                             alt={item.imageAlt || item.displayName}
@@ -4417,6 +4525,24 @@ export default function ProjectDetailPage() {
                                           .map((prop, index) => {
                                             const v = prop.value.trim();
                                             if (v.startsWith("http://") || v.startsWith("https://")) {
+                                              if (isLikelyPdfUrl(v)) {
+                                                return (
+                                                  <div key={index} style={{ marginTop: "0.25rem" }}>
+                                                    <strong>{prop.name}:</strong>
+                                                    <div className="project-clad-upload-url-pdf">
+                                                      <a
+                                                        href={v}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="project-clad-upload-url-pdf__link"
+                                                      >
+                                                        <PdfGlyphSvg className="project-clad-upload-url-pdf__icon" />
+                                                        <span>Open PDF</span>
+                                                      </a>
+                                                    </div>
+                                                  </div>
+                                                );
+                                              }
                                               return (
                                                 <div key={index} style={{ marginTop: "0.25rem" }}>
                                                   <strong>{prop.name}:</strong>
@@ -4465,9 +4591,7 @@ export default function ProjectDetailPage() {
                                   data-projectclad-price
                                   data-price={item.priceSnapshot}
                                 >
-                                  {pricingUnlocked ? (
-                                    formatPrice(item.priceSnapshot)
-                                  ) : (
+                                  {!pricingUnlocked ? (
                                     <button
                                       type="button"
                                       className="project-clad-hidden-link"
@@ -4475,6 +4599,41 @@ export default function ProjectDetailPage() {
                                     >
                                       Hidden
                                     </button>
+                                  ) : (
+                                    <>
+                                      <span className="project-clad-normal-view">
+                                        {formatPrice(item.priceSnapshot)}
+                                      </span>
+                                      {canEdit && !job.isLocked ? (
+                                        <span
+                                          className="project-clad-edit-view"
+                                          style={{ display: "none" }}
+                                        >
+                                          <label
+                                            className="project-clad-sr-only"
+                                            htmlFor={`projectclad-unit-price-${job.id}-${item.id}`}
+                                          >
+                                            Unit price for {item.displayName}
+                                          </label>
+                                          <input
+                                            id={`projectclad-unit-price-${job.id}-${item.id}`}
+                                            type="number"
+                                            inputMode="decimal"
+                                            step="0.01"
+                                            min={0}
+                                            defaultValue={Number(item.priceSnapshot).toFixed(2)}
+                                            data-original-unit-price={Number(
+                                              item.priceSnapshot,
+                                            ).toFixed(2)}
+                                            data-projectclad-unit-price-input
+                                            data-item-id={item.id}
+                                            data-job-id={job.id}
+                                            className="project-clad-unit-price-input"
+                                            aria-label={`Unit price for ${item.displayName}`}
+                                          />
+                                        </span>
+                                      ) : null}
+                                    </>
                                   )}
                                 </td>
                                 {canEdit && !job.isLocked && (
@@ -5369,8 +5528,20 @@ export default function ProjectDetailPage() {
   const revealPricing = () => {
     document.querySelectorAll('[data-projectclad-price]').forEach((cell) => {
       const value = cell.getAttribute('data-price');
-      if (value) {
+      if (!value) return;
+      const normal = cell.querySelector('.project-clad-normal-view');
+      if (normal instanceof HTMLElement) {
+        normal.textContent = value;
+      } else {
         cell.textContent = value;
+      }
+      const priceInp = cell.querySelector('[data-projectclad-unit-price-input]');
+      if (priceInp instanceof HTMLInputElement) {
+        var n = parseFloat(value);
+        if (!isNaN(n)) {
+          priceInp.value = n.toFixed(2);
+          priceInp.setAttribute('data-original-unit-price', n.toFixed(2));
+        }
       }
     });
     const pricingModal = document.querySelector('[data-projectclad-pricing-modal-backdrop]');
@@ -5535,7 +5706,17 @@ export default function ProjectDetailPage() {
         const itemId = inp.getAttribute('data-item-id');
         const qty = parseInt(inp.value, 10);
         if (itemId && !isNaN(qty) && qty >= 0) {
-          itemUpdates.push({ itemId: itemId, quantity: qty });
+          const row = inp.closest('[data-projectclad-item-row]');
+          const priceInp = row && row.querySelector('[data-projectclad-unit-price-input]');
+          const entry = { itemId: itemId, quantity: qty };
+          if (priceInp instanceof HTMLInputElement) {
+            var rawP = priceInp.value.trim().replace(/,/g, '');
+            if (rawP !== '') {
+              var p = parseFloat(rawP);
+              if (!isNaN(p) && p >= 0) entry.unitPrice = p;
+            }
+          }
+          itemUpdates.push(entry);
         }
       });
       let jobName = '';
