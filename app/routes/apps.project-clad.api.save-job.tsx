@@ -116,6 +116,7 @@ async function finalizeCartOrderSaved(args: {
   jobName: string;
   headline: string;
   poNumber?: string | null;
+  jobPurchaseOrderNumber?: string | null;
   companyName?: string | null;
   ownerCustomerId: string;
   actorCustomerId: string;
@@ -148,6 +149,7 @@ async function finalizeCartOrderSaved(args: {
     jobName: args.jobName,
     headline: args.headline,
     poNumber: args.poNumber,
+    jobPurchaseOrderNumber: args.jobPurchaseOrderNumber,
     companyName: args.companyName,
     ownerCustomerId: args.ownerCustomerId,
     actorCustomerId: args.actorCustomerId,
@@ -340,8 +342,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         projectName: project.name,
         jobId: firstJob.id,
         jobName: firstJob.name,
-        headline: "New project and order saved from cart",
+        headline: "Your order has been saved!",
         poNumber: project.poNumber,
+        jobPurchaseOrderNumber: firstJob.purchaseOrderNumber,
         companyName: project.companyName,
         ownerCustomerId: project.ownerCustomerId,
         actorCustomerId: customerId,
@@ -434,8 +437,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       projectName: project.name,
       jobId: job.id,
       jobName: job.name,
-      headline: "New order saved from cart",
+      headline: "Your order has been saved!",
       poNumber,
+      jobPurchaseOrderNumber: job.purchaseOrderNumber,
       companyName,
       ownerCustomerId: project.ownerCustomerId,
       actorCustomerId: customerId,
@@ -594,7 +598,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const jobForNotify = await prisma.job.findFirst({
       where: { id: targetJobId, projectId: project.id },
-      select: { name: true },
+      select: { name: true, purchaseOrderNumber: true },
     });
     if (jobForNotify) {
       await finalizeCartOrderSaved({
@@ -603,8 +607,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         projectName: project.name,
         jobId: targetJobId,
         jobName: jobForNotify.name,
-        headline: "Order updated from cart",
+        headline: "Your order has been saved!",
         poNumber,
+        jobPurchaseOrderNumber: jobForNotify.purchaseOrderNumber,
         companyName,
         ownerCustomerId: project.ownerCustomerId,
         actorCustomerId: customerId,

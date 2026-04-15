@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "react-router";
 import {
@@ -47,7 +47,10 @@ import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
 import { getStorefrontAppNav } from "../utils/storefrontAppNav";
 import { logProjectActivity } from "../utils/projectActivity.server";
-import { sendProjectStatusNotificationEmail } from "../utils/orderCreatedEmail.server";
+import {
+  sendOrderPlacedEmails,
+  sendProjectStatusNotificationEmail,
+} from "../utils/orderCreatedEmail.server";
 import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";
 import {
   formatOrderDeliveryFootline,
@@ -106,6 +109,21 @@ type JobView = {
   hasFulfillmentPhoto: boolean;
   fulfillmentPhotoUrl: string | null;
 };
+
+function jobMatchesOrderSearch(job: JobView, qRaw: string): boolean {
+  const q = qRaw.trim().toLowerCase();
+  if (!q) return true;
+  const parts = q.split(/\s+/).filter(Boolean);
+  const hay = [
+    job.name,
+    job.orderName || "",
+    job.purchaseOrderNumber || "",
+    ...job.items.map((item) => item.displayName),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return parts.every((part) => hay.includes(part));
+}
 
 type ActivityFeedItem = {
   id: string;
@@ -1251,7 +1269,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           headline: "Orders reordered",
           introLines: [
             "The order list for this project was reordered.",
-            "Full snapshot below so you can verify everything before production.",
+            "Open the project link below to review the current order list.",
           ],
         });
       }
@@ -1294,7 +1312,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           headline: "Order lines reordered",
           introLines: [
             "Line items inside an order were reordered.",
-            "Use variant IDs below to replace any bad rows in Shopify if needed.",
+            "Open the project link below to review the updated line order.",
           ],
         });
       }
@@ -1357,7 +1375,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 headline: "Order deleted from project",
                 introLines: [
                   `The order "${jobTitleForMessage}" was removed from this project.`,
-                  "Snapshot below lists all remaining orders and lines.",
+                  "Open the project link below to see what remains on the project.",
                 ],
               });
             } else {
@@ -1404,7 +1422,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   headline: "Order updated on project page",
                   introLines: [
                     `Someone edited order "${jobTitleForMessage}" (quantities, name, or removed lines).`,
-                    "Full project snapshot is below — use variant IDs to fix or replace SKUs in Shopify.",
+                    "Open the project link below to review the current order contents.",
                   ],
                 });
               }
@@ -1534,6 +1552,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           e instanceof Error ? e.message : "Database error while confirming order.";
         console.error("[project-clad] confirm-order-now prisma error:", e);
         return Response.json({ error: detail }, { status: 500 });
+      }
+      try {
+        await sendOrderPlacedEmails({
+          shop,
+          projectId,
+          jobId,
+          fulfillmentMethod,
+          actorCustomerId: customerId,
+        });
+      } catch (err) {
+        console.error(
+          "[project] order placed email failed:",
+          err instanceof Error ? err.message : err,
+        );
       }
       return Response.json({ ok: true });
     }
@@ -2032,7 +2064,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       headline: "New empty order added",
       introLines: [
         `Order "${newJob.name}" was created on the project page (no checkout lines yet).`,
-        "Full project snapshot below.",
+        "Open the project link below to add lines or continue editing.",
       ],
     });
 
@@ -2072,7 +2104,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       headline: "Order deleted from project",
       introLines: [
         `The order "${job.name}" was removed.`,
-        "Snapshot below lists all remaining orders and lines.",
+        "Open the project link below to see what remains on the project.",
       ],
     });
 
@@ -2111,7 +2143,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             targetProject
               ? `Destination project: ${targetProject.name}`
               : "It was moved to another saved project.",
-            "Snapshot below is for this project after the move.",
+            "Open the project link below to review this project after the move.",
           ],
         });
         await emailProjectStatusSnapshot({
@@ -2121,7 +2153,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           headline: "Order moved into this project",
           introLines: [
             `Order "${job.name}" was moved here from another saved project.`,
-            "Snapshot below includes all orders and lines on this project.",
+            "Open the project link below to review all orders on this project.",
           ],
         });
       }
@@ -2192,7 +2224,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             `A copy of order "${job.name}" was created${
               targetProject ? ` on project "${targetProject.name}"` : " on another project"
             } as "${copyJob.name}".`,
-            "Snapshot below is for this project (source).",
+            "Open the project link below to review this project (source).",
           ],
         });
         await emailProjectStatusSnapshot({
@@ -2204,7 +2236,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             `Order "${copyJob.name}" was added (copy of "${job.name}"${
               sourceProject ? ` from "${sourceProject.name}"` : ""
             }).`,
-            "Full snapshot of this project below.",
+            "Open the project link below to review this project.",
           ],
         });
       }
@@ -2253,7 +2285,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         headline: "Line removed from order",
         introLines: [
           `A line was removed from order "${item.job.name}".`,
-          "Use the snapshot below to align Shopify or replace variants if needed.",
+          "Open the project link below to review the order.",
         ],
       });
     }
@@ -2396,7 +2428,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       headline: "Project details updated",
       introLines: [
         "Project name, PO, or company was changed on the project page.",
-        "Current project contents are listed below.",
+        "Open the project link below to review the updated details.",
       ],
     });
 
@@ -2463,7 +2495,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         receiveMode === "pickup"
           ? "This project was set to store pickup ($0 project delivery fee)."
           : "The delivery address or receive mode for this project was changed on the project page.",
-        "Current project contents are listed below.",
+        "Open the project link below to review delivery settings and the project.",
       ],
     });
 
@@ -2679,6 +2711,26 @@ export default function ProjectDetailPage() {
   const approveJobId = searchParams.get("approveJobId") || "";
   const approveItemId = searchParams.get("approveItemId") || "";
   const [jobs, setJobs] = useState(project.jobs);
+  const orderListSearchQ = (searchParams.get("q") || "").trim();
+  const visibleJobs = useMemo(() => {
+    if (!orderListSearchQ) return jobs;
+    return jobs.filter((job) => jobMatchesOrderSearch(job, orderListSearchQ));
+  }, [jobs, orderListSearchQ]);
+
+  useEffect(() => {
+    if (!selectedJobId || !orderListSearchQ) return;
+    if (!visibleJobs.some((j) => j.id === selectedJobId)) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("job");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [selectedJobId, orderListSearchQ, visibleJobs, setSearchParams]);
+
   const projectOrderDeliveryFeesTotal = jobs.reduce(
     (sum, job) => sum + deliveryFeeForJob(job),
     0,
@@ -2693,6 +2745,154 @@ export default function ProjectDetailPage() {
     if (getApprovalStatus(jobId, "") === "awaiting") return true;
     return jobs.some(
       (j) => j.id === jobId && j.orderLifecycleStatus === "pending_review",
+    );
+  };
+
+  /** Customer-facing order lifecycle controls (Ordered / Delivered / Order now / review). */
+  const renderOrderLifecycleCustomerSummaryActions = (job: JobView) => {
+    const ls = job.orderLifecycleStatus;
+    const approval = getApprovalStatus(job.id, "");
+    const viewerUsesNAReviewFlow = viewerHasNATag === true;
+    const skipReviewOrderFlow = !viewerUsesNAReviewFlow || viewerIsAdmin;
+    if (ls === "paid") {
+      return (
+        <button type="button" className="project-clad-button" disabled>
+          Order complete
+        </button>
+      );
+    }
+    if (ls === "delivered") {
+      return (
+        <button type="button" className="project-clad-button" disabled>
+          Delivered
+        </button>
+      );
+    }
+    if (ls === "ordered") {
+      return (
+        <button type="button" className="project-clad-button" disabled>
+          Ordered
+        </button>
+      );
+    }
+    if (
+      (ls === "ready_to_order" &&
+        (approval === "approved" || skipReviewOrderFlow)) ||
+      (ls === "draft" && skipReviewOrderFlow)
+    ) {
+      return (
+        <div
+          className="project-clad-inline-form"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
+            gap: "0.35rem",
+          }}
+        >
+          <button
+            type="button"
+            className="project-clad-button"
+            data-projectclad-order-now-submit
+            data-job-id={job.id}
+            data-has-delivery={isDeliveryCompleteForOrderNow ? "1" : "0"}
+            disabled={orderNowSubmittingJobId === job.id}
+          >
+            {orderNowSubmittingJobId === job.id ? "Placing…" : "Order now"}
+          </button>
+          {project.receiveMode === "delivery" && !hasCompleteDeliveryAddress ? (
+            <span
+              className="project-clad-muted"
+              style={{
+                maxWidth: "16rem",
+                fontSize: "0.82rem",
+                lineHeight: 1.4,
+              }}
+            >
+              No delivery details on file — order will be placed as{" "}
+              <strong>store pickup</strong>.
+            </span>
+          ) : null}
+        </div>
+      );
+    }
+    if (
+      viewerUsesNAReviewFlow &&
+      ls !== "ready_to_order" &&
+      ls !== "ordered" &&
+      ls !== "delivered" &&
+      ls !== "paid"
+    ) {
+      const intent =
+        approval === "awaiting"
+          ? "cancel-approval-request"
+          : "submit-for-approval";
+      const label =
+        approval === "awaiting" ? "Confirming order" : "Send for review";
+      return (
+        <form
+          method="get"
+          action="/apps/project-clad/api/project-actions"
+          className="project-clad-inline-form"
+          data-projectclad-ajax
+          data-projectclad-intent={intent}
+          data-projectclad-project-id={project.id}
+          onPointerDownCapture={(event) => event.stopPropagation()}
+        >
+          <input type="hidden" name="jobId" value={job.id} />
+          <button type="submit" className="project-clad-button">
+            {label}
+          </button>
+          <span className="project-clad-muted" data-projectclad-form-message />
+        </form>
+      );
+    }
+    return (
+      <span className="project-clad-muted">{orderLifecycleLabel(ls)}</span>
+    );
+  };
+
+  /** Staff lifecycle dropdown + Apply — only inside the line-item "Edit order" panel. */
+  const staffOrderLifecycleStatusForm = (job: JobView) => {
+    if (!viewerCanFulfill) return null;
+    const sid = `${job.id}-edit-panel`;
+    return (
+      <Form
+        method="post"
+        action={`/apps/project-clad/project?id=${project.id}`}
+        className="project-clad-staff-fulfillment-status-form"
+      >
+        <input type="hidden" name="intent" value="staff-set-order-lifecycle" />
+        <input type="hidden" name="jobId" value={job.id} />
+        <div className="project-clad-staff-fulfillment-status-row">
+          <label
+            className="project-clad-staff-fulfillment__label--tile"
+            htmlFor={`project-clad-staff-status-${sid}`}
+          >
+            Order status
+          </label>
+          <select
+            id={`project-clad-staff-status-${sid}`}
+            name="lifecycleStatus"
+            defaultValue={job.orderLifecycleStatus}
+            className="project-clad-staff-fulfillment__status"
+          >
+            <option value="draft">New</option>
+            <option value="pending_review">Review</option>
+            <option value="ready_to_order">Order now</option>
+            <option value="ordered">Ordered</option>
+            <option value="delivered" disabled={!job.hasFulfillmentPhoto}>
+              {job.hasFulfillmentPhoto
+                ? "Delivered"
+                : "Delivered (photo required)"}
+            </option>
+            <option value="paid">Order complete</option>
+          </select>
+          <button type="submit" className="project-clad-button">
+            Apply
+          </button>
+        </div>
+      </Form>
     );
   };
 
@@ -2910,7 +3110,7 @@ export default function ProjectDetailPage() {
             Provide a reason for the rejection. This will be included in the email sent to project members.
           </p>
           <form data-projectclad-reject-form className="project-clad-reject-form">
-            <label htmlFor="reject-reason">Reason (optional)</label>
+            <label htmlFor="reject-reason">Reason (required)</label>
             <textarea
               id="reject-reason"
               name="rejectReason"
@@ -3483,91 +3683,128 @@ export default function ProjectDetailPage() {
           <header className="project-clad-header">
             <ProjectCladStorefrontNav
               logoDataUrl={logoDataUrl}
-              logoHref="/"
+              logoHref="/apps/project-clad/projects"
               links={storefrontAppNav.links}
               cartUrl={storefrontAppNav.cartUrl}
               searchUrl={storefrontAppNav.searchUrl}
               accountUrl={storefrontAppNav.accountUrl}
               accountInitial={navAccountInitial}
+              inAppSearch="orders"
               shellExtra={
-                canAdminMembers ? (
-                  <div className="project-clad-header-slot project-clad-header-slot--left">
-                    <button
-                      type="button"
-                      className="project-clad-storefront-nav__icon-btn project-clad-storefront-nav__icon-btn--add-member"
-                      data-projectclad-add-member-popover-toggle
-                      aria-label="Add member"
-                      aria-haspopup="dialog"
-                      aria-expanded="false"
-                      aria-controls="projectclad-add-member-popover"
-                    >
-                      <svg
-                        className="project-clad-storefront-nav__icon"
-                        width={20}
-                        height={20}
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="9" cy="7" r="3.5" />
-                        <path d="M4 20v-0.5C4 16.5 6.5 14 10 14s6 2.5 6 5.5V20" />
-                        <path d="M19 8v6M16 11h6" />
-                      </svg>
-                    </button>
-                    <div
-                      id="projectclad-add-member-popover"
-                      className="project-clad-add-member-popover"
-                      data-projectclad-add-member-popover
-                      role="dialog"
-                      aria-label="Add project member"
-                      aria-hidden="true"
-                    >
-                      <Form
-                        id="projectclad-add-member-form-header"
-                        method="post"
-                        action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
-                        className="project-clad-inline-form"
-                        data-projectclad-member-form
-                        data-projectclad-member-intent="add-member"
-                        data-projectclad-project-id={project.id}
-                        data-projectclad-ajax
-                        data-projectclad-intent="add-member"
-                      >
-                        <input type="hidden" name="intent" value="add-member" />
-                        <label htmlFor="member-email-header">Email</label>
-                        <div className="project-clad-neu-finder-input">
-                          <div className="project-clad-neu-finder-input__well">
-                            <input
-                              id="member-email-header"
-                              name="email"
-                              type="email"
-                              className="project-clad-neu-finder-input__field"
-                              placeholder="customer@example.com"
-                              required
-                              autoComplete="email"
-                              aria-label="Customer email"
-                            />
-                          </div>
-                        </div>
-                        <label htmlFor="member-role-header-role-edit">Project member role</label>
-                        <MemberRoleSelect idPrefix="member-role-header" defaultValue="edit" />
+                canAdminMembers || canEdit ? (
+                  <div
+                    className="project-clad-header-slot project-clad-header-slot--left project-clad-header-slot--nav-tools"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {canAdminMembers ? (
+                      <>
                         <button
-                          type="submit"
-                          className="project-clad-button project-clad-reject-modal-btn"
+                          type="button"
+                          className="project-clad-storefront-nav__icon-btn project-clad-storefront-nav__icon-btn--add-member"
+                          data-projectclad-add-member-popover-toggle
+                          aria-label="Add member"
+                          aria-haspopup="dialog"
+                          aria-expanded="false"
+                          aria-controls="projectclad-add-member-popover"
                         >
-                          Add
+                          <svg
+                            className="project-clad-storefront-nav__icon"
+                            width={20}
+                            height={20}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <circle cx="9" cy="7" r="3.5" />
+                            <path d="M4 20v-0.5C4 16.5 6.5 14 10 14s6 2.5 6 5.5V20" />
+                            <path d="M19 8v6M16 11h6" />
+                          </svg>
                         </button>
-                        <span
-                          className="project-clad-muted"
-                          data-projectclad-form-message
-                          style={{ margin: 0, minHeight: "1.25em" }}
-                        />
-                      </Form>
-                    </div>
+                        <div
+                          id="projectclad-add-member-popover"
+                          className="project-clad-add-member-popover"
+                          data-projectclad-add-member-popover
+                          role="dialog"
+                          aria-label="Add project member"
+                          aria-hidden="true"
+                        >
+                          <Form
+                            id="projectclad-add-member-form-header"
+                            method="post"
+                            action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+                            className="project-clad-inline-form"
+                            data-projectclad-member-form
+                            data-projectclad-member-intent="add-member"
+                            data-projectclad-project-id={project.id}
+                            data-projectclad-ajax
+                            data-projectclad-intent="add-member"
+                          >
+                            <input type="hidden" name="intent" value="add-member" />
+                            <label htmlFor="member-email-header">Email</label>
+                            <div className="project-clad-neu-finder-input">
+                              <div className="project-clad-neu-finder-input__well">
+                                <input
+                                  id="member-email-header"
+                                  name="email"
+                                  type="email"
+                                  className="project-clad-neu-finder-input__field"
+                                  placeholder="customer@example.com"
+                                  required
+                                  autoComplete="email"
+                                  aria-label="Customer email"
+                                />
+                              </div>
+                            </div>
+                            <label htmlFor="member-role-header-role-edit">Project member role</label>
+                            <MemberRoleSelect idPrefix="member-role-header" defaultValue="edit" />
+                            <button
+                              type="submit"
+                              className="project-clad-button project-clad-reject-modal-btn"
+                            >
+                              Add
+                            </button>
+                            <span
+                              className="project-clad-muted"
+                              data-projectclad-form-message
+                              style={{ margin: 0, minHeight: "1.25em" }}
+                            />
+                          </Form>
+                        </div>
+                      </>
+                    ) : null}
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        className="project-clad-storefront-nav__icon-btn project-clad-storefront-nav__icon-btn--edit-project-details"
+                        data-projectclad-edit-project-details
+                        aria-label="Edit project details"
+                      >
+                        <svg
+                          className="project-clad-storefront-nav__icon"
+                          width={20}
+                          height={20}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={1.5}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.398.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.272-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z" />
+                          <path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                        </svg>
+                      </button>
+                    ) : null}
                   </div>
                 ) : null
               }
@@ -3643,25 +3880,19 @@ export default function ProjectDetailPage() {
                         {project.name}
                       </span>
                     </span>
-                    <span className="project-clad-project-meta-chip__dot" aria-hidden="true">
-                      •
-                    </span>
+                    <span className="project-clad-project-meta-chip__dot" aria-hidden="true" />
                     <span className="project-clad-project-meta-chip__part">
-                      <span className="project-clad-project-meta-chip__label">Project #:</span>{" "}
+                      <span className="project-clad-project-meta-chip__label">Project #</span>{" "}
                       {project.poNumber || "—"}
                     </span>
-                    <span className="project-clad-project-meta-chip__dot" aria-hidden="true">
-                      •
-                    </span>
+                    <span className="project-clad-project-meta-chip__dot" aria-hidden="true" />
                     <span className="project-clad-project-meta-chip__part">
                       <span className="project-clad-project-meta-chip__label">Company name:</span>{" "}
                       {project.companyName || "—"}
                     </span>
-                    <span className="project-clad-project-meta-chip__dot" aria-hidden="true">
-                      •
-                    </span>
+                    <span className="project-clad-project-meta-chip__dot" aria-hidden="true" />
                     <span className="project-clad-project-meta-chip__part">
-                      <span className="project-clad-project-meta-chip__label">Created:</span>{" "}
+                      <span className="project-clad-project-meta-chip__label">Created</span>{" "}
                       {new Date(project.createdAt).toLocaleDateString()}
                     </span>
                   </span>
@@ -3697,12 +3928,17 @@ export default function ProjectDetailPage() {
               )}
               {project.jobs.length === 0 ? (
                 <p className="project-clad-muted">No orders saved yet.</p>
+              ) : visibleJobs.length === 0 ? (
+                <p className="project-clad-muted">
+                  No orders match &ldquo;{orderListSearchQ}&rdquo;. Adjust the search or clear it from
+                  the header.
+                </p>
               ) : (
                 <div
                   id="project-clad-orders-font-scope"
                   className="project-clad-grid project-clad-orders-shell__list"
                 >
-                  {jobs.map((job) => {
+                  {visibleJobs.map((job) => {
                     const workOrderShellClass =
                       getJobApprovalInfo(job.id) &&
                       job.workOrderStatus !== "complete"
@@ -3847,14 +4083,14 @@ export default function ProjectDetailPage() {
                         </div>
                         <div className="project-clad-order-summary-head-end">
                           <div className="project-clad-order-summary-head-row__subtotal">
-                            <span className="project-clad-muted">Total: </span>
+                            <span className="project-clad-muted">Subtotal: </span>
                             {pricingUnlocked ? (
                               <span
                                 className="project-clad-order-summary-qty__sub-amount"
                                 data-projectclad-price
-                                data-price={jobTotalWithDisplayTax.toFixed(2)}
+                                data-price={job.subtotal.toFixed(2)}
                               >
-                                {formatPrice(jobTotalWithDisplayTax.toFixed(2))}
+                                {formatPrice(job.subtotal.toFixed(2))}
                               </span>
                             ) : (
                               <button
@@ -3866,139 +4102,24 @@ export default function ProjectDetailPage() {
                               </button>
                             )}
                           </div>
-                          {canEdit ? (
-                            (() => {
-                              const ls = job.orderLifecycleStatus;
-                              const approval = getApprovalStatus(job.id, "");
-                              /** Strict true — avoids truthy non-booleans from any serialization edge case. */
-                              const viewerUsesNAReviewFlow =
-                                viewerHasNATag === true;
-                              /** Non-NA customers (and app admins) order without the review gate. */
-                              const skipReviewOrderFlow =
-                                !viewerUsesNAReviewFlow || viewerIsAdmin;
-                              if (ls === "paid") {
-                                return (
-                                  <button type="button" className="project-clad-button" disabled>
-                                    Order complete
-                                  </button>
-                                );
-                              }
-                              if (ls === "delivered") {
-                                return (
-                                  <button type="button" className="project-clad-button" disabled>
-                                    Delivered
-                                  </button>
-                                );
-                              }
-                              if (ls === "ordered") {
-                                return (
-                                  <button type="button" className="project-clad-button" disabled>
-                                    Ordered
-                                  </button>
-                                );
-                              }
-                              if (
-                                (ls === "ready_to_order" &&
-                                  (approval === "approved" ||
-                                    skipReviewOrderFlow)) ||
-                                (ls === "draft" && skipReviewOrderFlow)
-                              ) {
-                                return (
-                                  <div
-                                    className="project-clad-inline-form"
-                                    style={{
-                                      display: "flex",
-                                      flexDirection: "column",
-                                      alignItems: "flex-start",
-                                      gap: "0.35rem",
-                                    }}
-                                  >
-                                    <button
-                                      type="button"
-                                      className="project-clad-button"
-                                      data-projectclad-order-now-submit
-                                      data-job-id={job.id}
-                                      data-has-delivery={
-                                        isDeliveryCompleteForOrderNow
-                                          ? "1"
-                                          : "0"
-                                      }
-                                      disabled={
-                                        orderNowSubmittingJobId === job.id
-                                      }
-                                    >
-                                      {orderNowSubmittingJobId === job.id
-                                        ? "Placing…"
-                                        : "Order now"}
-                                    </button>
-                                    {project.receiveMode === "delivery" &&
-                                    !hasCompleteDeliveryAddress ? (
-                                      <span
-                                        className="project-clad-muted"
-                                        style={{
-                                          maxWidth: "16rem",
-                                          fontSize: "0.82rem",
-                                          lineHeight: 1.4,
-                                        }}
-                                      >
-                                        No delivery details on file — order will
-                                        be placed as{" "}
-                                        <strong>store pickup</strong>.
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                );
-                              }
-                              if (
-                                viewerUsesNAReviewFlow &&
-                                ls !== "ready_to_order" &&
-                                ls !== "ordered" &&
-                                ls !== "delivered" &&
-                                ls !== "paid"
-                              ) {
-                                const intent =
-                                  approval === "awaiting"
-                                    ? "cancel-approval-request"
-                                    : "submit-for-approval";
-                                const label =
-                                  approval === "awaiting"
-                                    ? "Confirming order"
-                                    : "Send for review";
-                                return (
-                                  <form
-                                    method="get"
-                                    action="/apps/project-clad/api/project-actions"
-                                    className="project-clad-inline-form"
-                                    data-projectclad-ajax
-                                    data-projectclad-intent={intent}
-                                    data-projectclad-project-id={project.id}
-                                    onPointerDownCapture={(event) => event.stopPropagation()}
-                                  >
-                                    <input type="hidden" name="jobId" value={job.id} />
-                                    <button
-                                      type="submit"
-                                      className="project-clad-button"
-                                    >
-                                      {label}
-                                    </button>
-                                    <span
-                                      className="project-clad-muted"
-                                      data-projectclad-form-message
-                                    />
-                                  </form>
-                                );
-                              }
-                              return (
-                                <span className="project-clad-muted">
-                                  {orderLifecycleLabel(ls)}
-                                </span>
-                              );
-                            })()
-                          ) : (
-                            <span className="project-clad-muted">
-                              {orderLifecycleLabel(job.orderLifecycleStatus)}
-                            </span>
-                          )}
+                          <div
+                            className="project-clad-order-summary-lifecycle-cluster"
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              alignItems: "center",
+                              justifyContent: "flex-end",
+                              gap: "0.5rem 0.75rem",
+                            }}
+                          >
+                            {canEdit ? (
+                              renderOrderLifecycleCustomerSummaryActions(job)
+                            ) : (
+                              <span className="project-clad-muted">
+                                {orderLifecycleLabel(job.orderLifecycleStatus)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </summary>
@@ -4722,22 +4843,34 @@ export default function ProjectDetailPage() {
                             </span>
                           </div>
                         ) : null}
-                        {showEditOrderButton ? (
-                          <div
-                            className="project-clad-actions project-clad-order-actions-left"
-                            style={{ flexWrap: "wrap", gap: "0.75rem", flex: "0 0 auto" }}
-                          >
-                            <button
-                              type="button"
-                              className="project-clad-button"
-                              data-projectclad-edit-order
-                              data-job-id={job.id}
-                              data-project-id={project.id}
-                            >
-                              Edit order
-                            </button>
+                        <div
+                          className="project-clad-order-actions-lifecycle-row"
+                          style={{
+                            display: "flex",
+                            flexDirection: "row",
+                            flexWrap: "nowrap",
+                            alignItems: "center",
+                            justifyContent: "flex-end",
+                            flex: "1 1 auto",
+                            minWidth: 0,
+                            marginLeft: preferredDeliveryLine ? "auto" : undefined,
+                          }}
+                        >
+                          <div className="project-clad-order-actions-customer-inline">
+                            {canEdit ? renderOrderLifecycleCustomerSummaryActions(job) : null}
+                            {showEditOrderButton ? (
+                              <button
+                                type="button"
+                                className="project-clad-button"
+                                data-projectclad-edit-order
+                                data-job-id={job.id}
+                                data-project-id={project.id}
+                              >
+                                Edit order
+                              </button>
+                            ) : null}
                           </div>
-                        ) : null}
+                        </div>
                       </div>
                       {!showLineItemEditPanel ? deliveryScheduleForm : null}
                       {showLineItemEditPanel ? (
@@ -4762,45 +4895,7 @@ export default function ProjectDetailPage() {
                               maxWidth: "32rem",
                             }}
                           >
-                            <Form
-                              method="post"
-                              action={`/apps/project-clad/project?id=${project.id}`}
-                              className="project-clad-staff-fulfillment-status-form"
-                            >
-                              <input type="hidden" name="intent" value="staff-set-order-lifecycle" />
-                              <input type="hidden" name="jobId" value={job.id} />
-                              <div className="project-clad-staff-fulfillment-status-row">
-                                <label
-                                  className="project-clad-staff-fulfillment__label--tile"
-                                  htmlFor={`project-clad-staff-status-${job.id}`}
-                                >
-                                  Order status
-                                </label>
-                                <select
-                                  id={`project-clad-staff-status-${job.id}`}
-                                  name="lifecycleStatus"
-                                  defaultValue={job.orderLifecycleStatus}
-                                  className="project-clad-staff-fulfillment__status"
-                                >
-                                  <option value="draft">New</option>
-                                  <option value="pending_review">Review</option>
-                                  <option value="ready_to_order">Order now</option>
-                                  <option value="ordered">Ordered</option>
-                                  <option
-                                    value="delivered"
-                                    disabled={!job.hasFulfillmentPhoto}
-                                  >
-                                    {job.hasFulfillmentPhoto
-                                      ? "Delivered"
-                                      : "Delivered (photo required)"}
-                                  </option>
-                                  <option value="paid">Order complete</option>
-                                </select>
-                                <button type="submit" className="project-clad-button">
-                                  Apply
-                                </button>
-                              </div>
-                            </Form>
+                            {staffOrderLifecycleStatusForm(job)}
                             {job.orderLifecycleStatus === "ordered" ? (
                               <StaffFulfillmentPhotoUpload job={job} projectId={project.id} />
                             ) : null}
@@ -5474,41 +5569,11 @@ export default function ProjectDetailPage() {
     if (editSaveNo) {
       const modal = document.querySelector('[data-projectclad-edit-save-modal]');
       const jobId = modal?.getAttribute?.('data-pending-job-id') || '';
-      if (jobId) {
-        const details = document.querySelector('details[data-job-id="' + jobId + '"]');
-        if (details) {
-          details.classList.remove('project-clad-edit-mode', 'project-clad-pending-delete');
-          const nameSpans = details.querySelectorAll('[data-projectclad-item-name]');
-          nameSpans.forEach(function(span) {
-            const name = span.getAttribute('data-display-name');
-            if (name) span.textContent = name;
-          });
-          const qtyInputs = details.querySelectorAll('[data-projectclad-qty-input]');
-          qtyInputs.forEach(function(inp) {
-            const orig = inp.getAttribute('data-original-qty');
-            if (orig !== null) inp.value = orig;
-          });
-          const nameInput = details.querySelector('[data-projectclad-job-name-input]');
-          if (nameInput instanceof HTMLInputElement) {
-            const origName = nameInput.getAttribute('data-original-job-name');
-            if (origName !== null) nameInput.value = origName;
-          }
-          const poInputRestore = details.querySelector('[data-projectclad-purchase-order-input]');
-          if (poInputRestore instanceof HTMLInputElement) {
-            const origPo = poInputRestore.getAttribute('data-original-purchase-order');
-            if (origPo !== null) poInputRestore.value = origPo;
-          }
-        }
-        const deleteBtn = details?.querySelector('[data-projectclad-delete-order-btn]');
-        if (deleteBtn) {
-          deleteBtn.textContent = 'Delete order';
-          deleteBtn.disabled = false;
-        }
-        editingJobId = null;
-        editRemovedItemIds[jobId] = [];
-        editPendingDeleteJobId = null;
-      }
       if (modal instanceof HTMLElement) modal.style.display = 'none';
+      editingJobId = null;
+      editPendingDeleteJobId = null;
+      if (jobId) editRemovedItemIds[jobId] = [];
+      window.location.reload();
     }
   });
 
@@ -5518,6 +5583,10 @@ export default function ProjectDetailPage() {
       const errEl = rejectForm.querySelector('[data-projectclad-reject-form-error]');
       if (errEl) errEl.textContent = '';
       const reason = rejectReasonInput instanceof HTMLTextAreaElement ? rejectReasonInput.value.trim() : '';
+      if (!reason) {
+        if (errEl) errEl.textContent = 'Please enter a rejection reason.';
+        return;
+      }
       try {
         const res = await fetch(actionsEndpoint, {
           method: 'POST',
@@ -5914,6 +5983,9 @@ export default function ProjectDetailPage() {
     document.body.classList.add('project-clad-leaving');
     setTimeout(function() { window.location.href = href; }, 180);
   }, true);
+  window.addEventListener('pageshow', function(ev) {
+    if (ev.persisted) window.location.reload();
+  });
 })();
           `,
         }}

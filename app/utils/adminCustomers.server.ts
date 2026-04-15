@@ -65,6 +65,8 @@ export type CustomerInfo = {
   email: string | null;
   firstName: string | null;
   lastName: string | null;
+  /** From default address when present (Admin API). */
+  phone: string | null;
   tags: string[];
 };
 
@@ -204,6 +206,9 @@ export const getCustomersByIds = async (
                 firstName
                 lastName
                 tags
+                defaultAddress {
+                  phone
+                }
               }
             }
           }
@@ -230,6 +235,7 @@ export const getCustomersByIds = async (
           firstName?: string | null;
           lastName?: string | null;
           tags?: string[];
+          defaultAddress?: { phone?: string | null } | null;
         } | null>;
       };
       errors?: Array<{ message?: string }>;
@@ -250,6 +256,7 @@ export const getCustomersByIds = async (
         email: node.email ?? null,
         firstName: node.firstName ?? null,
         lastName: node.lastName ?? null,
+        phone: node.defaultAddress?.phone?.trim() || null,
         tags: normalizeShopifyTagsField(node.tags),
       };
     });
@@ -331,20 +338,22 @@ export const listCustomers = async (
 
   const edges = payload.data?.customers?.edges || [];
   return edges
-    .map((edge) => {
+    .map((edge): CustomerInfo | null => {
       const node = edge.node;
       if (!node?.id) return null;
       const parts = node.id.split("/");
       const id = parts[parts.length - 1];
-      return {
+      const row: CustomerInfo = {
         id,
         email: node.email ?? null,
         firstName: node.firstName ?? null,
         lastName: node.lastName ?? null,
+        phone: null,
         tags: normalizeShopifyTagsField(node.tags),
       };
+      return row;
     })
-    .filter((customer): customer is CustomerInfo => Boolean(customer));
+    .filter((customer): customer is CustomerInfo => customer != null);
 };
 
 /**

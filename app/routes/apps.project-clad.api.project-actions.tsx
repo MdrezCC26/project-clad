@@ -18,11 +18,11 @@ import {
   isProjectMember,
   shopStringFilter,
 } from "../utils/projectAccess.server";
+import { dedupeEmailAddresses, isEmailConfigured } from "../utils/email.server";
 import {
-  dedupeEmailAddresses,
-  isEmailConfigured,
-  sendEmail,
-} from "../utils/email.server";
+  sendTransactionalEmail,
+  sendTransactionalEmailToRecipients,
+} from "../utils/transactionalEmail.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
 import {
@@ -372,19 +372,43 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     if (itemId) approveQuery.set("approveItemId", itemId);
     const approveLink = `https://${shop}/apps/project-clad/project?${approveQuery.toString()}`;
 
-    const subject = `Approval request: ${contextLabel}`;
-    const text = `${requesterName} has submitted the following for approval: ${contextLabel}\n\nView and approve: ${approveLink}`;
-
-    try {
-      for (const to of dedupeEmailAddresses(approverEmails)) {
-        await sendEmail({ to, subject, text });
+    let orderLine = "—";
+    let jobPoLine = "—";
+    if (jobId) {
+      const jobRow = await prisma.job.findFirst({
+        where: { id: jobId, projectId },
+        select: { name: true, purchaseOrderNumber: true },
+      });
+      if (jobRow) {
+        orderLine = jobRow.name;
+        jobPoLine = jobRow.purchaseOrderNumber?.trim() || "—";
       }
-    } catch (err) {
+    }
+    const projectNumDisplay = (project.poNumber ?? "").trim() || "—";
+
+    const subject = `Approval request: ${contextLabel}`;
+    const text = [
+      `${requesterName} has submitted the following for review:`,
+      ``,
+      `Project: ${project.name}`,
+      `Order: ${orderLine}`,
+      `Project # ${projectNumDisplay}`,
+      `PO Number: ${jobPoLine}`,
+      ``,
+      `Reminder! Add your address in EDIT PROJECT DETAILS to qualify for $15 shipping!`,
+      ``,
+      `Review your order: ${approveLink}`,
+    ].join("\n");
+
+    const sent = await sendTransactionalEmailToRecipients({
+      shop,
+      recipients: dedupeEmailAddresses(approverEmails),
+      subject,
+      text,
+    });
+    if (sent === 0) {
       return Response.json(
-        {
-          error:
-            err instanceof Error ? err.message : "Failed to send approval request.",
-        },
+        { error: "Failed to send approval request. Check SMTP logs and recipient addresses." },
         { status: 500 },
       );
     }
@@ -774,12 +798,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               .join("\n") +
             "\n"
           : "";
-      const text = `${approverName} has approved: ${contextLabel}${itemsList}\nView project: ${projectLink}`;
+      const text = `${approverName} has approved: ${contextLabel}${itemsList}\nOpen project: ${projectLink}`;
 
       try {
-        for (const to of dedupeEmailAddresses(memberEmails)) {
-          await sendEmail({ to, subject, text });
-        }
+        await sendTransactionalEmailToRecipients({
+          shop,
+          recipients: dedupeEmailAddresses(memberEmails),
+          subject,
+          text,
+        });
       } catch (err) {
         console.error("Approval notification email error:", err);
       }
@@ -813,6 +840,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent !== "cancel-approval-request" || !projectId) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  if (!rejectReason) {
+    return Response.json(
+      { error: "A rejection reason is required." },
+      { status: 400 },
+    );
   }
 
   const project = await prisma.project.findFirst({
@@ -952,17 +986,44 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       .map((id) => customerInfo[id]?.email)
       .filter((e): e is string => Boolean(e?.trim()));
 
+    let orderLine = "—";
+    let jobPoLine = "—";
+    if (jobId) {
+      const jobRow = await prisma.job.findFirst({
+        where: { id: jobId, projectId },
+        select: { name: true, purchaseOrderNumber: true },
+      });
+      if (jobRow) {
+        orderLine = jobRow.name;
+        jobPoLine = jobRow.purchaseOrderNumber?.trim() || "—";
+      }
+    }
+    const projectNumDisplay = (project.poNumber ?? "").trim() || "—";
+    const companyDisplay = (project.companyName ?? "").trim() || "—";
+
     const subject = `Order rejected: ${contextLabel}`;
-    const reasonText = rejectReason
-      ? `\n\nRejection reason:\n${rejectReason}\n`
-      : "";
-    const text =
-      `${rejectorName} has rejected: ${contextLabel}${reasonText}\nView project: ${projectLink}`;
+    const text = [
+      `${rejectorName} has rejected this submission for review:`,
+      ``,
+      `Project: ${project.name}`,
+      `Order: ${orderLine}`,
+      `Project # ${projectNumDisplay}`,
+      `PO Number: ${jobPoLine}`,
+      `Company: ${companyDisplay}`,
+      ``,
+      `Rejection reason:`,
+      rejectReason,
+      ``,
+      `Open project: ${projectLink}`,
+    ].join("\n");
 
     try {
-      for (const to of dedupeEmailAddresses(memberEmails)) {
-        await sendEmail({ to, subject, text });
-      }
+      await sendTransactionalEmailToRecipients({
+        shop,
+        recipients: dedupeEmailAddresses(memberEmails),
+        subject,
+        text,
+      });
     } catch (err) {
       console.error("Rejection notification email error:", err);
     }

@@ -16,13 +16,13 @@ export type ShopSettingsNavSlice = {
   storefrontNavLinksJson: string | null;
 };
 
-/** Example for admin placeholder — adjust URLs to match your theme. */
+/** Example for admin placeholder — Canadian Cladding storefront paths (same host as app proxy). */
 export const STOREFRONT_APP_NAV_JSON_PLACEHOLDER = `[
   { "label": "HOME", "url": "/" },
   { "label": "SHOP", "url": "/collections/main-products" },
-  { "label": "CUSTOM PART", "url": "/pages/custom-part" },
+  { "label": "CUSTOM PART", "url": "/pages/custompart" },
   { "label": "PROJECTS", "url": "/apps/project-clad/projects" },
-  { "label": "COLOURS", "url": "/collections/colours" },
+  { "label": "COLOURS", "url": "/pages/colours" },
   { "label": "CONTACT", "url": "/pages/contact" }
 ]`;
 
@@ -67,9 +67,9 @@ export function defaultStorefrontAppNavLinks(
   return [
     { label: "HOME", url: "/" },
     { label: shopLabel.toUpperCase(), url: shopUrl },
-    { label: "CUSTOM PART", url: "/pages/custom-part" },
+    { label: "CUSTOM PART", url: "/pages/custompart" },
     { label: projectsLabel.toUpperCase(), url: projectsUrl },
-    { label: "COLOURS", url: "/collections/colours" },
+    { label: "COLOURS", url: "/pages/colours" },
     { label: "CONTACT", url: "/pages/contact" },
   ];
 }

@@ -32,7 +32,14 @@ export type SendEmailOptions = {
   subject: string;
   text?: string;
   html?: string;
-  attachments?: Array<{ filename: string; content: string | Buffer }>;
+  /** Nodemailer attachments (CSV export, inline `cid:` images, etc.). */
+  attachments?: Array<{
+    filename: string;
+    content: string | Buffer;
+    cid?: string;
+    contentDisposition?: "inline" | "attachment";
+    contentType?: string;
+  }>;
 };
 
 /**

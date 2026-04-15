@@ -324,12 +324,14 @@ body.cc-store-neu #header-component .header__drawer {
   }
 
   /*
-   * First-paint hero: own compositor layer so scroll + rubber-band doesn’t thrash repaints with the
-   * header overlap margin (pairs with debounced --header-group-height in header.js).
+   * Desktop only: promote hero media to its own layer (pairs with debounced --header-group-height).
+   * On phones, translateZ(0) + dynamic viewport chrome often reads as a subtle zoom/stutter — skip there.
    */
-  body.cc-store-neu .content-for-layout > .shopify-section.hero-wrapper:first-child .hero__media-grid {
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
+  @media screen and (min-width: 750px) {
+    body.cc-store-neu .content-for-layout > .shopify-section.hero-wrapper:first-child .hero__media-grid {
+      transform: translateZ(0);
+      -webkit-transform: translateZ(0);
+    }
   }
 
   /*

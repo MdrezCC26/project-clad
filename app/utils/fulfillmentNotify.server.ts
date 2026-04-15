@@ -1,10 +1,12 @@
 import prisma from "../db.server";
-import { getCustomersByIds } from "./adminCustomers.server";
 import {
-  dedupeEmailAddresses,
-  isEmailConfigured,
-  sendEmail,
-} from "./email.server";
+  getCustomersByIds,
+  type CustomerInfo,
+} from "./adminCustomers.server";
+import { customerFacingPropertiesIndentedBlock } from "./customerFacingEmailLines.server";
+import { isEmailConfigured } from "./email.server";
+import { sendTransactionalEmail } from "./transactionalEmail.server";
+import { formatPreferredDeliveryDisplay } from "./preferredDeliveryFormat";
 import {
   buildVariantPresentation,
   parseVariantSnapshot,
@@ -12,7 +14,6 @@ import {
   type VariantDisplayInfo,
 } from "./variantInfo.server";
 import { shopStringFilter } from "./projectAccess.server";
-import { formatPreferredDeliveryDisplay } from "./preferredDeliveryFormat";
 
 function formatMoney(amount: number): string {
   if (Number.isNaN(amount)) return "$0.00";
@@ -21,15 +22,17 @@ function formatMoney(amount: number): string {
 
 const DEFAULT_FINANCE_EMAIL = "michaeldrezin@canadiancladding.ca";
 
-function parseFinanceEmails(): string[] {
-  const raw =
-    process.env.PROJECTCLAD_FINANCE_EMAIL?.trim() || DEFAULT_FINANCE_EMAIL;
-  return dedupeEmailAddresses(
-    raw
+/** Single finance mailbox for delivered / invoice mail (env may override first address only). */
+function financeDeliveryInvoiceRecipient(): string {
+  const raw = process.env.PROJECTCLAD_FINANCE_EMAIL?.trim();
+  if (raw) {
+    const first = raw
       .split(/[,;]+/)
       .map((s) => s.trim())
-      .filter(Boolean),
-  );
+      .find(Boolean);
+    if (first) return first;
+  }
+  return DEFAULT_FINANCE_EMAIL;
 }
 
 function shippingBlock(project: {
@@ -55,8 +58,60 @@ function shippingBlock(project: {
   return lines.length ? ["Ship to:", ...lines.map((l) => `  ${l}`)].join("\n") : "Ship to: (not on file)";
 }
 
+function buildDeliveredLineItemsAndSubtotal(args: {
+  shop: string;
+  items: Array<{
+    variantId: string;
+    quantity: number;
+    priceSnapshot: { toString(): string } | number | string;
+    customData: unknown;
+    variantSnapshot: unknown;
+  }>;
+  live: Record<string, VariantDisplayInfo>;
+}): { blocks: string[]; subtotal: number } {
+  let subtotal = 0;
+  const blocks: string[] = [];
+  args.items.forEach((row, index) => {
+    const unit = Number(row.priceSnapshot?.toString?.() ?? row.priceSnapshot ?? 0);
+    const lineTotal = unit * row.quantity;
+    subtotal += lineTotal;
+    const props =
+      row.customData && Array.isArray(row.customData)
+        ? (row.customData as { name: string; value: string }[])
+        : null;
+    const snap = parseVariantSnapshot(row.variantSnapshot);
+    const pres = buildVariantPresentation({
+      shop: args.shop,
+      variantId: row.variantId,
+      live: args.live[row.variantId],
+      snapshot: snap,
+    });
+    const propBlock = customerFacingPropertiesIndentedBlock(props);
+    blocks.push(
+      [
+        `${index + 1}. ${pres.displayName}`,
+        `   Qty ${row.quantity} × ${formatMoney(unit)} = ${formatMoney(lineTotal)}`,
+        propBlock || null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  });
+  return { blocks, subtotal };
+}
+
+function formatProjectNumberLine(poNumber?: string | null): string {
+  const v = (poNumber ?? "").trim();
+  return `Project # ${v || "—"}`;
+}
+
+function formatJobPoLine(jobPurchaseOrderNumber?: string | null): string {
+  const v = (jobPurchaseOrderNumber ?? "").trim();
+  return `PO Number: ${v || "—"}`;
+}
+
 /**
- * After fulfillment photo: same detail text to project owner and to finance (separate sends).
+ * After fulfillment photo: owner gets customer-facing delivered copy; finance gets invoice-oriented copy.
  * Idempotent caller should set fulfillmentNotifiedAt only after success.
  */
 export async function sendFulfillmentPackageEmails(args: {
@@ -93,22 +148,10 @@ export async function sendFulfillmentPackageEmails(args: {
     }
   }
 
-  let subtotal = 0;
-  const lineTexts: string[] = [];
-  job.items.forEach((row, index) => {
-    const unit = Number(row.priceSnapshot);
-    const lineTotal = unit * row.quantity;
-    subtotal += lineTotal;
-    const snap = parseVariantSnapshot(row.variantSnapshot);
-    const pres = buildVariantPresentation({
-      shop: args.shop,
-      variantId: row.variantId,
-      live: live[row.variantId],
-      snapshot: snap,
-    });
-    lineTexts.push(
-      `${index + 1}. ${pres.displayName} — Qty ${row.quantity} × ${formatMoney(unit)} = ${formatMoney(lineTotal)}`,
-    );
+  const { blocks: lineBlocks, subtotal } = buildDeliveredLineItemsAndSubtotal({
+    shop: args.shop,
+    items: job.items,
+    live,
   });
 
   const delivery = 0;
@@ -119,22 +162,30 @@ export async function sendFulfillmentPackageEmails(args: {
     job.scheduledDeliveryDate,
     job.scheduledDeliveryWindow,
   );
-  const scheduleParts = prefLine ? [prefLine] : [];
+  const scheduleParts = prefLine ? [prefLine, ``] : [];
 
   const projectUrl = `https://${args.shop}/apps/project-clad/project?id=${encodeURIComponent(args.projectId)}`;
 
-  const body = [
-    `Order fulfilled — ${job.name}`,
+  const isDelivery =
+    String(job.fulfillmentMethod || "").trim().toLowerCase() === "delivery";
+  const locationBlock = isDelivery
+    ? [shippingBlock(project), ``]
+    : [`Fulfillment: Store pickup`, ``];
+
+  const headerBlock = [
+    `Your order has been delivered!`,
     ``,
     `Project: ${project.name}`,
-    `Project ID: ${project.id}`,
-    `Order ID: ${job.id}`,
+    `Order: ${job.name}`,
+    formatProjectNumberLine(project.poNumber),
+    formatJobPoLine(job.purchaseOrderNumber),
+    `Company: ${(project.companyName ?? "").trim() || "—"}`,
+    ``,
     ...scheduleParts,
-    ``,
-    shippingBlock(project),
-    ``,
+    ...locationBlock,
     `Line items:`,
-    lineTexts.join("\n") || "(none)",
+    ``,
+    lineBlocks.join("\n\n") || "(none)",
     ``,
     `Subtotal: ${formatMoney(subtotal)}`,
     `Delivery: ${formatMoney(delivery)}`,
@@ -143,25 +194,73 @@ export async function sendFulfillmentPackageEmails(args: {
     ``,
     `View in Projects: ${projectUrl}`,
     ``,
-  ].join("\n");
+  ];
+
+  const ownerBody = headerBlock.join("\n");
 
   const ownerId = project.ownerCustomerId;
   let ownerEmail: string | null = null;
+  let ownerCustomerRow: CustomerInfo | undefined;
   try {
     const info = await getCustomersByIds(args.shop, [ownerId]);
-    ownerEmail = info[ownerId]?.email?.trim() || null;
+    ownerCustomerRow = info[ownerId];
+    ownerEmail = ownerCustomerRow?.email?.trim() || null;
   } catch {
     ownerEmail = null;
   }
 
+  const ownerName =
+    [ownerCustomerRow?.firstName, ownerCustomerRow?.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || "—";
+  const ownerCustEmail = ownerCustomerRow?.email?.trim() || "—";
+  const ownerPhone = (ownerCustomerRow?.phone ?? "").trim() || "—";
+
+  const financeBody = [
+    `This order has been delivered. Please proceed with the invoice for this order.`,
+    ``,
+    `Customer details`,
+    `Customer name: ${ownerName}`,
+    `Email: ${ownerCustEmail}`,
+    `Phone: ${ownerPhone}`,
+    `Company on project: ${(project.companyName ?? "").trim() || "—"}`,
+    ``,
+    `Project / order`,
+    `Project: ${project.name}`,
+    formatProjectNumberLine(project.poNumber),
+    `Order: ${job.name}`,
+    formatJobPoLine(job.purchaseOrderNumber),
+    ``,
+    isDelivery ? `${shippingBlock(project)}` : `Fulfillment: Store pickup`,
+    ``,
+    `Line items:`,
+    ``,
+    lineBlocks.join("\n\n") || "(none)",
+    ``,
+    `Subtotal: ${formatMoney(subtotal)}`,
+    `Delivery: ${formatMoney(delivery)}`,
+    `Tax: ${formatMoney(tax)}`,
+    `Total: ${formatMoney(total)}`,
+    ``,
+    `View project (ProjectClad): ${projectUrl}`,
+    ``,
+  ].join("\n");
+
   const subject = `ProjectClad: Order delivered — ${project.name} · ${job.name}`;
 
   const ownerNorm = ownerEmail?.trim().toLowerCase() ?? "";
-  const financeTos = parseFinanceEmails();
+  const financeTo = financeDeliveryInvoiceRecipient().trim();
+  const financeNorm = financeTo.toLowerCase();
 
   if (ownerEmail) {
     try {
-      await sendEmail({ to: ownerEmail, subject, text: body });
+      await sendTransactionalEmail({
+        shop: args.shop,
+        to: ownerEmail,
+        subject,
+        text: ownerBody,
+      });
     } catch (err) {
       console.error(
         "[fulfillmentNotify] owner send failed:",
@@ -171,13 +270,14 @@ export async function sendFulfillmentPackageEmails(args: {
     }
   }
 
-  for (const to of financeTos) {
-    const nt = to.trim().toLowerCase();
-    if (nt && nt === ownerNorm) {
-      continue;
-    }
+  if (financeTo && financeNorm !== ownerNorm) {
     try {
-      await sendEmail({ to, subject: `${subject} [finance]`, text: body });
+      await sendTransactionalEmail({
+        shop: args.shop,
+        to: financeTo,
+        subject: `ProjectClad: Finance — Order delivered — ${project.name} · ${job.name}`,
+        text: financeBody,
+      });
     } catch (err) {
       console.error(
         "[fulfillmentNotify] finance send failed:",

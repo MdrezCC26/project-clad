@@ -1,5 +1,13 @@
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "react-router";
-import { Outlet, redirect, useLoaderData, useLocation } from "react-router";
+import {
+  Link,
+  Outlet,
+  redirect,
+  useLoaderData,
+  useLocation,
+  useSearchParams,
+} from "react-router";
+import { useMemo } from "react";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import {
@@ -8,7 +16,8 @@ import {
   type CustomerInfo,
 } from "../utils/adminCustomers.server";
 import { getCsvForProjectIds } from "../utils/exportProjectsCsv.server";
-import { isEmailConfigured, sendEmail } from "../utils/email.server";
+import { isEmailConfigured } from "../utils/email.server";
+import { sendTransactionalEmail } from "../utils/transactionalEmail.server";
 import {
   buildVariantPresentation,
   parseVariantSnapshot,
@@ -59,6 +68,25 @@ type ProjectListItem = {
     }[];
   }[];
 };
+
+function projectListItemMatchesQuery(project: ProjectListItem, qRaw: string): boolean {
+  const q = qRaw.trim().toLowerCase();
+  if (!q) return true;
+  const parts = q.split(/\s+/).filter(Boolean);
+  const hay = [
+    project.name,
+    project.poNumber || "",
+    project.companyName || "",
+    String(project.jobCount),
+    ...project.jobs.flatMap((job) => [
+      job.name,
+      ...job.items.map((item) => item.displayName),
+    ]),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return parts.every((part) => hay.includes(part));
+}
 
 const buildProjectCartItems = (jobs: ProjectListItem["jobs"]) => {
   const totals = new Map<string, number>();
@@ -309,11 +337,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (isEmailConfigured()) {
     try {
       const csv = await getCsvForProjectIds(shop, [projectId]);
-      await sendEmail({
+      await sendTransactionalEmail({
+        shop,
         to: backupEmail,
         subject: `ProjectClad project export: ${project.name}`,
         text: `Your project "${project.name}" has been deleted.`,
-        attachments: [
+        extraAttachments: [
           {
             filename: `projectclad-${project.name.replace(/[^a-z0-9-_]/gi, "-")}.csv`,
             content: csv,
@@ -343,6 +372,12 @@ export default function ProjectsPage() {
   } = useLoaderData<typeof loader>();
   const inlineStyles = themeStyles?.styles || [];
   const { pathname } = useLocation();
+  const [searchParams] = useSearchParams();
+  const listSearchQ = (searchParams.get("q") || "").trim();
+  const filteredProjects = useMemo(
+    () => projects.filter((p) => projectListItemMatchesQuery(p, listSearchQ)),
+    [projects, listSearchQ],
+  );
   /** Nested legacy route `apps.project-clad.projects.$projectId` — parent must render `<Outlet />`. */
   const isNestedProjectDetail = /\/apps\/project-clad\/projects\/[^/?#]+/.test(
     pathname,
@@ -380,6 +415,7 @@ export default function ProjectsPage() {
               searchUrl={storefrontAppNav.searchUrl}
               accountUrl={storefrontAppNav.accountUrl}
               accountInitial={navAccountInitial}
+              inAppSearch="projects"
             />
           </header>
           {variantLookupError && (
@@ -391,9 +427,19 @@ export default function ProjectsPage() {
                 You have not saved any projects yet.
               </p>
             </section>
+          ) : filteredProjects.length === 0 ? (
+            <section className="project-clad-card">
+              <p className="project-clad-muted">
+                No projects match &ldquo;{listSearchQ}&rdquo;. Try different words or{" "}
+                <Link to="/apps/project-clad/projects" className="project-clad-hidden-link" style={{ textDecoration: "underline" }}>
+                  clear the search
+                </Link>
+                .
+              </p>
+            </section>
           ) : (
             <section className="project-clad-grid">
-              {projects.map((project) => (
+              {filteredProjects.map((project) => (
                 <div
                   key={project.id}
                   className={`project-clad-card${project.approvalStatus.requested ? " project-clad-card--confirming" : ""}`}
