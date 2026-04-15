@@ -29,6 +29,9 @@ export default async function handleRequest(
         "private, no-store, no-cache, max-age=0, must-revalidate",
       );
       responseHeaders.set("Pragma", "no-cache");
+      /* Shopify / some CDNs honor this in addition to Cache-Control */
+      responseHeaders.set("CDN-Cache-Control", "no-store");
+      responseHeaders.set("Surrogate-Control", "no-store");
     }
   } catch {
     // ignore malformed request URL
