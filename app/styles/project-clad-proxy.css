@@ -2839,12 +2839,23 @@ html:has(.project-clad-page--projects) body {
     --pc-storefront-nav-cluster-gap: 0.32rem;
   }
 
-  .project-clad-storefront-nav__shell {
+  /*
+   * Wide tray only. Stacked mobile shell (__shell--compact-stacked) needs row-gap between
+   * logo row and icon row; a global row-gap:0 here removed that gap and let scaled logos overlap buttons.
+   */
+  .project-clad-storefront-nav__shell:not(.project-clad-storefront-nav__shell--compact-stacked) {
     flex-wrap: nowrap;
     column-gap: 0.4rem;
     row-gap: 0;
     padding-left: 0.5rem;
     padding-right: 0.5rem;
+  }
+
+  .project-clad-storefront-nav__shell.project-clad-storefront-nav__shell--compact-stacked {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    row-gap: 0.7rem;
+    align-items: stretch;
   }
 
   .project-clad-storefront-nav__left {
@@ -2895,18 +2906,50 @@ html:has(.project-clad-page--projects) body {
     max-width: 100%;
   }
 
-  /* Mobile stacked bar: hamburger + optional admin icons + search/account/cart — centered under logo */
-  .project-clad-storefront-nav__shell--compact-stacked .project-clad-storefront-nav__icon-toolbar {
-    justify-content: center;
-    align-items: center;
-  }
-
   .project-clad-storefront-nav__shell--compact-stacked
     .project-clad-storefront-nav__shell-extra.project-clad-storefront-nav__shell-extra--compact-toolbar {
     flex: 0 1 auto;
     justify-content: center;
     width: 100%;
     max-width: 100%;
+  }
+
+  /*
+   * Compact mobile: logo must stay on its own row. transform:scale() does not expand layout height,
+   * so the projects-page logo scale was painting over the centered icon row below.
+   */
+  .project-clad-page--projects
+    .project-clad-storefront-nav__shell--compact-stacked
+    .project-clad-storefront-nav__logo-img {
+    transform: none;
+    max-height: min(48px, calc(var(--pc-storefront-nav-icon) + 14px));
+  }
+
+  .project-clad-storefront-nav__shell--compact-stacked .project-clad-storefront-nav__brand-row {
+    flex: 0 0 auto;
+    min-height: 0;
+    /* Reserve one line of tray height; logo scales inside box without overlapping row 2 */
+    align-items: center;
+    justify-content: center;
+  }
+
+  .project-clad-storefront-nav__shell--compact-stacked .project-clad-storefront-nav__icon-toolbar {
+    flex-wrap: nowrap;
+    justify-content: center;
+    align-items: center;
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+    gap: var(--pc-storefront-nav-cluster-gap);
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .project-clad-storefront-nav__shell--compact-stacked
+    .project-clad-storefront-nav__icon-toolbar::-webkit-scrollbar {
+    display: none;
   }
 
   /* Add-member popover position on narrow screens: JS applies fixed + clamped left (see project page script). */
