@@ -4036,6 +4036,11 @@ export default function ProjectDetailPage() {
                   id="project-clad-orders-font-scope"
                   className="project-clad-grid project-clad-orders-shell__list"
                 >
+                  <span
+                    data-projectclad-server-build="unit-price-edit-v1"
+                    className="project-clad-sr-only"
+                    aria-hidden="true"
+                  />
                   {visibleJobs.map((job) => {
                     const workOrderShellClass =
                       getJobApprovalInfo(job.id) &&
@@ -4600,15 +4605,17 @@ export default function ProjectDetailPage() {
                                       Hidden
                                     </button>
                                   ) : (
-                                    <>
-                                      <span className="project-clad-normal-view">
-                                        {formatPrice(item.priceSnapshot)}
-                                      </span>
-                                      {canEdit && !job.isLocked ? (
-                                        <span
-                                          className="project-clad-edit-view"
-                                          style={{ display: "none" }}
-                                        >
+                                    <span className="project-clad-normal-view">
+                                      {formatPrice(item.priceSnapshot)}
+                                    </span>
+                                  )}
+                                  {canEdit && !job.isLocked ? (
+                                    <span
+                                      className="project-clad-edit-view"
+                                      style={{ display: "none" }}
+                                    >
+                                      {pricingUnlocked ? (
+                                        <>
                                           <label
                                             className="project-clad-sr-only"
                                             htmlFor={`projectclad-unit-price-${job.id}-${item.id}`}
@@ -4631,10 +4638,23 @@ export default function ProjectDetailPage() {
                                             className="project-clad-unit-price-input"
                                             aria-label={`Unit price for ${item.displayName}`}
                                           />
+                                        </>
+                                      ) : (
+                                        <span
+                                          className="project-clad-muted"
+                                          style={{
+                                            fontSize: "0.82rem",
+                                            lineHeight: 1.35,
+                                            textAlign: "right",
+                                            display: "inline-block",
+                                            maxWidth: "10rem",
+                                          }}
+                                        >
+                                          Unlock prices (Show price) to edit this amount.
                                         </span>
-                                      ) : null}
-                                    </>
-                                  )}
+                                      )}
+                                    </span>
+                                  ) : null}
                                 </td>
                                 {canEdit && !job.isLocked && (
                                   <td className="project-clad-table-right">
@@ -5525,25 +5545,7 @@ export default function ProjectDetailPage() {
       memberMessage.textContent = text || '';
     }
   };
-  const revealPricing = () => {
-    document.querySelectorAll('[data-projectclad-price]').forEach((cell) => {
-      const value = cell.getAttribute('data-price');
-      if (!value) return;
-      const normal = cell.querySelector('.project-clad-normal-view');
-      if (normal instanceof HTMLElement) {
-        normal.textContent = value;
-      } else {
-        cell.textContent = value;
-      }
-      const priceInp = cell.querySelector('[data-projectclad-unit-price-input]');
-      if (priceInp instanceof HTMLInputElement) {
-        var n = parseFloat(value);
-        if (!isNaN(n)) {
-          priceInp.value = n.toFixed(2);
-          priceInp.setAttribute('data-original-unit-price', n.toFixed(2));
-        }
-      }
-    });
+  const closePricingModal = () => {
     const pricingModal = document.querySelector('[data-projectclad-pricing-modal-backdrop]');
     if (pricingModal instanceof HTMLElement) {
       pricingModal.style.display = 'none';
@@ -6094,7 +6096,8 @@ export default function ProjectDetailPage() {
       }
       if (payload?.pricingUnlocked) {
         document.cookie = '${PRICING_COOKIE}; Path=/; Max-Age=3600; SameSite=Lax';
-        revealPricing();
+        closePricingModal();
+        window.location.reload();
         return;
       }
       if (payload?.shareLink) {
