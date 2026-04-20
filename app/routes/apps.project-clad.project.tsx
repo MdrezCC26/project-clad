@@ -2958,15 +2958,7 @@ export default function ProjectDetailPage() {
       (ls === "draft" && skipReviewOrderFlow)
     ) {
       return (
-        <div
-          className="project-clad-inline-form"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-start",
-            gap: "0.35rem",
-          }}
-        >
+        <div className="project-clad-inline-form project-clad-order-lifecycle-actions-form">
           <button
             type="button"
             className="project-clad-button"
@@ -4295,16 +4287,7 @@ export default function ProjectDetailPage() {
                               </button>
                             )}
                           </div>
-                          <div
-                            className="project-clad-order-summary-lifecycle-cluster"
-                            style={{
-                              display: "flex",
-                              flexWrap: "wrap",
-                              alignItems: "center",
-                              justifyContent: "flex-end",
-                              gap: "0.5rem 0.75rem",
-                            }}
-                          >
+                          <div className="project-clad-order-summary-lifecycle-cluster">
                             {canEdit ? (
                               renderOrderLifecycleCustomerSummaryActions(job)
                             ) : (
@@ -5108,17 +5091,11 @@ export default function ProjectDetailPage() {
                       }}
                     >
                       <div
-                        className="project-clad-normal-view project-clad-order-actions-top-row"
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          alignItems: "center",
-                          justifyContent: preferredDeliveryLine
-                            ? "space-between"
-                            : "flex-end",
-                          gap: "0.75rem",
-                          width: "100%",
-                        }}
+                        className={`project-clad-normal-view project-clad-order-actions-top-row${
+                          preferredDeliveryLine
+                            ? " project-clad-order-actions-top-row--split"
+                            : ""
+                        }`}
                       >
                         {preferredDeliveryLine ? (
                           <div className="project-clad-order-schedule-summary">
@@ -5128,17 +5105,11 @@ export default function ProjectDetailPage() {
                           </div>
                         ) : null}
                         <div
-                          className="project-clad-order-actions-lifecycle-row"
-                          style={{
-                            display: "flex",
-                            flexDirection: "row",
-                            flexWrap: "nowrap",
-                            alignItems: "center",
-                            justifyContent: "flex-end",
-                            flex: "1 1 auto",
-                            minWidth: 0,
-                            marginLeft: preferredDeliveryLine ? "auto" : undefined,
-                          }}
+                          className={`project-clad-order-actions-lifecycle-row${
+                            preferredDeliveryLine
+                              ? " project-clad-order-actions-lifecycle-row--schedule"
+                              : ""
+                          }`}
                         >
                           <div className="project-clad-order-actions-customer-inline">
                             {canEdit ? renderOrderLifecycleCustomerSummaryActions(job) : null}

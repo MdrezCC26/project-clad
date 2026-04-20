@@ -3686,6 +3686,51 @@ details.project-clad-edit-mode
   align-items: center;
 }
 
+/* Summary chip: lifecycle CTAs — class-only so mobile media queries can center (no inline flex-end). */
+.project-clad-page--projects.project-clad-page--detail .project-clad-order-summary-lifecycle-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem 0.75rem;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-order-actions-top-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-actions-top-row.project-clad-order-actions-top-row--split {
+  justify-content: space-between;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-order-actions-lifecycle-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-actions-lifecycle-row.project-clad-order-actions-lifecycle-row--schedule {
+  margin-left: auto;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-order-lifecycle-actions-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
 /* Ordered + Edit order: one horizontal line (not .project-clad-order-actions-left). */
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-order-actions-lifecycle-row
@@ -5342,6 +5387,104 @@ details.project-clad-edit-mode .project-clad-edit-view {
     content: "Price: ";
     font-weight: 700;
   }
+
+  /*
+   * ≤900px phones: lifecycle + “Edit order” were a single nowrap row → clipped edges and odd
+   * space-between vs. totals. Stack, center, and full-width buttons below the money lines.
+   */
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-summary-lifecycle-cluster {
+    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-summary-lifecycle-cluster
+    > .project-clad-button,
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-summary-lifecycle-cluster
+    .project-clad-order-lifecycle-actions-form
+    .project-clad-button {
+    width: 100%;
+    max-width: min(22rem, 100%);
+    box-sizing: border-box;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-summary-lifecycle-cluster
+    .project-clad-order-lifecycle-actions-form {
+    align-items: center;
+    width: 100%;
+    max-width: min(22rem, 100%);
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-actions-top-row {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-actions-top-row.project-clad-order-actions-top-row--split {
+    align-items: stretch;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-actions-top-row
+    .project-clad-order-schedule-summary {
+    width: 100%;
+    text-align: center;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-actions-lifecycle-row,
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-actions-lifecycle-row.project-clad-order-actions-lifecycle-row--schedule {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0 !important;
+    flex-wrap: wrap;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-actions-lifecycle-row
+    .project-clad-order-actions-customer-inline {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    width: 100%;
+    max-width: min(22rem, 100%);
+    flex-wrap: nowrap;
+    gap: 0.65rem;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-actions-lifecycle-row
+    .project-clad-order-actions-customer-inline
+    > .project-clad-button,
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-actions-lifecycle-row
+    .project-clad-order-actions-customer-inline
+    .project-clad-order-lifecycle-actions-form
+    .project-clad-button {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-actions[data-projectclad-order-section] {
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    clear: both;
+  }
 }
 
 /* Tablet / narrow desktop: smaller thumbs + tighter cells so the line-item table does not overflow */
@@ -5560,7 +5703,7 @@ details.project-clad-edit-mode .project-clad-edit-view {
   .project-clad-page--projects.project-clad-page--detail
     details.project-clad-order-row
     .project-clad-order-summary-head-end {
-    align-items: flex-start;
+    align-items: center;
   }
 
   .project-clad-page--projects.project-clad-page--detail
@@ -5568,7 +5711,7 @@ details.project-clad-edit-mode .project-clad-edit-view {
     .project-clad-order-summary-head-row__subtotal {
     margin-left: 0;
     width: 100%;
-    text-align: left;
+    text-align: center;
   }
 
   .project-clad-order-empty-with-totals__row {
