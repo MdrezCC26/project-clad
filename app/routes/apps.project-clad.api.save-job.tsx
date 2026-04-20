@@ -17,6 +17,10 @@ import {
   hydrateJobItemVariantSnapshots,
   type CartLineMetaInput,
 } from "../utils/variantInfo.server";
+import {
+  duplicateUploadPartMirrorsForCopiedJobItem,
+  mirrorShopifyStagedUploadsForJobItem,
+} from "../utils/uploadPartMirror.server";
 
 type SaveJobPayload = {
   mode: "newProject" | "existingProject" | "existingJob";
@@ -199,6 +203,21 @@ function parseCustomPart(
   return { shapeType, l1, l2, l3, a1, gauge };
 }
 
+/** Copies Shopify staged-upload URLs into app storage; returns JSON error response on failure. */
+async function mirrorLineFilesOrResponse(
+  shop: string,
+  jobItemId: string,
+  properties: { name: string; value: string }[] | null | undefined,
+): Promise<Response | null> {
+  try {
+    await mirrorShopifyStagedUploadsForJobItem({ shop, jobItemId, properties });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Could not save uploaded files.";
+    return Response.json({ error: msg }, { status: 422 });
+  }
+  return null;
+}
+
 async function enqueueDrawingJob(
   jobItemId: string,
   shop: string,
@@ -319,6 +338,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const jobItems = project.jobs[0]?.items ?? [];
     for (let i = 0; i < jobItems.length; i++) {
+      const mirrorErr = await mirrorLineFilesOrResponse(
+        shop,
+        jobItems[i].id,
+        items[i]?.properties,
+      );
+      if (mirrorErr) return mirrorErr;
       await enqueueDrawingJob(
         jobItems[i].id,
         shop,
@@ -414,6 +439,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
 
     for (let i = 0; i < job.items.length; i++) {
+      const mirrorErr = await mirrorLineFilesOrResponse(
+        shop,
+        job.items[i].id,
+        items[i]?.properties,
+      );
+      if (mirrorErr) return mirrorErr;
       await enqueueDrawingJob(job.items[i].id, shop, items[i]?.properties);
     }
 
@@ -529,6 +560,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         actorCustomerId: customerId,
         payload: { jobName: copy.name, copiedFrom: job.name },
       });
+
+      const sourceItems = [...job.items].sort((a, b) => a.sortOrder - b.sortOrder);
+      const copyWithItems = await prisma.job.findFirst({
+        where: { id: copy.id },
+        include: { items: true },
+      });
+      const destItems = [...(copyWithItems?.items ?? [])].sort(
+        (a, b) => a.sortOrder - b.sortOrder,
+      );
+      const pairCount = Math.min(sourceItems.length, destItems.length);
+      for (let i = 0; i < pairCount; i++) {
+        await duplicateUploadPartMirrorsForCopiedJobItem({
+          shop,
+          oldItem: {
+            id: sourceItems[i].id,
+            customData: sourceItems[i].customData,
+            uploadPartMirrorKeysJson: sourceItems[i].uploadPartMirrorKeysJson,
+          },
+          newJobItemId: destItems[i].id,
+        });
+      }
     }
 
     if (payload.quantityMode === "replace") {
@@ -556,6 +608,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         orderBy: { sortOrder: "asc" },
       });
       for (let i = 0; i < createdItems.length; i++) {
+        const mirrorErr = await mirrorLineFilesOrResponse(
+          shop,
+          createdItems[i].id,
+          items[i]?.properties,
+        );
+        if (mirrorErr) return mirrorErr;
         await enqueueDrawingJob(
           createdItems[i].id,
           shop,
@@ -583,6 +641,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 : undefined,
           },
         });
+        const mirrorErr = await mirrorLineFilesOrResponse(
+          shop,
+          created.id,
+          item.properties,
+        );
+        if (mirrorErr) return mirrorErr;
         await enqueueDrawingJob(created.id, shop, item.properties);
         nextSortOrder += 1;
       }

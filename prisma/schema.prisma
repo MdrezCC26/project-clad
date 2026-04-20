@@ -137,6 +137,8 @@ model JobItem {
   variantSnapshot Json?
   /// Immutable line audit captured when the row is created (survives deleted Shopify variants).
   orderLineCapture Json?
+  /// JSON map of line property index → relative path under `storage/upload-part-files` (mirrored Shopify staged uploads).
+  uploadPartMirrorKeysJson String? @db.Text
   job             Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
   drawingJob    DrawingJob?
 
@@ -274,6 +276,8 @@ model ShopSettings {
   navButton3Url        String?
   /// Optional JSON array of { "label", "url" } for app-proxy storefront nav. If null, defaults + navButton1–3 are used.
   storefrontNavLinksJson String? @db.Text
+  /// JSON map of notification kinds → boolean; null means all enabled (see DEFAULT_EMAIL_NOTIFICATION_PREFS).
+  emailNotificationPrefsJson String? @db.Text
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
