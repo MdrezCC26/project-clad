@@ -11,6 +11,7 @@
 <div
   class="projectclad-cart-actions"
   data-projectclad
+  data-projectclad-customer-signed-in="{% if customer %}true{% else %}false{% endif %}"
   data-projectclad-login-url="{% if customer %}{{ view_projects_url }}{% else %}{{ login_url }}{% endif %}"
   data-projectclad-projects-url="/apps/project-clad/api/projects"
   data-projectclad-save-url="/apps/project-clad/api/save-job"

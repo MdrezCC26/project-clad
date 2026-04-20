@@ -131,6 +131,8 @@
   min-height: var(--pc-cart-toolbar-btn-min-height);
   padding: var(--pc-cart-toolbar-btn-padding-y) var(--pc-cart-toolbar-btn-padding-x);
   letter-spacing: 0.02em;
+  /* iOS Safari: avoid ~300ms double-tap delay so the synthetic click stays on this control. */
+  touch-action: manipulation;
 }
 
 .projectclad-cart-actions .projectclad-button:not(.projectclad-button--primary):not(.projectclad-button--approve):hover {

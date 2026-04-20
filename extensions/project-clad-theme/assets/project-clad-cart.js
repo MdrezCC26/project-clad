@@ -370,6 +370,8 @@
   if (!root) return;
 
   const loginUrl = root.getAttribute("data-projectclad-login-url") || "";
+  const customerSignedIn =
+    root.getAttribute("data-projectclad-customer-signed-in") === "true";
   const projectsUrl = root.getAttribute("data-projectclad-projects-url") || "";
   const saveUrl = root.getAttribute("data-projectclad-save-url") || "";
   const viewProjectsUrl =
@@ -819,9 +821,11 @@
     });
   };
 
-  saveButton.addEventListener("click", async () => {
-    if (!loginUrl || loginUrl.includes("/account/login")) {
-      window.location.href = loginUrl;
+  saveButton.addEventListener("click", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!customerSignedIn) {
+      window.location.href = loginUrl || "/account/login";
       return;
     }
     await refreshCartState();
