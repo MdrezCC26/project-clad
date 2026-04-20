@@ -1095,6 +1095,62 @@ html:has(.project-clad-page--projects) body {
 }
 
 /*
+ * Phones: one-line activity rows clip long emails + “Internal” suffix (nowrap + overflow-x hidden).
+ * Wrap meta + message; keep desktop/tablet single-line ellipsis.
+ */
+@media (max-width: 900px) {
+  .project-clad-page--projects.project-clad-page--detail .project-clad-activity-feed__scroll {
+    overflow-x: visible;
+    padding-left: 0.15rem;
+    padding-right: 0.35rem;
+    box-sizing: border-box;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-activity-feed__composer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-activity-feed__composer
+    .project-clad-button {
+    align-self: center;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-activity-feed__comment-line {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    row-gap: 0.2rem;
+    column-gap: 0.15rem;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-activity-feed__comment-line-name {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-activity-feed__comment-line
+    > span.project-clad-muted {
+    flex: 0 1 auto;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-activity-feed__comment-line-msg {
+    flex: 1 1 100%;
+    min-width: 0;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
+/*
  * Bakbak One: full project list tile (link + actions), order/receipt titles, meta chip, activity.
  * Descendants need explicit Bakbak — .project-clad-page * { Helvetica !important } beats inheriting from the <a>.
  */
