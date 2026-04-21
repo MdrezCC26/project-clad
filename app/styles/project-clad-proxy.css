@@ -4910,6 +4910,109 @@ details.project-clad-edit-mode
   min-height: 0;
 }
 
+/* Order line items: outer table shell inset once; each row’s product cell nests a deeper “pressed” tile. */
+.project-clad-page--projects.project-clad-page--detail .project-clad-order-lines-outer {
+  margin-top: 0.35rem;
+  margin-bottom: 0.35rem;
+  padding: 0.55rem 0.45rem 0.65rem;
+  border-radius: calc(var(--pc-neu-radius, 16px) + 2px);
+  background: var(--pc-caesura-bg);
+  border: var(--pc-caesura-border);
+  box-shadow: var(--pc-caesura-inset);
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail .project-clad-order-line-product-cell {
+  padding-top: 0.55rem !important;
+  padding-bottom: 0.55rem !important;
+  vertical-align: middle !important;
+}
+
+.project-clad-order-line-tile {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.5rem 0.55rem 0.55rem;
+  border-radius: var(--pc-neu-radius, 14px);
+  background: var(--pc-card-bg);
+  border: var(--pc-caesura-border);
+  box-shadow: var(--pc-btn-neu-shadow-active);
+}
+
+.project-clad-order-line-tile__row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.project-clad-order-line-num {
+  flex: 0 0 auto;
+  align-self: center;
+  min-width: 1.5rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: calc(0.95rem * var(--pc-text-scale));
+  line-height: 1.1;
+  color: var(--pc-caesura-dark);
+  opacity: 0.72;
+  -webkit-font-smoothing: antialiased;
+}
+
+.project-clad-order-line-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.65rem 0.85rem;
+}
+
+.project-clad-order-line-thumbwrap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: inherit;
+}
+
+.project-clad-order-line-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.08rem;
+  text-align: left;
+}
+
+.project-clad-order-line-titlelink {
+  text-decoration: none;
+  color: inherit;
+  max-width: 100%;
+}
+
+.project-clad-order-line-titlelink span[data-projectclad-item-name],
+.project-clad-order-line-title {
+  display: block;
+  max-width: 100%;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.project-clad-order-line-text .project-clad-item-properties {
+  margin-top: 0.2rem;
+  width: 100%;
+  text-align: left;
+}
+
 .project-clad-table-right {
   text-align: right;
 }
@@ -5299,6 +5402,35 @@ details.project-clad-edit-mode .project-clad-edit-view {
     flex-direction: column;
     align-items: center;
     text-align: center;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-order-line-main {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-line-text {
+    align-items: center;
+    text-align: center;
+    width: 100%;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-text
+    .project-clad-item-properties {
+    text-align: center;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-line-tile__row {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-line-num {
+    align-self: center;
   }
 
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:first-child {

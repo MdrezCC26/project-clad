@@ -75,6 +75,8 @@ import {
 
 type JobItemView = {
   id: string;
+  /** Line sequence within the job (1-based). */
+  sortOrder: number;
   variantId: string;
   quantity: number;
   priceSnapshot: string;
@@ -132,6 +134,219 @@ function PdfThumbIcon({ label = "PDF document" }: { label?: string }) {
     <span className="project-clad-thumb project-clad-thumb--pdf" role="img" aria-label={label}>
       <PdfGlyphSvg />
     </span>
+  );
+}
+
+/** Product column: line # + sunken tile, thumb left, title + custom properties to the right. */
+function OrderLineProductCell({ item }: { item: JobItemView }) {
+  const isUploadPart = item.displayName.toLowerCase().includes("upload part");
+  const href = isUploadPart
+    ? item.uploadPartFileUrl || item.imageUrl
+    : item.productUrl;
+  const showPdfThumb =
+    isUploadPart &&
+    Boolean(item.uploadPartFileUrl && isLikelyPdfUrl(item.uploadPartFileUrl));
+  const lineNum = item.sortOrder;
+  const nameText =
+    item.quantity === 0 ? `${item.displayName} (Removed)` : item.displayName;
+
+  const thumbInner = showPdfThumb ? (
+    <PdfThumbIcon label="PDF attachment" />
+  ) : item.imageUrl ? (
+    <img
+      src={item.imageUrl}
+      alt={item.imageAlt || item.displayName}
+      className="project-clad-thumb"
+    />
+  ) : (
+    <span className="project-clad-thumb project-clad-thumb--placeholder" />
+  );
+
+  const thumbWrap =
+    href ? (
+      <a
+        href={href}
+        target={isUploadPart ? "_blank" : undefined}
+        rel={isUploadPart ? "noopener noreferrer" : undefined}
+        className="project-clad-order-line-thumbwrap"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {thumbInner}
+      </a>
+    ) : (
+      <div className="project-clad-order-line-thumbwrap">{thumbInner}</div>
+    );
+
+  const titleEl = href ? (
+    <a
+      href={href}
+      target={isUploadPart ? "_blank" : undefined}
+      rel={isUploadPart ? "noopener noreferrer" : undefined}
+      className="project-clad-order-line-titlelink"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <span data-projectclad-item-name data-display-name={item.displayName}>
+        {nameText}
+      </span>
+    </a>
+  ) : (
+    <span
+      className="project-clad-order-line-title"
+      data-projectclad-item-name
+      data-display-name={item.displayName}
+    >
+      {nameText}
+    </span>
+  );
+
+  const propertiesBlock =
+    item.properties && item.properties.length > 0 ? (
+      <div className="project-clad-item-properties">
+        {(() => {
+          const calcPayload = item.properties!.find((p) => p.name === "__ooCalcPayload");
+          if (calcPayload && calcPayload.value) {
+            try {
+              const parsed = JSON.parse(calcPayload.value);
+              return Object.entries(parsed).map(([key, value], index) => (
+                <div key={`calc-${index}`} style={{ marginTop: "0.25rem" }}>
+                  <strong>{key}:</strong> {String(value)}
+                </div>
+              ));
+            } catch {
+              return (
+                <div style={{ marginTop: "0.25rem" }}>
+                  <strong>Details:</strong> {calcPayload.value}
+                </div>
+              );
+            }
+          }
+
+          return item.properties!
+            .filter((p) => {
+              if (!p.value || p.value.trim() === "" || p.name.startsWith("__oo")) {
+                return false;
+              }
+              if (
+                item.displayName.toLowerCase().includes("upload part") &&
+                p.name.toLowerCase() === "file"
+              ) {
+                return false;
+              }
+              return true;
+            })
+            .map((prop, index) => {
+              const v = prop.value.trim();
+              if (v.startsWith("http://") || v.startsWith("https://")) {
+                if (isLikelyPdfUrl(v)) {
+                  return (
+                    <div key={index} style={{ marginTop: "0.25rem" }}>
+                      <strong>{prop.name}:</strong>
+                      <div className="project-clad-upload-url-pdf">
+                        <a
+                          href={v}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="project-clad-upload-url-pdf__link"
+                        >
+                          <PdfGlyphSvg className="project-clad-upload-url-pdf__icon" />
+                          <span>Open PDF</span>
+                        </a>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={index} style={{ marginTop: "0.25rem" }}>
+                    <strong>{prop.name}:</strong>
+                    <div>
+                      <img
+                        src={v}
+                        alt={prop.name}
+                        style={{
+                          maxWidth: "200px",
+                          maxHeight: "200px",
+                          display: "block",
+                          marginTop: "0.25rem",
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div key={index} style={{ marginTop: "0.25rem" }}>
+                  <strong>{prop.name}:</strong> {v}
+                </div>
+              );
+            });
+        })()}
+      </div>
+    ) : null;
+
+  return (
+    <div className="project-clad-order-line-tile">
+      <div className="project-clad-order-line-tile__row">
+        <span className="project-clad-order-line-num" aria-label={`Line ${lineNum}`}>
+          {lineNum}
+        </span>
+        <div className="project-clad-order-line-main">
+          {thumbWrap}
+          <div className="project-clad-order-line-text">
+            {titleEl}
+            {item.variantDisplaySource === "snapshot" && (
+              <p
+                className="project-clad-muted"
+                style={{
+                  margin: "0.15rem 0 0",
+                  fontSize: "0.78rem",
+                  lineHeight: 1.35,
+                }}
+              >
+                Saved product name (Shopify did not return this variant; name is from a previous
+                sync).
+              </p>
+            )}
+            {item.variantDisplaySource === "unknown" && (
+              <>
+                <p
+                  className="project-clad-muted"
+                  style={{
+                    margin: "0.15rem 0 0",
+                    fontSize: "0.78rem",
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {`Product no longer available. "Variant ${item.variantId}" has been updated or removed. Please contact us for help.`}
+                </p>
+                {item.orderLineCapture ? (
+                  <p
+                    className="project-clad-muted"
+                    style={{
+                      margin: "0.15rem 0 0",
+                      fontSize: "0.74rem",
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    <strong>Recorded when saved:</strong> {item.orderLineCapture.displayLabel}
+                    {item.orderLineCapture.sku ? ` · SKU ${item.orderLineCapture.sku}` : ""}
+                    {item.orderLineCapture.unitPrice
+                      ? ` · ${formatPrice(item.orderLineCapture.unitPrice)} each`
+                      : ""}
+                    {(() => {
+                      const raw = item.orderLineCapture.capturedAt;
+                      if (!raw) return "";
+                      const d = new Date(raw);
+                      return Number.isNaN(d.getTime()) ? "" : ` · ${d.toLocaleString()}`;
+                    })()}
+                  </p>
+                ) : null}
+              </>
+            )}
+            {propertiesBlock}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1100,6 +1315,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
           return {
             id: item.id,
+            sortOrder: item.sortOrder,
             variantId: item.variantId,
             quantity: item.quantity,
             priceSnapshot: item.priceSnapshot.toString(),
@@ -3104,7 +3320,11 @@ export default function ProjectDetailPage() {
         const [moved] = items.splice(fromIndex, 1);
         items.splice(toIndex, 0, moved);
         reordered = items.map((item) => item.id);
-        return { ...job, items };
+        const renumbered = items.map((item, idx) => ({
+          ...item,
+          sortOrder: idx + 1,
+        }));
+        return { ...job, items: renumbered };
       }),
     );
 
@@ -4390,7 +4610,7 @@ export default function ProjectDetailPage() {
                           </div>
                         </div>
                       ) : (
-                      <div className="project-clad-table-x-scroll">
+                      <div className="project-clad-table-x-scroll project-clad-order-lines-outer">
                       <table className="project-clad-table project-clad-orders-table">
                           <thead>
                             <tr>
@@ -4427,227 +4647,8 @@ export default function ProjectDetailPage() {
                                   canEdit && !job.isLocked ? "project-clad-draggable" : undefined
                                 }
                               >
-                                <td>
-                                  {(() => {
-                                    const isUploadPart = item.displayName
-                                      .toLowerCase()
-                                      .includes("upload part");
-                                    const href = isUploadPart
-                                      ? item.uploadPartFileUrl || item.imageUrl
-                                      : item.productUrl;
-                                    const showPdfThumb =
-                                      isUploadPart &&
-                                      Boolean(
-                                        item.uploadPartFileUrl &&
-                                          isLikelyPdfUrl(item.uploadPartFileUrl),
-                                      );
-
-                                    if (href) {
-                                      return (
-                                        <a
-                                          href={href}
-                                          target={isUploadPart ? "_blank" : undefined}
-                                          rel={
-                                            isUploadPart
-                                              ? "noopener noreferrer"
-                                              : undefined
-                                          }
-                                          className="project-clad-item-link"
-                                          onClick={(event) => event.stopPropagation()}
-                                        >
-                                          {showPdfThumb ? (
-                                            <PdfThumbIcon label="PDF attachment" />
-                                          ) : item.imageUrl ? (
-                                            <img
-                                              src={item.imageUrl}
-                                              alt={item.imageAlt || item.displayName}
-                                              className="project-clad-thumb"
-                                            />
-                                          ) : (
-                                            <span className="project-clad-thumb project-clad-thumb--placeholder" />
-                                          )}
-                                          <span
-                                            data-projectclad-item-name
-                                            data-display-name={item.displayName}
-                                          >
-                                            {item.quantity === 0
-                                              ? `${item.displayName} (Removed)`
-                                              : item.displayName}
-                                          </span>
-                                        </a>
-                                      );
-                                    }
-
-                                    return (
-                                      <div className="project-clad-item-link">
-                                        {showPdfThumb ? (
-                                          <PdfThumbIcon label="PDF attachment" />
-                                        ) : item.imageUrl ? (
-                                          <img
-                                            src={item.imageUrl}
-                                            alt={item.imageAlt || item.displayName}
-                                            className="project-clad-thumb"
-                                          />
-                                        ) : (
-                                          <span className="project-clad-thumb project-clad-thumb--placeholder" />
-                                        )}
-                                        <span
-                                          data-projectclad-item-name
-                                          data-display-name={item.displayName}
-                                        >
-                                          {item.quantity === 0
-                                            ? `${item.displayName} (Removed)`
-                                            : item.displayName}
-                                        </span>
-                                      </div>
-                                    );
-                                  })()}
-                                  {item.variantDisplaySource === "snapshot" && (
-                                    <p
-                                      className="project-clad-muted"
-                                      style={{
-                                        margin: "0.35rem 0 0",
-                                        fontSize: "0.78rem",
-                                        lineHeight: 1.35,
-                                      }}
-                                    >
-                                      Saved product name (Shopify did not return this variant;
-                                      name is from a previous sync).
-                                    </p>
-                                  )}
-                                  {item.variantDisplaySource === "unknown" && (
-                                    <>
-                                      <p
-                                        className="project-clad-muted"
-                                        style={{
-                                          margin: "0.35rem 0 0",
-                                          fontSize: "0.78rem",
-                                          lineHeight: 1.35,
-                                        }}
-                                      >
-                                        {`Product no longer available. "Variant ${item.variantId}" has been updated or removed. Please contact us for help.`}
-                                      </p>
-                                      {item.orderLineCapture ? (
-                                        <p
-                                          className="project-clad-muted"
-                                          style={{
-                                            margin: "0.35rem 0 0",
-                                            fontSize: "0.74rem",
-                                            lineHeight: 1.35,
-                                          }}
-                                        >
-                                          <strong>Recorded when saved:</strong>{" "}
-                                          {item.orderLineCapture.displayLabel}
-                                          {item.orderLineCapture.sku
-                                            ? ` · SKU ${item.orderLineCapture.sku}`
-                                            : ""}
-                                          {item.orderLineCapture.unitPrice
-                                            ? ` · ${formatPrice(item.orderLineCapture.unitPrice)} each`
-                                            : ""}
-                                          {(() => {
-                                            const raw = item.orderLineCapture.capturedAt;
-                                            if (!raw) return "";
-                                            const d = new Date(raw);
-                                            return Number.isNaN(d.getTime())
-                                              ? ""
-                                              : ` · ${d.toLocaleString()}`;
-                                          })()}
-                                        </p>
-                                      ) : null}
-                                    </>
-                                  )}
-                                  {item.properties && item.properties.length > 0 && (
-                                    <div className="project-clad-item-properties" style={{ marginTop: "0.5rem" }}>
-                                      {(() => {
-                                        // Special handling for the calculator app payload
-                                        const calcPayload = item.properties.find(
-                                          (p) => p.name === "__ooCalcPayload",
-                                        );
-                                        if (calcPayload && calcPayload.value) {
-                                          try {
-                                            const parsed = JSON.parse(calcPayload.value);
-                                            return Object.entries(parsed).map(([key, value], index) => (
-                                              <div key={`calc-${index}`} style={{ marginTop: "0.25rem" }}>
-                                                <strong>{key}:</strong> {String(value)}
-                                              </div>
-                                            ));
-                                          } catch {
-                                            // Fallback to showing the raw payload if JSON parse fails
-                                            return (
-                                              <div style={{ marginTop: "0.25rem" }}>
-                                                <strong>Details:</strong> {calcPayload.value}
-                                              </div>
-                                            );
-                                          }
-                                        }
-
-                                        // Generic fallback for other properties
-                                        return item.properties
-                                          .filter((p) => {
-                                            if (
-                                              !p.value ||
-                                              p.value.trim() === "" ||
-                                              p.name.startsWith("__oo")
-                                            ) {
-                                              return false;
-                                            }
-                                            // For the special Upload Part product, hide the File: row
-                                            if (
-                                              item.displayName.toLowerCase().includes("upload part") &&
-                                              p.name.toLowerCase() === "file"
-                                            ) {
-                                              return false;
-                                            }
-                                            return true;
-                                          })
-                                          .map((prop, index) => {
-                                            const v = prop.value.trim();
-                                            if (v.startsWith("http://") || v.startsWith("https://")) {
-                                              if (isLikelyPdfUrl(v)) {
-                                                return (
-                                                  <div key={index} style={{ marginTop: "0.25rem" }}>
-                                                    <strong>{prop.name}:</strong>
-                                                    <div className="project-clad-upload-url-pdf">
-                                                      <a
-                                                        href={v}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="project-clad-upload-url-pdf__link"
-                                                      >
-                                                        <PdfGlyphSvg className="project-clad-upload-url-pdf__icon" />
-                                                        <span>Open PDF</span>
-                                                      </a>
-                                                    </div>
-                                                  </div>
-                                                );
-                                              }
-                                              return (
-                                                <div key={index} style={{ marginTop: "0.25rem" }}>
-                                                  <strong>{prop.name}:</strong>
-                                                  <div>
-                                                    <img
-                                                      src={v}
-                                                      alt={prop.name}
-                                                      style={{
-                                                        maxWidth: "200px",
-                                                        maxHeight: "200px",
-                                                        display: "block",
-                                                        marginTop: "0.25rem",
-                                                      }}
-                                                    />
-                                                  </div>
-                                                </div>
-                                              );
-                                            }
-                                            return (
-                                              <div key={index} style={{ marginTop: "0.25rem" }}>
-                                                <strong>{prop.name}:</strong> {v}
-                                              </div>
-                                            );
-                                          });
-                                      })()}
-                                    </div>
-                                  )}
+                                <td className="project-clad-order-line-product-cell">
+                                  <OrderLineProductCell item={item} />
                                 </td>
                                 <td className="project-clad-table-right">
                                   <span className="project-clad-normal-view">{item.quantity}</span>
