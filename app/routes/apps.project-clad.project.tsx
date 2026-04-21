@@ -4610,7 +4610,7 @@ export default function ProjectDetailPage() {
                           </div>
                         </div>
                       ) : (
-                      <div className="project-clad-table-x-scroll project-clad-order-lines-outer">
+                      <div className="project-clad-table-x-scroll">
                       <table className="project-clad-table project-clad-orders-table">
                           <thead>
                             <tr>

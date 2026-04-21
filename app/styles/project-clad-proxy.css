@@ -4910,23 +4910,11 @@ details.project-clad-edit-mode
   min-height: 0;
 }
 
-/* Order line items: outer table shell inset once; each row’s product cell nests a deeper “pressed” tile. */
-.project-clad-page--projects.project-clad-page--detail .project-clad-order-lines-outer {
-  margin-top: 0.35rem;
-  margin-bottom: 0.35rem;
-  padding: 0.55rem 0.45rem 0.65rem;
-  border-radius: calc(var(--pc-neu-radius, 16px) + 2px);
-  background: var(--pc-caesura-bg);
-  border: var(--pc-caesura-border);
-  box-shadow: var(--pc-caesura-inset);
-  box-sizing: border-box;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.project-clad-page--projects.project-clad-page--detail .project-clad-order-line-product-cell {
-  padding-top: 0.55rem !important;
-  padding-bottom: 0.55rem !important;
+/* Product column: single inset tile per line; qty/price stay flush with the open order (no extra outer dip). */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  td.project-clad-order-line-product-cell {
+  padding: 0.45rem 0.65rem !important;
   vertical-align: middle !important;
 }
 
@@ -4935,7 +4923,7 @@ details.project-clad-edit-mode
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  padding: 0.5rem 0.55rem 0.55rem;
+  padding: 0.55rem 0.75rem;
   border-radius: var(--pc-neu-radius, 14px);
   background: var(--pc-card-bg);
   border: var(--pc-caesura-border);
