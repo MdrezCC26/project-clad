@@ -24,7 +24,7 @@ import {
   parseEmailNotificationPrefsJson,
   serializeEmailNotificationPrefs,
   type EmailNotificationPrefs,
-} from "../utils/emailNotificationPrefs.server";
+} from "../utils/emailNotificationPrefs";
 import {
   parseStorefrontNavLinksJson,
   STOREFRONT_APP_NAV_JSON_PLACEHOLDER,
