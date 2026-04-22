@@ -415,6 +415,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       data: {
         projectId: project.id,
         name: saveJobName,
+        siteContactName: project.defaultSiteContactName ?? null,
+        siteContactPhone: project.defaultSiteContactPhone ?? null,
         ...(saveJobPurchaseOrderNumber
           ? { purchaseOrderNumber: saveJobPurchaseOrderNumber }
           : {}),
@@ -532,6 +534,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           projectId: project.id,
           name: `${job.name} (Copy)`,
           purchaseOrderNumber: job.purchaseOrderNumber ?? undefined,
+          siteContactName:
+            job.siteContactName?.trim() ||
+            project.defaultSiteContactName ||
+            null,
+          siteContactPhone:
+            job.siteContactPhone?.trim() ||
+            project.defaultSiteContactPhone ||
+            null,
           isLocked: false,
           sortOrder: nextJobSortOrder,
           items: {

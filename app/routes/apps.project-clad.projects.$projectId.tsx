@@ -410,11 +410,23 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       });
 
       if (job) {
+        const targetDefaults = await prisma.project.findFirst({
+          where: { id: targetProjectId, shop: shopStringFilter(shop) },
+          select: { defaultSiteContactName: true, defaultSiteContactPhone: true },
+        });
         await prisma.job.create({
           data: {
             projectId: targetProjectId,
             name: `${job.name} (Copy)`,
             purchaseOrderNumber: job.purchaseOrderNumber ?? undefined,
+            siteContactName:
+              job.siteContactName?.trim() ||
+              targetDefaults?.defaultSiteContactName ||
+              null,
+            siteContactPhone:
+              job.siteContactPhone?.trim() ||
+              targetDefaults?.defaultSiteContactPhone ||
+              null,
             isLocked: false,
             items: {
               create: job.items.map((item) => ({

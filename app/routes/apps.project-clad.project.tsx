@@ -28,7 +28,6 @@ import {
   useActionData,
   useLoaderData,
   useLocation,
-  useRevalidator,
 } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
@@ -625,14 +624,13 @@ function OrderFinancePanel({
   jobId: string;
   /**
    * When true, the Site Contact + Phone capsules render as inline-editable inputs
-   * (the value sits inside an `<input>` styled to match the capsule). The save-order-edit
-   * handler in the page-level click listener will pick them up via their data-attrs.
+   * (the value sits inside an `<input>` styled to match the capsule). The Save
+   * button POSTs them via `save-order-edit` using `data-projectclad-site-contact-*`.
    */
   canEditSiteContact: boolean;
   /**
    * When true, the Purchase Order # capsule renders as an inline-editable input —
-   * same pattern as Site Contact. The save-order-edit handler picks it up via
-   * `data-projectclad-purchase-order-input` (no header-mode duplicate needed).
+   * same pattern as Site Contact; Save posts `data-projectclad-purchase-order-input`.
    */
   canEditPurchaseOrder: boolean;
   /**
@@ -806,7 +804,7 @@ function OrderFinancePanel({
                   data-projectclad-site-contact-name-input
                   data-job-id={jobId}
                   data-original-site-contact-name={trimmedContactName}
-                  placeholder="Required to place order"
+                  placeholder="Required"
                   aria-label="Site contact name"
                   autoComplete="name"
                   required
@@ -870,7 +868,7 @@ function OrderFinancePanel({
                   data-projectclad-site-contact-phone-input
                   data-job-id={jobId}
                   data-original-site-contact-phone={trimmedContactPhone}
-                  placeholder="Required to place order"
+                  placeholder="Required"
                   aria-label="Site contact phone"
                   autoComplete="tel"
                   required
@@ -2058,6 +2056,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (jsonPayload) {
     const payload = jsonPayload as {
       intent?: string;
+      /** When `"json"`, save-order-edit returns `{ ok: true }` instead of redirect (fetch + app proxy). */
+      responseMode?: string;
       jobId?: string;
       jobName?: string;
       purchaseOrderNumber?: string;
@@ -2286,7 +2286,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
         if (job) {
           const isLocked = job.isLocked || Boolean(job.orderLink);
-          if (!isLocked) {
+          const hasStructuralEdits =
+            deleteJob ||
+            removeItemIds.length > 0 ||
+            itemUpdates.length > 0;
+
+          /*
+           * Linked / locked orders: line items + delete are frozen, but
+           * merchants still need to backfill PO #, site contact name, and
+           * phone after delivery (records / driver callbacks). Previously
+           * the entire `save-order-edit` branch was skipped whenever
+           * `isLocked`, so the inline Save POST succeeded at
+           * the HTTP layer (redirect) while persisting zero DB rows — the
+           * UI looked editable but nothing ever committed.
+           */
+          if (isLocked && hasStructuralEdits) {
+            return Response.json(
+              {
+                error:
+                  "This order is locked against line-item changes. You can still update purchase order #, site contact name, and phone from the order summary — remove line edits or delete-order flags from your save request.",
+              },
+              { status: 403 },
+            );
+          }
+
+          if (!isLocked || !hasStructuralEdits) {
             let didChange = false;
             const jobTitleForMessage = job.name;
 
@@ -2304,7 +2328,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 ],
               });
             } else {
-              if (removeItemIds.length) {
+              if (!isLocked && removeItemIds.length) {
                 for (const rid of removeItemIds) {
                   if (job.items.some((i) => i.id === rid)) {
                     await prisma.jobItem.delete({ where: { id: rid } });
@@ -2360,36 +2384,46 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 });
                 didChange = true;
               }
-              for (const u of itemUpdates) {
-                const itemId = u.itemId as string;
-                const quantity = u.quantity as number;
-                const row = job.items.find((i) => i.id === itemId);
-                if (!row || quantity < 0) continue;
-                const priceStr = allowUnitPricePersistence
-                  ? parseOptionalUnitPrice(u.unitPrice)
-                  : null;
-                const data: { quantity: number; priceSnapshot?: string } = {
-                  quantity,
-                };
-                if (priceStr !== null) {
-                  data.priceSnapshot = priceStr;
+              if (!isLocked) {
+                for (const u of itemUpdates) {
+                  const itemId = u.itemId as string;
+                  const quantity = u.quantity as number;
+                  const row = job.items.find((i) => i.id === itemId);
+                  if (!row || quantity < 0) continue;
+                  const priceStr = allowUnitPricePersistence
+                    ? parseOptionalUnitPrice(u.unitPrice)
+                    : null;
+                  const data: { quantity: number; priceSnapshot?: string } = {
+                    quantity,
+                  };
+                  if (priceStr !== null) {
+                    data.priceSnapshot = priceStr;
+                  }
+                  await prisma.jobItem.update({
+                    where: { id: itemId },
+                    data,
+                  });
+                  didChange = true;
                 }
-                await prisma.jobItem.update({
-                  where: { id: itemId },
-                  data,
-                });
-                didChange = true;
               }
               if (didChange) {
+                const metadataOnly =
+                  isLocked ||
+                  (!removeItemIds.length && !itemUpdates.length);
                 await emailProjectStatusSnapshot({
                   shop,
                   projectId,
                   actorCustomerId: customerId,
                   headline: "Order updated on project page",
-                  introLines: [
-                    `Someone edited order "${jobTitleForMessage}" (quantities, line unit prices, name, or removed lines).`,
-                    "Open the project link below to review the current order contents.",
-                  ],
+                  introLines: metadataOnly
+                    ? [
+                        `Someone updated reference or contact details on order "${jobTitleForMessage}" (purchase order #, site contact name, or phone).`,
+                        "Open the project link below to review the current order.",
+                      ]
+                    : [
+                        `Someone edited order "${jobTitleForMessage}" (quantities, line unit prices, name, or removed lines).`,
+                        "Open the project link below to review the current order contents.",
+                      ],
                 });
               }
             }
@@ -2397,6 +2431,32 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }
       }
 
+      /*
+       * Storefront inline "Save" uses `fetch()` + JSON. Following Remix
+       * `redirect()` across the Shopify app proxy is brittle (opaque
+       * responses, HTML 200s, etc.). When the client asks for JSON ack,
+       * return a tiny JSON body so the browser can reliably reload.
+       *
+       * Also honor `?pcJson=1` on the request URL so we still return JSON
+       * if a proxy strips or alters the JSON body but preserves the query.
+       */
+      const saveAckFromQuery =
+        new URL(request.url).searchParams.get("pcJson") === "1";
+      if (
+        String(payload.responseMode || "").toLowerCase() === "json" ||
+        saveAckFromQuery
+      ) {
+        return Response.json(
+          { ok: true as const },
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
+          },
+        );
+      }
       return redirectToProject(request, projectId, shop);
     }
 
@@ -3171,11 +3231,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
 
       if (job) {
+        const targetDefaults = await prisma.project.findFirst({
+          where: { id: targetProjectId, shop: shopStringFilter(shop) },
+          select: { defaultSiteContactName: true, defaultSiteContactPhone: true },
+        });
         const copyJob = await prisma.job.create({
           data: {
             projectId: targetProjectId,
             name: `${job.name} (Copy)`,
             purchaseOrderNumber: job.purchaseOrderNumber ?? undefined,
+            siteContactName:
+              job.siteContactName?.trim() ||
+              targetDefaults?.defaultSiteContactName ||
+              null,
+            siteContactPhone:
+              job.siteContactPhone?.trim() ||
+              targetDefaults?.defaultSiteContactPhone ||
+              null,
             isLocked: false,
             items: {
               create: job.items.map((item) => ({
@@ -3913,7 +3985,6 @@ export default function ProjectDetailPage() {
       ? (actionData.memberError as string)
       : null;
   const location = useLocation();
-  const revalidator = useRevalidator();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedJobId = searchParams.get("job");
   const [jobs, setJobs] = useState(project.jobs);
@@ -4124,7 +4195,7 @@ export default function ProjectDetailPage() {
    * by showing only:
    *   - "Order again" button when the order has been delivered (via
    *     `copy-job` → duplicates this job + all items as a fresh draft).
-   *   - A green "Order complete" chip when the order has been paid, so
+   *   - A green "Delivered" chip when the order has been paid, so
    *     the user gets a clear "this is done" signal on finished rows.
    *   - Nothing for every other lifecycle state.
    */
@@ -4155,7 +4226,7 @@ export default function ProjectDetailPage() {
     if (ls === "paid") {
       return (
         <span className="project-clad-order-lifecycle-chip project-clad-order-lifecycle-chip--complete">
-          Order complete
+          Delivered
         </span>
       );
     }
@@ -4410,320 +4481,6 @@ export default function ProjectDetailPage() {
     return () =>
       document.removeEventListener("click", onCaptureClick, true);
   }, [location.pathname, location.search]);
-
-  /*
-   * Autosave-on-blur for the three inline-editable capsules in OrderFinancePanel:
-   *   - [data-projectclad-purchase-order-input]
-   *   - [data-projectclad-site-contact-name-input]
-   *   - [data-projectclad-site-contact-phone-input]
-   *
-   * Without this, those inputs only persist when the user enters Edit order →
-   * Save. Clicking Order now without that round-trip would 400 with "Add a
-   * purchase order # / site contact …" because the server hasn't seen the
-   * typed value yet. Blur-autosave bridges that gap so the capsules behave
-   * the way they look — type, click away, it's saved.
-   *
-   * Implementation notes:
-   *   - We compare the trimmed value against `data-original-...` to skip
-   *     no-op blurs (clicking through without changing anything).
-   *   - We always send all three fields + jobName from the same <details>,
-   *     so the diff-aware `save-order-edit` action only writes the deltas
-   *     and never accidentally clears a sibling field. (`jobName` empty =
-   *     leave-as-is; `purchaseOrderNumber` empty = clear; site contact
-   *     fields use `undefined` = leave-as-is, "" = clear.)
-   *   - A `data-projectclad-saving="1"` lock prevents overlapping saves on
-   *     the same input; if the user keeps editing during a flight, the
-   *     pending flag re-fires once the in-flight save resolves so we never
-   *     drop a final value.
-   *   - Brief `data-projectclad-just-saved="1"` flag pulses the row so the
-   *     user gets a subtle visual ack without a modal/toast.
-   */
-  const revalidatorRef = useRef(revalidator);
-  revalidatorRef.current = revalidator;
-  /*
-   * We scan for newly-mounted inputs every render (not just on URL change)
-   * so that when React revalidates after a save / when the user opens a
-   * previously-collapsed <details> / when the visibleJobs list changes,
-   * freshly-mounted inputs still get their listeners + original-value
-   * snapshots. A WeakSet of already-wired elements prevents double-binding.
-   *
-   * `useEffect` (not `useLayoutEffect`) because:
-   *   1. SSR warnings for useLayoutEffect are cosmetic but noisy
-   *   2. We're only touching the DOM, no layout read/write race
-   *   3. It runs after every render commit, which is exactly when new
-   *      inputs may have appeared
-   */
-  const wiredInputsRef = useRef<WeakSet<HTMLInputElement>>(new WeakSet());
-  const originalValuesRef = useRef<WeakMap<HTMLInputElement, string>>(
-    new WeakMap(),
-  );
-  useEffect(() => {
-    const path = `${location.pathname}${location.search}`;
-    const FIELD_SELECTORS = [
-      "[data-projectclad-purchase-order-input]",
-      "[data-projectclad-site-contact-name-input]",
-      "[data-projectclad-site-contact-phone-input]",
-    ].join(",");
-
-    /*
-     * Walk every inline-editable input inside `details` and compare its
-     * trimmed value vs the snapshot in `originalValuesRef`. If at least
-     * one differs, flip that details's Save button on (green glow +
-     * enabled). Otherwise disable it and clear the glow.
-     *
-     * Snapshots live in a WeakMap (seeded at first bind) rather than
-     * `data-original-…` DOM attrs because React re-renders would reset
-     * those attrs from stale loader data mid-edit and flicker the glow.
-     */
-    function recomputeUnsavedFor(details: Element) {
-      const inputs = details.querySelectorAll(FIELD_SELECTORS);
-      let anyUnsaved = false;
-      inputs.forEach((el) => {
-        if (!(el instanceof HTMLInputElement)) return;
-        const original = (originalValuesRef.current.get(el) ?? "").trim();
-        if (el.value.trim() !== original) anyUnsaved = true;
-      });
-      const btn = details.querySelector(
-        "[data-projectclad-save-fields-btn]",
-      );
-      if (btn instanceof HTMLButtonElement) {
-        /* The button is ALWAYS clickable — clicking Save always POSTs
-           the current DOM values (the server-side diff is cheap and
-           idempotent for no-ops). This attribute only drives the green
-           "you have unsaved changes" glow; it is not a click gate. */
-        if (anyUnsaved) {
-          btn.setAttribute("data-projectclad-has-unsaved", "1");
-        } else {
-          btn.removeAttribute("data-projectclad-has-unsaved");
-        }
-      }
-    }
-
-    function flashSaved(input: HTMLInputElement) {
-      const row = input.closest(".project-clad-order-finance__row");
-      const target =
-        row instanceof HTMLElement ? row : (input as HTMLElement);
-      target.setAttribute("data-projectclad-just-saved", "1");
-      window.setTimeout(() => {
-        target.removeAttribute("data-projectclad-just-saved");
-      }, 1200);
-    }
-
-    /**
-     * Persist the 3 inline-editable capsules (PO / Site Contact Name /
-     * Phone) via the same `save-order-edit` action that the Edit Order
-     * form posts to.
-     *
-     * @param input  the capsule input that triggered the save
-     * @param mode   "blur"       = in-place update (revalidate), keeps focus
-     *               "explicit"   = Save button click (full reload, matches
-     *                              the proven Edit Order pattern)
-     */
-    async function trySave(
-      input: HTMLInputElement,
-      mode: "blur" | "explicit" = "blur",
-    ): Promise<void> {
-      const original = originalValuesRef.current.get(input) ?? "";
-      const current = input.value.trim();
-      if (current === original.trim()) return;
-
-      if (input.dataset.projectcladSaving === "1") {
-        input.dataset.projectcladPendingSave = "1";
-        input.dataset.projectcladPendingMode = mode;
-        return;
-      }
-
-      const details = input.closest("details");
-      const jobId =
-        input.getAttribute("data-job-id") ||
-        details?.getAttribute("data-job-id") ||
-        "";
-      if (!jobId || !details) return;
-
-      // Snapshot every relevant input from the same <details> so the
-      // diff-aware action never wipes a sibling we didn't touch.
-      function readField(selector: string): string {
-        const el = details.querySelector(selector);
-        return el instanceof HTMLInputElement ? el.value.trim() : "";
-      }
-      const jobName = readField("[data-projectclad-job-name-input]");
-      const purchaseOrderNumber = readField(
-        "[data-projectclad-purchase-order-input]",
-      );
-      const siteContactName = readField(
-        "[data-projectclad-site-contact-name-input]",
-      );
-      const siteContactPhone = readField(
-        "[data-projectclad-site-contact-phone-input]",
-      );
-
-      input.dataset.projectcladSaving = "1";
-      try {
-        const res = await fetch(path, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify({
-            intent: "save-order-edit",
-            jobId,
-            jobName,
-            purchaseOrderNumber,
-            siteContactName,
-            siteContactPhone,
-            removeItemIds: [],
-            itemUpdates: [],
-            deleteJob: false,
-          }),
-        });
-        /*
-         * save-order-edit returns a redirect() on success, so after
-         * fetch auto-follows we get HTML (not JSON) with res.ok=true.
-         * Only try JSON.parse for the error paths where the action
-         * returns Response.json({ error }, { status: 4xx }).
-         */
-        let payload: Record<string, unknown> | null = null;
-        if (!res.ok) {
-          try {
-            payload = (await res.json()) as Record<string, unknown>;
-          } catch {
-            payload = null;
-          }
-          const errLine =
-            payload && typeof payload.error === "string"
-              ? payload.error
-              : `Save failed (${res.status}).`;
-          // eslint-disable-next-line no-console -- surface save failures; silent
-          // alerts are worse than a console log + visible alert.
-          console.error("[project-clad] save-order-edit failed", {
-            status: res.status,
-            payload,
-          });
-          window.alert(errLine);
-          // Revert local input to last-known-good so the page reflects
-          // server truth and a future blur won't keep retrying the same
-          // bad value silently.
-          input.value = original;
-          return;
-        }
-
-        if (mode === "explicit") {
-          /*
-           * Explicit Save button click → full page reload to match the
-           * proven Edit Order save path (line ~6937). This guarantees the
-           * freshly-persisted PO / Site Contact values propagate to the
-           * React tree, the Order Now gate, and the badges in the row —
-           * no fighting with uncontrolled-input staleness or revalidator
-           * edge cases.
-           */
-          window.location.reload();
-          return;
-        }
-
-        // Blur path: re-snapshot EVERY inline input in this details so
-        // subsequent input events see them all as "clean" — the server
-        // now owns all 3 values atomically.
-        details
-          .querySelectorAll(FIELD_SELECTORS)
-          .forEach((el) => {
-            if (el instanceof HTMLInputElement) {
-              originalValuesRef.current.set(el, el.value.trim());
-            }
-          });
-        // Snapshots are now in sync with server truth — drop the green
-        // glow on this job's Save button and disable it.
-        recomputeUnsavedFor(details);
-        flashSaved(input);
-        // Pull fresh loader data so the React tree picks up the new
-        // siteContactName / purchaseOrderNumber and the Order Now gate
-        // re-enables without a full page reload (which would steal focus
-        // and reset any in-progress edits in adjacent capsules).
-        revalidatorRef.current.revalidate();
-      } catch (err) {
-        // eslint-disable-next-line no-console -- surface network failures.
-        console.error("[project-clad] save-order-edit network error", err);
-        window.alert("Couldn't save — check your connection and try again.");
-        input.value = original;
-      } finally {
-        input.dataset.projectcladSaving = "";
-        if (input.dataset.projectcladPendingSave === "1") {
-          const pendingMode =
-            input.dataset.projectcladPendingMode === "explicit"
-              ? "explicit"
-              : "blur";
-          input.dataset.projectcladPendingSave = "";
-          input.dataset.projectcladPendingMode = "";
-          // User kept editing while we were saving — flush their final
-          // value as a fresh save round.
-          void trySave(input, pendingMode);
-        }
-      }
-    }
-
-    /*
-     * Direct-bind per-input handlers. Delegation at document/capture had
-     * subtle ordering issues with other listeners in this file — binding
-     * to each input directly is bulletproof and also lets us seed the
-     * original-value snapshot at bind time from the current DOM value
-     * (which IS the server's last-saved value thanks to `defaultValue=`).
-     */
-    function handleInputEvent(this: HTMLInputElement) {
-      const details = this.closest("details");
-      if (details) recomputeUnsavedFor(details);
-    }
-    function handleBlurEvent(this: HTMLInputElement) {
-      void trySave(this);
-    }
-
-    const wired = wiredInputsRef.current;
-    const snapshots = originalValuesRef.current;
-    const inputs = document.querySelectorAll<HTMLInputElement>(FIELD_SELECTORS);
-    inputs.forEach((input) => {
-      if (!snapshots.has(input)) {
-        // Seed: the input's current value at first-bind IS server truth
-        // (React SSR rendered `defaultValue={serverValue}` and hydration
-        // preserved it). Using `value` rather than the data-original-*
-        // attr dodges React re-renders that would reset a stale attr
-        // while the user is mid-edit.
-        snapshots.set(input, input.value.trim());
-      }
-      if (wired.has(input)) return;
-      wired.add(input);
-      input.addEventListener("input", handleInputEvent);
-      input.addEventListener("blur", handleBlurEvent);
-    });
-
-    /*
-     * The explicit "Save" button's click is now bound directly via
-     * React onClick in the button's JSX — the document-level delegate
-     * used here previously could miss clicks when the button's
-     * imperative `disabled` gate got out of sync with the React tree
-     * after a revalidation. The direct handler always POSTs the DOM's
-     * current input values, so a click always saves what the user sees.
-     */
-
-    /*
-     * Initial / post-render sync: walk every <details> so each job's
-     * Save button reflects the correct "has unsaved changes" glow based
-     * on the freshly-seeded snapshots.
-     */
-    document
-      .querySelectorAll("details[data-job-id]")
-      .forEach((d) => recomputeUnsavedFor(d));
-
-    // NB: we intentionally do NOT detach the input/blur listeners on
-    // cleanup — the wiredInputsRef WeakSet will naturally GC when the
-    // DOM node goes away, and detaching every time the effect re-runs
-    // would drop listeners bound to inputs that didn't re-render.
-    return;
-    /*
-     * Re-run on every render so newly-mounted inputs (from revalidation,
-     * opening a <details>, new job row, etc.) get bound. The WeakSet
-     * guard keeps it idempotent.
-     */
-  });
 
   const inlineStyles = themeStyles?.styles || [];
 
@@ -5712,126 +5469,12 @@ export default function ProjectDetailPage() {
                       (canEdit || viewerCanFulfill) &&
                       !job.isLocked &&
                       (!awaitingForActions || viewerCanFulfill);
-                    /*
-                     * Render the explicit "Save" button whenever the user is
-                     * allowed to edit the inline-editable capsules (PO + site
-                     * contact). Autosave-on-blur still fires for those, but
-                     * this gives users an unambiguous commit handle that
-                     * also visually signals (green glow) "you have unsaved
-                     * changes".
-                     *
-                     * The click handler is bound DIRECTLY here (instead of
-                     * via a document-level delegate) so a click always
-                     * reaches the POST regardless of whether the input
-                     * listener has had a chance to flip the unsaved flag —
-                     * earlier rev used a capture-phase delegate that could
-                     * miss when the delegate's snapshot WeakMap got out of
-                     * sync with the current DOM across revalidations.
-                     *
-                     * We also explicitly read the current input values out of
-                     * the DOM at click time rather than trusting any cached
-                     * snapshot, so typing + clicking Save always saves what
-                     * the user sees — even if autosave-on-blur misfires.
-                     */
-                    const showSaveFieldsBtn = Boolean(canEdit && !job.isLocked);
-                    const handleSaveFieldsClick = (
-                      event: React.MouseEvent<HTMLButtonElement>,
-                    ) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      const btn = event.currentTarget;
-                      if (btn.dataset.projectcladSaving === "1") return;
-
-                      const details = btn.closest("details");
-                      if (!details) return;
-
-                      const readField = (selector: string): string => {
-                        const el = details.querySelector(selector);
-                        return el instanceof HTMLInputElement
-                          ? el.value.trim()
-                          : "";
-                      };
-                      const jobName = readField(
-                        "[data-projectclad-job-name-input]",
-                      );
-                      const purchaseOrderNumber = readField(
-                        "[data-projectclad-purchase-order-input]",
-                      );
-                      const siteContactName = readField(
-                        "[data-projectclad-site-contact-name-input]",
-                      );
-                      const siteContactPhone = readField(
-                        "[data-projectclad-site-contact-phone-input]",
-                      );
-
-                      btn.dataset.projectcladSaving = "1";
-                      btn.setAttribute("aria-busy", "true");
-                      void (async () => {
-                        try {
-                          const url = `${location.pathname}${location.search}`;
-                          const res = await fetch(url, {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                              Accept: "application/json",
-                            },
-                            credentials: "include",
-                            body: JSON.stringify({
-                              intent: "save-order-edit",
-                              jobId: job.id,
-                              jobName,
-                              purchaseOrderNumber,
-                              siteContactName,
-                              siteContactPhone,
-                              removeItemIds: [],
-                              itemUpdates: [],
-                              deleteJob: false,
-                            }),
-                          });
-                          if (!res.ok) {
-                            let serverMsg = `Save failed (${res.status}).`;
-                            try {
-                              const errJson = (await res.json()) as {
-                                error?: string;
-                              };
-                              if (
-                                errJson &&
-                                typeof errJson.error === "string" &&
-                                errJson.error.trim()
-                              ) {
-                                serverMsg = errJson.error;
-                              }
-                            } catch {
-                              /* non-JSON body — stick with the generic message */
-                            }
-                            console.error(
-                              "[project-clad] Save fields failed:",
-                              res.status,
-                              serverMsg,
-                            );
-                            window.alert(serverMsg);
-                            return;
-                          }
-                          /* save-order-edit returns a redirect() on success;
-                             after fetch auto-follows we get HTML with res.ok=true.
-                             Full reload guarantees the freshly-persisted values
-                             propagate to the React tree (same proven path as
-                             Edit Order → Save). */
-                          window.location.reload();
-                        } catch (err) {
-                          console.error(
-                            "[project-clad] Save fields network error:",
-                            err,
-                          );
-                          window.alert(
-                            "Couldn't save — check your connection and try again.",
-                          );
-                        } finally {
-                          btn.dataset.projectcladSaving = "";
-                          btn.removeAttribute("aria-busy");
-                        }
-                      })();
-                    };
+                    /* Save: POST current PO / site contact / phone (+ order name
+                     * from the summary). Locked Shopify-linked orders still allow
+                     * those fields; line items stay frozen server-side.
+                     * Click handling lives in the page inline script (same pattern as
+                     * Edit order) so saves work even if React event delegation fails. */
+                    const showSaveFieldsBtn = Boolean(canEdit);
                     const orderFinanceActionsSlot =
                       canEdit || showEditOrderButtonForActions ? (
                         <div className="project-clad-order-finance__actions-row">
@@ -5841,8 +5484,7 @@ export default function ProjectDetailPage() {
                               className="project-clad-button project-clad-save-fields-btn"
                               data-projectclad-save-fields-btn
                               data-job-id={job.id}
-                              title="Save PO / Site Contact / Phone"
-                              onClick={handleSaveFieldsClick}
+                              title="Save purchase order, site contact, and phone"
                             >
                               Save
                             </button>
@@ -5952,7 +5594,7 @@ export default function ProjectDetailPage() {
                           {/*
                            * Lifecycle chip / "Order again" button comes FIRST
                            * (left side of the cluster) so the status reads
-                           * before the dollar amount: e.g. `ORDER COMPLETE
+                           * before the dollar amount: e.g. `DELIVERED
                            * SUBTOTAL: $1.00`. Mirrors how a receipt headline
                            * leads with state, then settles into the number.
                            */}
@@ -6003,8 +5645,8 @@ export default function ProjectDetailPage() {
                             siteContactName={job.siteContactName}
                             siteContactPhone={job.siteContactPhone}
                             jobId={job.id}
-                            canEditSiteContact={Boolean(canEdit && !job.isLocked)}
-                            canEditPurchaseOrder={Boolean(canEdit && !job.isLocked)}
+                            canEditSiteContact={Boolean(canEdit)}
+                            canEditPurchaseOrder={Boolean(canEdit)}
                             actionsSlot={orderFinanceActionsSlot}
                           />
                         </div>
@@ -6225,8 +5867,8 @@ export default function ProjectDetailPage() {
                                 siteContactName={job.siteContactName}
                                 siteContactPhone={job.siteContactPhone}
                                 jobId={job.id}
-                                canEditSiteContact={Boolean(canEdit && !job.isLocked)}
-                                canEditPurchaseOrder={Boolean(canEdit && !job.isLocked)}
+                                canEditSiteContact={Boolean(canEdit)}
+                                canEditPurchaseOrder={Boolean(canEdit)}
                                 actionsSlot={orderFinanceActionsSlot}
                               />
                             </td>
@@ -7005,6 +6647,112 @@ export default function ProjectDetailPage() {
   }, true);
 
   document.addEventListener('click', (event) => {
+    const saveFieldsBtn = event.target?.closest?.('[data-projectclad-save-fields-btn]');
+    if (saveFieldsBtn instanceof HTMLButtonElement) {
+      if (saveFieldsBtn.dataset.projectcladSaving === '1') return;
+      event.preventDefault();
+      event.stopPropagation();
+      const jobId = saveFieldsBtn.getAttribute('data-job-id') || '';
+      if (!jobId) return;
+      const details = document.querySelector('details[data-job-id="' + jobId.replace(/"/g, '') + '"]');
+      if (!(details instanceof HTMLElement)) {
+        window.alert('Could not find this order on the page — try refreshing.');
+        return;
+      }
+      const readField = function (selector) {
+        const el = details.querySelector(selector);
+        return el instanceof HTMLInputElement ? el.value.trim() : '';
+      };
+      const jobName = readField('[data-projectclad-job-name-input]');
+      const purchaseOrderNumber = readField('[data-projectclad-purchase-order-input]');
+      const siteContactName = readField('[data-projectclad-site-contact-name-input]');
+      const siteContactPhone = readField('[data-projectclad-site-contact-phone-input]');
+      saveFieldsBtn.dataset.projectcladSaving = '1';
+      saveFieldsBtn.setAttribute('aria-busy', 'true');
+      void (async function () {
+        try {
+          var saveUrl = new URL(window.location.href);
+          saveUrl.searchParams.set('pcJson', '1');
+          const res = await fetch(saveUrl.pathname + saveUrl.search, {
+            method: 'POST',
+            redirect: 'manual',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              intent: 'save-order-edit',
+              responseMode: 'json',
+              jobId: jobId,
+              jobName: jobName,
+              purchaseOrderNumber: purchaseOrderNumber,
+              siteContactName: siteContactName,
+              siteContactPhone: siteContactPhone,
+              removeItemIds: [],
+              itemUpdates: [],
+              deleteJob: false,
+            }),
+          });
+          /*
+           * Default fetch follows Remix redirect() so the final response is often
+           * 200 HTML and the JSON ack is lost even though the DB already updated.
+           * redirect manual keeps 3xx; treat redirect after save as success.
+           */
+          function stripPcJsonAndReload() {
+            var u = new URL(window.location.href);
+            u.searchParams.delete('pcJson');
+            window.location.replace(u.pathname + u.search);
+          }
+          if (res.status >= 300 && res.status < 400) {
+            stripPcJsonAndReload();
+            return;
+          }
+          var raw = await res.text();
+          var bomStripped = raw.length && raw.charCodeAt(0) === 65279 ? raw.slice(1) : raw;
+          var trimmed = bomStripped.trimStart();
+          var ack = null;
+          if (trimmed.indexOf('{') === 0) {
+            try {
+              ack = JSON.parse(trimmed);
+            } catch (e) {
+              ack = null;
+            }
+          }
+          if (!res.ok) {
+            const serverMsg =
+              (ack && typeof ack.error === 'string' && ack.error.trim()) ||
+              ('Save failed (' + res.status + ').');
+            console.error('[project-clad] Save fields failed:', res.status, serverMsg);
+            window.alert(serverMsg);
+            return;
+          }
+          /*
+           * res.ok but body may be HTML (app proxy / redirect quirks) or JSON without
+           * a boolean ok flag. If the server sent an explicit JSON error, surface it;
+           * otherwise assume the action completed and reload so SSR shows saved values.
+           */
+          if (ack && typeof ack.error === 'string' && ack.error.trim()) {
+            window.alert(ack.error.trim());
+            return;
+          }
+          if (ack && ack.ok === false) {
+            window.alert(
+              (ack.error && String(ack.error).trim()) || 'Save could not be completed.',
+            );
+            return;
+          }
+          stripPcJsonAndReload();
+        } catch (err) {
+          console.error('[project-clad] Save fields network error:', err);
+          window.alert("Couldn't save — check your connection and try again.");
+        } finally {
+          saveFieldsBtn.dataset.projectcladSaving = '';
+          saveFieldsBtn.removeAttribute('aria-busy');
+        }
+      })();
+      return;
+    }
     const editOrderBtn = event.target?.closest?.('[data-projectclad-edit-order]');
     if (editOrderBtn instanceof HTMLElement) {
       event.preventDefault();

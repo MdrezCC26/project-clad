@@ -6205,66 +6205,10 @@ input[data-projectclad-unit-price-input] {
   text-shadow: none !important;
 }
 
-/*
- * "Save" CTA inside OrderFinancePanel actions row.
- * - Default state: standard neumorphic button, disabled, no glow (nothing to save).
- * - When `data-projectclad-has-unsaved="1"` is set by the document input listener
- *   (any of the 3 inline-editable capsules differs from its `data-original-…`
- *   snapshot): button enables and gets a steady green outset glow + green
- *   label color so the user can see at a glance that a commit is pending.
- * - Hover (only when enabled): existing grey-button hover wins — the white rim
- *   from `.project-clad-button:not(:disabled):...:hover` overrides the green
- *   outset shadow naturally because that rule sets `box-shadow: none`.
- */
-.project-clad-button.project-clad-save-fields-btn[data-projectclad-has-unsaved="1"] {
-  box-shadow:
-    var(--pc-btn-neu-shadow),
-    0 0 0 2px rgba(46, 160, 67, 0.55),
-    0 0 14px rgba(46, 160, 67, 0.32);
-  color: rgba(28, 140, 52, 0.95) !important;
-  text-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.28),
-    0 0 6px rgba(28, 186, 28, 0.28),
-    0 0 14px rgba(28, 186, 28, 0.16);
-}
-
-/*
- * "No unsaved changes" resting state — button is still fully clickable
- * (clicks are a no-op on the server and safe to re-fire), but we dim
- * it slightly so the glow-vs-rest contrast still reads as a clear
- * "you have work to commit" signal when the user types.
- */
-.project-clad-button.project-clad-save-fields-btn:not([data-projectclad-has-unsaved="1"]) {
-  opacity: 0.7;
-}
+/* Save in finance actions row — same neu button stack as neighbors; busy while POST flies. */
 .project-clad-button.project-clad-save-fields-btn[aria-busy="true"] {
-  opacity: 0.6;
+  opacity: 0.65;
   cursor: progress;
-}
-
-/*
- * Autosave-on-blur visual ack. The blur handler in apps.project-clad.project.tsx
- * sets `data-projectclad-just-saved="1"` on the row for ~1.2s after a successful
- * save — this rule pulses the capsule's inset shadow softly green so the user
- * gets a non-modal confirmation that their typed value persisted.
- */
-.project-clad-order-finance__row[data-projectclad-just-saved="1"] {
-  animation: project-clad-order-finance-saved-pulse 1.1s ease-out;
-}
-
-@keyframes project-clad-order-finance-saved-pulse {
-  0% {
-    box-shadow: var(--pc-btn-neu-shadow-active);
-  }
-  18% {
-    box-shadow:
-      var(--pc-btn-neu-shadow-active),
-      0 0 0 2px rgba(46, 160, 67, 0.55),
-      0 0 14px rgba(46, 160, 67, 0.35);
-  }
-  100% {
-    box-shadow: var(--pc-btn-neu-shadow-active);
-  }
 }
 
 /* Inline middot + muted secondary unit (e.g. linear ft beside unit count). */
@@ -6359,7 +6303,7 @@ input[data-projectclad-unit-price-input] {
 }
 
 /*
- * Green "Order complete" chip rendered in the order tile's TOP-RIGHT
+ * Green "Delivered" chip rendered in the order tile's TOP-RIGHT
  * header when `orderLifecycleStatus === "paid"`. Matches Bakbak One
  * caps + the green glow treatment used on the Approve button hover so
  * a finished order reads as "locked in, done" at a glance.
