@@ -1,6 +1,10 @@
 import prisma from "../db.server";
 import { getCustomersByIds } from "./adminCustomers.server";
 import { customerFacingPropertiesIndentedBlock } from "./customerFacingEmailLines.server";
+import {
+  getEmailNotificationPrefs,
+  isEmailNotificationEnabled,
+} from "./emailNotificationPrefs.server";
 import { dedupeEmailAddresses, isEmailConfigured } from "./email.server";
 import {
   sendTransactionalEmail,
@@ -198,6 +202,8 @@ export async function sendProjectStatusNotificationEmail(args: {
   introLines?: string[];
 }): Promise<void> {
   if (!isEmailConfigured()) return;
+  const notifyPrefs = await getEmailNotificationPrefs(args.shop);
+  if (!isEmailNotificationEnabled(notifyPrefs, "projectStatus")) return;
 
   const recipients = await collectRecipientEmails(
     args.shop,
@@ -263,6 +269,8 @@ export async function sendOrderCreatedNotificationEmail(args: {
   }>;
 }): Promise<void> {
   if (!isEmailConfigured()) return;
+  const notifyPrefs = await getEmailNotificationPrefs(args.shop);
+  if (!isEmailNotificationEnabled(notifyPrefs, "cartSave")) return;
 
   const recipients = await collectRecipientEmails(
     args.shop,
@@ -450,6 +458,13 @@ export async function sendOrderPlacedEmails(args: {
   actorCustomerId: string;
 }): Promise<void> {
   if (!isEmailConfigured()) return;
+  const notifyPrefs = await getEmailNotificationPrefs(args.shop);
+  const sendCustomer = isEmailNotificationEnabled(
+    notifyPrefs,
+    "orderPlacedCustomer",
+  );
+  const sendShop = isEmailNotificationEnabled(notifyPrefs, "orderPlacedShop");
+  if (!sendCustomer && !sendShop) return;
 
   const project = await prisma.project.findFirst({
     where: { id: args.projectId, shop: shopStringFilter(args.shop) },
@@ -594,7 +609,7 @@ export async function sendOrderPlacedEmails(args: {
   ].join("\n");
 
   const customerTo = ac?.email?.trim();
-  if (customerTo) {
+  if (sendCustomer && customerTo) {
     try {
       await sendTransactionalEmail({
         shop: args.shop,
@@ -609,6 +624,8 @@ export async function sendOrderPlacedEmails(args: {
       );
     }
   }
+
+  if (!sendShop) return;
 
   const shopRecipients = parseShopOrderPlacedRecipients();
   if (shopRecipients.length === 0) {

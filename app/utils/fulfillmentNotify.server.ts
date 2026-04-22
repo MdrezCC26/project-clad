@@ -4,6 +4,10 @@ import {
   type CustomerInfo,
 } from "./adminCustomers.server";
 import { customerFacingPropertiesIndentedBlock } from "./customerFacingEmailLines.server";
+import {
+  getEmailNotificationPrefs,
+  isEmailNotificationEnabled,
+} from "./emailNotificationPrefs.server";
 import { isEmailConfigured } from "./email.server";
 import { sendTransactionalEmail } from "./transactionalEmail.server";
 import { formatPreferredDeliveryDisplay } from "./preferredDeliveryFormat";
@@ -125,6 +129,16 @@ export async function sendFulfillmentPackageEmails(args: {
 }): Promise<void> {
   if (!isEmailConfigured()) {
     console.warn("[fulfillmentNotify] email not configured; skip send");
+    return;
+  }
+
+  const notifyPrefs = await getEmailNotificationPrefs(args.shop);
+  const sendOwner = isEmailNotificationEnabled(notifyPrefs, "fulfillmentOwner");
+  const sendFinance = isEmailNotificationEnabled(
+    notifyPrefs,
+    "fulfillmentFinance",
+  );
+  if (!sendOwner && !sendFinance) {
     return;
   }
 
@@ -257,7 +271,7 @@ export async function sendFulfillmentPackageEmails(args: {
   const financeTo = financeDeliveryInvoiceRecipient().trim();
   const financeNorm = financeTo.toLowerCase();
 
-  if (ownerEmail) {
+  if (sendOwner && ownerEmail) {
     try {
       await sendTransactionalEmail({
         shop: args.shop,
@@ -274,7 +288,11 @@ export async function sendFulfillmentPackageEmails(args: {
     }
   }
 
-  if (financeTo && financeNorm !== ownerNorm) {
+  if (
+    sendFinance &&
+    financeTo &&
+    financeNorm !== ownerNorm
+  ) {
     try {
       await sendTransactionalEmail({
         shop: args.shop,

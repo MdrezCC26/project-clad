@@ -629,6 +629,130 @@ html:has(.project-clad-page--projects) body {
   gap: 0.65rem;
 }
 
+/*
+ * Orders header row: "Orders" title on the left, sort-by dropdown on the right. Laid out
+ * with flex so the dropdown wraps below the title on narrow viewports.
+ */
+.project-clad-orders-shell__heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.project-clad-orders-shell__heading-row > .project-clad-section-title {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/*
+ * Sort dropdown: neumorphic pill matching the rest of the caesura buttons. The native
+ * <select> is styled with appearance:none and a chevron drawn via background-image so
+ * it feels like a neu button + value row rather than an OS-chrome dropdown.
+ */
+.project-clad-orders-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-size: calc(0.76rem * var(--pc-text-scale));
+  letter-spacing: 0.03em;
+  color: var(--pc-btn-neu-fg);
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  text-transform: uppercase;
+}
+
+.project-clad-orders-sort__label {
+  opacity: 0.85;
+}
+
+.project-clad-orders-sort__select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--pc-caesura-raised);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%235a6673' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  border-radius: var(--pc-neu-radius, 14px);
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+  box-shadow: var(--pc-btn-neu-shadow);
+  color: var(--pc-btn-neu-fg);
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-size: calc(0.82rem * var(--pc-text-scale));
+  letter-spacing: 0.025em;
+  text-transform: none;
+  padding: 0.45rem 1.75rem 0.45rem 0.85rem;
+  cursor: pointer;
+  transition: var(--pc-btn-neu-transition);
+}
+
+.project-clad-orders-sort__select:hover,
+.project-clad-orders-sort__select:focus-visible {
+  box-shadow: var(--pc-btn-neu-shadow-hover);
+  border-color: var(--pc-caesura-border-hover);
+  outline: none;
+}
+
+.project-clad-orders-sort__select:active {
+  box-shadow: var(--pc-btn-neu-shadow-active);
+  border-color: transparent;
+}
+
+/*
+ * Drag handle: plain grip icon embedded in the order summary. Intentionally no button
+ * chrome, border, background, or hover effects — it sits flat on the tile and only
+ * changes cursor on hover. While a drag is active we dim the icon slightly so the user
+ * can see that the tile they're moving is the "active" one.
+ */
+.project-clad-order-drag-handle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.5rem;
+  margin-right: 0.55rem;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--pc-btn-neu-fg);
+  opacity: 0.55;
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: opacity 120ms ease;
+}
+
+.project-clad-order-drag-handle:hover {
+  opacity: 0.9;
+}
+
+.project-clad-order-drag-handle:focus-visible {
+  outline: 2px solid var(--pc-caesura-border-hover);
+  outline-offset: 2px;
+  opacity: 0.9;
+}
+
+.project-clad-order-drag-handle:active,
+.project-clad-order-drag-handle[data-dragging="true"] {
+  cursor: grabbing;
+  opacity: 1;
+}
+
+/*
+ * Wrapper for each sortable order tile. dnd-kit positions this shell via transform, so
+ * the whole <details> smoothly animates to its sorted spot.
+ */
+.project-clad-order-row-shell {
+  touch-action: manipulation;
+}
+
 .project-clad-orders-shell__footer {
   margin-top: 0.65rem;
   padding-top: 0.45rem;
@@ -1927,7 +2051,6 @@ html:has(.project-clad-page--projects) body {
   gap: 0.5rem 1.25rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .project-clad-page--projects.project-clad-page--detail
@@ -3491,23 +3614,20 @@ html:has(.project-clad-page--projects) body {
 }
 
 /*
- * Edit order: two stacked fields (order name + PO), same label + inset input pattern as cart modal.
+ * Edit order: order-name input lives in the tile header and only reveals in edit mode.
+ * The PURCHASE ORDER # input used to live alongside it but has been moved into
+ * OrderFinancePanel as an always-visible inline-editable capsule (matches the
+ * Site Contact pattern). Dead `.project-clad-job-po-field` rules removed.
  */
-.project-clad-job-name-field,
-.project-clad-job-po-field {
+.project-clad-job-name-field {
   display: none !important;
   width: 100%;
   max-width: min(320px, 100%);
   box-sizing: border-box;
 }
 
-details.project-clad-edit-mode .project-clad-job-name-field,
-details.project-clad-edit-mode .project-clad-job-po-field {
+details.project-clad-edit-mode .project-clad-job-name-field {
   display: block !important;
-}
-
-details.project-clad-edit-mode .project-clad-job-po-field {
-  margin-top: 0.65rem;
 }
 
 .project-clad-job-edit-label {
@@ -4174,14 +4294,17 @@ details.project-clad-edit-mode
   text-shadow: var(--pc-caesura-hover-red-text-glow);
 }
 
-/* Approve action only: same hover treatment as grey buttons, but green label glow. */
+/* Approve action only: same hover treatment as grey buttons, but green label glow.
+   Triple-selector + !important on box-shadow/border so this wins against
+   any deeper ancestor scoping or rule-order accidents. */
 .project-clad-page
   .project-clad-button.project-clad-button--approve:not(:disabled):hover,
 .project-clad-modal-backdrop
-  .project-clad-button.project-clad-button--approve:not(:disabled):hover {
+  .project-clad-button.project-clad-button--approve:not(:disabled):hover,
+.project-clad-button.project-clad-button--approve:not(:disabled):hover {
   z-index: 1;
-  box-shadow: none;
-  border-color: var(--pc-caesura-border-hover);
+  box-shadow: none !important;
+  border-color: var(--pc-caesura-border-hover) !important;
   color: var(--color-2) !important;
   text-shadow:
     0 1px 0 rgba(255, 255, 255, 0.28),
@@ -4747,7 +4870,7 @@ details.project-clad-edit-mode
   content: "Product";
   font-size: calc(1rem * var(--pc-text-scale));
   display: block;
-  width: var(--pc-order-thumb-size);
+  width: var(--pc-order-card-thumb-col, var(--pc-order-thumb-size));
   min-width: 0;
   max-width: 100%;
   text-align: left;
@@ -4781,7 +4904,7 @@ details.project-clad-edit-mode
 
 /*
  * Order line items + column headers: Bakbak + meta chip scale (explicit descendants / ::before beat
- * .project-clad-page * { Helvetica !important }). No line under thead or under last body row — see below.
+ * .project-clad-page * { Helvetica !important }). No hairline borders between rows — tiles carry separation.
  */
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-orders-table
@@ -4793,14 +4916,6 @@ details.project-clad-edit-mode
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-orders-table
   tbody
-  td {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12) !important;
-}
-
-.project-clad-page--projects.project-clad-page--detail
-  .project-clad-orders-table
-  tbody
-  tr:last-child
   td {
   border-bottom: none !important;
 }
@@ -4889,17 +5004,50 @@ details.project-clad-edit-mode
   box-sizing: border-box;
 }
 
-/* Project detail: smaller drawing + raised neu tile (matches nav pills, not flat white slab) */
+/* Project detail: smaller drawing + raised neu chip on the same caesura tray as order rows */
 .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table {
-  --pc-order-thumb-size: clamp(80px, 18vw, 220px);
+  --pc-order-thumb-size: clamp(176px, 24.2vw, 264px);
+  --pc-order-card-thumb-col: clamp(198px, 26.4vw, 286px);
+  --pc-order-card-thumb-max-h: clamp(11rem, 28.6vw, 22rem);
+  --pc-order-card-qty-col: clamp(72px, 9vw, 104px);
+  --pc-order-card-price-col: clamp(140px, 16vw, 180px);
+  --pc-order-card-actions-col: minmax(4.75rem, max-content);
+}
+
+/* Align thead columns with the internal grid inside each line tile (tbody uses colspan). */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  thead
+  tr
+  th:nth-child(1) {
+  width: var(--pc-order-card-thumb-col);
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  thead
+  tr
+  th:nth-child(3) {
+  width: var(--pc-order-card-qty-col);
+  text-align: center !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  thead
+  tr
+  th:nth-child(4) {
+  width: var(--pc-order-card-price-col);
+  text-align: right !important;
 }
 
 .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb,
 .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb--placeholder {
-  background: var(--pc-card-bg);
+  background: var(--pc-caesura-raised);
   padding: 0.4rem;
   border-radius: var(--pc-neu-radius);
   border: var(--pc-caesura-border);
+  border-color: transparent;
   box-shadow: var(--pc-caesura-drop);
   box-sizing: border-box;
 }
@@ -4910,12 +5058,521 @@ details.project-clad-edit-mode
   min-height: 0;
 }
 
-/* Product column: single inset tile per line; qty/price stay flush with the open order (no extra outer dip). */
+/* One full-width tile per line: product + qty + price (+ actions) inside a single inset. */
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-orders-table
-  td.project-clad-order-line-product-cell {
-  padding: 0.45rem 0.65rem !important;
+  td.project-clad-order-line-full-cell {
+  padding: 0.5rem 0.65rem !important;
   vertical-align: middle !important;
+}
+
+.project-clad-order-line-body {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.project-clad-order-line-tile__grid {
+  display: grid;
+  grid-template-columns:
+    var(--pc-order-card-thumb-col, clamp(88px, 14vw, 120px))
+    minmax(0, 1fr)
+    var(--pc-order-card-qty-col, clamp(72px, 9vw, 104px))
+    var(--pc-order-card-price-col, clamp(140px, 16vw, 180px));
+  gap: 0.55rem 1rem;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.project-clad-order-line-tile__grid--with-actions {
+  grid-template-columns:
+    var(--pc-order-card-thumb-col, clamp(88px, 14vw, 120px))
+    minmax(0, 1fr)
+    var(--pc-order-card-qty-col, clamp(72px, 9vw, 104px))
+    var(--pc-order-card-price-col, clamp(140px, 16vw, 180px))
+    var(--pc-order-card-actions-col, minmax(4.75rem, max-content));
+}
+
+/* Remove line: Actions header + Remove control only while `details.project-clad-edit-mode` is on. */
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row:not(.project-clad-edit-mode)
+  .project-clad-orders-table
+  thead
+  th.project-clad-orders-th-actions {
+  display: none !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row:not(.project-clad-edit-mode)
+  .project-clad-order-line-tile__col--actions {
+  display: none !important;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row:not(.project-clad-edit-mode)
+  .project-clad-order-line-tile__grid--with-actions {
+  grid-template-columns:
+    var(--pc-order-card-thumb-col, clamp(88px, 14vw, 120px))
+    minmax(0, 1fr)
+    var(--pc-order-card-qty-col, clamp(72px, 9vw, 104px))
+    var(--pc-order-card-price-col, clamp(140px, 16vw, 180px)) !important;
+}
+
+.project-clad-order-line-tile__col--thumb,
+.project-clad-order-line-tile__col--details {
+  min-width: 0;
+}
+
+.project-clad-order-line-tile__col--qty {
+  white-space: nowrap;
+  align-self: center;
+}
+
+.project-clad-order-line-tile__col--price,
+.project-clad-order-line-tile__col.project-clad-order-line-tile__col--price.project-clad-table-right {
+  white-space: normal;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  text-align: center;
+}
+
+/*
+ * Single-line "Heads up" pill rendered under a regenerated/unavailable line item.
+ * Soft pink fill, faint red border, icon on the left, inline bold heading + em-dash + body.
+ * Matches the mockup; intentionally NOT pressed/sunken so it reads as an informational
+ * notice rather than another data row.
+ */
+.project-clad-order-card-notice {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin-top: 0.5rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: color-mix(in srgb, var(--color-1, #c40000) 6%, var(--pc-caesura-bg));
+  border: 1px solid
+    color-mix(in srgb, var(--color-1, #c40000) 18%, transparent);
+  box-shadow: none;
+}
+
+.project-clad-order-card-notice__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  color: var(--color-1, #c40000);
+}
+
+.project-clad-order-card-notice__icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.project-clad-order-card-notice__title {
+  font-family: Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 700 !important;
+  font-size: inherit !important;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--pc-btn-neu-fg);
+  text-shadow: none;
+}
+
+.project-clad-order-card-notice__sep {
+  margin: 0 0.15rem;
+  opacity: 0.75;
+}
+
+.project-clad-order-card-notice__body {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.85rem * var(--pc-text-scale)) !important;
+  font-weight: 400 !important;
+  line-height: 1.4 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: none !important;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .project-clad-order-card-notice {
+    border-radius: 14px;
+    align-items: flex-start;
+    padding: 0.6rem 0.75rem;
+  }
+  .project-clad-order-card-notice__icon {
+    margin-top: 0.18rem;
+  }
+}
+
+/*
+ * The thumb frame is THE single neumorphic card around the product photo — raised (button-like)
+ * in its resting state, bright white glow on hover / focus-within. The <img> inside gets no
+ * separate raised box so there is only one layer of chrome.
+ */
+.project-clad-order-card-thumb-frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  border-radius: var(--pc-neu-radius, 14px);
+  background: var(--pc-caesura-raised);
+  background-image: none;
+  box-shadow: var(--pc-btn-neu-shadow);
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+  padding: 0.2rem;
+  box-sizing: border-box;
+  transition: var(--pc-btn-neu-transition);
+  transform: scale(1);
+  filter: none;
+}
+
+.project-clad-order-card-thumb-frame:hover,
+.project-clad-order-card-thumb-frame:focus-visible,
+.project-clad-order-card-thumb-frame:focus-within {
+  z-index: 2;
+  transform: scale(1);
+  filter: none;
+  box-shadow: var(--pc-btn-neu-shadow-hover);
+  border-color: var(--pc-caesura-border-hover);
+  outline: none;
+}
+
+.project-clad-order-card-thumb-frame:active {
+  transform: scale(1);
+  filter: none;
+  background: var(--pc-caesura-bg);
+  background-image: none;
+  border-color: transparent;
+  box-shadow: var(--pc-btn-neu-shadow-active);
+}
+
+.project-clad-order-card-thumb-badge {
+  position: absolute;
+  top: 0.35rem;
+  left: 0.35rem;
+  z-index: 1;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-size: calc(0.58rem * var(--pc-text-scale));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.12rem 0.35rem;
+  border-radius: calc(var(--pc-neu-radius, 14px) * 0.45);
+  color: #fff;
+  background: color-mix(in srgb, var(--pc-btn-neu-fg) 92%, #000);
+  box-shadow: var(--pc-caesura-drop);
+}
+
+.project-clad-order-line-tile__col--thumb,
+.project-clad-order-line-tile__col--details,
+.project-clad-order-line-tile__col--qty,
+.project-clad-order-line-tile__col--price,
+.project-clad-order-line-tile__col--actions {
+  align-self: center;
+}
+
+.project-clad-order-line-tile__col--thumb .project-clad-order-line-tile__row {
+  align-items: center;
+}
+
+/*
+ * Thumb frame fills the fixed column width. The box itself is `width × max-height`; the image inside
+ * uses object-fit: contain so square products render square, tall drawings letterbox into the cap,
+ * and small images still scale up to be legible.
+ */
+.project-clad-order-line-tile__col--thumb .project-clad-order-card-thumb-frame {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  align-self: center;
+}
+
+/*
+ * Strip stacked neumorphic chrome off <img> inside the thumb column — the frame is the only card.
+ * Also kills the base `.project-clad-table .project-clad-thumb { height: 288px; min-height: 288px }`
+ * rule so `height: auto` + intrinsic aspect actually holds and square photos stay square.
+ */
+.project-clad-order-line-tile__col--thumb .project-clad-thumb,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  .project-clad-order-line-tile__col--thumb
+  .project-clad-thumb,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  .project-clad-order-line-tile__col--thumb
+  .project-clad-thumb--placeholder {
+  background: transparent !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
+/*
+ * Real image: width is locked to the column, height follows the photo's intrinsic aspect exactly
+ * (no max-height cap, no object-fit stretch) so the tile is the shape of the product photo.
+ */
+.project-clad-order-line-tile__col--thumb .project-clad-thumb:not(.project-clad-thumb--pdf):not(.project-clad-thumb--placeholder),
+.project-clad-orders-table
+  .project-clad-order-line-tile__col--thumb
+  .project-clad-thumb:not(.project-clad-thumb--placeholder):not(.project-clad-thumb--pdf) {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  aspect-ratio: auto;
+  object-fit: contain;
+  display: block;
+  border-radius: calc(var(--pc-neu-radius, 14px) * 0.6);
+}
+
+.project-clad-order-line-tile__col--thumb .project-clad-thumb--placeholder {
+  width: 100% !important;
+  max-width: 100% !important;
+  aspect-ratio: 1;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+}
+
+.project-clad-order-line-tile__col--thumb .project-clad-thumb--pdf {
+  width: 100% !important;
+  max-width: 100% !important;
+  aspect-ratio: 1;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+}
+
+.project-clad-order-card-details {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  text-align: left;
+  width: 100%;
+  min-width: 0;
+}
+
+.project-clad-order-card-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.project-clad-order-card-vid {
+  flex: 0 0 auto;
+  font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+  font-size: calc(0.68rem * var(--pc-text-scale));
+  padding: 0.12rem 0.4rem;
+  border-radius: calc(var(--pc-neu-radius, 14px) * 0.45);
+  background: var(--pc-caesura-raised);
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+  box-shadow: var(--pc-caesura-drop);
+  color: var(--pc-btn-neu-fg);
+  opacity: 0.92;
+}
+
+.project-clad-order-card-sub {
+  margin: 0;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.78rem * var(--pc-text-scale)) !important;
+  font-weight: 400 !important;
+  line-height: 1.4;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  opacity: 0.88;
+}
+
+.project-clad-order-card-snapshot-note {
+  margin: 0.05rem 0 0;
+  font-size: 0.78rem !important;
+  line-height: 1.35 !important;
+}
+
+.project-clad-order-card-specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.45rem;
+  margin-top: 0.15rem;
+  width: 100%;
+}
+
+.project-clad-order-card-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.22rem 0.45rem;
+  border-radius: calc(var(--pc-neu-radius, 14px) * 0.55);
+  background: var(--pc-caesura-raised);
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+  box-shadow: var(--pc-caesura-drop);
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.72rem * var(--pc-text-scale)) !important;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.project-clad-order-card-chip__k {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400;
+  opacity: 0.72;
+  font-size: calc(0.68rem * var(--pc-text-scale));
+  letter-spacing: 0.04em;
+}
+
+.project-clad-order-card-chip__v {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400;
+  font-size: calc(0.78rem * var(--pc-text-scale));
+  letter-spacing: 0.01em;
+  color: var(--color-1, #c40000) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+}
+
+.project-clad-order-card-prop-blocks {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.project-clad-order-card-prop-block {
+  margin-top: 0.25rem;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.78rem * var(--pc-text-scale)) !important;
+}
+
+.project-clad-order-card-prop-img {
+  max-width: min(200px, 100%);
+  max-height: 200px;
+  display: block;
+  margin-top: 0.25rem;
+  border-radius: var(--pc-neu-radius, 14px);
+  box-shadow: var(--pc-caesura-drop);
+}
+
+.project-clad-order-card-qty-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.project-clad-order-card-qty-label {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.78rem * var(--pc-text-scale)) !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  opacity: 0.72;
+}
+
+.project-clad-order-card-qty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(1.2rem * var(--pc-text-scale)) !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.025em;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+}
+
+.project-clad-order-card-price-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  text-align: center;
+}
+
+.project-clad-order-card-price-unit {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(1.2rem * var(--pc-text-scale)) !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.025em;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  text-transform: uppercase !important;
+}
+
+.project-clad-order-card-price-each {
+  font-family: Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: 0.72rem !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.02em;
+  text-transform: none !important;
+  color: var(--pc-muted) !important;
+  text-shadow: none !important;
+  opacity: 0.95;
+}
+
+.project-clad-order-card-price-line {
+  margin-top: 0.15rem;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.74rem * var(--pc-text-scale)) !important;
+  letter-spacing: 0.02em;
+  text-transform: none !important;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  white-space: nowrap;
+}
+
+.project-clad-order-card-price-line strong {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  margin-left: 0.3em;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+}
+
+.project-clad-order-line-tile__col--actions .project-clad-stack {
+  justify-items: center;
 }
 
 .project-clad-order-line-tile {
@@ -4925,9 +5582,87 @@ details.project-clad-edit-mode
   box-sizing: border-box;
   padding: 0.55rem 0.75rem;
   border-radius: var(--pc-neu-radius, 14px);
-  background: var(--pc-card-bg);
+  /* Same pressed tray as open order <details> — not flat white on grey */
+  background: var(--pc-caesura-bg);
+  background-image: none;
   border: var(--pc-caesura-border);
+  border-color: transparent;
   box-shadow: var(--pc-btn-neu-shadow-active);
+  /* Narrow-container stacking (split view / mobile) — beats viewport media queries. */
+  container-type: inline-size;
+  container-name: pcOrderLineTile;
+}
+
+/* Tile itself is narrow (split view / mobile): stack to a single column like the pre-mockup layout. */
+@container pcOrderLineTile (max-width: 640px) {
+  /* Outrank the not-edit-mode `!important` rule (specificity 0,4,1). */
+  .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-line-tile
+    .project-clad-order-line-tile__grid,
+  .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-line-tile
+    .project-clad-order-line-tile__grid--with-actions {
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+    justify-items: stretch !important;
+    gap: 0.55rem !important;
+  }
+
+  .project-clad-order-line-tile__col--thumb,
+  .project-clad-order-line-tile__col--details,
+  .project-clad-order-line-tile__col--qty,
+  .project-clad-order-line-tile__col--price,
+  .project-clad-order-line-tile__col--actions {
+    text-align: center !important;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .project-clad-order-line-tile__col--thumb .project-clad-order-line-tile__row {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .project-clad-order-line-tile__col--thumb .project-clad-order-card-thumb-frame {
+    width: min(100%, 18rem);
+    max-width: 100%;
+    margin-inline: auto;
+  }
+
+  .project-clad-order-line-tile__col--thumb .project-clad-thumb:not(.project-clad-thumb--pdf) {
+    max-height: min(70vh, 24rem);
+    aspect-ratio: auto;
+  }
+
+  .project-clad-order-card-details {
+    align-items: center;
+    text-align: center;
+  }
+
+  .project-clad-order-card-name-row {
+    justify-content: center;
+  }
+
+  .project-clad-order-card-specs {
+    justify-content: center;
+  }
+
+  .project-clad-order-line-tile__col--price {
+    align-items: center !important;
+    display: flex !important;
+  }
+
+  .project-clad-order-card-price-stack {
+    align-items: center;
+    text-align: center;
+  }
+}
+
+.project-clad-order-line-tile--line-item.project-clad-order-line-tile {
+  padding: 0.6rem 0.85rem;
 }
 
 .project-clad-order-line-tile__row {
@@ -4944,11 +5679,14 @@ details.project-clad-edit-mode
   align-self: center;
   min-width: 1.5rem;
   text-align: center;
-  font-weight: 700;
-  font-size: calc(0.95rem * var(--pc-text-scale));
-  line-height: 1.1;
-  color: var(--pc-caesura-dark);
-  opacity: 0.72;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400;
+  font-size: calc(1.1rem * var(--pc-text-scale));
+  line-height: 1.45;
+  letter-spacing: 0.025em;
+  color: var(--color-1, #c40000) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+  opacity: 1;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -4992,7 +5730,38 @@ details.project-clad-edit-mode
   display: block;
   max-width: 100%;
   text-transform: uppercase;
-  font-weight: 700;
+  font-weight: 400;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  .project-clad-order-line-tile
+  .project-clad-order-line-titlelink,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  .project-clad-order-line-tile
+  .project-clad-order-card-details
+  .project-clad-order-line-titlelink,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  .project-clad-order-line-tile
+  .project-clad-order-line-titlelink span[data-projectclad-item-name],
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  .project-clad-order-line-tile
+  .project-clad-order-card-details
+  .project-clad-order-line-titlelink span[data-projectclad-item-name],
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  .project-clad-order-line-tile
+  .project-clad-order-line-title {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.9rem * var(--pc-text-scale)) !important;
+  line-height: 1.45;
+  letter-spacing: 0.025em;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  -webkit-font-smoothing: antialiased;
 }
 
 .project-clad-order-line-text .project-clad-item-properties {
@@ -5001,13 +5770,50 @@ details.project-clad-edit-mode
   text-align: left;
 }
 
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  .project-clad-order-line-tile
+  .project-clad-order-line-text
+  .project-clad-item-properties,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  .project-clad-order-line-tile
+  .project-clad-order-line-text
+  .project-clad-item-properties * {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: calc(0.9rem * var(--pc-text-scale)) !important;
+  line-height: 1.45;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Body copy for the "Heads up" pill is owned by `.project-clad-order-card-notice__body`
+ * above. Keep this selector as a no-op anchor so any legacy markup that still uses
+ * `.project-clad-order-line-unavailable-notice` continues to inherit clean defaults.
+ */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  .project-clad-order-line-tile
+  .project-clad-order-line-unavailable-notice {
+  font-family: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .project-clad-table-right {
   text-align: right;
 }
 
-/* Orders table: Quantity column — center header + values (Price stays right via .project-clad-table-right). */
-.project-clad-page--projects.project-clad-page--detail .project-clad-orders-table thead tr th:nth-child(2),
-.project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr td:nth-child(2) {
+/* Orders table: Quantity column — center header + values inside the line tile (price stays right). */
+.project-clad-page--projects.project-clad-page--detail .project-clad-orders-table thead tr th:nth-child(3),
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  .project-clad-order-line-tile__col--qty {
   text-align: center !important;
 }
 
@@ -5017,37 +5823,49 @@ details.project-clad-edit-mode
  */
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-orders-table
-  tbody
-  tr
-  td:nth-child(2)
+  .project-clad-order-line-tile__col--qty
   .project-clad-normal-view,
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-orders-table
-  tbody
-  tr
-  td:nth-child(2)
+  .project-clad-order-line-tile__col--qty
   input[data-projectclad-qty-input] {
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
   font-weight: 400 !important;
   font-size: calc(0.9rem * var(--pc-text-scale)) !important;
   letter-spacing: 0.025em !important;
-  color: var(--pc-muted) !important;
+  line-height: 1.45;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
   opacity: 1 !important;
-  text-transform: none !important;
+  text-transform: uppercase !important;
   -webkit-font-smoothing: antialiased;
 }
 
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-orders-table
-  tbody
-  tr
-  td:nth-child(3)
+  .project-clad-order-line-tile__col--price
+  .project-clad-normal-view:not(:has(.project-clad-order-card-price-stack)) {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: calc(0.9rem * var(--pc-text-scale)) !important;
+  letter-spacing: 0.025em !important;
+  line-height: 1.45;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  text-transform: uppercase !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  .project-clad-order-line-tile__col--price
   input[data-projectclad-unit-price-input] {
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
   font-weight: 400 !important;
   font-size: calc(0.9rem * var(--pc-text-scale)) !important;
   letter-spacing: 0.025em !important;
-  color: var(--pc-muted) !important;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
   text-transform: none !important;
   -webkit-font-smoothing: antialiased;
 }
@@ -5060,10 +5878,9 @@ input[data-projectclad-unit-price-input] {
   box-sizing: border-box;
 }
 
-/* Orders table: Actions is 4th column when shown — center with Add to cart / row actions */
-.project-clad-orders-table thead tr th:nth-child(4),
-.project-clad-orders-table tbody tr td:nth-child(4),
-.project-clad-orders-table tfoot tr td:nth-child(4) {
+/* Orders table: Actions header + cell — center with row actions */
+.project-clad-orders-table thead tr th.project-clad-orders-th-actions,
+.project-clad-orders-table .project-clad-order-line-tile__col--actions {
   text-align: center;
   padding-left: 0.65rem;
   padding-right: 1.1rem;
@@ -5076,29 +5893,26 @@ input[data-projectclad-unit-price-input] {
   margin-bottom: 0;
 }
 
-/* Order table footer: same neon as Project subtotal (body/thead outer borders cleared above). */
+/*
+ * Order totals tile: same typography as “IN STORE PICKUP” (.project-clad-order-schedule-summary__line),
+ * not the red neon subtotal scale.
+ */
 .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td {
   border-bottom: none !important;
   border-top: none !important;
-  color: var(--pc-pill-text-glow-hover) !important;
+  color: var(--pc-btn-neu-fg) !important;
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
   font-weight: 400 !important;
-  font-size: clamp(1.1rem, 4vw, 1.72rem) !important;
-  line-height: 1.25;
-  letter-spacing: 0.02em;
-  text-shadow: var(--pc-accent-heading-shadow);
+  font-size: calc(0.9rem * var(--pc-text-scale)) !important;
+  line-height: 1.45;
+  letter-spacing: 0.025em;
+  text-shadow: var(--pc-btn-neu-label-shadow);
   text-transform: uppercase;
   opacity: 1 !important;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
   -webkit-font-smoothing: antialiased;
-}
-
-/* Divider above subtotal: matches line items + order-actions strip (rgba(0,0,0,0.12)). */
-.project-clad-page--projects.project-clad-page--detail
-  .project-clad-orders-table
-  tfoot
-  tr:first-child
-  td {
-  border-top: 1px solid rgba(0, 0, 0, 0.12) !important;
 }
 
 .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td::before {
@@ -5106,11 +5920,714 @@ input[data-projectclad-unit-price-input] {
   color: inherit;
 }
 
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-orders-table
+  td.project-clad-order-tfoot-summary-cell {
+  padding: 0.5rem 0.65rem !important;
+  vertical-align: top !important;
+}
+
+/* =========================================================================
+   Order finance panel (bottom of each order tile)
+   Two columns: left = pressed info capsules (delivery, PO#, qty, shopify ref),
+   right = sunken finance card with subtotal/tax/delivery/total hero + meta.
+   Mirrors the mockup at docs/purchase-tile/order-summary-neumorphic.html.
+   ========================================================================= */
+.project-clad-order-finance {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 2.25rem;
+  padding: 1.25rem 0.4rem 0.35rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.project-clad-order-finance__left,
+.project-clad-order-finance__right {
+  min-width: 0;
+}
+
+/*
+ * Right column = Payment Summary card stacked above the order CTAs.
+ * The CTAs (Order now / Edit order) used to live in their own row
+ * underneath the entire panel; pulling them in here keeps everything
+ * in one visual section so the buttons read as part of the summary.
+ */
+.project-clad-order-finance__right {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.project-clad-order-finance__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 0.15rem;
+}
+
+.project-clad-order-finance__actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.project-clad-order-finance__actions-row > .project-clad-button {
+  margin: 0;
+}
+
+/*
+ * Mobile: stack the action-row buttons (Save / Order now / Edit order)
+ * vertically and center-align them inside the finance panel. At tablet
+ * width (<=780) they still go full-width; at phone width (<=520) we
+ * also cap their width so they don't stretch to the panel edge — the
+ * result reads as a tidy centered button column, matching the stacked
+ * tile layout the mobile row already uses elsewhere.
+ */
+@media (max-width: 780px) {
+  .project-clad-order-finance__actions {
+    justify-content: center;
+  }
+
+  .project-clad-order-finance__actions-row {
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .project-clad-order-finance__actions-row > .project-clad-button {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: min(22rem, 100%);
+    box-sizing: border-box;
+    min-width: 0;
+  }
+}
+
+.project-clad-order-finance__label {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.78rem * var(--pc-text-scale)) !important;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  opacity: 0.7;
+  margin: 0 0 0.9rem;
+  padding-left: 0.25rem;
+}
+
+.project-clad-order-finance__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.project-clad-order-finance__row {
+  display: grid;
+  grid-template-columns: 2.25rem 1fr auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.65rem 0.95rem;
+  border-radius: calc(var(--pc-neu-radius, 14px) * 0.8);
+  background: var(--pc-caesura-bg);
+  box-shadow: var(--pc-btn-neu-shadow-active);
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+}
+
+.project-clad-order-finance__icon {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background: var(--pc-caesura-bg);
+  box-shadow: var(--pc-caesura-drop);
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pc-btn-neu-fg);
+  flex: 0 0 auto;
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.project-clad-order-finance__icon svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  transition: filter 0.18s ease;
+}
+
+/*
+ * Hover: mirror the caesura button hover — white rim, red stroke, soft
+ * red glow on the SVG. Purely decorative (the row isn't interactive),
+ * but it ties the circle icons visually to the rest of the neumorphic
+ * hover vocabulary.
+ */
+.project-clad-order-finance__icon:hover {
+  border-color: var(--pc-caesura-border-hover);
+  color: var(--pc-caesura-hover-red-text, var(--color-1, #c40000));
+  box-shadow:
+    var(--pc-caesura-drop),
+    0 0 10px rgba(196, 0, 0, 0.22);
+}
+
+.project-clad-order-finance__icon:hover svg {
+  filter: drop-shadow(0 0 4px rgba(196, 0, 0, 0.45));
+}
+
+.project-clad-order-finance__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.project-clad-order-finance__k {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.68rem * var(--pc-text-scale)) !important;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 400;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  opacity: 0.7;
+  /* Labels like "PHONE NUMBER" / "TOTAL ORDER QUANTITY" — wrap at word
+     boundaries ONLY. Without this, narrow mobile columns fell back to
+     mid-word breaks ("PHO / NE / NUM / BER"). */
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+
+.project-clad-order-finance__v {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.95rem * var(--pc-text-scale)) !important;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  line-height: 1.25;
+  /* `break-word` (not `anywhere`) — only break mid-word when a single
+     token truly can't fit the column. Prevents values like "Required"
+     rendering as "Requ / ired" in narrow mobile viewports while still
+     letting pathologically-long strings (unbroken URLs, etc.) wrap. */
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.project-clad-order-finance__v--empty {
+  opacity: 0.55;
+  font-style: italic;
+}
+
+/* Site Contact "REQUIRED" state — same italic shape as --empty, but red/full opacity
+   so it actually reads as a hard requirement instead of a gentle "not provided" hint. */
+.project-clad-order-finance__v--required {
+  opacity: 1;
+  color: var(--color-1, #c40000) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow) !important;
+}
+
+/*
+ * Inline-editable input rendered inside a finance capsule (Site Contact + Phone).
+ * Completely chromeless — no border, background, or shadow — so it reads as plain
+ * text inside the capsule that just happens to be typeable.
+ *
+ * SPECIFICITY NOTE: the global `.project-clad-page input:not(...)*9` rule (and
+ * `.project-clad-orders-table input`) both ship `!important` declarations for
+ * background / box-shadow / border-radius. To win we have to MATCH or BEAT their
+ * (0, 10, 1) specificity. Below selector mirrors the global :not() chain plus the
+ * component class, taking us to (0, 12, 1) so source order + !important reliably
+ * beat the cascade.
+ */
+.project-clad-page
+  input.project-clad-order-finance__input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="image"]):not(.project-clad-neu-finder-input__field) {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.95rem * var(--pc-text-scale)) !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.01em !important;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow) !important;
+  line-height: 1.25 !important;
+  outline: none !important;
+  transition: none !important;
+}
+
+.project-clad-page
+  input.project-clad-order-finance__input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="image"]):not(.project-clad-neu-finder-input__field):focus,
+.project-clad-page
+  input.project-clad-order-finance__input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="image"]):not(.project-clad-neu-finder-input__field):focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.project-clad-page
+  input.project-clad-order-finance__input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="image"]):not(.project-clad-neu-finder-input__field)::placeholder {
+  color: var(--pc-muted) !important;
+  opacity: 0.7 !important;
+  font-style: italic !important;
+  text-shadow: none !important;
+}
+
+/* Empty + required: red italic text + placeholder, matches the read-only REQUIRED label. */
+.project-clad-page
+  input.project-clad-order-finance__input.project-clad-order-finance__input--required:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="image"]):not(.project-clad-neu-finder-input__field) {
+  color: var(--color-1, #c40000) !important;
+  text-shadow: none !important;
+  font-style: italic !important;
+}
+
+.project-clad-page
+  input.project-clad-order-finance__input.project-clad-order-finance__input--required:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="image"]):not(.project-clad-neu-finder-input__field)::placeholder {
+  color: var(--color-1, #c40000) !important;
+  opacity: 0.85 !important;
+  font-style: italic !important;
+  text-shadow: none !important;
+}
+
+/*
+ * "Save" CTA inside OrderFinancePanel actions row.
+ * - Default state: standard neumorphic button, disabled, no glow (nothing to save).
+ * - When `data-projectclad-has-unsaved="1"` is set by the document input listener
+ *   (any of the 3 inline-editable capsules differs from its `data-original-…`
+ *   snapshot): button enables and gets a steady green outset glow + green
+ *   label color so the user can see at a glance that a commit is pending.
+ * - Hover (only when enabled): existing grey-button hover wins — the white rim
+ *   from `.project-clad-button:not(:disabled):...:hover` overrides the green
+ *   outset shadow naturally because that rule sets `box-shadow: none`.
+ */
+.project-clad-button.project-clad-save-fields-btn[data-projectclad-has-unsaved="1"] {
+  box-shadow:
+    var(--pc-btn-neu-shadow),
+    0 0 0 2px rgba(46, 160, 67, 0.55),
+    0 0 14px rgba(46, 160, 67, 0.32);
+  color: rgba(28, 140, 52, 0.95) !important;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 6px rgba(28, 186, 28, 0.28),
+    0 0 14px rgba(28, 186, 28, 0.16);
+}
+
+/*
+ * "No unsaved changes" resting state — button is still fully clickable
+ * (clicks are a no-op on the server and safe to re-fire), but we dim
+ * it slightly so the glow-vs-rest contrast still reads as a clear
+ * "you have work to commit" signal when the user types.
+ */
+.project-clad-button.project-clad-save-fields-btn:not([data-projectclad-has-unsaved="1"]) {
+  opacity: 0.7;
+}
+.project-clad-button.project-clad-save-fields-btn[aria-busy="true"] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/*
+ * Autosave-on-blur visual ack. The blur handler in apps.project-clad.project.tsx
+ * sets `data-projectclad-just-saved="1"` on the row for ~1.2s after a successful
+ * save — this rule pulses the capsule's inset shadow softly green so the user
+ * gets a non-modal confirmation that their typed value persisted.
+ */
+.project-clad-order-finance__row[data-projectclad-just-saved="1"] {
+  animation: project-clad-order-finance-saved-pulse 1.1s ease-out;
+}
+
+@keyframes project-clad-order-finance-saved-pulse {
+  0% {
+    box-shadow: var(--pc-btn-neu-shadow-active);
+  }
+  18% {
+    box-shadow:
+      var(--pc-btn-neu-shadow-active),
+      0 0 0 2px rgba(46, 160, 67, 0.55),
+      0 0 14px rgba(46, 160, 67, 0.35);
+  }
+  100% {
+    box-shadow: var(--pc-btn-neu-shadow-active);
+  }
+}
+
+/* Inline middot + muted secondary unit (e.g. linear ft beside unit count). */
+.project-clad-order-finance__v-sep {
+  display: inline-block;
+  margin: 0 0.45rem;
+  opacity: 0.45;
+  font-weight: 400;
+}
+
+.project-clad-order-finance__v-secondary {
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  opacity: 0.65;
+}
+
+/* Tappable phone link inside the Site Contact Phone capsule. */
+.project-clad-order-finance__phone {
+  font-family: inherit !important;
+  color: inherit !important;
+  text-decoration: none;
+  border-bottom: 1px dashed currentColor;
+  text-shadow: inherit;
+}
+
+.project-clad-order-finance__phone:hover,
+.project-clad-order-finance__phone:focus-visible {
+  color: var(--color-1, #c40000) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+  border-bottom-color: var(--color-1, #c40000);
+  outline: none;
+}
+
+/* Subtle red asterisk for required fields in the order edit panel. */
+.project-clad-job-edit-required {
+  color: var(--color-1, #c40000);
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+  font-weight: 600;
+}
+
+.project-clad-order-finance__badge {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.65rem * var(--pc-text-scale)) !important;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(196, 0, 0, 0.08);
+  color: var(--color-1, #c40000) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+  white-space: nowrap;
+}
+
+.project-clad-order-finance__badge--neutral {
+  background: rgba(110, 108, 130, 0.1);
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  opacity: 0.85;
+}
+
+/*
+ * Green check icon shown in place of the "Provided" badge for the three
+ * inline-editable capsules (PO / Site Contact Name / Phone) once the user
+ * has filled them in. Same outer footprint as the badge so the row layout
+ * doesn't shift when a value is added — but visually it's just a soft
+ * green check inside a faint pill so the eye scans "this is good" instantly.
+ */
+.project-clad-order-finance__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(46, 160, 67, 0.12);
+  color: rgba(28, 140, 52, 0.95);
+  flex-shrink: 0;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 6px rgba(28, 186, 28, 0.28),
+    0 0 14px rgba(28, 186, 28, 0.16);
+}
+
+.project-clad-order-finance__check svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  display: block;
+  filter: drop-shadow(0 0 4px rgba(28, 186, 28, 0.35));
+}
+
+/*
+ * Green "Order complete" chip rendered in the order tile's TOP-RIGHT
+ * header when `orderLifecycleStatus === "paid"`. Matches Bakbak One
+ * caps + the green glow treatment used on the Approve button hover so
+ * a finished order reads as "locked in, done" at a glance.
+ *
+ * NOTE: The neighboring `.project-clad-order-summary-head-row__subtotal`
+ * rule sets font-family with `!important`; without `!important` here
+ * the chip silently falls back to the inherited system sans-serif.
+ * Specificity-bump + `!important` is intentional, not lazy.
+ */
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-lifecycle-cluster
+  .project-clad-order-lifecycle-chip,
+.project-clad-order-lifecycle-chip {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  font-size: var(--pc-button-font-size);
+  line-height: var(--pc-button-line-height);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-lifecycle-cluster
+  .project-clad-order-lifecycle-chip--complete,
+.project-clad-order-lifecycle-chip--complete {
+  color: rgba(28, 140, 52, 0.95) !important;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 6px rgba(28, 186, 28, 0.28),
+    0 0 14px rgba(28, 186, 28, 0.16);
+}
+
+.project-clad-order-finance__card {
+  padding: 1.2rem 1.35rem 1rem;
+  border-radius: var(--pc-neu-radius, 14px);
+  background: var(--pc-caesura-bg);
+  box-shadow: var(--pc-btn-neu-shadow-active);
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+}
+
+.project-clad-order-finance__fin {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  gap: 0.75rem;
+}
+
+.project-clad-order-finance__fin-k {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.78rem * var(--pc-text-scale)) !important;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  opacity: 0.75;
+  /* "SUBTOTAL" / "TAX (13%)" / "DELIVERY" / "TOTAL" — never break
+     inside a word, even when the narrow mobile card squeezes us. */
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.project-clad-order-finance__fin-v {
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(1rem * var(--pc-text-scale)) !important;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+  font-variant-numeric: tabular-nums;
+  /* Money values must never split across lines — "$33.22" rendering
+     as "$33.2 / 2" is never acceptable. */
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  flex: 0 0 auto;
+}
+
+.project-clad-order-finance__fin--muted .project-clad-order-finance__fin-v {
+  opacity: 0.85;
+}
+
+.project-clad-order-finance__divider {
+  height: 1px;
+  margin: 0.6rem -0.35rem;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.12) 18%,
+    rgba(0, 0, 0, 0.12) 82%,
+    transparent 100%
+  );
+}
+
+.project-clad-order-finance__fin--total {
+  padding-top: 0.6rem;
+  align-items: baseline;
+}
+
+.project-clad-order-finance__fin--total .project-clad-order-finance__fin-k {
+  font-size: calc(0.9rem * var(--pc-text-scale)) !important;
+  letter-spacing: 0.18em;
+  opacity: 1;
+}
+
+.project-clad-order-finance__fin--total .project-clad-order-finance__fin-v {
+  font-size: calc(1.9rem * var(--pc-text-scale)) !important;
+  letter-spacing: 0.01em;
+  color: var(--color-1, #c40000) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+}
+
+.project-clad-order-finance__tax-meta {
+  margin-top: 0.55rem;
+  padding-left: 0.15rem;
+  font-family: Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-size: calc(0.7rem * var(--pc-text-scale)) !important;
+  letter-spacing: 0.02em;
+  color: var(--pc-muted) !important;
+  opacity: 0.85;
+}
+
+@media (max-width: 780px) {
+  .project-clad-order-finance {
+    grid-template-columns: 1fr;
+    gap: 1.4rem;
+    padding: 1rem 0.2rem 0.25rem;
+  }
+}
+
+/*
+ * Narrow mobile (phone portrait, app proxy embedded in narrow theme
+ * columns, etc.). At these widths the 3-column grid
+ * `icon | text | badge` squeezes the text column until Bakbak One +
+ * letter-spacing can't fit "PHONE NUMBER" on one line, and the
+ * "REQUIRED" pill forces character-level wrapping on neighboring
+ * labels/values. Fix: promote the row to a 2-column grid and drop the
+ * badge / green check onto its own row beneath the text. The badge
+ * keeps its meaning, the text gets the full column width, and Bakbak
+ * One can breathe.
+ */
+@media (max-width: 520px) {
+  .project-clad-order-finance__row {
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+    grid-auto-rows: auto;
+    row-gap: 0.35rem;
+    column-gap: 0.75rem;
+    padding: 0.6rem 0.8rem;
+  }
+
+  .project-clad-order-finance__row > .project-clad-order-finance__badge,
+  .project-clad-order-finance__row > .project-clad-order-finance__check {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  /* Tighten the label letter-spacing a hair so multi-word labels like
+     "TOTAL ORDER QUANTITY" and "PHONE NUMBER" stay on one line. */
+  .project-clad-order-finance__k {
+    letter-spacing: 0.08em;
+  }
+
+  /* Payment summary card: row still reads left (label) / right (value),
+     but the amount gets tabular nums + nowrap enforcement above, and we
+     let the label shrink if needed without wrapping mid-word. */
+  .project-clad-order-finance__card {
+    padding: 1rem 1.1rem 0.9rem;
+  }
+
+  .project-clad-order-finance__fin {
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  /* The grand total number stays massive but shrinks ~15% on narrow
+     screens so a six-figure total (e.g. "$119.72") still fits the
+     sunken card without blowing out the card's right edge. */
+  .project-clad-order-finance__fin--total .project-clad-order-finance__fin-v {
+    font-size: calc(1.55rem * var(--pc-text-scale)) !important;
+  }
+
+  .project-clad-order-finance__fin--total .project-clad-order-finance__fin-k {
+    font-size: calc(0.82rem * var(--pc-text-scale)) !important;
+    letter-spacing: 0.14em;
+  }
+}
+
+/* --- legacy summary tile (kept for other spots that still reference it) --- */
+.project-clad-order-summary-tile {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.55rem 0.85rem;
+  border-radius: var(--pc-neu-radius, 14px);
+  background: var(--pc-caesura-bg);
+  background-image: none;
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+  box-shadow: var(--pc-btn-neu-shadow-active);
+}
+
+.project-clad-order-summary-tile--solo {
+  margin-top: 0.35rem;
+}
+
+.project-clad-order-summary-tile__line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(5rem, max-content);
+  gap: 0.35rem 0.85rem;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.32rem 0;
+}
+
+.project-clad-order-summary-tile__line--subtotal {
+  padding-top: 0;
+}
+
+.project-clad-order-summary-tile__lead {
+  min-width: 0;
+}
+
+.project-clad-order-summary-tile__amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.project-clad-order-summary-tile__lead:empty {
+  display: none;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-summary-tile
+  .project-clad-muted {
+  color: var(--pc-btn-neu-fg) !important;
+  text-shadow: var(--pc-btn-neu-label-shadow);
+}
+
 /* Tax row col 1: Total Order Quantity only. */
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-order-tfoot-qty-cell {
   text-align: left;
   vertical-align: middle;
+}
+
+/*
+ * Delivery row col 1: fulfillment / schedule summary line (e.g. "IN STORE PICKUP",
+ * "DELIVERY MON JUN 10, AM", "DELIVERED - JUN 10"). Typography matches the former
+ * external `.project-clad-order-schedule-summary__line` so the text keeps the same
+ * caps/weight/tracking after being moved into the sunken totals tile.
+ */
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-order-tfoot-fulfill-cell {
+  text-align: left;
+  vertical-align: middle;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 /* Total row col 1: PURCHASE ORDER # (same line / font weight as “Total”) + optional Shopify ref */
@@ -5121,39 +6638,29 @@ input[data-projectclad-unit-price-input] {
 }
 
 .project-clad-page--projects.project-clad-page--detail
-  .project-clad-orders-table
-  tr.project-clad-order-tfoot-row--total
-  > td {
-  vertical-align: middle;
+  .project-clad-order-summary-tile__line--total {
+  align-items: start;
 }
 
-.project-clad-page--projects.project-clad-page--detail .project-clad-order-tfoot-po-total-line {
-  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
-  font-weight: 400 !important;
-  font-size: clamp(1.1rem, 4vw, 1.72rem) !important;
-  line-height: 1.25;
-  letter-spacing: 0.02em;
-  text-shadow: var(--pc-accent-heading-shadow);
-  text-transform: uppercase;
-  color: var(--pc-pill-text-glow-hover) !important;
-  -webkit-font-smoothing: antialiased;
-}
-
+.project-clad-page--projects.project-clad-page--detail .project-clad-order-tfoot-po-total-line,
 .project-clad-page--projects.project-clad-page--detail .project-clad-order-tfoot-po-value {
-  font-weight: 400 !important;
+  font-size: inherit !important;
+  line-height: inherit;
+  letter-spacing: inherit;
+  color: inherit !important;
+  text-shadow: inherit;
+  text-transform: inherit;
 }
 
 .project-clad-page--projects.project-clad-page--detail
   .project-clad-order-tfoot-total-lead-cell
   .project-clad-order-foot-label {
-  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
-  font-weight: 400 !important;
-  font-size: clamp(0.95rem, 3.5vw, 1.45rem) !important;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--pc-pill-text-glow-hover) !important;
-  text-shadow: var(--pc-accent-heading-shadow) !important;
-  -webkit-font-smoothing: antialiased;
+  font-size: inherit !important;
+  line-height: inherit;
+  letter-spacing: inherit;
+  color: inherit !important;
+  text-shadow: inherit;
+  text-transform: inherit;
 }
 
 .project-clad-page--projects.project-clad-page--detail
@@ -5163,30 +6670,26 @@ input[data-projectclad-unit-price-input] {
 }
 
 .project-clad-page--projects.project-clad-page--detail .project-clad-order-foot-order-name {
-  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
+  font-family: inherit !important;
   font-weight: 400 !important;
   font-size: inherit;
   letter-spacing: inherit;
   line-height: inherit;
-  color: var(--pc-pill-text-glow-hover) !important;
-  text-shadow: var(--pc-accent-heading-shadow);
+  color: inherit !important;
+  text-shadow: inherit;
   text-transform: none !important;
   -webkit-font-smoothing: antialiased;
 }
 
-.project-clad-page--projects.project-clad-page--detail .project-clad-order-empty-with-totals__row {
-  border-top: none;
-}
-
 .project-clad-page--projects.project-clad-page--detail .project-clad-order-empty-with-totals__row .project-clad-muted,
 .project-clad-page--projects.project-clad-page--detail .project-clad-order-empty-with-totals__row .project-clad-table-right {
-  color: var(--pc-pill-text-glow-hover) !important;
+  color: var(--pc-btn-neu-fg) !important;
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
   font-weight: 400 !important;
-  font-size: clamp(1.1rem, 4vw, 1.72rem) !important;
-  line-height: 1.25;
-  letter-spacing: 0.02em;
-  text-shadow: var(--pc-accent-heading-shadow);
+  font-size: calc(0.9rem * var(--pc-text-scale)) !important;
+  line-height: 1.45;
+  letter-spacing: 0.025em;
+  text-shadow: var(--pc-btn-neu-label-shadow);
   text-transform: uppercase;
   opacity: 1 !important;
   -webkit-font-smoothing: antialiased;
@@ -5196,28 +6699,35 @@ input[data-projectclad-unit-price-input] {
   margin-top: 0;
 }
 
-.project-clad-orders-table tbody td:nth-child(4) .project-clad-stack {
+.project-clad-orders-table .project-clad-order-line-tile__col--actions .project-clad-stack {
   justify-items: center;
 }
 
 /*
- * Full-width: product column top-aligned (details under image+name). Qty / Price / Actions use extra
- * padding-top so their text/button centers line up with the variant row (vertically centered with the thumb).
+ * Full-width: every column (thumb, details, qty, price, actions) centers vertically within the row
+ * so qty / price / actions sit in line with the chip row rather than hugging the top.
  */
 @media (min-width: 901px) {
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:first-child {
-    vertical-align: top;
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    td.project-clad-order-line-full-cell {
+    vertical-align: middle;
   }
 
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:nth-child(2),
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:nth-child(3),
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:nth-child(4) {
-    vertical-align: top;
-    padding-top: 0.75rem;
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    .project-clad-order-line-tile__col--qty,
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    .project-clad-order-line-tile__col--price,
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    .project-clad-order-line-tile__col--actions {
+    align-self: center;
   }
 
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-item-link {
-    align-items: flex-start;
+    align-items: center;
   }
 }
 
@@ -5323,37 +6833,17 @@ details.project-clad-edit-mode .project-clad-edit-view {
     width: 100%;
   }
 
-  /* Flex column keeps DOM order reliable and centers the whole line item as one column */
+  /* One <td> per line: stretch the full-width tile; inner grid stacks on narrow screens */
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-    box-sizing: border-box;
-  }
-
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr:last-child {
+    padding: 0.45rem 0;
     border-bottom: none;
-  }
-
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr > td:nth-child(1) {
-    order: 1;
-  }
-
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr > td:nth-child(2) {
-    order: 2;
-  }
-
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr > td:nth-child(3) {
-    order: 3;
-  }
-
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr > td:nth-child(4) {
-    order: 4;
+    box-sizing: border-box;
   }
 
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td {
@@ -5361,7 +6851,62 @@ details.project-clad-edit-mode .project-clad-edit-view {
     width: 100%;
     max-width: 100%;
     border: none;
-    padding: 0.25rem 0;
+    padding: 0.2rem 0;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-line-tile
+    .project-clad-order-line-tile__grid,
+  .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-line-tile
+    .project-clad-order-line-tile__grid--with-actions {
+    grid-template-columns: 1fr !important;
+    gap: 0.55rem !important;
+    align-items: stretch;
+    justify-items: stretch;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-line-tile__col--qty,
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-line-tile__col--price,
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-line-tile__col--actions {
+    text-align: center !important;
+    white-space: normal;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-line-tile__col--price {
+    align-items: center !important;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-card-price-stack {
+    align-items: center;
+    text-align: center;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-line-tile__col--details {
+    text-align: center;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-card-details {
+    align-items: center;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-order-card-name-row {
+    justify-content: center;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--details::before {
+    content: "Details: ";
+    font-weight: 700;
+    display: block;
+    margin-bottom: 0.15rem;
+    font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+    font-size: calc(0.82rem * var(--pc-text-scale));
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+    color: var(--pc-btn-neu-fg);
   }
 
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot tr {
@@ -5421,10 +6966,6 @@ details.project-clad-edit-mode .project-clad-edit-view {
     align-self: center;
   }
 
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:first-child {
-    text-align: center;
-  }
-
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-item-properties {
     text-align: center;
     width: 100%;
@@ -5432,21 +6973,23 @@ details.project-clad-edit-mode .project-clad-edit-view {
 
   .project-clad-page--projects.project-clad-page--detail
     .project-clad-orders-table
+    .project-clad-order-line-tile__col--thumb
     .project-clad-thumb:not(.project-clad-thumb--placeholder):not(.project-clad-thumb--pdf) {
-    width: auto;
+    width: 100%;
     height: auto;
-    max-width: min(100%, 240px);
-    max-height: min(55vh, 360px);
+    max-width: 100%;
+    max-height: min(70vh, 24rem);
     margin-inline: auto;
     flex-shrink: 0;
     object-fit: contain;
     display: block;
-    background: var(--pc-card-bg);
-    padding: 0.4rem;
-    border-radius: var(--pc-neu-radius);
-    border: var(--pc-caesura-border);
-    box-shadow: var(--pc-caesura-drop);
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
     box-sizing: border-box;
+    aspect-ratio: auto;
   }
 
   .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table .project-clad-thumb--placeholder {
@@ -5456,10 +6999,11 @@ details.project-clad-edit-mode .project-clad-edit-view {
     flex-shrink: 0;
     aspect-ratio: 1;
     display: block;
-    background: var(--pc-card-bg);
+    background: var(--pc-caesura-raised);
     padding: 0.4rem;
     border-radius: var(--pc-neu-radius);
     border: var(--pc-caesura-border);
+    border-color: transparent;
     box-shadow: var(--pc-caesura-drop);
     box-sizing: border-box;
     min-height: 160px;
@@ -5469,88 +7013,107 @@ details.project-clad-edit-mode .project-clad-edit-view {
     text-align: center;
   }
 
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table thead tr th:nth-child(4),
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr td:nth-child(4),
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot tr td:nth-child(4) {
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    thead
+    tr
+    th.project-clad-orders-th-actions {
     text-align: center;
   }
 
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td:first-child {
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    .project-clad-order-line-tile__col--qty::before {
+    content: "Quantity: ";
+    font-weight: 700;
     display: block;
+    margin-bottom: 0.15rem;
   }
 
   .project-clad-page--projects.project-clad-page--detail
     .project-clad-orders-table
-    tfoot
-    tr.project-clad-order-tfoot-row--subtotal
-    td.project-clad-order-tfoot-lead--empty:first-child {
-    display: none !important;
+    .project-clad-order-line-tile__col--price::before {
+    content: "Price: ";
+    font-weight: 700;
+    display: block;
+    margin-bottom: 0.15rem;
   }
 
   .project-clad-page--projects.project-clad-page--detail
-    .project-clad-orders-table
-    tfoot
-    tr.project-clad-order-tfoot-row--total
-    td.project-clad-order-tfoot-lead--empty:first-child {
-    display: none !important;
+    .project-clad-order-summary-tile__line--subtotal,
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-summary-tile__line--tax,
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-summary-tile__line--delivery,
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-summary-tile__line--total {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: 0.75rem;
   }
 
   .project-clad-page--projects.project-clad-page--detail
-    .project-clad-orders-table
-    tfoot
-    tr.project-clad-order-tfoot-row--delivery
-    td.project-clad-order-tfoot-lead--empty:first-child {
-    display: none !important;
-  }
-
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot td:nth-child(2) {
+    .project-clad-order-summary-tile__line--subtotal
+    .project-clad-order-summary-tile__lead,
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-summary-tile__line--delivery
+    .project-clad-order-summary-tile__lead {
     display: none;
   }
 
   .project-clad-page--projects.project-clad-page--detail
-    .project-clad-orders-table
-    tfoot
-    tr.project-clad-order-tfoot-row--subtotal
-    td:nth-child(3)::before {
-    content: "Subtotal: ";
-    font-weight: 400;
+    .project-clad-order-summary-tile__line--tax
+    .project-clad-order-summary-tile__lead {
+    grid-column: 1 / -1;
   }
 
   .project-clad-page--projects.project-clad-page--detail
-    .project-clad-orders-table
-    tfoot
-    tr.project-clad-order-tfoot-row--tax
-    td:nth-child(3)::before {
-    content: "Tax (13%): ";
-    font-weight: 400;
+    .project-clad-order-summary-tile__line--subtotal
+    .project-clad-order-summary-tile__label,
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-summary-tile__line--delivery
+    .project-clad-order-summary-tile__label,
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-summary-tile__line--total
+    .project-clad-order-summary-tile__label {
+    grid-column: 1;
+    grid-row: 1;
   }
 
   .project-clad-page--projects.project-clad-page--detail
-    .project-clad-orders-table
-    tfoot
-    tr.project-clad-order-tfoot-row--delivery
-    td:nth-child(3)::before {
-    content: "Delivery: ";
-    font-weight: 400;
+    .project-clad-order-summary-tile__line--subtotal
+    .project-clad-order-summary-tile__amount,
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-summary-tile__line--delivery
+    .project-clad-order-summary-tile__amount,
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-summary-tile__line--total
+    .project-clad-order-summary-tile__amount {
+    grid-column: 2;
+    grid-row: 1;
   }
 
   .project-clad-page--projects.project-clad-page--detail
-    .project-clad-orders-table
-    tfoot
-    tr.project-clad-order-tfoot-row--total
-    td:nth-child(3)::before {
-    content: "Total: ";
-    font-weight: 400;
+    .project-clad-order-summary-tile__line--tax
+    .project-clad-order-summary-tile__label {
+    grid-column: 1;
+    grid-row: 2;
   }
 
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:nth-child(2)::before {
-    content: "Quantity: ";
-    font-weight: 700;
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-summary-tile__line--tax
+    .project-clad-order-summary-tile__amount {
+    grid-column: 2;
+    grid-row: 2;
   }
 
-  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody td:nth-child(3)::before {
-    content: "Price: ";
-    font-weight: 700;
+  .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-summary-tile__line--total
+    .project-clad-order-summary-tile__lead {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   /*
@@ -5888,55 +7451,6 @@ details.project-clad-edit-mode .project-clad-edit-view {
     text-align: left;
   }
 
-  .project-clad-orders-table tfoot td:first-child {
-    display: block;
-  }
-
-  .project-clad-orders-table
-    tfoot
-    tr.project-clad-order-tfoot-row--subtotal
-    td.project-clad-order-tfoot-lead--empty:first-child {
-    display: none !important;
-  }
-
-  .project-clad-orders-table
-    tfoot
-    tr.project-clad-order-tfoot-row--total
-    td.project-clad-order-tfoot-lead--empty:first-child {
-    display: none !important;
-  }
-
-  .project-clad-orders-table
-    tfoot
-    tr.project-clad-order-tfoot-row--delivery
-    td.project-clad-order-tfoot-lead--empty:first-child {
-    display: none !important;
-  }
-
-  .project-clad-orders-table tfoot td:nth-child(2) {
-    display: none;
-  }
-
-  .project-clad-orders-table tfoot tr.project-clad-order-tfoot-row--subtotal td:nth-child(3)::before {
-    content: "Subtotal: ";
-    font-weight: 400;
-  }
-
-  .project-clad-orders-table tfoot tr.project-clad-order-tfoot-row--tax td:nth-child(3)::before {
-    content: "Tax (13%): ";
-    font-weight: 400;
-  }
-
-  .project-clad-orders-table tfoot tr.project-clad-order-tfoot-row--delivery td:nth-child(3)::before {
-    content: "Delivery: ";
-    font-weight: 400;
-  }
-
-  .project-clad-orders-table tfoot tr.project-clad-order-tfoot-row--total td:nth-child(3)::before {
-    content: "Total: ";
-    font-weight: 400;
-  }
-
   /* Approve + Reject side by side, aligned and centered on mobile */
   .project-clad-approval-buttons {
     justify-content: center;
@@ -5962,6 +7476,11 @@ details.project-clad-edit-mode .project-clad-edit-view {
   .project-clad-table tr {
     padding: 0.75rem 0;
     border-bottom: 1px solid #000;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tbody tr,
+  .project-clad-page--projects.project-clad-page--detail .project-clad-orders-table tfoot tr {
+    border-bottom: none;
   }
 
   .project-clad-table td {
@@ -6023,14 +7542,18 @@ details.project-clad-edit-mode .project-clad-edit-view {
     text-align: left;
   }
 
-  .project-clad-orders-table tbody td:nth-child(2)::before {
+  .project-clad-orders-table .project-clad-order-line-tile__col--qty::before {
     content: "Quantity: ";
     font-weight: 700;
+    display: block;
+    margin-bottom: 0.15rem;
   }
 
-  .project-clad-orders-table tbody td:nth-child(3)::before {
+  .project-clad-orders-table .project-clad-order-line-tile__col--price::before {
     content: "Price: ";
     font-weight: 700;
+    display: block;
+    margin-bottom: 0.15rem;
   }
 
   .project-clad-members-table td:nth-child(2)::before {

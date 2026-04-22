@@ -17,6 +17,10 @@ import {
 } from "../utils/adminCustomers.server";
 import { getCsvForProjectIds } from "../utils/exportProjectsCsv.server";
 import { isEmailConfigured } from "../utils/email.server";
+import {
+  getEmailNotificationPrefs,
+  isEmailNotificationEnabled,
+} from "../utils/emailNotificationPrefs.server";
 import { sendTransactionalEmail } from "../utils/transactionalEmail.server";
 import {
   buildVariantPresentation,
@@ -322,22 +326,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const backupEmail = "michaeldrezin@canadiancladding.ca";
 
   if (isEmailConfigured()) {
-    try {
-      const csv = await getCsvForProjectIds(shop, [projectId]);
-      await sendTransactionalEmail({
-        shop,
-        to: backupEmail,
-        subject: `ProjectClad project export: ${project.name}`,
-        text: `Your project "${project.name}" has been deleted.`,
-        extraAttachments: [
-          {
-            filename: `projectclad-${project.name.replace(/[^a-z0-9-_]/gi, "-")}.csv`,
-            content: csv,
-          },
-        ],
-      });
-    } catch {
-      // Still delete the project even if email fails
+    const deleteNotifyPrefs = await getEmailNotificationPrefs(shop);
+    if (isEmailNotificationEnabled(deleteNotifyPrefs, "projectDeleteBackup")) {
+      try {
+        const csv = await getCsvForProjectIds(shop, [projectId]);
+        await sendTransactionalEmail({
+          shop,
+          to: backupEmail,
+          subject: `ProjectClad project export: ${project.name}`,
+          text: `Your project "${project.name}" has been deleted.`,
+          extraAttachments: [
+            {
+              filename: `projectclad-${project.name.replace(/[^a-z0-9-_]/gi, "-")}.csv`,
+              content: csv,
+            },
+          ],
+        });
+      } catch {
+        // Still delete the project even if email fails
+      }
     }
   }
 

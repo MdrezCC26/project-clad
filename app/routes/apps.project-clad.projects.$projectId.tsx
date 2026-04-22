@@ -324,11 +324,18 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     });
     const nextSortOrder = (maxOrder._max.sortOrder ?? 0) + 1;
 
+    const projectDefaults = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { defaultSiteContactName: true, defaultSiteContactPhone: true },
+    });
+
     await prisma.job.create({
       data: {
         projectId,
         name,
         sortOrder: nextSortOrder,
+        siteContactName: projectDefaults?.defaultSiteContactName ?? null,
+        siteContactPhone: projectDefaults?.defaultSiteContactPhone ?? null,
       },
     });
 

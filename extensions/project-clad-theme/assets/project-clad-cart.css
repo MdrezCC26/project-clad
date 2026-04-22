@@ -834,3 +834,245 @@
     color 0.22s cubic-bezier(0.23, 1, 0.32, 1),
     text-shadow 0.32s cubic-bezier(0.23, 1, 0.32, 1);
 }
+
+/* =====================================================================
+ * Product detail page "Save to Project" — secondary pill button + inline
+ * validation error + success toast.
+ *
+ * Lives in this sheet (not its own file) so the product-save block can
+ * reference cart.css as its single schema-declared stylesheet — the
+ * neumorphic design tokens (--pc-cart-toolbar-btn-*, --pc-caesura-*)
+ * are defined on .projectclad-cart-actions above and need to be on the
+ * same sheet to resolve.
+ * ===================================================================== */
+
+.projectclad-product-actions {
+  margin-top: 0.75rem;
+}
+
+.projectclad-product-save__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/*
+ * Match the height/font of theme cart toolbar buttons so the trigger sits at
+ * the same baseline as the merchant's "Add to cart" CTA. The base
+ * .projectclad-button styling (pill shape, neumorphic shadow) comes from the
+ * .projectclad-cart-actions .projectclad-button rules above.
+ */
+.projectclad-product-actions .projectclad-button {
+  font-size: var(--pc-cart-toolbar-btn-font);
+  line-height: var(--pc-cart-toolbar-btn-line-height);
+  min-height: var(--pc-cart-toolbar-btn-min-height);
+  padding: var(--pc-cart-toolbar-btn-padding-y) var(--pc-cart-toolbar-btn-padding-x);
+  letter-spacing: 0.02em;
+  touch-action: manipulation;
+}
+
+/*
+ * Secondary treatment: outlined neutral pill, lighter face than the cart's
+ * red --primary CTA so "Add to Cart" stays visually dominant.
+ */
+.projectclad-product-actions .projectclad-button--secondary {
+  background: transparent;
+  color: var(--pc-caesura-dark);
+  box-shadow: var(--pc-btn-neu-shadow);
+}
+
+.projectclad-product-actions .projectclad-button--secondary:hover {
+  z-index: 1;
+  background: var(--pc-caesura-bg);
+  box-shadow: var(--pc-btn-neu-shadow);
+  color: var(--pc-caesura-hover-red-text);
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+  border-color: var(--pc-caesura-border-hover);
+}
+
+.projectclad-product-actions .projectclad-button--secondary:active {
+  background: var(--pc-caesura-bg);
+  box-shadow: var(--pc-btn-neu-shadow-active);
+  color: var(--pc-caesura-dark);
+  text-shadow: none;
+}
+
+/* Inline validation error — red text + soft glow, matches modal heading red */
+.projectclad-product-save__error[hidden] {
+  display: none;
+}
+
+.projectclad-product-save__error {
+  margin: 0;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  font-size: max(0.92rem, clamp(0.88rem, 2.6vw, 1rem));
+  line-height: 1.3;
+  color: var(--pc-pill-text-glow-hover, #c40000);
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+  letter-spacing: 0.02em;
+  flex-basis: 100%;
+}
+
+/*
+ * Inline "Order saved ✓" pill shown next to the Save to Project button for
+ * ~60s after a successful save. Starts hidden, fades in via the --visible
+ * modifier, and fades out before the [hidden] attribute is reapplied.
+ */
+.projectclad-product-save__saved[hidden] {
+  display: none;
+}
+
+.projectclad-product-save__saved {
+  /*
+   * Match the Save to Project button's metrics exactly so the two pills sit
+   * side-by-side at identical height. These tokens are the same ones applied
+   * to .projectclad-product-actions .projectclad-button above.
+   */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  box-sizing: border-box;
+  min-height: var(--pc-cart-toolbar-btn-min-height);
+  padding: var(--pc-cart-toolbar-btn-padding-y) var(--pc-cart-toolbar-btn-padding-x);
+  border-radius: 9999px;
+  background: linear-gradient(168deg, #eef0f2 0%, #e8eaed 38%, #dcdee3 100%);
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -3px 8px rgba(0, 0, 0, 0.06) inset,
+    0 4px 10px rgba(0, 0, 0, 0.08);
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  font-size: var(--pc-cart-toolbar-btn-font);
+  line-height: var(--pc-cart-toolbar-btn-line-height);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #2f6b3a;
+  opacity: 0;
+  transform: translateY(-2px) scale(0.98);
+  transition:
+    opacity 240ms ease,
+    transform 240ms ease;
+}
+
+.projectclad-product-save__saved--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.projectclad-product-save__saved-check {
+  width: 1.05em;
+  height: 1.05em;
+  flex: 0 0 auto;
+  color: #2f6b3a;
+  filter: drop-shadow(0 0 4px rgba(47, 107, 58, 0.45));
+}
+
+.projectclad-product-save__saved-text {
+  white-space: nowrap;
+}
+
+.projectclad-product-save__saved-link {
+  margin-left: 0.35rem;
+  color: #2f6b3a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-size: 0.9em;
+  letter-spacing: 0.02em;
+}
+
+.projectclad-product-save__saved-link:hover,
+.projectclad-product-save__saved-link:focus-visible {
+  color: #1f4a28;
+}
+
+/* Success toast container + card */
+.projectclad-toast-container {
+  position: fixed;
+  z-index: 10000002;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+  max-width: calc(100vw - 3rem);
+}
+
+.projectclad-toast {
+  position: relative;
+  pointer-events: auto;
+  background: linear-gradient(168deg, #eef0f2 0%, #e8eaed 38%, #dcdee3 100%);
+  border-radius: 16px;
+  padding: 1rem 2.25rem 1rem 1.25rem;
+  box-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -4px 10px rgba(0, 0, 0, 0.08) inset,
+    0 24px 50px rgba(0, 0, 0, 0.18),
+    0 10px 24px rgba(0, 0, 0, 0.1);
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  color: #484f60;
+  display: grid;
+  gap: 0.4rem;
+  min-width: 240px;
+  max-width: 360px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.projectclad-toast--open {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.projectclad-toast__title {
+  margin: 0;
+  font-size: max(16px, clamp(0.95rem, 2.8vw, 1.05rem));
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.projectclad-toast__action {
+  align-self: start;
+  font-size: max(15px, clamp(0.88rem, 2.5vw, 0.98rem));
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #c40000;
+  text-decoration: none;
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+}
+
+.projectclad-toast__action:hover {
+  text-decoration: underline;
+}
+
+.projectclad-toast__close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  border: none;
+  background: transparent;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  color: #484f60;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.projectclad-toast__close:hover {
+  color: #c40000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projectclad-toast {
+    transition-duration: 0.01ms !important;
+  }
+}

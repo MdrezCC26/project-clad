@@ -19,6 +19,13 @@ import {
   sendEmail,
 } from "../utils/email.server";
 import {
+  DEFAULT_EMAIL_NOTIFICATION_PREFS,
+  EMAIL_NOTIFICATION_KINDS,
+  parseEmailNotificationPrefsJson,
+  serializeEmailNotificationPrefs,
+  type EmailNotificationPrefs,
+} from "../utils/emailNotificationPrefs.server";
+import {
   parseStorefrontNavLinksJson,
   STOREFRONT_APP_NAV_JSON_PLACEHOLDER,
 } from "../utils/storefrontAppNav";
@@ -113,7 +120,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
   ];
 
+  const emailNotificationPrefs = parseEmailNotificationPrefsJson(
+    settings?.emailNotificationPrefsJson,
+  );
+
   return {
+    emailNotificationPrefs,
     hasPricingPassword: Boolean(settings?.pricingPasswordHash),
     hasLogo: Boolean(settings?.logoDataUrl),
     hasBackgroundLogo: Boolean(settings?.backgroundLogoDataUrl),
@@ -566,6 +578,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { ok: true, memberAdded: true };
   }
 
+  if (intent === "save-email-notification-prefs") {
+    const prefs: EmailNotificationPrefs = { ...DEFAULT_EMAIL_NOTIFICATION_PREFS };
+    for (const k of EMAIL_NOTIFICATION_KINDS) {
+      prefs[k] = formData.get(`notify_${k}`) === "on";
+    }
+    await prisma.shopSettings.upsert({
+      where: { shop: session.shop },
+      update: {
+        emailNotificationPrefsJson: serializeEmailNotificationPrefs(prefs),
+      },
+      create: {
+        shop: session.shop,
+        emailNotificationPrefsJson: serializeEmailNotificationPrefs(prefs),
+      },
+    });
+    return { ok: true, emailNotificationPrefsSaved: true };
+  }
+
   if (intent === "save-app-admin-ids") {
     const raw = String(formData.get("appAdminCustomerIds") || "").trim();
     const emailsRaw = String(formData.get("globalStaffEmails") || "").trim();
@@ -648,8 +678,55 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return { ok: true, cleared: false };
 };
 
+const EMAIL_NOTIFICATION_LABELS: Record<
+  keyof EmailNotificationPrefs,
+  { title: string; hint?: string }
+> = {
+  cartSave: {
+    title: "Cart saved",
+    hint: "When order lines are saved to the project (owner / notify list).",
+  },
+  projectStatus: {
+    title: "Project status updates",
+    hint: "Headline updates such as lifecycle or project changes.",
+  },
+  orderPlacedCustomer: {
+    title: "Order placed — customer",
+    hint: "Thank-you email to the customer who placed the order.",
+  },
+  orderPlacedShop: {
+    title: "Order placed — shop",
+    hint: "Operations copy (PROJECTCLAD_SHOP_ORDER_NOTIFY_EMAIL).",
+  },
+  fulfillmentOwner: {
+    title: "Delivered — customer (owner)",
+    hint: "After fulfillment photo upload.",
+  },
+  fulfillmentFinance: {
+    title: "Delivered — finance",
+    hint: "Invoice-oriented copy (PROJECTCLAD_FINANCE_EMAIL).",
+  },
+  approvalRequest: {
+    title: "Submit for review",
+    hint: "Email to approvers when someone requests review.",
+  },
+  approvalApproved: {
+    title: "Order approved",
+    hint: "Email to project members when a submission is approved.",
+  },
+  approvalRejected: {
+    title: "Order rejected",
+    hint: "Email to project members when a submission is rejected.",
+  },
+  projectDeleteBackup: {
+    title: "Project deleted — backup CSV",
+    hint: "Automatic export when a project is deleted from the storefront.",
+  },
+};
+
 export default function Settings() {
   const {
+    emailNotificationPrefs,
     hasPricingPassword,
     hasLogo,
     hasBackgroundLogo,
@@ -705,6 +782,12 @@ export default function Settings() {
   const sessionsCleared =
     actionData && typeof actionData === "object" && "sessionsCleared" in actionData
       ? Boolean(actionData.sessionsCleared)
+      : false;
+  const emailNotificationPrefsSaved =
+    actionData &&
+    typeof actionData === "object" &&
+    "emailNotificationPrefsSaved" in actionData
+      ? Boolean(actionData.emailNotificationPrefsSaved)
       : false;
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -825,6 +908,59 @@ export default function Settings() {
         </Form>
         {appAdminIdsSaved && (
           <s-paragraph>Storefront staff settings saved.</s-paragraph>
+        )}
+      </s-section>
+      <s-section heading="Automated email notifications">
+        <s-paragraph>
+          Turn off categories you do not want sent via SMTP. Unchecked means that
+          email is skipped; the storefront action still completes (for example,
+          submit for review works without mail when that toggle is off). Defaults
+          are all on. Manual “Email CSV” in Projects below is not affected.
+        </s-paragraph>
+        <Form method="post">
+          <input
+            type="hidden"
+            name="intent"
+            value="save-email-notification-prefs"
+          />
+          <s-stack direction="block" gap="base">
+            {EMAIL_NOTIFICATION_KINDS.map((key) => {
+              const { title, hint } = EMAIL_NOTIFICATION_LABELS[key];
+              return (
+                <label
+                  key={key}
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    alignItems: "flex-start",
+                    maxWidth: 640,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    name={`notify_${key}`}
+                    defaultChecked={emailNotificationPrefs[key]}
+                    style={{ marginTop: 4 }}
+                  />
+                  <span>
+                    <strong>{title}</strong>
+                    {hint ? (
+                      <>
+                        {" "}
+                        <span style={{ color: "var(--p-color-text-secondary)" }}>
+                          — {hint}
+                        </span>
+                      </>
+                    ) : null}
+                  </span>
+                </label>
+              );
+            })}
+            <button type="submit">Save notification settings</button>
+          </s-stack>
+        </Form>
+        {emailNotificationPrefsSaved && (
+          <s-paragraph>Notification settings saved.</s-paragraph>
         )}
       </s-section>
       <s-section heading="Storefront logo">

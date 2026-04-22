@@ -1,0 +1,17 @@
+{
+  "gauge": 16,
+  "colour": "Galvanized",
+  "quantity": 20,
+  "painted_side": "Inside",
+  "segments": [
+    { "direction": "right", "length": 2 },
+    { "direction": "down",  "length": 4 },
+    { "direction": "right", "length": 4 }
+  ],
+  "length": 120,
+  "job_location": "Site",
+  "date": "2026-04-15",
+  "job_name": "Job",
+  "order_number": "ORD-001",
+  "ordered_by": "MD"
+}

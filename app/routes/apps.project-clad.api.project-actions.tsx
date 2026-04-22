@@ -19,6 +19,10 @@ import {
   shopStringFilter,
 } from "../utils/projectAccess.server";
 import { dedupeEmailAddresses, isEmailConfigured } from "../utils/email.server";
+import {
+  getEmailNotificationPrefs,
+  isEmailNotificationEnabled,
+} from "../utils/emailNotificationPrefs.server";
 import { sendTransactionalEmailToRecipients } from "../utils/transactionalEmail.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
@@ -129,8 +133,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return Response.json({ error: "This order already exists." }, { status: 400 });
     }
     const nextSortOrder = await getNextJobSortOrder(projectId);
+    const projectDefaults = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { defaultSiteContactName: true, defaultSiteContactPhone: true },
+    });
     const newJob = await prisma.job.create({
-      data: { projectId, name, sortOrder: nextSortOrder },
+      data: {
+        projectId,
+        name,
+        sortOrder: nextSortOrder,
+        siteContactName: projectDefaults?.defaultSiteContactName ?? null,
+        siteContactPhone: projectDefaults?.defaultSiteContactPhone ?? null,
+      },
     });
     await logProjectActivity({
       projectId,
@@ -290,7 +304,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         { status: 403 },
       );
     }
-    if (!isEmailConfigured()) {
+    const notifyPrefsSubmit = await getEmailNotificationPrefs(shop);
+    const wantApprovalRequestEmail = isEmailNotificationEnabled(
+      notifyPrefsSubmit,
+      "approvalRequest",
+    );
+    if (wantApprovalRequestEmail && !isEmailConfigured()) {
       return Response.json(
         { error: "Email is not configured. Approval requests cannot be sent." },
         { status: 400 },
@@ -396,17 +415,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       `Review your order: ${approveLink}`,
     ].join("\n");
 
-    const sent = await sendTransactionalEmailToRecipients({
-      shop,
-      recipients: dedupeEmailAddresses(approverEmails),
-      subject,
-      text,
-    });
-    if (sent === 0) {
-      return Response.json(
-        { error: "Failed to send approval request. Check SMTP logs and recipient addresses." },
-        { status: 500 },
-      );
+    if (wantApprovalRequestEmail) {
+      const sent = await sendTransactionalEmailToRecipients({
+        shop,
+        recipients: dedupeEmailAddresses(approverEmails),
+        subject,
+        text,
+      });
+      if (sent === 0) {
+        return Response.json(
+          {
+            error:
+              "Failed to send approval request. Check SMTP logs and recipient addresses.",
+          },
+          { status: 500 },
+        );
+      }
     }
 
     await prisma.approvalRequest.upsert({
@@ -689,7 +713,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     await initWorkOrdersAfterApproval();
 
-    if (isEmailConfigured()) {
+    const notifyPrefsApproved = await getEmailNotificationPrefs(shop);
+    if (
+      isEmailConfigured() &&
+      isEmailNotificationEnabled(notifyPrefsApproved, "approvalApproved")
+    ) {
       const approver = customerInfo[customerId];
       const approverName =
         [approver?.firstName, approver?.lastName]
@@ -976,7 +1004,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     where: { id: existing.id },
   });
 
-  if (isEmailConfigured()) {
+  const notifyPrefsRejected = await getEmailNotificationPrefs(shop);
+  if (
+    isEmailConfigured() &&
+    isEmailNotificationEnabled(notifyPrefsRejected, "approvalRejected")
+  ) {
     const projectLink = `https://${shop}/apps/project-clad/project?id=${projectId}`;
     const memberEmails = memberIds
       .map((id) => customerInfo[id]?.email)

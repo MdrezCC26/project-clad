@@ -88,5 +88,6 @@ View project (ProjectClad): https://rnc2a0-d3.myshopify.com/apps/project-clad/pr
 
 ## Related
 
+- `fulfillment-delivered-finance-custom-part-sample.md` — full sample with a **custom configured** line + a catalog line.
 - `fulfillment-delivered.md` — customer-facing delivered mockup.
-- `fulfillmentNotify.server.ts` — current single-body finance send.
+- `fulfillmentNotify.server.ts` — owner + finance sends.

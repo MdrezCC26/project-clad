@@ -1,0 +1,99 @@
+{% comment %}
+  Renders a "Save to Project" pill button on a product detail page.
+
+  Mirrors the cart "Save Order" flow by reusing:
+    - the shared modal snippet (snippets/projectclad-save-modal.liquid)
+    - the shared JS module (assets/project-clad-save-modal.js)
+
+  Block-specific glue (validation against the theme's variant/qty inputs,
+  one-item payload assembly, success toast, sessionStorage state preservation
+  across the login round-trip) lives in project-clad-product-save.js.
+
+  Add this block to the Product information section of the merchant's theme;
+  place it directly under "Buy buttons" so it visually follows Add to Cart.
+{% endcomment %}
+
+{% assign default_variant_id = product.selected_or_first_available_variant.id %}
+{% assign default_variant_price = product.selected_or_first_available_variant.price %}
+{% assign view_projects_url = "https://" | append: request.host | append: "/apps/project-clad/projects" %}
+{% assign current_path = request.path %}
+{% assign return_url_param = current_path | append: "?projectclad-save=1" | url_encode %}
+{% assign login_url = "/account/login?return_url=" | append: return_url_param %}
+{% assign product_image_url = product.featured_image | image_url: width: 600 %}
+
+{{ 'project-clad-save-modal.js' | asset_url | script_tag }}
+{{ 'project-clad-product-save.js' | asset_url | script_tag }}
+
+<div
+  class="projectclad-cart-actions projectclad-product-actions"
+  data-projectclad
+  data-projectclad-product
+  data-projectclad-customer-signed-in="{% if customer %}true{% else %}false{% endif %}"
+  data-projectclad-login-url="{{ login_url }}"
+  data-projectclad-projects-url="/apps/project-clad/api/projects"
+  data-projectclad-save-url="/apps/project-clad/api/save-job"
+  data-projectclad-product-handle="{{ product.handle }}"
+  data-projectclad-product-id="{{ product.id }}"
+  data-projectclad-product-title="{{ product.title | escape }}"
+  data-projectclad-product-vendor="{{ product.vendor | escape }}"
+  data-projectclad-product-image-url="{{ product_image_url }}"
+  data-projectclad-default-variant-id="{{ default_variant_id }}"
+  data-projectclad-default-variant-price="{{ default_variant_price }}"
+  data-projectclad-product-url="{{ shop.url }}{{ product.url }}"
+>
+  <div class="projectclad-product-save__row">
+    <button
+      class="projectclad-button projectclad-button--secondary"
+      type="button"
+      data-projectclad-save
+      data-projectclad-product-save
+    >
+      Save to Project
+    </button>
+    <span
+      class="projectclad-product-save__saved"
+      data-projectclad-saved
+      role="status"
+      aria-live="polite"
+      hidden
+    >
+      <svg
+        class="projectclad-product-save__saved-check"
+        viewBox="0 0 16 16"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          d="M3 8.5l3 3 7-7"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+      <span class="projectclad-product-save__saved-text" data-projectclad-saved-text>Order saved</span>
+    </span>
+    <p
+      class="projectclad-product-save__error"
+      data-projectclad-error
+      role="alert"
+      aria-live="polite"
+      hidden
+    ></p>
+  </div>
+
+  {% render 'projectclad-save-modal', intent: 'product' %}
+</div>
+
+{% schema %}
+{
+  "name": "ProjectClad save",
+  "target": "section",
+  "stylesheet": "project-clad-cart.css",
+  "enabled_on": {
+    "templates": ["product"]
+  },
+  "settings": []
+}
+{% endschema %}

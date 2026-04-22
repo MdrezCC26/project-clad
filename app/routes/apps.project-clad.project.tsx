@@ -1,8 +1,25 @@
 import crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS as DndCSS } from "@dnd-kit/utilities";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "react-router";
 import {
   Form,
@@ -11,6 +28,7 @@ import {
   useActionData,
   useLoaderData,
   useLocation,
+  useRevalidator,
 } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
@@ -137,8 +155,8 @@ function PdfThumbIcon({ label = "PDF document" }: { label?: string }) {
   );
 }
 
-/** Product column: line # + sunken tile, thumb left, title + custom properties to the right. */
-function OrderLineProductCell({ item }: { item: JobItemView }) {
+/** Thumbnail only (line # sits in the thumb column wrapper in the parent row). */
+function OrderLineThumbMedia({ item }: { item: JobItemView }) {
   const isUploadPart = item.displayName.toLowerCase().includes("upload part");
   const href = isUploadPart
     ? item.uploadPartFileUrl || item.imageUrl
@@ -146,9 +164,10 @@ function OrderLineProductCell({ item }: { item: JobItemView }) {
   const showPdfThumb =
     isUploadPart &&
     Boolean(item.uploadPartFileUrl && isLikelyPdfUrl(item.uploadPartFileUrl));
-  const lineNum = item.sortOrder;
-  const nameText =
-    item.quantity === 0 ? `${item.displayName} (Removed)` : item.displayName;
+  const showCustomBadge =
+    isUploadPart ||
+    /\bcustom\b/i.test(item.displayName) ||
+    /\bupload\b/i.test(item.displayName);
 
   const thumbInner = showPdfThumb ? (
     <PdfThumbIcon label="PDF attachment" />
@@ -157,25 +176,138 @@ function OrderLineProductCell({ item }: { item: JobItemView }) {
       src={item.imageUrl}
       alt={item.imageAlt || item.displayName}
       className="project-clad-thumb"
+      draggable={false}
     />
   ) : (
     <span className="project-clad-thumb project-clad-thumb--placeholder" />
   );
 
-  const thumbWrap =
-    href ? (
-      <a
-        href={href}
-        target={isUploadPart ? "_blank" : undefined}
-        rel={isUploadPart ? "noopener noreferrer" : undefined}
-        className="project-clad-order-line-thumbwrap"
-        onClick={(event) => event.stopPropagation()}
-      >
-        {thumbInner}
-      </a>
-    ) : (
-      <div className="project-clad-order-line-thumbwrap">{thumbInner}</div>
+  const inner = href ? (
+    <a
+      href={href}
+      target={isUploadPart ? "_blank" : undefined}
+      rel={isUploadPart ? "noopener noreferrer" : undefined}
+      className="project-clad-order-line-thumbwrap project-clad-order-card-thumb-frame"
+      onClick={(event) => event.stopPropagation()}
+    >
+      {thumbInner}
+      {showCustomBadge ? (
+        <span className="project-clad-order-card-thumb-badge">Custom</span>
+      ) : null}
+    </a>
+  ) : (
+    <div className="project-clad-order-line-thumbwrap project-clad-order-card-thumb-frame">
+      {thumbInner}
+      {showCustomBadge ? (
+        <span className="project-clad-order-card-thumb-badge">Custom</span>
+      ) : null}
+    </div>
+  );
+
+  return inner;
+}
+
+function OrderLinePropertyChips({ item }: { item: JobItemView }) {
+  if (!item.properties?.length) return null;
+
+  const calcPayload = item.properties.find((p) => p.name === "__ooCalcPayload");
+  if (calcPayload?.value) {
+    try {
+      const parsed = JSON.parse(calcPayload.value) as Record<string, unknown>;
+      const entries = Object.entries(parsed);
+      if (!entries.length) return null;
+      return (
+        <div className="project-clad-order-card-specs">
+          {entries.map(([key, value], index) => (
+            <span key={`calc-${index}`} className="project-clad-order-card-chip">
+              <span className="project-clad-order-card-chip__k">{key}</span>
+              <span className="project-clad-order-card-chip__v">{String(value)}</span>
+            </span>
+          ))}
+        </div>
+      );
+    } catch {
+      return (
+        <p className="project-clad-order-card-sub project-clad-muted" style={{ margin: "0.2rem 0 0" }}>
+          <strong>Details:</strong> {calcPayload.value}
+        </p>
+      );
+    }
+  }
+
+  const filtered = item.properties.filter((p) => {
+    if (!p.value || p.value.trim() === "" || p.name.startsWith("__oo")) return false;
+    if (item.displayName.toLowerCase().includes("upload part") && p.name.toLowerCase() === "file") {
+      return false;
+    }
+    return true;
+  });
+
+  if (!filtered.length) return null;
+
+  const chips: ReactNode[] = [];
+  const blocks: ReactNode[] = [];
+
+  filtered.forEach((prop, index) => {
+    const v = prop.value.trim();
+    if (v.startsWith("http://") || v.startsWith("https://")) {
+      if (isLikelyPdfUrl(v)) {
+        blocks.push(
+          <div key={`b-${index}`} className="project-clad-order-card-prop-block">
+            <strong>{prop.name}:</strong>
+            <div className="project-clad-upload-url-pdf">
+              <a
+                href={v}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="project-clad-upload-url-pdf__link"
+              >
+                <PdfGlyphSvg className="project-clad-upload-url-pdf__icon" />
+                <span>Open PDF</span>
+              </a>
+            </div>
+          </div>,
+        );
+        return;
+      }
+      blocks.push(
+        <div key={`b-${index}`} className="project-clad-order-card-prop-block">
+          <strong>{prop.name}:</strong>
+          <div>
+            <img
+              src={v}
+              alt={prop.name}
+              className="project-clad-order-card-prop-img"
+              draggable={false}
+            />
+          </div>
+        </div>,
+      );
+      return;
+    }
+    chips.push(
+      <span key={`c-${index}`} className="project-clad-order-card-chip">
+        <span className="project-clad-order-card-chip__k">{prop.name}</span>
+        <span className="project-clad-order-card-chip__v">{v}</span>
+      </span>,
     );
+  });
+
+  return (
+    <>
+      {chips.length > 0 ? <div className="project-clad-order-card-specs">{chips}</div> : null}
+      {blocks.length > 0 ? <div className="project-clad-order-card-prop-blocks">{blocks}</div> : null}
+    </>
+  );
+}
+
+function OrderLineDetailsColumn({ item }: { item: JobItemView }) {
+  const isUploadPart = item.displayName.toLowerCase().includes("upload part");
+  const href = isUploadPart
+    ? item.uploadPartFileUrl || item.imageUrl
+    : item.productUrl;
+  const nameText =
+    item.quantity === 0 ? `${item.displayName} (Removed)` : item.displayName;
 
   const titleEl = href ? (
     <a
@@ -199,155 +331,31 @@ function OrderLineProductCell({ item }: { item: JobItemView }) {
     </span>
   );
 
-  const propertiesBlock =
-    item.properties && item.properties.length > 0 ? (
-      <div className="project-clad-item-properties">
-        {(() => {
-          const calcPayload = item.properties!.find((p) => p.name === "__ooCalcPayload");
-          if (calcPayload && calcPayload.value) {
-            try {
-              const parsed = JSON.parse(calcPayload.value);
-              return Object.entries(parsed).map(([key, value], index) => (
-                <div key={`calc-${index}`} style={{ marginTop: "0.25rem" }}>
-                  <strong>{key}:</strong> {String(value)}
-                </div>
-              ));
-            } catch {
-              return (
-                <div style={{ marginTop: "0.25rem" }}>
-                  <strong>Details:</strong> {calcPayload.value}
-                </div>
-              );
-            }
-          }
-
-          return item.properties!
-            .filter((p) => {
-              if (!p.value || p.value.trim() === "" || p.name.startsWith("__oo")) {
-                return false;
-              }
-              if (
-                item.displayName.toLowerCase().includes("upload part") &&
-                p.name.toLowerCase() === "file"
-              ) {
-                return false;
-              }
-              return true;
-            })
-            .map((prop, index) => {
-              const v = prop.value.trim();
-              if (v.startsWith("http://") || v.startsWith("https://")) {
-                if (isLikelyPdfUrl(v)) {
-                  return (
-                    <div key={index} style={{ marginTop: "0.25rem" }}>
-                      <strong>{prop.name}:</strong>
-                      <div className="project-clad-upload-url-pdf">
-                        <a
-                          href={v}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="project-clad-upload-url-pdf__link"
-                        >
-                          <PdfGlyphSvg className="project-clad-upload-url-pdf__icon" />
-                          <span>Open PDF</span>
-                        </a>
-                      </div>
-                    </div>
-                  );
-                }
-                return (
-                  <div key={index} style={{ marginTop: "0.25rem" }}>
-                    <strong>{prop.name}:</strong>
-                    <div>
-                      <img
-                        src={v}
-                        alt={prop.name}
-                        style={{
-                          maxWidth: "200px",
-                          maxHeight: "200px",
-                          display: "block",
-                          marginTop: "0.25rem",
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              }
-              return (
-                <div key={index} style={{ marginTop: "0.25rem" }}>
-                  <strong>{prop.name}:</strong> {v}
-                </div>
-              );
-            });
-        })()}
-      </div>
+  const sku = item.orderLineCapture?.sku?.trim();
+  const subtitle =
+    sku && item.variantDisplaySource !== "unknown" ? (
+      <p className="project-clad-order-card-sub">SKU {sku}</p>
+    ) : isUploadPart ? (
+      <p className="project-clad-order-card-sub">Customer-supplied file</p>
     ) : null;
 
   return (
-    <div className="project-clad-order-line-tile">
-      <div className="project-clad-order-line-tile__row">
-        <span className="project-clad-order-line-num" aria-label={`Line ${lineNum}`}>
-          {lineNum}
-        </span>
-        <div className="project-clad-order-line-main">
-          {thumbWrap}
-          <div className="project-clad-order-line-text">
-            {titleEl}
-            {item.variantDisplaySource === "snapshot" && (
-              <p
-                className="project-clad-muted"
-                style={{
-                  margin: "0.15rem 0 0",
-                  fontSize: "0.78rem",
-                  lineHeight: 1.35,
-                }}
-              >
-                Saved product name (Shopify did not return this variant; name is from a previous
-                sync).
-              </p>
-            )}
-            {item.variantDisplaySource === "unknown" && (
-              <>
-                <p
-                  className="project-clad-muted"
-                  style={{
-                    margin: "0.15rem 0 0",
-                    fontSize: "0.78rem",
-                    lineHeight: 1.35,
-                  }}
-                >
-                  {`Product no longer available. "Variant ${item.variantId}" has been updated or removed. Please contact us for help.`}
-                </p>
-                {item.orderLineCapture ? (
-                  <p
-                    className="project-clad-muted"
-                    style={{
-                      margin: "0.15rem 0 0",
-                      fontSize: "0.74rem",
-                      lineHeight: 1.35,
-                    }}
-                  >
-                    <strong>Recorded when saved:</strong> {item.orderLineCapture.displayLabel}
-                    {item.orderLineCapture.sku ? ` · SKU ${item.orderLineCapture.sku}` : ""}
-                    {item.orderLineCapture.unitPrice
-                      ? ` · ${formatPrice(item.orderLineCapture.unitPrice)} each`
-                      : ""}
-                    {(() => {
-                      const raw = item.orderLineCapture.capturedAt;
-                      if (!raw) return "";
-                      const d = new Date(raw);
-                      return Number.isNaN(d.getTime()) ? "" : ` · ${d.toLocaleString()}`;
-                    })()}
-                  </p>
-                ) : null}
-              </>
-            )}
-            {propertiesBlock}
-          </div>
-        </div>
-      </div>
+    <div className="project-clad-order-card-details">
+      <div className="project-clad-order-card-name-row">{titleEl}</div>
+      {subtitle}
+      {item.variantDisplaySource === "snapshot" ? (
+        <p className="project-clad-order-card-snapshot-note project-clad-muted">
+          Saved product name (Shopify did not return this variant; name is from a previous sync).
+        </p>
+      ) : null}
+      <OrderLinePropertyChips item={item} />
     </div>
   );
+}
+
+/** Colspan for order line + summary rows (must match thead column count). */
+function orderLinesTableColSpan(canEditLineActions: boolean) {
+  return canEditLineActions ? 5 : 4;
 }
 
 type JobView = {
@@ -362,6 +370,10 @@ type JobView = {
   orderName: string | null;
   /** Cart / customer "PURCHASE ORDER #" (not Shopify `orderName`). */
   purchaseOrderNumber: string | null;
+  /** Per-order on-site contact name (required before placing). Autofilled from project default at create time. */
+  siteContactName: string | null;
+  /** Per-order on-site contact phone (required before placing). Autofilled from project default at create time. */
+  siteContactPhone: string | null;
   items: JobItemView[];
   subtotal: number;
   orderLifecycleStatus: string;
@@ -475,6 +487,9 @@ type ProjectView = {
   shipCountry: string | null;
   /** Project default: delivery (+fee) vs store pickup (no address required on project). */
   receiveMode: "delivery" | "pickup";
+  /** Default site contact autofilled into NEW jobs. Editable per-order on the job tile. */
+  defaultSiteContactName: string | null;
+  defaultSiteContactPhone: string | null;
   jobs: JobView[];
   members: {
     customerId: string;
@@ -510,6 +525,508 @@ const formatPrice = (value: string | number) => {
   if (Number.isNaN(num)) return "$0.00";
   return `$${num.toFixed(2)}`;
 };
+
+/** Full-width row under the line grid when the variant cannot be resolved (mockup-style notice). */
+function OrderLineUnknownVariantNotice({ item }: { item: JobItemView }) {
+  if (item.variantDisplaySource !== "unknown") return null;
+  return (
+    <div
+      className="project-clad-order-card-notice project-clad-order-card-notice--warn"
+      role="status"
+    >
+      <span
+        className="project-clad-order-card-notice__icon"
+        aria-hidden="true"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      </span>
+      <p className="project-clad-order-card-notice__body project-clad-order-line-unavailable-notice">
+        <strong className="project-clad-order-card-notice__title">
+          Heads up
+        </strong>
+        <span className="project-clad-order-card-notice__sep" aria-hidden="true">
+          {" — "}
+        </span>
+        this variant was previously unavailable. We&apos;ve regenerated it from the specs above.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Two-column finance panel rendered inside each order's `<tfoot>`. Mirrors the
+ * "order-summary-neumorphic" mockup: pressed info capsules on the left (delivery
+ * method, PO#, qty, optional Shopify ref) and a single sunken finance card on
+ * the right with Subtotal → Tax → Delivery → Total + a tax meta footnote.
+ *
+ * Action buttons (Order Now / Edit) are rendered elsewhere — this component is
+ * purely the summary block, so it works identically for the "no items yet" and
+ * "with items" cases.
+ */
+function OrderFinancePanel({
+  jobSubtotal,
+  jobDisplayTax,
+  jobDeliveryFeeAmount,
+  jobTotalWithDisplayTax,
+  totalQty,
+  preferredDeliveryLine,
+  poFooterDisplay,
+  orderFootShopify,
+  pricingUnlocked,
+  taxRatePercent,
+  shipProvince,
+  isDelivery,
+  deliveryAddress,
+  siteContactName,
+  siteContactPhone,
+  jobId,
+  canEditSiteContact,
+  canEditPurchaseOrder,
+  actionsSlot,
+}: {
+  jobSubtotal: number;
+  jobDisplayTax: number;
+  jobDeliveryFeeAmount: number;
+  jobTotalWithDisplayTax: number;
+  totalQty: number;
+  preferredDeliveryLine: string | null | undefined;
+  poFooterDisplay: string;
+  orderFootShopify: ReactNode | null;
+  pricingUnlocked: boolean | undefined;
+  taxRatePercent: number;
+  shipProvince: string | null | undefined;
+  /**
+   * True when this order will ship (job.fulfillmentMethod === "delivery" or the
+   * project defaults to delivery). Drives whether we render the "Delivery Address"
+   * row vs the pickup row — and swaps the Free/$fee badge accordingly.
+   */
+  isDelivery: boolean;
+  /**
+   * Assembled one-line address (address1, city, province, postal, country).
+   * Computed live from the current project each render, so adding an address
+   * AFTER the order exists will start surfacing it without needing a write.
+   */
+  deliveryAddress: string | null;
+  /** Per-order on-site contact (required before ordering). Edited in the order tile. */
+  siteContactName: string | null;
+  siteContactPhone: string | null;
+  /** Job id — needed so the editable inputs carry the right `data-job-id`. */
+  jobId: string;
+  /**
+   * When true, the Site Contact + Phone capsules render as inline-editable inputs
+   * (the value sits inside an `<input>` styled to match the capsule). The save-order-edit
+   * handler in the page-level click listener will pick them up via their data-attrs.
+   */
+  canEditSiteContact: boolean;
+  /**
+   * When true, the Purchase Order # capsule renders as an inline-editable input —
+   * same pattern as Site Contact. The save-order-edit handler picks it up via
+   * `data-projectclad-purchase-order-input` (no header-mode duplicate needed).
+   */
+  canEditPurchaseOrder: boolean;
+  /**
+   * Optional buttons (Order Now / Edit Order / etc) rendered INSIDE the right column
+   * below the Payment Summary card so they read as part of the same finance section
+   * instead of floating below the whole panel.
+   */
+  actionsSlot?: ReactNode;
+}) {
+  const hiddenPrice = (
+    <button
+      type="button"
+      className="project-clad-hidden-link"
+      data-projectclad-show-price
+    >
+      Hidden
+    </button>
+  );
+
+  const trimmedAddress = deliveryAddress?.trim() || "";
+  const showAddressRow = isDelivery;
+  const deliveryLabel = showAddressRow ? "Delivery Address" : "Delivery Method";
+  const trimmedContactName = siteContactName?.trim() || "";
+  const trimmedContactPhone = siteContactPhone?.trim() || "";
+  const hasContactName = trimmedContactName.length > 0;
+  const hasContactPhone = trimmedContactPhone.length > 0;
+  const pickupValue = preferredDeliveryLine?.trim() || "In store pickup";
+  const deliveryValue = showAddressRow
+    ? trimmedAddress || "Address not provided yet"
+    : pickupValue;
+  const addressEmpty = showAddressRow && !trimmedAddress;
+  const isFreeDelivery = jobDeliveryFeeAmount <= 0;
+  const poRaw = (poFooterDisplay ?? "").trim();
+  const hasPo = poRaw.length > 0 && poRaw !== "—";
+  const provinceLabel = shipProvince?.trim()
+    ? `HST ${shipProvince.trim()} ${taxRatePercent}%`
+    : `HST ${taxRatePercent}%`;
+
+  return (
+    <div className="project-clad-order-finance">
+      <div className="project-clad-order-finance__left">
+        <p className="project-clad-order-finance__label">Contact &amp; Delivery</p>
+        <div className="project-clad-order-finance__list">
+          <div className="project-clad-order-finance__row">
+            <span className="project-clad-order-finance__icon" aria-hidden="true">
+              {showAddressRow ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9l1-5h16l1 5" />
+                  <path d="M3 9h18v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9z" />
+                  <path d="M8 13h8" />
+                </svg>
+              )}
+            </span>
+            <span className="project-clad-order-finance__text">
+              <span className="project-clad-order-finance__k">{deliveryLabel}</span>
+              <span
+                className={
+                  addressEmpty
+                    ? "project-clad-order-finance__v project-clad-order-finance__v--empty"
+                    : "project-clad-order-finance__v"
+                }
+              >
+                {deliveryValue}
+              </span>
+            </span>
+            {/*
+             * Fee badge (Free / $X.XX) only renders on the DELIVERY row.
+             * For in-store pickup the cost is always $0 and rendering a
+             * "FREE" chip next to "In Store Pickup" reads as redundant
+             * noise — pickup is obviously free, so we drop the badge
+             * and let the delivery method text stand on its own.
+             */}
+            {showAddressRow ? (
+              <span
+                className={
+                  isFreeDelivery
+                    ? "project-clad-order-finance__badge"
+                    : "project-clad-order-finance__badge project-clad-order-finance__badge--neutral"
+                }
+              >
+                {isFreeDelivery
+                  ? "Free"
+                  : pricingUnlocked
+                    ? formatPrice(jobDeliveryFeeAmount.toFixed(2))
+                    : "Fee"}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="project-clad-order-finance__row">
+            <span className="project-clad-order-finance__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="8" y1="13" x2="16" y2="13" />
+                <line x1="8" y1="17" x2="13" y2="17" />
+              </svg>
+            </span>
+            <span className="project-clad-order-finance__text">
+              <span className="project-clad-order-finance__k">Purchase Order #</span>
+              {/*
+               * Purchase Order # is OPTIONAL — no `required`, no red glow,
+               * no Order Now gate. The badge / placeholder still surface
+               * status, but the user can place orders without it.
+               */}
+              {canEditPurchaseOrder ? (
+                <input
+                  id={`projectclad-purchase-order-${jobId}`}
+                  type="text"
+                  defaultValue={hasPo ? poRaw : ""}
+                  data-projectclad-purchase-order-input
+                  data-job-id={jobId}
+                  data-original-purchase-order={hasPo ? poRaw : ""}
+                  placeholder="Optional"
+                  aria-label="Purchase order number"
+                  autoComplete="off"
+                  className="project-clad-order-finance__input"
+                />
+              ) : (
+                <span
+                  className={
+                    hasPo
+                      ? "project-clad-order-finance__v"
+                      : "project-clad-order-finance__v project-clad-order-finance__v--empty"
+                  }
+                >
+                  {hasPo ? poRaw : "Not set"}
+                </span>
+              )}
+            </span>
+            {hasPo ? (
+              <span
+                className="project-clad-order-finance__check"
+                aria-label="Provided"
+                title="Provided"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+            ) : null}
+          </div>
+
+          <div className="project-clad-order-finance__row">
+            <span className="project-clad-order-finance__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </span>
+            <span className="project-clad-order-finance__text">
+              <span className="project-clad-order-finance__k">Contact</span>
+              {canEditSiteContact ? (
+                <input
+                  id={`projectclad-site-contact-name-${jobId}`}
+                  type="text"
+                  defaultValue={trimmedContactName}
+                  data-projectclad-site-contact-name-input
+                  data-job-id={jobId}
+                  data-original-site-contact-name={trimmedContactName}
+                  placeholder="Required to place order"
+                  aria-label="Site contact name"
+                  autoComplete="name"
+                  required
+                  className={
+                    hasContactName
+                      ? "project-clad-order-finance__input"
+                      : "project-clad-order-finance__input project-clad-order-finance__input--required"
+                  }
+                />
+              ) : (
+                <span
+                  className={
+                    hasContactName
+                      ? "project-clad-order-finance__v"
+                      : "project-clad-order-finance__v project-clad-order-finance__v--empty project-clad-order-finance__v--required"
+                  }
+                >
+                  {hasContactName ? trimmedContactName : "Required"}
+                </span>
+              )}
+            </span>
+            {hasContactName ? (
+              <span
+                className="project-clad-order-finance__check"
+                aria-label="Provided"
+                title="Provided"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+            ) : (
+              <span className="project-clad-order-finance__badge">
+                Required
+              </span>
+            )}
+          </div>
+
+          <div className="project-clad-order-finance__row">
+            <span className="project-clad-order-finance__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+              </svg>
+            </span>
+            <span className="project-clad-order-finance__text">
+              <span className="project-clad-order-finance__k">Phone Number</span>
+              {canEditSiteContact ? (
+                <input
+                  id={`projectclad-site-contact-phone-${jobId}`}
+                  type="tel"
+                  inputMode="tel"
+                  defaultValue={trimmedContactPhone}
+                  data-projectclad-site-contact-phone-input
+                  data-job-id={jobId}
+                  data-original-site-contact-phone={trimmedContactPhone}
+                  placeholder="Required to place order"
+                  aria-label="Site contact phone"
+                  autoComplete="tel"
+                  required
+                  className={
+                    hasContactPhone
+                      ? "project-clad-order-finance__input"
+                      : "project-clad-order-finance__input project-clad-order-finance__input--required"
+                  }
+                />
+              ) : (
+                <span
+                  className={
+                    hasContactPhone
+                      ? "project-clad-order-finance__v"
+                      : "project-clad-order-finance__v project-clad-order-finance__v--empty project-clad-order-finance__v--required"
+                  }
+                >
+                  {hasContactPhone ? (
+                    <a
+                      className="project-clad-order-finance__phone"
+                      href={`tel:${trimmedContactPhone.replace(/\s+/g, "")}`}
+                    >
+                      {trimmedContactPhone}
+                    </a>
+                  ) : (
+                    "Required"
+                  )}
+                </span>
+              )}
+            </span>
+            {hasContactPhone ? (
+              <span
+                className="project-clad-order-finance__check"
+                aria-label="Provided"
+                title="Provided"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+            ) : (
+              <span className="project-clad-order-finance__badge">
+                Required
+              </span>
+            )}
+          </div>
+
+          <div className="project-clad-order-finance__row">
+            <span className="project-clad-order-finance__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                <line x1="12" y1="22.08" x2="12" y2="12" />
+              </svg>
+            </span>
+            <span className="project-clad-order-finance__text">
+              <span className="project-clad-order-finance__k">Total Order Quantity</span>
+              <span className="project-clad-order-finance__v">
+                {totalQty} {totalQty === 1 ? "unit" : "units"}
+                <span className="project-clad-order-finance__v-sep" aria-hidden="true">
+                  ·
+                </span>
+                <span className="project-clad-order-finance__v-secondary">
+                  {totalQty * 10} linear ft
+                </span>
+              </span>
+            </span>
+          </div>
+
+          {orderFootShopify ? (
+            <div className="project-clad-order-finance__row">
+              <span className="project-clad-order-finance__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="9" cy="21" r="1" />
+                  <circle cx="20" cy="21" r="1" />
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                </svg>
+              </span>
+              <span className="project-clad-order-finance__text">
+                <span className="project-clad-order-finance__k">Shopify Order</span>
+                <span className="project-clad-order-finance__v">{orderFootShopify}</span>
+              </span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="project-clad-order-finance__right">
+        <p className="project-clad-order-finance__label">Payment Summary</p>
+        <div className="project-clad-order-finance__card">
+          <div className="project-clad-order-finance__fin project-clad-order-finance__fin--muted">
+            <span className="project-clad-order-finance__fin-k">Subtotal</span>
+            <span
+              className="project-clad-order-finance__fin-v"
+              data-projectclad-price
+              data-price={jobSubtotal.toFixed(2)}
+            >
+              {pricingUnlocked ? formatPrice(jobSubtotal.toFixed(2)) : hiddenPrice}
+            </span>
+          </div>
+          <div className="project-clad-order-finance__fin project-clad-order-finance__fin--muted">
+            <span className="project-clad-order-finance__fin-k">
+              Tax ({taxRatePercent}%)
+            </span>
+            <span
+              className="project-clad-order-finance__fin-v"
+              data-projectclad-price
+              data-price={jobDisplayTax.toFixed(2)}
+            >
+              {pricingUnlocked ? formatPrice(jobDisplayTax.toFixed(2)) : hiddenPrice}
+            </span>
+          </div>
+          <div className="project-clad-order-finance__fin project-clad-order-finance__fin--muted">
+            <span className="project-clad-order-finance__fin-k">Delivery</span>
+            <span
+              className="project-clad-order-finance__fin-v"
+              data-projectclad-price
+              data-price={jobDeliveryFeeAmount.toFixed(2)}
+            >
+              {pricingUnlocked
+                ? formatPrice(jobDeliveryFeeAmount.toFixed(2))
+                : hiddenPrice}
+            </span>
+          </div>
+          <div className="project-clad-order-finance__divider" />
+          <div className="project-clad-order-finance__fin project-clad-order-finance__fin--total">
+            <span className="project-clad-order-finance__fin-k">Total</span>
+            <span
+              className="project-clad-order-finance__fin-v"
+              data-projectclad-price
+              data-price={jobTotalWithDisplayTax.toFixed(2)}
+            >
+              {pricingUnlocked
+                ? formatPrice(jobTotalWithDisplayTax.toFixed(2))
+                : hiddenPrice}
+            </span>
+          </div>
+          <div className="project-clad-order-finance__tax-meta">
+            CAD · incl. {provinceLabel}
+          </div>
+        </div>
+        {actionsSlot ? (
+          <div className="project-clad-order-finance__actions">{actionsSlot}</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 const CANADA_PROVINCE_OPTIONS: { code: string; label: string }[] = [
   { code: "AB", label: "Alberta" },
@@ -1237,6 +1754,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shipPostal: project.shipPostal ?? null,
     shipCountry: project.shipCountry ?? null,
     receiveMode: receiveModeForUi,
+    defaultSiteContactName: project.defaultSiteContactName ?? null,
+    defaultSiteContactPhone: project.defaultSiteContactPhone ?? null,
     jobs: project.jobs.map((job) => {
       const jobSubtotal = job.items.reduce((sum, item) => {
         const price = Number(item.priceSnapshot || 0);
@@ -1253,6 +1772,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         receiptSnapshot: job.receiptSnapshot ?? null,
         orderName: job.orderLink?.orderName ?? null,
         purchaseOrderNumber: job.purchaseOrderNumber ?? null,
+        siteContactName: job.siteContactName ?? null,
+        siteContactPhone: job.siteContactPhone ?? null,
         subtotal: jobSubtotal,
         orderLifecycleStatus: job.orderLifecycleStatus,
         scheduledDeliveryDate: job.scheduledDeliveryDate ?? null,
@@ -1540,6 +2061,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       jobId?: string;
       jobName?: string;
       purchaseOrderNumber?: string;
+      /** Per-order site contact name. Omitted = leave as-is; "" = clear. */
+      siteContactName?: string | null;
+      /** Per-order site contact phone. Omitted = leave as-is; "" = clear. */
+      siteContactPhone?: string | null;
       jobIds?: string[];
       itemIds?: string[];
       removeItemIds?: string[];
@@ -1670,6 +2195,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         typeof payload.purchaseOrderNumber === "string"
           ? payload.purchaseOrderNumber.trim()
           : "";
+      const siteContactNameRaw =
+        typeof payload.siteContactName === "string"
+          ? payload.siteContactName.trim()
+          : null;
+      const siteContactPhoneRaw =
+        typeof payload.siteContactPhone === "string"
+          ? payload.siteContactPhone.trim()
+          : null;
       const removeItemIds = Array.isArray(payload.removeItemIds)
         ? payload.removeItemIds.filter((id): id is string => typeof id === "string")
         : [];
@@ -1786,12 +2319,43 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               const prevPo = job.purchaseOrderNumber ?? null;
               const nameChanged = Boolean(jobName && jobName !== job.name);
               const poChanged = nextPo !== prevPo;
-              if (nameChanged || poChanged) {
+              /* Site contact: only consider as a change when client actually sent
+                 the field (string or null). undefined => leave as-is. */
+              const siteContactNameProvided = payload.siteContactName !== undefined;
+              const siteContactPhoneProvided = payload.siteContactPhone !== undefined;
+              const nextSiteContactName = siteContactNameProvided
+                ? siteContactNameRaw && siteContactNameRaw.length > 0
+                  ? siteContactNameRaw
+                  : null
+                : job.siteContactName;
+              const nextSiteContactPhone = siteContactPhoneProvided
+                ? siteContactPhoneRaw && siteContactPhoneRaw.length > 0
+                  ? siteContactPhoneRaw
+                  : null
+                : job.siteContactPhone;
+              const siteContactNameChanged =
+                siteContactNameProvided &&
+                nextSiteContactName !== (job.siteContactName ?? null);
+              const siteContactPhoneChanged =
+                siteContactPhoneProvided &&
+                nextSiteContactPhone !== (job.siteContactPhone ?? null);
+              if (
+                nameChanged ||
+                poChanged ||
+                siteContactNameChanged ||
+                siteContactPhoneChanged
+              ) {
                 await prisma.job.update({
                   where: { id: jobId },
                   data: {
                     ...(nameChanged ? { name: jobName } : {}),
                     ...(poChanged ? { purchaseOrderNumber: nextPo } : {}),
+                    ...(siteContactNameChanged
+                      ? { siteContactName: nextSiteContactName }
+                      : {}),
+                    ...(siteContactPhoneChanged
+                      ? { siteContactPhone: nextSiteContactPhone }
+                      : {}),
                   },
                 });
                 didChange = true;
@@ -1940,6 +2504,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           );
         }
       }
+
+      /* Per-order site contact is required for ALL fulfillment methods so
+         the warehouse / driver / counter has a real human + phone to call. */
+      const siteContactNameOk = Boolean(job.siteContactName?.trim());
+      const siteContactPhoneOk = Boolean(job.siteContactPhone?.trim());
+      if (!siteContactNameOk || !siteContactPhoneOk) {
+        return Response.json(
+          {
+            error:
+              "Add a site contact name and phone number on this order before placing it.",
+          },
+          { status: 400 },
+        );
+      }
+
+      /* Purchase Order # is OPTIONAL — finance no longer blocks Order Now
+         on its absence. (Site contact name + phone are still required
+         above so the warehouse / driver can reach someone on delivery.) */
 
       try {
         await prisma.job.update({
@@ -2441,11 +3023,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
     const nextSortOrder = (maxOrder._max.sortOrder ?? 0) + 1;
 
+    /** Pull project defaults so we can autofill the new order's site contact. */
+    const projectDefaults = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        defaultSiteContactName: true,
+        defaultSiteContactPhone: true,
+      },
+    });
+
     const newJob = await prisma.job.create({
       data: {
         projectId,
         name,
         sortOrder: nextSortOrder,
+        siteContactName: projectDefaults?.defaultSiteContactName ?? null,
+        siteContactPhone: projectDefaults?.defaultSiteContactPhone ?? null,
       },
     });
 
@@ -2808,6 +3401,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const name = String(formData.get("projectName") || "").trim();
     const poNumber = String(formData.get("poNumber") || "").trim() || null;
     const companyName = String(formData.get("companyName") || "").trim() || null;
+    const defaultSiteContactName =
+      String(formData.get("defaultSiteContactName") || "").trim() || null;
+    const defaultSiteContactPhone =
+      String(formData.get("defaultSiteContactPhone") || "").trim() || null;
 
     if (!name) {
       return redirectToProject(request, projectId, shop);
@@ -2819,6 +3416,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         name,
         poNumber,
         companyName,
+        defaultSiteContactName,
+        defaultSiteContactPhone,
       },
     });
 
@@ -2967,6 +3566,219 @@ const JOB_EDIT_ORDER_INPUT_STYLE: CSSProperties = {
   WebkitFontSmoothing: "antialiased",
 };
 
+/* ---------------------------------------------------------------
+ * Orders list sort + drag-to-reorder
+ * ------------------------------------------------------------- */
+
+type OrderSortMode =
+  | "custom"
+  | "recent"
+  | "oldest"
+  | "approved"
+  | "status"
+  | "name"
+  | "total";
+
+const ORDER_SORT_OPTIONS: ReadonlyArray<{ id: OrderSortMode; label: string }> = [
+  { id: "custom", label: "Custom (drag to reorder)" },
+  { id: "recent", label: "Most recent" },
+  { id: "oldest", label: "Oldest first" },
+  { id: "approved", label: "Recently approved" },
+  { id: "status", label: "By status" },
+  { id: "name", label: "Order name (A\u2013Z)" },
+  { id: "total", label: "Order total (high to low)" },
+];
+
+/* Canonical status ordering matching the app's lifecycle. */
+const ORDER_STATUS_RANK: Record<string, number> = {
+  draft: 0,
+  pending_review: 1,
+  ready_to_order: 2,
+  ordered: 3,
+  delivered: 4,
+  paid: 5,
+};
+
+/* Storage key is project-scoped so each project can have its own preferred sort. */
+function orderSortStorageKey(projectId: string): string {
+  return `pc:orders:sortMode:${projectId}`;
+}
+
+function readStoredOrderSortMode(projectId: string): OrderSortMode {
+  if (typeof window === "undefined") return "custom";
+  try {
+    const raw = window.localStorage.getItem(orderSortStorageKey(projectId));
+    if (!raw) return "custom";
+    if (ORDER_SORT_OPTIONS.some((option) => option.id === raw)) {
+      return raw as OrderSortMode;
+    }
+  } catch {
+    /* ignore storage failures (private mode, disabled, etc.) */
+  }
+  return "custom";
+}
+
+/** 6-dot "grip" glyph used for the drag handle. Uses currentColor so it inherits neu fg. */
+function OrderDragHandleGlyph() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 12 18"
+      width="12"
+      height="18"
+      focusable="false"
+    >
+      <circle cx="3" cy="3" r="1.4" fill="currentColor" />
+      <circle cx="9" cy="3" r="1.4" fill="currentColor" />
+      <circle cx="3" cy="9" r="1.4" fill="currentColor" />
+      <circle cx="9" cy="9" r="1.4" fill="currentColor" />
+      <circle cx="3" cy="15" r="1.4" fill="currentColor" />
+      <circle cx="9" cy="15" r="1.4" fill="currentColor" />
+    </svg>
+  );
+}
+
+/**
+ * Shared drag-handle context: the handle button is deep inside each order's <summary>,
+ * but useSortable() lives on the outer shell. We bridge them via context instead of
+ * prop-drilling through every intermediate div.
+ */
+type OrderDragHandleCtx = {
+  listeners: ReturnType<typeof useSortable>["listeners"];
+  attributes: ReturnType<typeof useSortable>["attributes"];
+  setActivatorNodeRef: ReturnType<typeof useSortable>["setActivatorNodeRef"];
+  isDragging: boolean;
+  canDrag: boolean;
+};
+const OrderDragHandleContext = createContext<OrderDragHandleCtx | null>(null);
+
+/**
+ * Wrapper around each order tile. Applies dnd-kit's transform/transition to the shell so
+ * the whole <details> animates in and out of the sort position. `disabled` suppresses the
+ * handle without remounting the tree (so open/closed state survives sort-mode changes).
+ */
+function SortableJobShell({
+  jobId,
+  disabled,
+  children,
+}: {
+  jobId: string;
+  disabled: boolean;
+  children: ReactNode;
+}) {
+  const sortable = useSortable({ id: jobId, disabled });
+  const canDrag = !disabled;
+  const style: CSSProperties = {
+    transform: DndCSS.Transform.toString(sortable.transform),
+    transition: sortable.transition,
+    position: "relative",
+    zIndex: sortable.isDragging ? 20 : undefined,
+    opacity: sortable.isDragging ? 0.75 : 1,
+  };
+  const ctxValue = useMemo<OrderDragHandleCtx>(
+    () => ({
+      listeners: sortable.listeners,
+      attributes: sortable.attributes,
+      setActivatorNodeRef: sortable.setActivatorNodeRef,
+      isDragging: sortable.isDragging,
+      canDrag,
+    }),
+    [
+      sortable.listeners,
+      sortable.attributes,
+      sortable.setActivatorNodeRef,
+      sortable.isDragging,
+      canDrag,
+    ],
+  );
+  return (
+    <div
+      ref={sortable.setNodeRef}
+      style={style}
+      className="project-clad-order-row-shell"
+    >
+      <OrderDragHandleContext.Provider value={ctxValue}>
+        {children}
+      </OrderDragHandleContext.Provider>
+    </div>
+  );
+}
+
+/**
+ * Drag handle rendered inside each order's <summary>. Plain grip icon — no button chrome,
+ * no hover / pressed states — so it reads as a static tile ornament until the user grabs it.
+ *
+ * Uses a <span role="button"> instead of a real <button> so it inherits the neu summary
+ * surface without us having to override button defaults. Stops propagation on pointer/
+ * mouse/click in the capture phase so the native <details> toggle never fires when the
+ * user is starting a drag; dnd-kit's listeners are on the same element and run in the
+ * target phase, so they still fire.
+ */
+function OrderDragHandle() {
+  const ctx = useContext(OrderDragHandleContext);
+  if (!ctx || !ctx.canDrag) return null;
+  return (
+    <span
+      ref={ctx.setActivatorNodeRef}
+      aria-label="Drag to reorder"
+      title="Drag to reorder"
+      className="project-clad-order-drag-handle"
+      data-dragging={ctx.isDragging ? "true" : undefined}
+      onClick={(event) => {
+        /* The <summary> would toggle open/closed on click — swallow it so clicking the
+           handle without dragging doesn't expand/collapse the order. */
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      {...ctx.attributes}
+      {...(ctx.listeners ?? {})}
+    >
+      <OrderDragHandleGlyph />
+    </span>
+  );
+}
+
+/**
+ * Pure comparator for the seven sort modes. `custom` returns 0 because that order is
+ * controlled by the persisted sortOrder the loader already sorted by.
+ */
+function compareJobsForSort(
+  a: JobView,
+  b: JobView,
+  mode: OrderSortMode,
+  approvalLookup: ReadonlyMap<string, number>,
+): number {
+  switch (mode) {
+    case "custom":
+      return 0;
+    case "recent":
+      return Date.parse(b.createdAt) - Date.parse(a.createdAt);
+    case "oldest":
+      return Date.parse(a.createdAt) - Date.parse(b.createdAt);
+    case "approved": {
+      const aAt = approvalLookup.get(a.id) ?? 0;
+      const bAt = approvalLookup.get(b.id) ?? 0;
+      if (aAt === bAt) return Date.parse(b.createdAt) - Date.parse(a.createdAt);
+      return bAt - aAt;
+    }
+    case "status": {
+      const aRank = ORDER_STATUS_RANK[a.orderLifecycleStatus] ?? 99;
+      const bRank = ORDER_STATUS_RANK[b.orderLifecycleStatus] ?? 99;
+      if (aRank !== bRank) return aRank - bRank;
+      return Date.parse(b.createdAt) - Date.parse(a.createdAt);
+    }
+    case "name": {
+      const aName = jobNameForOrderSummary(a.name, a.orderName).toLocaleLowerCase();
+      const bName = jobNameForOrderSummary(b.name, b.orderName).toLocaleLowerCase();
+      return aName.localeCompare(bName);
+    }
+    case "total":
+      return (b.subtotal || 0) - (a.subtotal || 0);
+    default:
+      return 0;
+  }
+}
+
 export default function ProjectDetailPage() {
   const {
     proxyStylesCss,
@@ -3101,14 +3913,67 @@ export default function ProjectDetailPage() {
       ? (actionData.memberError as string)
       : null;
   const location = useLocation();
+  const revalidator = useRevalidator();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedJobId = searchParams.get("job");
   const [jobs, setJobs] = useState(project.jobs);
   const orderListSearchQ = (searchParams.get("q") || "").trim();
+  const [orderSortMode, setOrderSortMode] = useState<OrderSortMode>("custom");
+  useEffect(() => {
+    setOrderSortMode(readStoredOrderSortMode(project.id));
+  }, [project.id]);
+
+  /*
+   * dnd-kit uses `useLayoutEffect` internally, which is a noop on the server and leaves
+   * the sortable hooks in a half-initialized state after hydration (listeners spread on
+   * children never actually fire). Rendering the DndContext tree only after the client
+   * has mounted sidesteps this — SSR matches first client render (no DnD wiring) and
+   * dnd-kit then takes over from a clean tree.
+   */
+  const [dndReady, setDndReady] = useState(false);
+  useEffect(() => {
+    setDndReady(true);
+  }, []);
+  const persistOrderSortMode = (mode: OrderSortMode) => {
+    console.log("[pc] persistOrderSortMode ->", mode);
+    setOrderSortMode(mode);
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(orderSortStorageKey(project.id), mode);
+    } catch {
+      /* ignore storage failures */
+    }
+  };
+  /** Job id -> timestamp (ms) of the most recent job-level approval, for the "approved" sort. */
+  const approvalLookup = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of approvalRequests) {
+      if (!r.jobId || r.itemId || !r.approvedAt) continue;
+      const ts = Date.parse(r.approvedAt);
+      if (!Number.isFinite(ts)) continue;
+      const prev = map.get(r.jobId) ?? 0;
+      if (ts > prev) map.set(r.jobId, ts);
+    }
+    return map;
+  }, [approvalRequests]);
   const visibleJobs = useMemo(() => {
-    if (!orderListSearchQ) return jobs;
-    return jobs.filter((job) => jobMatchesOrderSearch(job, orderListSearchQ));
-  }, [jobs, orderListSearchQ]);
+    const base = orderListSearchQ
+      ? jobs.filter((job) => jobMatchesOrderSearch(job, orderListSearchQ))
+      : jobs;
+    if (orderSortMode === "custom") {
+      console.log("[pc] visibleJobs (custom)", base.map((j) => j.id));
+      return base;
+    }
+    const sorted = [...base];
+    sorted.sort((a, b) => compareJobsForSort(a, b, orderSortMode, approvalLookup));
+    console.log(`[pc] visibleJobs (${orderSortMode})`, sorted.map((j) => j.id));
+    return sorted;
+  }, [jobs, orderListSearchQ, orderSortMode, approvalLookup]);
+  /** Dragging only makes sense while the list is showing the custom (persisted) order. */
+  /* Drag-to-reorder temporarily disabled — no UI exposes a sort mode right now and dnd-kit
+     activation wasn't reliable inside the storefront proxy. The DndContext/SortableContext
+     wrappers stay mounted so hook order is stable, but everything is force-disabled. */
+  const orderDragEnabled = false;
 
   useEffect(() => {
     if (!selectedJobId || !orderListSearchQ) return;
@@ -3131,7 +3996,6 @@ export default function ProjectDetailPage() {
   const projectTotalWithDisplayTax =
     projectSubtotalPlusTax + projectOrderDeliveryFeesTotal;
   const dragItemId = useRef<string | null>(null);
-  const dragJobId = useRef<string | null>(null);
 
   const isOrderAwaitingApproval = (jobId: string) => {
     if (hasProjectLevelApprovalPending) return true;
@@ -3173,19 +4037,35 @@ export default function ProjectDetailPage() {
         (approval === "approved" || skipReviewOrderFlow)) ||
       (ls === "draft" && skipReviewOrderFlow)
     ) {
+      const hasSiteContact = Boolean(
+        job.siteContactName?.trim() && job.siteContactPhone?.trim(),
+      );
+      // PO is OPTIONAL — only Site Contact gates Order now.
+      const canPlaceOrder = hasSiteContact;
+      const missingTooltip = !hasSiteContact
+        ? "Add a site contact name and phone on this order to place it."
+        : undefined;
       return (
         <div className="project-clad-inline-form project-clad-order-lifecycle-actions-form">
           <button
             type="button"
-            className="project-clad-button"
+            className="project-clad-button project-clad-button--approve"
             data-projectclad-order-now-submit
             data-job-id={job.id}
             data-has-delivery={isDeliveryCompleteForOrderNow ? "1" : "0"}
-            disabled={orderNowSubmittingJobId === job.id}
+            data-has-site-contact={hasSiteContact ? "1" : "0"}
+            disabled={orderNowSubmittingJobId === job.id || !canPlaceOrder}
+            title={
+              !canPlaceOrder
+                ? missingTooltip
+                : undefined
+            }
           >
             {orderNowSubmittingJobId === job.id ? "Placing…" : "Order now"}
           </button>
-          {project.receiveMode === "delivery" && !hasCompleteDeliveryAddress ? (
+          {canPlaceOrder &&
+          project.receiveMode === "delivery" &&
+          !hasCompleteDeliveryAddress ? (
             <span
               className="project-clad-muted"
               style={{
@@ -3235,6 +4115,51 @@ export default function ProjectDetailPage() {
     return (
       <span className="project-clad-muted">{orderLifecycleLabel(ls)}</span>
     );
+  };
+
+  /**
+   * Compact action shown in the order tile's TOP-RIGHT summary header
+   * (next to the Subtotal). The full Order now / Send for review CTA
+   * lives in the bottom finance panel — the header keeps the row scannable
+   * by showing only:
+   *   - "Order again" button when the order has been delivered (via
+   *     `copy-job` → duplicates this job + all items as a fresh draft).
+   *   - A green "Order complete" chip when the order has been paid, so
+   *     the user gets a clear "this is done" signal on finished rows.
+   *   - Nothing for every other lifecycle state.
+   */
+  const renderOrderLifecycleHeaderAction = (job: JobView) => {
+    const ls = job.orderLifecycleStatus;
+    if (ls === "delivered") {
+      return (
+        <Form
+          method="post"
+          action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+          className="project-clad-inline-form"
+          onPointerDownCapture={(event) => event.stopPropagation()}
+          onClickCapture={(event) => event.stopPropagation()}
+        >
+          <input type="hidden" name="intent" value="copy-job" />
+          <input type="hidden" name="jobId" value={job.id} />
+          <input type="hidden" name="targetProjectId" value={project.id} />
+          <button
+            type="submit"
+            className="project-clad-button project-clad-button--approve"
+            title="Create a new order with the same items so you can place it again"
+          >
+            Order again
+          </button>
+        </Form>
+      );
+    }
+    if (ls === "paid") {
+      return (
+        <span className="project-clad-order-lifecycle-chip project-clad-order-lifecycle-chip--complete">
+          Order complete
+        </span>
+      );
+    }
+    return null;
   };
 
   /** Staff lifecycle dropdown + Apply — only inside the line-item "Edit order" panel. */
@@ -3346,41 +4271,52 @@ export default function ProjectDetailPage() {
     dragItemId.current = null;
   };
 
-  const reorderJobs = async (overJobId: string) => {
-    if (!canEdit || !dragJobId.current || dragJobId.current === overJobId) {
-      dragJobId.current = null;
-      return;
-    }
-
+  /**
+   * Pointer sensor has an 8px activation distance so brief clicks on <summary> still
+   * toggle the <details> open/close instead of starting a phantom drag.
+   */
+  const orderDndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  /**
+   * dnd-kit handler: `jobs` becomes the new order optimistically, then we POST the id list
+   * to the project route's `reorder-jobs` action which rewrites each job's `sortOrder` in Prisma.
+   * No-op when the drag landed on itself or when sorting is not in `custom` mode.
+   */
+  const handleJobDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    console.log("[pc] dragEnd", {
+      active: active?.id,
+      over: over?.id,
+      orderDragEnabled,
+    });
+    if (!orderDragEnabled) return;
+    if (!over || active.id === over.id) return;
     let reordered: string[] | null = null;
-
     setJobs((current) => {
-      const next = [...current];
-      const fromIndex = next.findIndex((job) => job.id === dragJobId.current);
-      const toIndex = next.findIndex((job) => job.id === overJobId);
+      const fromIndex = current.findIndex((job) => job.id === active.id);
+      const toIndex = current.findIndex((job) => job.id === over.id);
       if (fromIndex === -1 || toIndex === -1) return current;
-      const [moved] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, moved);
+      const next = arrayMove(current, fromIndex, toIndex);
       reordered = next.map((job) => job.id);
+      console.log("[pc] dragEnd reorder", { fromIndex, toIndex, reordered });
       return next;
     });
-
-    if (!reordered) {
-      dragJobId.current = null;
-      return;
+    if (!reordered) return;
+    try {
+      await fetch(`${location.pathname}${location.search}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          intent: "reorder-jobs",
+          jobIds: reordered,
+        }),
+        credentials: "include",
+      });
+    } catch {
+      /* optimistic update already applied; server will re-sync on next loader run */
     }
-
-    await fetch(`${location.pathname}${location.search}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        intent: "reorder-jobs",
-        jobIds: reordered,
-      }),
-      credentials: "include",
-    });
-
-    dragJobId.current = null;
   };
 
   /**
@@ -3474,6 +4410,320 @@ export default function ProjectDetailPage() {
     return () =>
       document.removeEventListener("click", onCaptureClick, true);
   }, [location.pathname, location.search]);
+
+  /*
+   * Autosave-on-blur for the three inline-editable capsules in OrderFinancePanel:
+   *   - [data-projectclad-purchase-order-input]
+   *   - [data-projectclad-site-contact-name-input]
+   *   - [data-projectclad-site-contact-phone-input]
+   *
+   * Without this, those inputs only persist when the user enters Edit order →
+   * Save. Clicking Order now without that round-trip would 400 with "Add a
+   * purchase order # / site contact …" because the server hasn't seen the
+   * typed value yet. Blur-autosave bridges that gap so the capsules behave
+   * the way they look — type, click away, it's saved.
+   *
+   * Implementation notes:
+   *   - We compare the trimmed value against `data-original-...` to skip
+   *     no-op blurs (clicking through without changing anything).
+   *   - We always send all three fields + jobName from the same <details>,
+   *     so the diff-aware `save-order-edit` action only writes the deltas
+   *     and never accidentally clears a sibling field. (`jobName` empty =
+   *     leave-as-is; `purchaseOrderNumber` empty = clear; site contact
+   *     fields use `undefined` = leave-as-is, "" = clear.)
+   *   - A `data-projectclad-saving="1"` lock prevents overlapping saves on
+   *     the same input; if the user keeps editing during a flight, the
+   *     pending flag re-fires once the in-flight save resolves so we never
+   *     drop a final value.
+   *   - Brief `data-projectclad-just-saved="1"` flag pulses the row so the
+   *     user gets a subtle visual ack without a modal/toast.
+   */
+  const revalidatorRef = useRef(revalidator);
+  revalidatorRef.current = revalidator;
+  /*
+   * We scan for newly-mounted inputs every render (not just on URL change)
+   * so that when React revalidates after a save / when the user opens a
+   * previously-collapsed <details> / when the visibleJobs list changes,
+   * freshly-mounted inputs still get their listeners + original-value
+   * snapshots. A WeakSet of already-wired elements prevents double-binding.
+   *
+   * `useEffect` (not `useLayoutEffect`) because:
+   *   1. SSR warnings for useLayoutEffect are cosmetic but noisy
+   *   2. We're only touching the DOM, no layout read/write race
+   *   3. It runs after every render commit, which is exactly when new
+   *      inputs may have appeared
+   */
+  const wiredInputsRef = useRef<WeakSet<HTMLInputElement>>(new WeakSet());
+  const originalValuesRef = useRef<WeakMap<HTMLInputElement, string>>(
+    new WeakMap(),
+  );
+  useEffect(() => {
+    const path = `${location.pathname}${location.search}`;
+    const FIELD_SELECTORS = [
+      "[data-projectclad-purchase-order-input]",
+      "[data-projectclad-site-contact-name-input]",
+      "[data-projectclad-site-contact-phone-input]",
+    ].join(",");
+
+    /*
+     * Walk every inline-editable input inside `details` and compare its
+     * trimmed value vs the snapshot in `originalValuesRef`. If at least
+     * one differs, flip that details's Save button on (green glow +
+     * enabled). Otherwise disable it and clear the glow.
+     *
+     * Snapshots live in a WeakMap (seeded at first bind) rather than
+     * `data-original-…` DOM attrs because React re-renders would reset
+     * those attrs from stale loader data mid-edit and flicker the glow.
+     */
+    function recomputeUnsavedFor(details: Element) {
+      const inputs = details.querySelectorAll(FIELD_SELECTORS);
+      let anyUnsaved = false;
+      inputs.forEach((el) => {
+        if (!(el instanceof HTMLInputElement)) return;
+        const original = (originalValuesRef.current.get(el) ?? "").trim();
+        if (el.value.trim() !== original) anyUnsaved = true;
+      });
+      const btn = details.querySelector(
+        "[data-projectclad-save-fields-btn]",
+      );
+      if (btn instanceof HTMLButtonElement) {
+        /* The button is ALWAYS clickable — clicking Save always POSTs
+           the current DOM values (the server-side diff is cheap and
+           idempotent for no-ops). This attribute only drives the green
+           "you have unsaved changes" glow; it is not a click gate. */
+        if (anyUnsaved) {
+          btn.setAttribute("data-projectclad-has-unsaved", "1");
+        } else {
+          btn.removeAttribute("data-projectclad-has-unsaved");
+        }
+      }
+    }
+
+    function flashSaved(input: HTMLInputElement) {
+      const row = input.closest(".project-clad-order-finance__row");
+      const target =
+        row instanceof HTMLElement ? row : (input as HTMLElement);
+      target.setAttribute("data-projectclad-just-saved", "1");
+      window.setTimeout(() => {
+        target.removeAttribute("data-projectclad-just-saved");
+      }, 1200);
+    }
+
+    /**
+     * Persist the 3 inline-editable capsules (PO / Site Contact Name /
+     * Phone) via the same `save-order-edit` action that the Edit Order
+     * form posts to.
+     *
+     * @param input  the capsule input that triggered the save
+     * @param mode   "blur"       = in-place update (revalidate), keeps focus
+     *               "explicit"   = Save button click (full reload, matches
+     *                              the proven Edit Order pattern)
+     */
+    async function trySave(
+      input: HTMLInputElement,
+      mode: "blur" | "explicit" = "blur",
+    ): Promise<void> {
+      const original = originalValuesRef.current.get(input) ?? "";
+      const current = input.value.trim();
+      if (current === original.trim()) return;
+
+      if (input.dataset.projectcladSaving === "1") {
+        input.dataset.projectcladPendingSave = "1";
+        input.dataset.projectcladPendingMode = mode;
+        return;
+      }
+
+      const details = input.closest("details");
+      const jobId =
+        input.getAttribute("data-job-id") ||
+        details?.getAttribute("data-job-id") ||
+        "";
+      if (!jobId || !details) return;
+
+      // Snapshot every relevant input from the same <details> so the
+      // diff-aware action never wipes a sibling we didn't touch.
+      function readField(selector: string): string {
+        const el = details.querySelector(selector);
+        return el instanceof HTMLInputElement ? el.value.trim() : "";
+      }
+      const jobName = readField("[data-projectclad-job-name-input]");
+      const purchaseOrderNumber = readField(
+        "[data-projectclad-purchase-order-input]",
+      );
+      const siteContactName = readField(
+        "[data-projectclad-site-contact-name-input]",
+      );
+      const siteContactPhone = readField(
+        "[data-projectclad-site-contact-phone-input]",
+      );
+
+      input.dataset.projectcladSaving = "1";
+      try {
+        const res = await fetch(path, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            intent: "save-order-edit",
+            jobId,
+            jobName,
+            purchaseOrderNumber,
+            siteContactName,
+            siteContactPhone,
+            removeItemIds: [],
+            itemUpdates: [],
+            deleteJob: false,
+          }),
+        });
+        /*
+         * save-order-edit returns a redirect() on success, so after
+         * fetch auto-follows we get HTML (not JSON) with res.ok=true.
+         * Only try JSON.parse for the error paths where the action
+         * returns Response.json({ error }, { status: 4xx }).
+         */
+        let payload: Record<string, unknown> | null = null;
+        if (!res.ok) {
+          try {
+            payload = (await res.json()) as Record<string, unknown>;
+          } catch {
+            payload = null;
+          }
+          const errLine =
+            payload && typeof payload.error === "string"
+              ? payload.error
+              : `Save failed (${res.status}).`;
+          // eslint-disable-next-line no-console -- surface save failures; silent
+          // alerts are worse than a console log + visible alert.
+          console.error("[project-clad] save-order-edit failed", {
+            status: res.status,
+            payload,
+          });
+          window.alert(errLine);
+          // Revert local input to last-known-good so the page reflects
+          // server truth and a future blur won't keep retrying the same
+          // bad value silently.
+          input.value = original;
+          return;
+        }
+
+        if (mode === "explicit") {
+          /*
+           * Explicit Save button click → full page reload to match the
+           * proven Edit Order save path (line ~6937). This guarantees the
+           * freshly-persisted PO / Site Contact values propagate to the
+           * React tree, the Order Now gate, and the badges in the row —
+           * no fighting with uncontrolled-input staleness or revalidator
+           * edge cases.
+           */
+          window.location.reload();
+          return;
+        }
+
+        // Blur path: re-snapshot EVERY inline input in this details so
+        // subsequent input events see them all as "clean" — the server
+        // now owns all 3 values atomically.
+        details
+          .querySelectorAll(FIELD_SELECTORS)
+          .forEach((el) => {
+            if (el instanceof HTMLInputElement) {
+              originalValuesRef.current.set(el, el.value.trim());
+            }
+          });
+        // Snapshots are now in sync with server truth — drop the green
+        // glow on this job's Save button and disable it.
+        recomputeUnsavedFor(details);
+        flashSaved(input);
+        // Pull fresh loader data so the React tree picks up the new
+        // siteContactName / purchaseOrderNumber and the Order Now gate
+        // re-enables without a full page reload (which would steal focus
+        // and reset any in-progress edits in adjacent capsules).
+        revalidatorRef.current.revalidate();
+      } catch (err) {
+        // eslint-disable-next-line no-console -- surface network failures.
+        console.error("[project-clad] save-order-edit network error", err);
+        window.alert("Couldn't save — check your connection and try again.");
+        input.value = original;
+      } finally {
+        input.dataset.projectcladSaving = "";
+        if (input.dataset.projectcladPendingSave === "1") {
+          const pendingMode =
+            input.dataset.projectcladPendingMode === "explicit"
+              ? "explicit"
+              : "blur";
+          input.dataset.projectcladPendingSave = "";
+          input.dataset.projectcladPendingMode = "";
+          // User kept editing while we were saving — flush their final
+          // value as a fresh save round.
+          void trySave(input, pendingMode);
+        }
+      }
+    }
+
+    /*
+     * Direct-bind per-input handlers. Delegation at document/capture had
+     * subtle ordering issues with other listeners in this file — binding
+     * to each input directly is bulletproof and also lets us seed the
+     * original-value snapshot at bind time from the current DOM value
+     * (which IS the server's last-saved value thanks to `defaultValue=`).
+     */
+    function handleInputEvent(this: HTMLInputElement) {
+      const details = this.closest("details");
+      if (details) recomputeUnsavedFor(details);
+    }
+    function handleBlurEvent(this: HTMLInputElement) {
+      void trySave(this);
+    }
+
+    const wired = wiredInputsRef.current;
+    const snapshots = originalValuesRef.current;
+    const inputs = document.querySelectorAll<HTMLInputElement>(FIELD_SELECTORS);
+    inputs.forEach((input) => {
+      if (!snapshots.has(input)) {
+        // Seed: the input's current value at first-bind IS server truth
+        // (React SSR rendered `defaultValue={serverValue}` and hydration
+        // preserved it). Using `value` rather than the data-original-*
+        // attr dodges React re-renders that would reset a stale attr
+        // while the user is mid-edit.
+        snapshots.set(input, input.value.trim());
+      }
+      if (wired.has(input)) return;
+      wired.add(input);
+      input.addEventListener("input", handleInputEvent);
+      input.addEventListener("blur", handleBlurEvent);
+    });
+
+    /*
+     * The explicit "Save" button's click is now bound directly via
+     * React onClick in the button's JSX — the document-level delegate
+     * used here previously could miss clicks when the button's
+     * imperative `disabled` gate got out of sync with the React tree
+     * after a revalidation. The direct handler always POSTs the DOM's
+     * current input values, so a click always saves what the user sees.
+     */
+
+    /*
+     * Initial / post-render sync: walk every <details> so each job's
+     * Save button reflects the correct "has unsaved changes" glow based
+     * on the freshly-seeded snapshots.
+     */
+    document
+      .querySelectorAll("details[data-job-id]")
+      .forEach((d) => recomputeUnsavedFor(d));
+
+    // NB: we intentionally do NOT detach the input/blur listeners on
+    // cleanup — the wiredInputsRef WeakSet will naturally GC when the
+    // DOM node goes away, and detaching every time the effect re-runs
+    // would drop listeners bound to inputs that didn't re-render.
+    return;
+    /*
+     * Re-run on every render so newly-mounted inputs (from revalidation,
+     * opening a <details>, new job row, etc.) get bound. The WeakSet
+     * guard keeps it idempotent.
+     */
+  });
 
   const inlineStyles = themeStyles?.styles || [];
 
@@ -3632,6 +4882,31 @@ export default function ProjectDetailPage() {
               defaultValue={project.companyName || ""}
               placeholder="Optional"
               className="project-clad-pricing-password-input"
+            />
+            <label htmlFor="edit-project-default-contact-name">
+              Default site contact name
+            </label>
+            <input
+              id="edit-project-default-contact-name"
+              name="defaultSiteContactName"
+              type="text"
+              defaultValue={project.defaultSiteContactName || ""}
+              placeholder="Autofills new orders (optional)"
+              className="project-clad-pricing-password-input"
+              autoComplete="name"
+            />
+            <label htmlFor="edit-project-default-contact-phone">
+              Default site contact phone
+            </label>
+            <input
+              id="edit-project-default-contact-phone"
+              name="defaultSiteContactPhone"
+              type="tel"
+              inputMode="tel"
+              defaultValue={project.defaultSiteContactPhone || ""}
+              placeholder="Autofills new orders (optional)"
+              className="project-clad-pricing-password-input"
+              autoComplete="tel"
             />
             <div className="project-clad-actions" style={{ marginTop: "0.75rem", gap: "0.5rem" }}>
               <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
@@ -4320,9 +5595,11 @@ export default function ProjectDetailPage() {
                   </span>
                 </span>
               </button>
-              <h2 className="project-clad-section-title project-clad-neon-title">
-                Orders
-              </h2>
+              <div className="project-clad-orders-shell__heading-row">
+                <h2 className="project-clad-section-title project-clad-neon-title">
+                  Orders
+                </h2>
+              </div>
               {variantLookupError && (
                 <p className="project-clad-muted">{variantLookupError}</p>
               )}
@@ -4337,12 +5614,23 @@ export default function ProjectDetailPage() {
                 <div
                   id="project-clad-orders-font-scope"
                   className="project-clad-grid project-clad-orders-shell__list"
+                  data-order-sort-mode={orderSortMode}
                 >
                   <span
                     data-projectclad-server-build="unit-price-edit-v1"
                     className="project-clad-sr-only"
                     aria-hidden="true"
                   />
+                  <DndContext
+                    sensors={orderDndSensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleJobDragEnd}
+                  >
+                    <SortableContext
+                      items={visibleJobs.map((j) => j.id)}
+                      strategy={verticalListSortingStrategy}
+                      disabled={!orderDragEnabled || !dndReady}
+                    >
                   {visibleJobs.map((job) => {
                     const workOrderShellClass =
                       getJobApprovalInfo(job.id) &&
@@ -4361,6 +5649,31 @@ export default function ProjectDetailPage() {
                     const jobDeliveryFeeAmount = deliveryFeeForJob(job);
                     const jobTotalWithDisplayTax =
                       jobSubtotalPlusTax + jobDeliveryFeeAmount;
+                    /**
+                     * Delivery-vs-pickup for THIS job. Pickup wins explicitly;
+                     * delivery wins if the job was saved with delivery OR the
+                     * project's default is delivery and no per-job override.
+                     * Mirrors the logic in `deliveryFeeForJob`.
+                     */
+                    const jobIsDelivery =
+                      job.fulfillmentMethod === "delivery" ||
+                      (job.fulfillmentMethod !== "pickup" &&
+                        project.receiveMode === "delivery");
+                    /** One-line address assembled live from the project so that
+                     *  edits to the address show up on existing orders immediately. */
+                    const jobDeliveryAddress = (() => {
+                      const parts = [
+                        project.shipAddress1,
+                        project.shipCity,
+                        project.shipProvince,
+                        project.shipPostal,
+                      ]
+                        .map((part) => part?.trim())
+                        .filter((part): part is string => Boolean(part));
+                      if (parts.length === 0) return null;
+                      const country = project.shipCountry?.trim() || "Canada";
+                      return [...parts, country].join(", ");
+                    })();
                     const totalOrderQtyLabel = `Total Order Quantity: ${totalQty}`;
                     const orderFootShopify = OrderFootShopifyCell(job);
                     const jobSummaryDisplayName = jobNameForOrderSummary(
@@ -4372,13 +5685,191 @@ export default function ProjectDetailPage() {
                         job.name,
                         job.purchaseOrderNumber,
                       ) || "—";
-                    const poDefault = jobPurchaseOrderDisplay(
-                      job.name,
-                      job.purchaseOrderNumber,
-                    );
+                    /*
+                     * The fulfillment / delivery status line (e.g. "In store pickup",
+                     * "Delivery Mon Jun 10, AM", "Delivered - Jun 10"). Lifted out of the
+                     * actions IIFE so we can also embed it in the sunken totals tile
+                     * (under the Delivery row) — keeps all purchasing info together.
+                     */
+                    const preferredDeliveryLine = formatOrderDeliveryFootline({
+                      orderLifecycleStatus: job.orderLifecycleStatus,
+                      paidAt: job.paidAt,
+                      completedAt: job.completedAt,
+                      scheduledDeliveryDate: job.scheduledDeliveryDate,
+                      scheduledDeliveryWindow: job.scheduledDeliveryWindow,
+                      fulfillmentMethod: job.fulfillmentMethod,
+                      projectReceiveMode: project.receiveMode,
+                    });
+                    /*
+                     * Lifted out of the actions IIFE so we can render the
+                     * Order now / Edit order buttons INSIDE the OrderFinancePanel
+                     * (right column, below the Payment Summary card) — that way the
+                     * CTAs read as part of the same finance section instead of
+                     * floating in whitespace below it.
+                     */
+                    const awaitingForActions = isOrderAwaitingApproval(job.id);
+                    const showEditOrderButtonForActions =
+                      (canEdit || viewerCanFulfill) &&
+                      !job.isLocked &&
+                      (!awaitingForActions || viewerCanFulfill);
+                    /*
+                     * Render the explicit "Save" button whenever the user is
+                     * allowed to edit the inline-editable capsules (PO + site
+                     * contact). Autosave-on-blur still fires for those, but
+                     * this gives users an unambiguous commit handle that
+                     * also visually signals (green glow) "you have unsaved
+                     * changes".
+                     *
+                     * The click handler is bound DIRECTLY here (instead of
+                     * via a document-level delegate) so a click always
+                     * reaches the POST regardless of whether the input
+                     * listener has had a chance to flip the unsaved flag —
+                     * earlier rev used a capture-phase delegate that could
+                     * miss when the delegate's snapshot WeakMap got out of
+                     * sync with the current DOM across revalidations.
+                     *
+                     * We also explicitly read the current input values out of
+                     * the DOM at click time rather than trusting any cached
+                     * snapshot, so typing + clicking Save always saves what
+                     * the user sees — even if autosave-on-blur misfires.
+                     */
+                    const showSaveFieldsBtn = Boolean(canEdit && !job.isLocked);
+                    const handleSaveFieldsClick = (
+                      event: React.MouseEvent<HTMLButtonElement>,
+                    ) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      const btn = event.currentTarget;
+                      if (btn.dataset.projectcladSaving === "1") return;
+
+                      const details = btn.closest("details");
+                      if (!details) return;
+
+                      const readField = (selector: string): string => {
+                        const el = details.querySelector(selector);
+                        return el instanceof HTMLInputElement
+                          ? el.value.trim()
+                          : "";
+                      };
+                      const jobName = readField(
+                        "[data-projectclad-job-name-input]",
+                      );
+                      const purchaseOrderNumber = readField(
+                        "[data-projectclad-purchase-order-input]",
+                      );
+                      const siteContactName = readField(
+                        "[data-projectclad-site-contact-name-input]",
+                      );
+                      const siteContactPhone = readField(
+                        "[data-projectclad-site-contact-phone-input]",
+                      );
+
+                      btn.dataset.projectcladSaving = "1";
+                      btn.setAttribute("aria-busy", "true");
+                      void (async () => {
+                        try {
+                          const url = `${location.pathname}${location.search}`;
+                          const res = await fetch(url, {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                              Accept: "application/json",
+                            },
+                            credentials: "include",
+                            body: JSON.stringify({
+                              intent: "save-order-edit",
+                              jobId: job.id,
+                              jobName,
+                              purchaseOrderNumber,
+                              siteContactName,
+                              siteContactPhone,
+                              removeItemIds: [],
+                              itemUpdates: [],
+                              deleteJob: false,
+                            }),
+                          });
+                          if (!res.ok) {
+                            let serverMsg = `Save failed (${res.status}).`;
+                            try {
+                              const errJson = (await res.json()) as {
+                                error?: string;
+                              };
+                              if (
+                                errJson &&
+                                typeof errJson.error === "string" &&
+                                errJson.error.trim()
+                              ) {
+                                serverMsg = errJson.error;
+                              }
+                            } catch {
+                              /* non-JSON body — stick with the generic message */
+                            }
+                            console.error(
+                              "[project-clad] Save fields failed:",
+                              res.status,
+                              serverMsg,
+                            );
+                            window.alert(serverMsg);
+                            return;
+                          }
+                          /* save-order-edit returns a redirect() on success;
+                             after fetch auto-follows we get HTML with res.ok=true.
+                             Full reload guarantees the freshly-persisted values
+                             propagate to the React tree (same proven path as
+                             Edit Order → Save). */
+                          window.location.reload();
+                        } catch (err) {
+                          console.error(
+                            "[project-clad] Save fields network error:",
+                            err,
+                          );
+                          window.alert(
+                            "Couldn't save — check your connection and try again.",
+                          );
+                        } finally {
+                          btn.dataset.projectcladSaving = "";
+                          btn.removeAttribute("aria-busy");
+                        }
+                      })();
+                    };
+                    const orderFinanceActionsSlot =
+                      canEdit || showEditOrderButtonForActions ? (
+                        <div className="project-clad-order-finance__actions-row">
+                          {showSaveFieldsBtn ? (
+                            <button
+                              type="button"
+                              className="project-clad-button project-clad-save-fields-btn"
+                              data-projectclad-save-fields-btn
+                              data-job-id={job.id}
+                              title="Save PO / Site Contact / Phone"
+                              onClick={handleSaveFieldsClick}
+                            >
+                              Save
+                            </button>
+                          ) : null}
+                          {canEdit
+                            ? renderOrderLifecycleCustomerSummaryActions(job)
+                            : null}
+                          {showEditOrderButtonForActions ? (
+                            <button
+                              type="button"
+                              className="project-clad-button"
+                              data-projectclad-edit-order
+                              data-job-id={job.id}
+                              data-project-id={project.id}
+                            >
+                              Edit order
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null;
                     return (
-                  <details
+                  <SortableJobShell
                     key={job.id}
+                    jobId={job.id}
+                    disabled={!orderDragEnabled || !dndReady}
+                  >
+                  <details
                     id={`job-${job.id}`}
                     data-job-id={job.id}
                     open={selectedJobId === job.id}
@@ -4386,7 +5877,6 @@ export default function ProjectDetailPage() {
                       [
                         "project-clad-order-row",
                         "project-clad-details",
-                        canEdit && selectedJobId === job.id && "project-clad-draggable",
                         ((job.orderLifecycleStatus === "pending_review" &&
                           getApprovalStatus(job.id, "") !== "approved") ||
                           (!hideAddToCart &&
@@ -4397,21 +5887,6 @@ export default function ProjectDetailPage() {
                         .filter(Boolean)
                         .join(" ")
                     }
-                    draggable={canEdit && selectedJobId === job.id}
-                    onDragStart={(event) => {
-                      if (!canEdit || selectedJobId !== job.id) return;
-                      dragJobId.current = job.id;
-                      event.dataTransfer.setData("text/plain", job.id);
-                    }}
-                    onDragOver={(event) => {
-                      if (!canEdit) return;
-                      event.preventDefault();
-                    }}
-                    onDrop={(event) => {
-                      if (!canEdit) return;
-                      event.preventDefault();
-                      reorderJobs(job.id);
-                    }}
                     onToggle={(e) => {
                       const el = e.currentTarget;
                       if (!(el instanceof HTMLDetailsElement)) return;
@@ -4464,29 +5939,26 @@ export default function ProjectDetailPage() {
                               style={JOB_EDIT_ORDER_INPUT_STYLE}
                             />
                           </div>
-                          <div className="project-clad-job-po-field project-clad-job-edit-field">
-                            <label
-                              className="project-clad-job-edit-label"
-                              style={JOB_EDIT_ORDER_LABEL_STYLE}
-                              htmlFor={`projectclad-po-order-${job.id}`}
-                            >
-                              PURCHASE ORDER #
-                            </label>
-                            <input
-                              id={`projectclad-po-order-${job.id}`}
-                              type="text"
-                              defaultValue={poDefault}
-                              data-projectclad-purchase-order-input
-                              data-job-id={job.id}
-                              data-original-purchase-order={poDefault}
-                              placeholder="Optional"
-                              aria-label="PURCHASE ORDER #"
-                              className="project-clad-job-po-input project-clad-job-edit-input"
-                              style={JOB_EDIT_ORDER_INPUT_STYLE}
-                            />
-                          </div>
+                          {/*
+                           * The PURCHASE ORDER # input lives inline inside OrderFinancePanel
+                           * (Contact & Delivery → Purchase Order # row), matching the Site
+                           * Contact pattern. The save-order-edit handler queries
+                           * `[data-projectclad-purchase-order-input]` within the entire
+                           * <details> block, so the inline panel input is the single source
+                           * of truth — no header-mode duplicate needed.
+                           */}
                         </div>
                         <div className="project-clad-order-summary-head-end">
+                          {/*
+                           * Lifecycle chip / "Order again" button comes FIRST
+                           * (left side of the cluster) so the status reads
+                           * before the dollar amount: e.g. `ORDER COMPLETE
+                           * SUBTOTAL: $1.00`. Mirrors how a receipt headline
+                           * leads with state, then settles into the number.
+                           */}
+                          <div className="project-clad-order-summary-lifecycle-cluster">
+                            {renderOrderLifecycleHeaderAction(job)}
+                          </div>
                           <div className="project-clad-order-summary-head-row__subtotal">
                             <span className="project-clad-muted">Subtotal: </span>
                             {pricingUnlocked ? (
@@ -4507,15 +5979,6 @@ export default function ProjectDetailPage() {
                               </button>
                             )}
                           </div>
-                          <div className="project-clad-order-summary-lifecycle-cluster">
-                            {canEdit ? (
-                              renderOrderLifecycleCustomerSummaryActions(job)
-                            ) : (
-                              <span className="project-clad-muted">
-                                {orderLifecycleLabel(job.orderLifecycleStatus)}
-                              </span>
-                            )}
-                          </div>
                         </div>
                       </div>
                     </summary>
@@ -4523,365 +5986,250 @@ export default function ProjectDetailPage() {
                       {job.items.length === 0 ? (
                         <div className="project-clad-order-empty-with-totals">
                           <p className="project-clad-muted">No items saved.</p>
-                          <div className="project-clad-order-empty-with-totals__row">
-                            <span
-                              className="project-clad-muted"
-                              aria-hidden
-                              style={{ visibility: "hidden", userSelect: "none" }}
-                            >
-                              {totalOrderQtyLabel}
-                            </span>
-                            <span className="project-clad-muted">Subtotal</span>
-                            <span
-                              className="project-clad-table-right"
-                              data-projectclad-price
-                              data-price={job.subtotal.toFixed(2)}
-                            >
-                              {pricingUnlocked ? (
-                                formatPrice(job.subtotal.toFixed(2))
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="project-clad-hidden-link"
-                                  data-projectclad-show-price
-                                >
-                                  Hidden
-                                </button>
-                              )}
-                            </span>
-                          </div>
-                          <div className="project-clad-order-empty-with-totals__row">
-                            <span className="project-clad-muted">
-                              {totalOrderQtyLabel}
-                            </span>
-                            <span className="project-clad-muted">
-                              Tax ({Math.round(ORDER_DISPLAY_TAX_RATE * 100)}%)
-                            </span>
-                            <span
-                              className="project-clad-table-right"
-                              data-projectclad-price
-                              data-price={jobDisplayTax.toFixed(2)}
-                            >
-                              {pricingUnlocked ? (
-                                formatPrice(jobDisplayTax.toFixed(2))
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="project-clad-hidden-link"
-                                  data-projectclad-show-price
-                                >
-                                  Hidden
-                                </button>
-                              )}
-                            </span>
-                          </div>
-                          <div className="project-clad-order-empty-with-totals__row">
-                            <div className="project-clad-muted project-clad-order-empty-with-totals__total-lead">
-                              <div className="project-clad-order-tfoot-po-total-line">
-                                PURCHASE ORDER #{" "}
-                                <span className="project-clad-order-tfoot-po-value">
-                                  {poFooterDisplay}
-                                </span>
-                              </div>
-                              {orderFootShopify ? (
-                                <div className="project-clad-order-tfoot-shopify-with-total">
-                                  {orderFootShopify}
-                                </div>
-                              ) : null}
-                            </div>
-                            <span className="project-clad-muted">Total</span>
-                            <span
-                              className="project-clad-table-right"
-                              data-projectclad-price
-                              data-price={jobTotalWithDisplayTax.toFixed(2)}
-                            >
-                              {pricingUnlocked ? (
-                                formatPrice(jobTotalWithDisplayTax.toFixed(2))
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="project-clad-hidden-link"
-                                  data-projectclad-show-price
-                                >
-                                  Hidden
-                                </button>
-                              )}
-                            </span>
-                          </div>
+                          <OrderFinancePanel
+                            jobSubtotal={job.subtotal}
+                            jobDisplayTax={jobDisplayTax}
+                            jobDeliveryFeeAmount={jobDeliveryFeeAmount}
+                            jobTotalWithDisplayTax={jobTotalWithDisplayTax}
+                            totalQty={totalQty}
+                            preferredDeliveryLine={preferredDeliveryLine}
+                            poFooterDisplay={poFooterDisplay}
+                            orderFootShopify={orderFootShopify}
+                            pricingUnlocked={pricingUnlocked}
+                            taxRatePercent={Math.round(ORDER_DISPLAY_TAX_RATE * 100)}
+                            shipProvince={project.shipProvince}
+                            isDelivery={jobIsDelivery}
+                            deliveryAddress={jobDeliveryAddress}
+                            siteContactName={job.siteContactName}
+                            siteContactPhone={job.siteContactPhone}
+                            jobId={job.id}
+                            canEditSiteContact={Boolean(canEdit && !job.isLocked)}
+                            canEditPurchaseOrder={Boolean(canEdit && !job.isLocked)}
+                            actionsSlot={orderFinanceActionsSlot}
+                          />
                         </div>
                       ) : (
                       <div className="project-clad-table-x-scroll">
                       <table className="project-clad-table project-clad-orders-table">
-                          <thead>
+                          <thead className="project-clad-sr-only" aria-hidden="true">
                             <tr>
-                                      <th>Product</th>
-                              <th className="project-clad-table-right">Quantity</th>
-                              <th className="project-clad-table-right">Price</th>
-                              {canEdit && !job.isLocked && (
-                                <th className="project-clad-table-right">Actions</th>
-                              )}
+                              <th>Product</th>
+                              <th>Details</th>
+                              <th>Quantity</th>
+                              <th>Price</th>
+                              {canEdit && !job.isLocked && <th>Actions</th>}
                             </tr>
                           </thead>
                           <tbody>
-                            {job.items.map((item) => (
+                            {job.items.map((item) => {
+                              const lineColSpan = orderLinesTableColSpan(
+                                Boolean(canEdit && !job.isLocked),
+                              );
+                              const unitN = Number(item.priceSnapshot);
+                              const lineTotalDisplay = Number.isFinite(unitN)
+                                ? (unitN * item.quantity).toFixed(2)
+                                : "0.00";
+                              const showLineActions = Boolean(canEdit && !job.isLocked);
+                              return (
                               <tr
                                 key={item.id}
                                 data-projectclad-item-row
                                 data-item-id={item.id}
                                 data-job-id={job.id}
-                                draggable={canEdit && !job.isLocked}
-                                onDragStart={() => {
-                                  if (!canEdit || job.isLocked) return;
-                                  dragItemId.current = item.id;
-                                }}
-                                onDragOver={(event) => {
-                                  if (!canEdit || job.isLocked) return;
-                                  event.preventDefault();
-                                }}
-                                onDrop={(event) => {
-                                  if (!canEdit || job.isLocked) return;
-                                  event.preventDefault();
-                                  reorderItems(job.id, item.id);
-                                }}
-                                className={
-                                  canEdit && !job.isLocked ? "project-clad-draggable" : undefined
-                                }
                               >
-                                <td className="project-clad-order-line-product-cell">
-                                  <OrderLineProductCell item={item} />
-                                </td>
-                                <td className="project-clad-table-right">
-                                  <span className="project-clad-normal-view">{item.quantity}</span>
-                                  <span className="project-clad-edit-view" style={{ display: "none" }}>
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      defaultValue={item.quantity}
-                                      data-original-qty={String(item.quantity)}
-                                      data-projectclad-qty-input
-                                      data-item-id={item.id}
-                                      data-job-id={job.id}
-                                      style={{ width: "4rem", padding: "0.25rem 0.5rem", fontSize: "16px" }}
-                                    />
-                                  </span>
-                                </td>
                                 <td
-                                  className="project-clad-table-right"
-                                  data-projectclad-price
-                                  data-price={item.priceSnapshot}
+                                  colSpan={lineColSpan}
+                                  className="project-clad-order-line-full-cell"
                                 >
-                                  {!pricingUnlocked ? (
-                                    <button
-                                      type="button"
-                                      className="project-clad-hidden-link"
-                                      data-projectclad-show-price
+                                  <div className="project-clad-order-line-tile project-clad-order-line-tile--line-item">
+                                    <div
+                                      className={[
+                                        "project-clad-order-line-tile__grid",
+                                        showLineActions
+                                          ? "project-clad-order-line-tile__grid--with-actions"
+                                          : "",
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" ")}
                                     >
-                                      Hidden
-                                    </button>
-                                  ) : (
-                                    <span className="project-clad-normal-view">
-                                      {formatPrice(item.priceSnapshot)}
-                                    </span>
-                                  )}
-                                  {canEdit && !job.isLocked ? (
-                                    <span
-                                      className="project-clad-edit-view"
-                                      style={{ display: "none" }}
-                                    >
-                                      {pricingUnlocked ? (
-                                        canEditLineUnitPrices ? (
-                                          <>
-                                            <label
-                                              className="project-clad-sr-only"
-                                              htmlFor={`projectclad-unit-price-${job.id}-${item.id}`}
+                                      <div className="project-clad-order-line-tile__col project-clad-order-line-tile__col--thumb">
+                                        <div className="project-clad-order-line-body">
+                                          <div className="project-clad-order-line-tile__row">
+                                            <span
+                                              className="project-clad-order-line-num"
+                                              aria-label={`Line ${item.sortOrder}`}
                                             >
-                                              Unit price for {item.displayName}
-                                            </label>
-                                            <input
-                                              id={`projectclad-unit-price-${job.id}-${item.id}`}
-                                              type="number"
-                                              inputMode="decimal"
-                                              step="0.01"
-                                              min={0}
-                                              defaultValue={Number(item.priceSnapshot).toFixed(2)}
-                                              data-original-unit-price={Number(
-                                                item.priceSnapshot,
-                                              ).toFixed(2)}
-                                              data-projectclad-unit-price-input
-                                              data-item-id={item.id}
-                                              data-job-id={job.id}
-                                              className="project-clad-unit-price-input"
-                                              aria-label={`Unit price for ${item.displayName}`}
-                                            />
-                                          </>
-                                        ) : (
-                                          <span
-                                            className="project-clad-muted"
-                                            style={{
-                                              fontSize: "0.82rem",
-                                              lineHeight: 1.35,
-                                              textAlign: "right",
-                                              display: "inline-block",
-                                              maxWidth: "12rem",
-                                            }}
-                                          >
-                                            Only designated staff can change unit prices.
-                                          </span>
-                                        )
-                                      ) : (
-                                        <span
-                                          className="project-clad-muted"
-                                          style={{
-                                            fontSize: "0.82rem",
-                                            lineHeight: 1.35,
-                                            textAlign: "right",
-                                            display: "inline-block",
-                                            maxWidth: "10rem",
-                                          }}
-                                        >
-                                          Unlock prices (Show price) to edit this amount.
-                                        </span>
-                                      )}
-                                    </span>
-                                  ) : null}
-                                </td>
-                                {canEdit && !job.isLocked && (
-                                  <td className="project-clad-table-right">
-                                    <div className="project-clad-stack">
-                                      <div className="project-clad-normal-view" data-projectclad-item-actions />
-                                      <div className="project-clad-edit-view" style={{ display: "none" }} data-projectclad-item-actions>
-                                        <Form
-                                          method="post"
-                                          action={`/apps/project-clad/project?id=${project.id}`}
-                                          style={{ display: "inline" }}
-                                          onSubmit={(e) => {
-                                            if (!confirm("Are you sure you want to remove this item?")) {
-                                              e.preventDefault();
-                                            }
-                                          }}
-                                        >
-                                          <input type="hidden" name="intent" value="delete-item" />
-                                          <input type="hidden" name="itemId" value={item.id} />
-                                          <button type="submit" className="project-clad-button">
-                                            Remove
-                                          </button>
-                                        </Form>
+                                              {item.sortOrder}
+                                            </span>
+                                            <OrderLineThumbMedia item={item} />
+                                          </div>
+                                        </div>
                                       </div>
+                                      <div className="project-clad-order-line-tile__col project-clad-order-line-tile__col--details">
+                                        <OrderLineDetailsColumn item={item} />
+                                      </div>
+                                      <div
+                                        className="project-clad-order-line-tile__col project-clad-order-line-tile__col--qty project-clad-table-right"
+                                        data-projectclad-order-line-qty-col
+                                      >
+                                        <span className="project-clad-normal-view project-clad-order-card-qty-wrap">
+                                          <span className="project-clad-order-card-qty-label">QTY:</span>
+                                          <span className="project-clad-order-card-qty">{item.quantity}</span>
+                                        </span>
+                                        <span className="project-clad-edit-view" style={{ display: "none" }}>
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            defaultValue={item.quantity}
+                                            data-original-qty={String(item.quantity)}
+                                            data-projectclad-qty-input
+                                            data-item-id={item.id}
+                                            data-job-id={job.id}
+                                            style={{ width: "4rem", padding: "0.25rem 0.5rem", fontSize: "16px" }}
+                                          />
+                                        </span>
+                                      </div>
+                                      <div
+                                        className="project-clad-order-line-tile__col project-clad-order-line-tile__col--price project-clad-table-right"
+                                        data-projectclad-price
+                                        data-price={item.priceSnapshot}
+                                      >
+                                        {!pricingUnlocked ? (
+                                          <button
+                                            type="button"
+                                            className="project-clad-hidden-link"
+                                            data-projectclad-show-price
+                                          >
+                                            Hidden
+                                          </button>
+                                        ) : (
+                                          <div className="project-clad-order-card-price-stack project-clad-normal-view">
+                                            <span className="project-clad-order-card-price-unit">
+                                              {formatPrice(item.priceSnapshot)}
+                                            </span>
+                                            <span className="project-clad-order-card-price-each">per unit</span>
+                                            <div className="project-clad-order-card-price-line">
+                                              Total{" "}
+                                              <strong>{formatPrice(lineTotalDisplay)}</strong>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {canEdit && !job.isLocked ? (
+                                          <span
+                                            className="project-clad-edit-view"
+                                            style={{ display: "none" }}
+                                          >
+                                            {pricingUnlocked ? (
+                                              canEditLineUnitPrices ? (
+                                                <>
+                                                  <label
+                                                    className="project-clad-sr-only"
+                                                    htmlFor={`projectclad-unit-price-${job.id}-${item.id}`}
+                                                  >
+                                                    Unit price for {item.displayName}
+                                                  </label>
+                                                  <input
+                                                    id={`projectclad-unit-price-${job.id}-${item.id}`}
+                                                    type="number"
+                                                    inputMode="decimal"
+                                                    step="0.01"
+                                                    min={0}
+                                                    defaultValue={Number(item.priceSnapshot).toFixed(2)}
+                                                    data-original-unit-price={Number(
+                                                      item.priceSnapshot,
+                                                    ).toFixed(2)}
+                                                    data-projectclad-unit-price-input
+                                                    data-item-id={item.id}
+                                                    data-job-id={job.id}
+                                                    className="project-clad-unit-price-input"
+                                                    aria-label={`Unit price for ${item.displayName}`}
+                                                  />
+                                                </>
+                                              ) : (
+                                                // Non-pricing-staff path: no inline note
+                                                // in the Edit order form — the locked input
+                                                // itself communicates that prices aren't
+                                                // editable here.
+                                                null
+                                              )
+                                            ) : (
+                                              <span
+                                                className="project-clad-muted"
+                                                style={{
+                                                  fontSize: "0.82rem",
+                                                  lineHeight: 1.35,
+                                                  textAlign: "right",
+                                                  display: "inline-block",
+                                                  maxWidth: "10rem",
+                                                }}
+                                              >
+                                                Unlock prices (Show price) to edit this amount.
+                                              </span>
+                                            )}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                      {canEdit && !job.isLocked ? (
+                                        <div className="project-clad-order-line-tile__col project-clad-order-line-tile__col--actions project-clad-table-right">
+                                          <div className="project-clad-stack">
+                                            <div className="project-clad-normal-view" data-projectclad-item-actions />
+                                            <div className="project-clad-edit-view" style={{ display: "none" }} data-projectclad-item-actions>
+                                              <Form
+                                                method="post"
+                                                action={`/apps/project-clad/project?id=${project.id}`}
+                                                style={{ display: "inline" }}
+                                                onSubmit={(e) => {
+                                                  if (!confirm("Are you sure you want to remove this item?")) {
+                                                    e.preventDefault();
+                                                  }
+                                                }}
+                                              >
+                                                <input type="hidden" name="intent" value="delete-item" />
+                                                <input type="hidden" name="itemId" value={item.id} />
+                                                <button type="submit" className="project-clad-button">
+                                                  Remove
+                                                </button>
+                                              </Form>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                      <OrderLineUnknownVariantNotice item={item} />
                                     </div>
-                                  </td>
-                                )}
+                                  </div>
+                                </td>
                               </tr>
-                            ))}
+                            );
+                            })}
                           </tbody>
                         <tfoot>
-                          <tr className="project-clad-order-tfoot-row project-clad-order-tfoot-row--subtotal">
-                            <td className="project-clad-muted project-clad-order-tfoot-lead--empty" aria-hidden="true" />
-                            <td className="project-clad-table-right">Subtotal</td>
+                          <tr className="project-clad-order-tfoot-row project-clad-order-tfoot-row--summary-block">
                             <td
-                              className="project-clad-table-right"
-                              data-projectclad-price
-                              data-price={job.subtotal.toFixed(2)}
+                              colSpan={orderLinesTableColSpan(Boolean(canEdit && !job.isLocked))}
+                              className="project-clad-order-tfoot-summary-cell"
                             >
-                              {pricingUnlocked ? (
-                                formatPrice(job.subtotal.toFixed(2))
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="project-clad-hidden-link"
-                                  data-projectclad-show-price
-                                >
-                                  Hidden
-                                </button>
-                              )}
+                              <OrderFinancePanel
+                                jobSubtotal={job.subtotal}
+                                jobDisplayTax={jobDisplayTax}
+                                jobDeliveryFeeAmount={jobDeliveryFeeAmount}
+                                jobTotalWithDisplayTax={jobTotalWithDisplayTax}
+                                totalQty={totalQty}
+                                preferredDeliveryLine={preferredDeliveryLine}
+                                poFooterDisplay={poFooterDisplay}
+                                orderFootShopify={orderFootShopify}
+                                pricingUnlocked={pricingUnlocked}
+                                taxRatePercent={Math.round(ORDER_DISPLAY_TAX_RATE * 100)}
+                                shipProvince={project.shipProvince}
+                                isDelivery={jobIsDelivery}
+                                deliveryAddress={jobDeliveryAddress}
+                                siteContactName={job.siteContactName}
+                                siteContactPhone={job.siteContactPhone}
+                                jobId={job.id}
+                                canEditSiteContact={Boolean(canEdit && !job.isLocked)}
+                                canEditPurchaseOrder={Boolean(canEdit && !job.isLocked)}
+                                actionsSlot={orderFinanceActionsSlot}
+                              />
                             </td>
-                            {canEdit && !job.isLocked && <td />}
-                          </tr>
-                          <tr className="project-clad-order-tfoot-row project-clad-order-tfoot-row--tax">
-                            <td className="project-clad-muted project-clad-order-tfoot-qty-cell">
-                              {totalOrderQtyLabel}
-                            </td>
-                            <td className="project-clad-table-right">
-                              Tax ({Math.round(ORDER_DISPLAY_TAX_RATE * 100)}%)
-                            </td>
-                            <td
-                              className="project-clad-table-right"
-                              data-projectclad-price
-                              data-price={jobDisplayTax.toFixed(2)}
-                            >
-                              {pricingUnlocked ? (
-                                formatPrice(jobDisplayTax.toFixed(2))
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="project-clad-hidden-link"
-                                  data-projectclad-show-price
-                                >
-                                  Hidden
-                                </button>
-                              )}
-                            </td>
-                            {canEdit && !job.isLocked && <td />}
-                          </tr>
-                          <tr className="project-clad-order-tfoot-row project-clad-order-tfoot-row--delivery">
-                            <td
-                              className="project-clad-muted project-clad-order-tfoot-lead--empty"
-                              aria-hidden="true"
-                            />
-                            <td className="project-clad-table-right">Delivery</td>
-                            <td
-                              className="project-clad-table-right"
-                              data-projectclad-price
-                              data-price={jobDeliveryFeeAmount.toFixed(2)}
-                            >
-                              {pricingUnlocked ? (
-                                formatPrice(jobDeliveryFeeAmount.toFixed(2))
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="project-clad-hidden-link"
-                                  data-projectclad-show-price
-                                >
-                                  Hidden
-                                </button>
-                              )}
-                            </td>
-                            {canEdit && !job.isLocked && <td />}
-                          </tr>
-                          <tr className="project-clad-order-tfoot-row project-clad-order-tfoot-row--total">
-                            <td className="project-clad-muted project-clad-order-tfoot-order-ref-cell project-clad-order-tfoot-total-lead-cell">
-                              <div className="project-clad-order-tfoot-total-lead-stack">
-                                <div className="project-clad-order-tfoot-po-total-line">
-                                  PURCHASE ORDER #{" "}
-                                  <span className="project-clad-order-tfoot-po-value">
-                                    {poFooterDisplay}
-                                  </span>
-                                </div>
-                                {orderFootShopify ? (
-                                  <div className="project-clad-order-tfoot-shopify-with-total">
-                                    {orderFootShopify}
-                                  </div>
-                                ) : null}
-                              </div>
-                            </td>
-                            <td className="project-clad-table-right">Total</td>
-                            <td
-                              className="project-clad-table-right"
-                              data-projectclad-price
-                              data-price={jobTotalWithDisplayTax.toFixed(2)}
-                            >
-                              {pricingUnlocked ? (
-                                formatPrice(jobTotalWithDisplayTax.toFixed(2))
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="project-clad-hidden-link"
-                                  data-projectclad-show-price
-                                >
-                                  Hidden
-                                </button>
-                              )}
-                            </td>
-                            {canEdit && !job.isLocked && <td />}
                           </tr>
                         </tfoot>
                         </table>
@@ -5029,15 +6377,6 @@ export default function ProjectDetailPage() {
                       </div>
                     )}
                     {(() => {
-                      const preferredDeliveryLine = formatOrderDeliveryFootline({
-                        orderLifecycleStatus: job.orderLifecycleStatus,
-                        paidAt: job.paidAt,
-                        completedAt: job.completedAt,
-                        scheduledDeliveryDate: job.scheduledDeliveryDate,
-                        scheduledDeliveryWindow: job.scheduledDeliveryWindow,
-                        fulfillmentMethod: job.fulfillmentMethod,
-                        projectReceiveMode: project.receiveMode,
-                      });
                       const awaiting = isOrderAwaitingApproval(job.id);
                       const showLineItemEditPanel = !awaiting || viewerCanFulfill;
                       const showEditOrderButton =
@@ -5083,51 +6422,17 @@ export default function ProjectDetailPage() {
                       data-projectclad-order-section
                       data-job-id={job.id}
                       style={{
-                        marginTop: "1rem",
-                        paddingTop: "1rem",
-                        borderTop: "1px solid rgba(0,0,0,0.12)",
                         flexDirection: "column",
                         alignItems: "stretch",
                         gap: "0.75rem",
                       }}
                     >
-                      <div
-                        className={`project-clad-normal-view project-clad-order-actions-top-row${
-                          preferredDeliveryLine
-                            ? " project-clad-order-actions-top-row--split"
-                            : ""
-                        }`}
-                      >
-                        {preferredDeliveryLine ? (
-                          <div className="project-clad-order-schedule-summary">
-                            <span className="project-clad-order-schedule-summary__line">
-                              {preferredDeliveryLine}
-                            </span>
-                          </div>
-                        ) : null}
-                        <div
-                          className={`project-clad-order-actions-lifecycle-row${
-                            preferredDeliveryLine
-                              ? " project-clad-order-actions-lifecycle-row--schedule"
-                              : ""
-                          }`}
-                        >
-                          <div className="project-clad-order-actions-customer-inline">
-                            {canEdit ? renderOrderLifecycleCustomerSummaryActions(job) : null}
-                            {showEditOrderButton ? (
-                              <button
-                                type="button"
-                                className="project-clad-button"
-                                data-projectclad-edit-order
-                                data-job-id={job.id}
-                                data-project-id={project.id}
-                              >
-                                Edit order
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
+                      {/*
+                       * Order now / Edit order buttons used to live here in their own
+                       * standalone row. They've moved INSIDE OrderFinancePanel via the
+                       * `actionsSlot` prop so they sit under the Payment Summary card
+                       * as part of the same finance section.
+                       */}
                       {!showLineItemEditPanel ? deliveryScheduleForm : null}
                       {showLineItemEditPanel ? (
                       <div
@@ -5216,8 +6521,11 @@ export default function ProjectDetailPage() {
                     ) : null}
                     </div>
                   </details>
+                  </SortableJobShell>
                 );
                   })}
+                    </SortableContext>
+                  </DndContext>
                 </div>
               )}
               <div className="project-clad-orders-shell__footer">
@@ -5808,11 +7116,21 @@ export default function ProjectDetailPage() {
       if (poInput instanceof HTMLInputElement) {
         purchaseOrderNumber = poInput.value.trim();
       }
+      let siteContactName = '';
+      const siteNameInput = details?.querySelector?.('[data-projectclad-site-contact-name-input]');
+      if (siteNameInput instanceof HTMLInputElement) {
+        siteContactName = siteNameInput.value.trim();
+      }
+      let siteContactPhone = '';
+      const sitePhoneInput = details?.querySelector?.('[data-projectclad-site-contact-phone-input]');
+      if (sitePhoneInput instanceof HTMLInputElement) {
+        siteContactPhone = sitePhoneInput.value.trim();
+      }
       try {
         const res = await fetch(window.location.pathname + window.location.search, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ intent: 'save-order-edit', jobId, jobName: jobName, purchaseOrderNumber: purchaseOrderNumber, removeItemIds: [], itemUpdates: itemUpdates, deleteJob: deleteJob }),
+          body: JSON.stringify({ intent: 'save-order-edit', jobId, jobName: jobName, purchaseOrderNumber: purchaseOrderNumber, siteContactName: siteContactName, siteContactPhone: siteContactPhone, removeItemIds: [], itemUpdates: itemUpdates, deleteJob: deleteJob }),
           credentials: 'include',
         });
         const payload = await res.json().catch(() => ({}));

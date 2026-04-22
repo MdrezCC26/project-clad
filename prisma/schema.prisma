@@ -74,6 +74,10 @@ model Project {
   shipPostal        String?
   shipCountry       String?
   receiveMode       ProjectReceiveMode @default(pickup)
+  /// Default site contact name autofilled into new orders.
+  defaultSiteContactName  String?
+  /// Default site contact phone autofilled into new orders.
+  defaultSiteContactPhone String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   jobs             Job[]
@@ -93,6 +97,10 @@ model Job {
   name              String
   /// Customer purchase order / reference (cart "PURCHASE ORDER #"), not the Shopify order name.
   purchaseOrderNumber String?
+  /// On-site contact for THIS order. Autofilled from project default but editable per order.
+  siteContactName   String?
+  /// On-site contact phone for THIS order. Required before customer can place the order.
+  siteContactPhone  String?
   createdAt         DateTime    @default(now())
   isLocked          Boolean     @default(false)
   sortOrder         Int         @default(0)
