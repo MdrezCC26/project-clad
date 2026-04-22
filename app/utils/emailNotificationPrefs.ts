@@ -17,7 +17,8 @@ export type EmailNotificationPrefs = Record<EmailNotificationKind, boolean>;
 
 export const DEFAULT_EMAIL_NOTIFICATION_PREFS: EmailNotificationPrefs = {
   cartSave: true,
-  projectStatus: true,
+  /** Off by default (high volume). Enable in Admin → Automated email notifications. */
+  projectStatus: false,
   orderPlacedCustomer: true,
   orderPlacedShop: true,
   fulfillmentOwner: true,

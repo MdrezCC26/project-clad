@@ -688,7 +688,7 @@ const EMAIL_NOTIFICATION_LABELS: Record<
   },
   projectStatus: {
     title: "Project status updates",
-    hint: "Headline updates such as lifecycle or project changes.",
+    hint: "Reorder, edit order, delivery settings, move/copy, etc. Off by default — enable here if you want them.",
   },
   orderPlacedCustomer: {
     title: "Order placed — customer",
@@ -914,8 +914,9 @@ export default function Settings() {
         <s-paragraph>
           Turn off categories you do not want sent via SMTP. Unchecked means that
           email is skipped; the storefront action still completes (for example,
-          submit for review works without mail when that toggle is off). Defaults
-          are all on. Manual “Email CSV” in Projects below is not affected.
+          submit for review works without mail when that toggle is off). Most
+          categories default to on; <strong>Project status updates</strong> defaults
+          to off (high volume). Manual “Email CSV” in Projects below is not affected.
         </s-paragraph>
         <Form method="post">
           <input

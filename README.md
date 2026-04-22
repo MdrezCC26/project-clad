@@ -75,7 +75,7 @@ Uses **nodemailer** and `SMTP_*` environment variables (`sendEmail`, `isEmailCon
 - **Fulfillment / package** — `fulfillmentNotify.server.ts` after delivery-type notifications (photos, finance copy); respects prefs and idempotency (`fulfillmentNotifiedAt`).
 - **Transactional recipients** — `transactionalEmail.server.ts` and shop prefs; optional env overrides in `.env.example` (`PROJECTCLAD_*_EMAIL`).
 
-Per-kind toggles live in **`ShopSettings.emailNotificationPrefsJson`** (see `emailNotificationPrefs.server.ts`).
+Per-kind toggles live in **`ShopSettings.emailNotificationPrefsJson`** (see `emailNotificationPrefs.server.ts`). **Project status / activity** emails default to **off**; enable them in the app’s **Automated email notifications** settings.
 
 ---
 
