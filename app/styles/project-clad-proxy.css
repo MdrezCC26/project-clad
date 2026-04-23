@@ -7623,6 +7623,12 @@ details.project-clad-edit-mode .project-clad-edit-view {
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
+    /* Shared face for project strip + order tile in PDF (keep in sync) */
+    --pc-print-order-shell-bg: #f9fafc;
+    --pc-print-order-shell-border: 1px solid rgba(0, 0, 0, 0.07);
+    --pc-print-order-shell-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7);
   }
 
   body.project-clad-print-order-only .project-clad-page,
@@ -7695,5 +7701,96 @@ details.project-clad-edit-mode .project-clad-edit-view {
   /* Save / Order now (or lifecycle) / Edit order — not part of the PDF */
   body.project-clad-print-order-only .project-clad-order-finance__actions {
     display: none !important;
+  }
+
+  /*
+   * Project meta chip (project name / # / company / created + delivery line):
+   * reuses the live Orders banner markup; print script no longer suppresses it.
+   * Tone down neumorphic hover ink so it reads as a receipt header on white paper.
+   */
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    button.project-clad-project-meta-chip {
+    display: block !important;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 0 0.85rem !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: avoid;
+    page-break-after: avoid;
+    cursor: default;
+    pointer-events: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: var(--pc-print-order-shell-bg) !important;
+    background-image: none !important;
+    border: var(--pc-print-order-shell-border) !important;
+    border-radius: var(--pc-shell-radius, 12px) !important;
+    box-shadow: var(--pc-print-order-shell-shadow) !important;
+    color: #1c2433 !important;
+    text-shadow: none !important;
+    filter: none !important;
+    transform: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-project-meta-chip
+    .project-clad-project-meta-chip__inner,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-project-meta-chip
+    .project-clad-project-meta-chip__inner * {
+    color: #1c2433 !important;
+    text-shadow: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-project-meta-chip__delivery {
+    border-top-color: rgba(0, 0, 0, 0.08) !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-project-meta-chip__dot::before,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-project-meta-chip
+    .project-clad-project-meta-chip__inner
+    .project-clad-project-meta-chip__dot::before {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    text-shadow:
+      0 0 1px rgba(255, 90, 90, 0.85),
+      0 0 5px rgba(230, 10, 10, 0.45) !important;
+  }
+
+  /* Main order tile: same shell as project meta strip */
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-row-shell
+    details.project-clad-order-row.project-clad-details {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: var(--pc-print-order-shell-bg) !important;
+    background-image: none !important;
+    border: var(--pc-print-order-shell-border) !important;
+    box-shadow: var(--pc-print-order-shell-shadow) !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-row-shell
+    details.project-clad-order-row.project-clad-details[open]
+    > summary.project-clad-summary {
+    background: transparent !important;
   }
 }

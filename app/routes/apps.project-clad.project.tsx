@@ -6820,6 +6820,8 @@ export default function ProjectDetailPage() {
         Array.from(ordersShell.children).forEach(function (el) {
           if (!(el instanceof HTMLElement)) return;
           if (el.contains(target)) return;
+          /* Same copy as the Orders page banner — show above the printed order tile. */
+          if (el.classList.contains('project-clad-project-meta-chip')) return;
           suppressForPrint(el);
         });
       }
