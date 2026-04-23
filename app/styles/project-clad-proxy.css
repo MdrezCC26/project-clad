@@ -7567,3 +7567,133 @@ details.project-clad-edit-mode .project-clad-edit-view {
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
   transition: background-color 99999s ease-out;
 }
+
+/* Created date + per-order PDF export (screen). Order title h3 styling unchanged. */
+#project-clad-orders-font-scope .project-clad-order-summary-title-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.65rem 1rem;
+  margin: 0.2rem 0 0.45rem;
+}
+
+#project-clad-orders-font-scope .project-clad-order-created-date {
+  display: block;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-size: calc(0.62rem * var(--pc-text-scale, 1));
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pc-muted, #6b6b6b);
+  line-height: 1.2;
+}
+
+#project-clad-orders-font-scope .project-clad-order-export-pdf {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-size: calc(0.58rem * var(--pc-text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pc-muted, #6b6b6b);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+#project-clad-orders-font-scope .project-clad-order-export-pdf:hover,
+#project-clad-orders-font-scope .project-clad-order-export-pdf:focus-visible {
+  color: var(--color-1, #c40000);
+  outline: none;
+}
+
+/*
+ * Single-order PDF: JS adds body.project-clad-print-order-only and .project-clad-print-suppressed
+ * on nodes outside the chosen order tile so print is only the order details + contents.
+ */
+@media print {
+  body.project-clad-print-order-only .project-clad-print-suppressed {
+    display: none !important;
+  }
+
+  body.project-clad-print-order-only {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-page,
+  body.project-clad-print-order-only .project-clad-container,
+  body.project-clad-print-order-only .project-clad-section {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-orders-shell {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  body.project-clad-print-order-only #project-clad-orders-font-scope {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-order-row-shell {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /*
+   * Let long orders span pages; granular `avoid` rules below keep
+   * line tiles and the finance block from splitting awkwardly.
+   */
+  body.project-clad-print-order-only details.project-clad-order-row {
+    break-inside: auto;
+    page-break-inside: auto;
+    margin: 0 !important;
+  }
+
+  body.project-clad-print-order-only details.project-clad-order-row > summary {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  body.project-clad-print-order-only tr[data-projectclad-item-row],
+  body.project-clad-print-order-only .project-clad-order-line-tile {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.project-clad-print-order-only .project-clad-order-finance {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.project-clad-print-order-only .project-clad-order-finance__row,
+  body.project-clad-print-order-only .project-clad-order-finance__card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.project-clad-print-order-only .project-clad-order-tfoot-summary-cell {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Save / Order now (or lifecycle) / Edit order — not part of the PDF */
+  body.project-clad-print-order-only .project-clad-order-finance__actions {
+    display: none !important;
+  }
+}

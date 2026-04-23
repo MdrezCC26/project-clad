@@ -357,6 +357,16 @@ function orderLinesTableColSpan(canEditLineActions: boolean) {
   return canEditLineActions ? 5 : 4;
 }
 
+/** Order created timestamp shown under the order title (local calendar MM-DD-YYYY). */
+function formatJobCreatedMmDdYyyy(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${mm}-${dd}-${yyyy}`;
+}
+
 type JobView = {
   id: string;
   name: string;
@@ -5560,6 +5570,23 @@ export default function ProjectDetailPage() {
                           <h3 className="project-clad-title">
                             {jobSummaryDisplayName}
                           </h3>
+                          <div className="project-clad-order-summary-title-meta">
+                            <time
+                              className="project-clad-order-created-date"
+                              dateTime={job.createdAt}
+                            >
+                              {formatJobCreatedMmDdYyyy(job.createdAt)}
+                            </time>
+                            <button
+                              type="button"
+                              className="project-clad-order-export-pdf"
+                              data-projectclad-export-order-pdf
+                              data-job-id={job.id}
+                              title="Opens print — choose Save as PDF in the print dialog"
+                            >
+                              Export PDF
+                            </button>
+                          </div>
                           <div className="project-clad-job-name-field project-clad-job-edit-field">
                             <label
                               className="project-clad-job-edit-label"
@@ -6751,6 +6778,86 @@ export default function ProjectDetailPage() {
           saveFieldsBtn.removeAttribute('aria-busy');
         }
       })();
+      return;
+    }
+    const exportPdfBtn = event.target?.closest?.('[data-projectclad-export-order-pdf]');
+    if (exportPdfBtn instanceof HTMLButtonElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      const jobId = exportPdfBtn.getAttribute('data-job-id') || '';
+      const safeId = jobId.replace(/"/g, '');
+      const target = document.querySelector(
+        'details.project-clad-order-row[data-job-id="' + safeId + '"]',
+      );
+      if (!(target instanceof HTMLDetailsElement)) {
+        window.alert('Could not find that order on the page.');
+        return;
+      }
+      var wasOpen = target.open;
+      target.open = true;
+      var suppressed = [];
+      function suppressForPrint(el) {
+        if (el instanceof HTMLElement) {
+          suppressed.push(el);
+          el.classList.add('project-clad-print-suppressed');
+        }
+      }
+      document.body.classList.add('project-clad-print-order-only');
+      var hdr = document.querySelector('header.project-clad-header');
+      if (hdr) suppressForPrint(hdr);
+      var container = document.querySelector('.project-clad-container');
+      if (container) {
+        Array.from(container.children).forEach(function (el) {
+          if (el instanceof HTMLElement && el.tagName !== 'SECTION') {
+            suppressForPrint(el);
+          }
+        });
+      }
+      suppressForPrint(document.querySelector('#project-clad-comments'));
+      document.querySelectorAll('.project-clad-modal-backdrop').forEach(suppressForPrint);
+      var ordersShell = document.querySelector('.project-clad-orders-shell');
+      if (ordersShell) {
+        Array.from(ordersShell.children).forEach(function (el) {
+          if (!(el instanceof HTMLElement)) return;
+          if (el.contains(target)) return;
+          suppressForPrint(el);
+        });
+      }
+      document.querySelectorAll('.project-clad-order-row-shell').forEach(function (wrap) {
+        var det = wrap.querySelector('details.project-clad-order-row[data-job-id]');
+        var idAttr = det ? det.getAttribute('data-job-id') : '';
+        if (idAttr !== safeId) suppressForPrint(wrap);
+      });
+      var scope = document.getElementById('project-clad-orders-font-scope');
+      if (scope) {
+        Array.from(scope.children).forEach(function (el) {
+          if (!(el instanceof HTMLElement)) return;
+          if (el.contains(target)) return;
+          suppressForPrint(el);
+        });
+      }
+      document.querySelectorAll('[data-projectclad-export-order-pdf]').forEach(suppressForPrint);
+      var printRestoreDone = false;
+      var printRestoreTimer = null;
+      function restorePrintLayout() {
+        if (printRestoreDone) return;
+        printRestoreDone = true;
+        if (printRestoreTimer !== null) {
+          window.clearTimeout(printRestoreTimer);
+          printRestoreTimer = null;
+        }
+        suppressed.forEach(function (el) {
+          el.classList.remove('project-clad-print-suppressed');
+        });
+        suppressed.length = 0;
+        document.body.classList.remove('project-clad-print-order-only');
+        target.open = wasOpen;
+      }
+      window.addEventListener('afterprint', restorePrintLayout, { once: true });
+      printRestoreTimer = window.setTimeout(restorePrintLayout, 5000);
+      window.setTimeout(function () {
+        window.print();
+      }, 200);
       return;
     }
     const editOrderBtn = event.target?.closest?.('[data-projectclad-edit-order]');
