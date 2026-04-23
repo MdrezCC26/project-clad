@@ -7572,42 +7572,60 @@ details.project-clad-edit-mode .project-clad-edit-view {
 #project-clad-orders-font-scope .project-clad-order-summary-title-meta {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.65rem 1rem;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
   margin: 0.2rem 0 0.45rem;
 }
 
 #project-clad-orders-font-scope .project-clad-order-created-date {
-  display: block;
+  display: inline;
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
   font-size: calc(0.62rem * var(--pc-text-scale, 1));
   font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--pc-muted, #6b6b6b);
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 #project-clad-orders-font-scope .project-clad-order-export-pdf {
   margin: 0;
-  padding: 0;
+  padding: 0.1rem;
   border: none;
   background: none;
   cursor: pointer;
-  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
-  font-size: calc(0.58rem * var(--pc-text-scale, 1));
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  line-height: 0;
   color: var(--pc-muted, #6b6b6b);
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
+  border-radius: 0.2rem;
+  transition: color 0.15s ease, filter 0.15s ease;
+}
+
+#project-clad-orders-font-scope .project-clad-order-export-pdf__icon {
+  display: block;
+  width: calc(0.68rem * var(--pc-text-scale, 1));
+  height: calc(0.68rem * var(--pc-text-scale, 1));
+  flex-shrink: 0;
+  /* Arrow-down glyphs read top-heavy; nudge up to sit with date cap height */
+  transform: translateY(-0.06em);
 }
 
 #project-clad-orders-font-scope .project-clad-order-export-pdf:hover,
 #project-clad-orders-font-scope .project-clad-order-export-pdf:focus-visible {
   color: var(--color-1, #c40000);
   outline: none;
+  filter:
+    drop-shadow(0 0 2px rgba(255, 90, 90, 0.95))
+    drop-shadow(0 0 8px rgba(230, 10, 10, 0.55))
+    drop-shadow(0 0 16px rgba(196, 0, 0, 0.35));
+}
+
+#project-clad-orders-font-scope .project-clad-order-export-pdf:focus-visible {
+  outline: 2px solid rgba(196, 0, 0, 0.35);
+  outline-offset: 2px;
 }
 
 /*
