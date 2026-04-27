@@ -6575,7 +6575,12 @@ input[data-projectclad-unit-price-input] {
    frozen with no reveal or accent. */
 .project-clad-action-row {
   display: grid;
-  grid-template-columns: repeat(var(--pc-action-row-cols, 3), 1fr);
+  /* minmax(0, 1fr) lets tracks shrink below content intrinsic min-width so
+     labels get a fair share of the row instead of mid-character wrapping. */
+  grid-template-columns: repeat(
+    var(--pc-action-row-cols, 3),
+    minmax(0, 1fr)
+  );
   gap: calc(1.1rem * var(--pc-text-scale, 1));
   margin-top: calc(0.4rem * var(--pc-text-scale, 1));
   width: 100%;
@@ -6639,21 +6644,24 @@ input[data-projectclad-unit-price-input] {
 
 /* FACE 1 — raised neumorphic pill. Lives at the TOP of the card at rest
    so the closed-state button sits snug under the Payment Summary tile.
-   Slides DOWN by one face-height on reveal to uncover Face 2. */
+   Slides DOWN by one face-height on reveal to uncover Face 2.
+
+   Icon stacks above the label so each tile gets the full column width
+   for text (avoids mid-word wraps when 3–4 cards share a narrow row).
+   Letter-spacing lives on the label only, tightened vs the old 0.18em
+   all-caps track which blew past narrow cells. */
 .project-clad-action-card__face--front {
   top: 0;
   z-index: 2;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
-  padding: 0 0.9rem;
+  gap: 0.28rem;
+  padding: 0.35rem 0.45rem;
   color: var(--pc-btn-neu-fg);
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
   font-weight: 400;
-  font-size: calc(0.82rem * var(--pc-text-scale, 1));
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
   text-align: center;
   transform: translateY(0);
   /* Rest shadow: caesura neumorphic geometry. Dark side stays strong so
@@ -6667,8 +6675,9 @@ input[data-projectclad-unit-price-input] {
 }
 
 .project-clad-action-card__icon {
-  width: calc(1.2rem * var(--pc-text-scale, 1));
-  height: calc(1.2rem * var(--pc-text-scale, 1));
+  width: calc(1.15rem * var(--pc-text-scale, 1));
+  height: calc(1.15rem * var(--pc-text-scale, 1));
+  flex-shrink: 0;
   display: grid;
   place-items: center;
   color: inherit;
@@ -6684,7 +6693,24 @@ input[data-projectclad-unit-price-input] {
 }
 
 .project-clad-action-card__label {
-  display: inline-block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0 0.05rem;
+  font-size: calc(0.7rem * var(--pc-text-scale, 1));
+  line-height: 1.18;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+  text-align: center;
+  text-wrap: balance;
   opacity: 0.82;
   transition: opacity 250ms ease-in-out, color 250ms ease-in-out,
     text-shadow 250ms ease-in-out, filter 250ms ease-in-out;
@@ -6885,7 +6911,7 @@ input[data-projectclad-unit-price-input] {
    Rows with 1-3 cards keep their natural column count. */
 @media (max-width: 1100px) {
   .project-clad-action-row:has(> .project-clad-action-card:nth-child(4)) {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -6903,8 +6929,9 @@ input[data-projectclad-unit-price-input] {
     height: calc(3.5rem * var(--pc-text-scale, 1));
   }
 
-  .project-clad-action-card__face--front {
-    font-size: calc(0.78rem * var(--pc-text-scale, 1));
+  .project-clad-action-card__label {
+    font-size: calc(0.68rem * var(--pc-text-scale, 1));
+    letter-spacing: 0.05em;
   }
 
   .project-clad-action-card:not(.project-clad-action-card--disabled):hover
