@@ -6778,41 +6778,31 @@ input[data-projectclad-unit-price-input] {
 }
 
 /* FACE 2 — engraved panel pinned at the TOP of the card. Covered by
-   Face 1 at rest; becomes visible when Face 1 slides down on hover. */
+   Face 1 at rest; becomes visible when Face 1 slides down on hover.
+   Copy is screen-reader only; the round CTA is centered. */
 .project-clad-action-card__face--back {
   top: 0;
   z-index: 1;
-  padding: 0.55rem 0.7rem 0.55rem 0.85rem;
+  position: relative;
+  padding: 0.45rem;
   display: flex;
-  flex-direction: row;
-  justify-content: space-between;
+  flex-direction: column;
+  justify-content: center;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0;
   box-shadow: var(--pc-caesura-inset);
-  /* Clip overflow defensively so the round CTA halo can't spill if a
-     translation makes the description wrap unusually wide. */
   overflow: hidden;
 }
 
-.project-clad-action-card__desc {
-  margin: 0;
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: calc(0.66rem * var(--pc-text-scale, 1));
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  color: var(--pc-caesura-dark);
-  line-height: 1.3;
-}
-
-/* CTA-form wrapper (used by Send-for-review / Cancel-request). Keeps
-   the inner round button vertically aligned and prevents the form from
-   stretching across Face 2's row. */
+/* CTA-form wrapper (Send-for-review / Cancel): center the submit button
+   the same as standalone <a>/<button> CTAs. */
 .project-clad-action-card__cta-form {
-  flex: 0 0 auto;
-  display: inline-flex;
+  display: flex;
+  justify-content: center;
   align-items: center;
+  width: 100%;
   margin: 0;
+  flex: 0 0 auto;
 }
 
 /* Round neumorphic CTA — same circular icon-button pattern as

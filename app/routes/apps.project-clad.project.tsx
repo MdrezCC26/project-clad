@@ -274,9 +274,10 @@ type ActionCardSpec = {
   cta?: ReactNode;
 };
 
-function renderActionCard(spec: ActionCardSpec) {
+function renderActionCard(spec: ActionCardSpec, jobId: string) {
   const { icon, label, description, disabled, cta, tone } = spec;
   const toneClass = `project-clad-action-card--tone-${tone ?? "edit"}`;
+  const descId = `project-clad-action-desc-${jobId}-${spec.key}`;
   return (
     <div
       key={spec.key}
@@ -289,6 +290,7 @@ function renderActionCard(spec: ActionCardSpec) {
       tabIndex={disabled ? -1 : 0}
       role={disabled ? undefined : "group"}
       aria-label={label}
+      aria-describedby={descId}
       aria-disabled={disabled ? "true" : undefined}
     >
       <div className="project-clad-action-card__face project-clad-action-card__face--front">
@@ -296,7 +298,9 @@ function renderActionCard(spec: ActionCardSpec) {
         <span className="project-clad-action-card__label">{label}</span>
       </div>
       <div className="project-clad-action-card__face project-clad-action-card__face--back">
-        <p className="project-clad-action-card__desc">{description}</p>
+        <span id={descId} className="project-clad-sr-only">
+          {description}
+        </span>
         {cta ?? null}
       </div>
     </div>
@@ -6064,7 +6068,7 @@ export default function ProjectDetailPage() {
                             } as CSSProperties
                           }
                         >
-                          {actionCards.map(renderActionCard)}
+                          {actionCards.map((spec) => renderActionCard(spec, job.id))}
                         </div>
                       ) : null;
                     return (
