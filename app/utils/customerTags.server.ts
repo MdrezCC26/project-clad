@@ -8,6 +8,34 @@ import { shopStringFilter } from "./projectAccess.server";
 export const hasTag = (tags: string[] | undefined, needle: string) =>
   (tags ?? []).some((t) => String(t).trim().toUpperCase() === needle.toUpperCase());
 
+/** Prefix convention for company tags. Accepts any casing (`Company:Acme`, `COMPANY:acme`, etc.). */
+export const COMPANY_TAG_PREFIX = "company:";
+
+/** Returns every `company:<name>` tag on the customer, preserving display casing after the colon. */
+export function extractCompanyTags(tags: string[] | undefined): string[] {
+  if (!tags?.length) return [];
+  return tags
+    .map((t) => String(t).trim())
+    .filter((t) => t.toLowerCase().startsWith(COMPANY_TAG_PREFIX));
+}
+
+/** Strips the `company:` prefix. Preserves casing + spacing of the name itself. */
+export function companyDisplayFromTag(tag: string): string {
+  return tag.slice(COMPANY_TAG_PREFIX.length).trim();
+}
+
+/** Canonical key for storage/matching: lowercased, whitespace-collapsed. */
+export function normalizeCompanyKey(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const v = String(raw).trim().toLowerCase().replace(/\s+/g, " ");
+  return v || null;
+}
+
+/** Lowercased/normalized key extracted from a raw `company:...` tag. */
+export function companyKeyFromTag(tag: string): string | null {
+  return normalizeCompanyKey(companyDisplayFromTag(tag));
+}
+
 /** Shopify customer tag `admin` (any casing) — full app access for staff. */
 export const hasAdminTag = (tags: string[] | undefined) => hasTag(tags, "ADMIN");
 
@@ -176,4 +204,77 @@ export async function viewerHasAdminTag(
 
   const restTags = await fetchCustomerTagsRest(shop, id);
   return hasStaffStorefrontTag(restTags);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Viewer tag cache + company context                                         */
+/* -------------------------------------------------------------------------- */
+
+const VIEWER_TAGS_TTL_MS = 60_000;
+const viewerTagsCache = new Map<
+  string,
+  { tags: string[]; expiresAt: number }
+>();
+
+function viewerTagsCacheKey(shop: string, customerId: string) {
+  return `${shop.trim().toLowerCase()}::${normalizeStorefrontCustomerId(customerId)}`;
+}
+
+/** Cached wrapper around Admin tag lookup. TTL ~60s keyed by (shop, customerId). */
+export async function getViewerTagsCached(
+  shop: string,
+  customerId: string,
+): Promise<string[]> {
+  const key = viewerTagsCacheKey(shop, customerId);
+  const now = Date.now();
+  const hit = viewerTagsCache.get(key);
+  if (hit && hit.expiresAt > now) {
+    return hit.tags;
+  }
+  const id = normalizeStorefrontCustomerId(customerId);
+  let tags: string[] = [];
+  try {
+    tags = await fetchCustomerTagsRest(shop, id);
+  } catch {
+    tags = [];
+  }
+  viewerTagsCache.set(key, { tags, expiresAt: now + VIEWER_TAGS_TTL_MS });
+  return tags;
+}
+
+/** Manually evict — call when you know the viewer's tags may have just changed. */
+export function invalidateViewerTagsCache(shop: string, customerId: string) {
+  viewerTagsCache.delete(viewerTagsCacheKey(shop, customerId));
+}
+
+export type ViewerCompanyContext = {
+  /** Raw `company:*` tags on the viewer, display casing preserved. */
+  tags: string[];
+  /** Display names, e.g. `["Acme Inc.", "Widgets LLC"]`. Casing preserved from the tag. */
+  displayNames: string[];
+  /** Normalized match keys for DB comparisons. */
+  keys: string[];
+};
+
+/**
+ * Resolve every `company:<name>` tag on the viewer. Empty arrays when the viewer has none.
+ * Safe to call on every request — uses {@link getViewerTagsCached}.
+ */
+export async function getViewerCompanyContext(
+  shop: string,
+  customerId: string,
+): Promise<ViewerCompanyContext> {
+  const tags = await getViewerTagsCached(shop, customerId);
+  const companyTags = extractCompanyTags(tags);
+  const displayNames = companyTags
+    .map((t) => companyDisplayFromTag(t))
+    .filter((s): s is string => Boolean(s));
+  const keys = Array.from(
+    new Set(
+      companyTags
+        .map((t) => companyKeyFromTag(t))
+        .filter((k): k is string => Boolean(k)),
+    ),
+  );
+  return { tags: companyTags, displayNames, keys };
 }

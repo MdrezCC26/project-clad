@@ -2,7 +2,10 @@ import type { ActionFunctionArgs } from "react-router";
 import { Prisma } from "@prisma/client";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
-import { viewerHasAdminTag } from "../utils/customerTags.server";
+import {
+  getViewerCompanyContext,
+  viewerHasAdminTag,
+} from "../utils/customerTags.server";
 import {
   canEditProject,
   projectByIdForCustomerWhere,
@@ -298,13 +301,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
     }
 
+    /* Stamp company key from the owner's first `company:` tag so coworkers sharing
+       the same tag can find this project via the Company scope. Display `companyName`
+       on the project record falls back to the tag's display name when the customer
+       left the cart's Company field blank. */
+    const viewerCompanyCtx = await getViewerCompanyContext(shop, customerId);
+    const ownerCompanyKey = viewerCompanyCtx.keys[0] ?? null;
+    const companyNameForRecord =
+      companyName || viewerCompanyCtx.displayNames[0] || "";
+
     const project = await prisma.project.create({
       data: {
         shop,
         name: projectName,
         ownerCustomerId: customerId,
         poNumber,
-        companyName,
+        companyName: companyNameForRecord,
+        ownerCompanyKey,
         members: {
           create: { customerId, role: "edit" },
         },

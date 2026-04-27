@@ -32,6 +32,7 @@ import { getThemeStyles } from "../utils/themeAssets.server";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
 import {
+  getViewerCompanyContext,
   hasTag,
   normalizeStorefrontCustomerId,
   viewerHasAdminTag,
@@ -47,6 +48,10 @@ import { getStorefrontAppNav } from "../utils/storefrontAppNav";
 type ProjectListItem = {
   id: string;
   isOwner: boolean;
+  /** True when this row is only visible because viewer's `company:*` tag matches the owner's. */
+  viaCompany: boolean;
+  /** Display name for the owner (falls back to email / id). Populated only in Company scope. */
+  ownerLabel: string | null;
   name: string;
   createdAt: string;
   poNumber: string | null;
@@ -105,8 +110,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     customerEmail,
   );
 
+  /* "mine" shows owner + explicit membership. "company" additionally surfaces coworker
+     projects via matching `company:*` customer tags (read-only). Default "mine". */
+  const url = new URL(request.url);
+  const scopeParam = url.searchParams.get("scope");
+  const scope: "mine" | "company" = scopeParam === "company" ? "company" : "mine";
+
+  const viewerCompanyCtx = viewerIsAppAdmin
+    ? { tags: [], displayNames: [], keys: [] as string[] }
+    : await getViewerCompanyContext(shop, customerId);
+  const hasAnyCompanyTag = viewerCompanyCtx.keys.length > 0;
+
   const projects = await prisma.project.findMany({
-    where: projectsListWhere(shop, customerId, viewerIsAppAdmin),
+    where: projectsListWhere(shop, customerId, viewerIsAppAdmin, {
+      scope,
+      viewerCompanyKeys: viewerCompanyCtx.keys,
+    }),
     include: {
       jobs: {
         orderBy: { sortOrder: "asc" },
@@ -198,6 +217,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         )
       : {};
 
+  /* Owner attribution for the Company scope. In "mine" scope every row is either the
+     viewer's or a project they're explicitly a member of, so we still compute it cheaply
+     here — adds minimal overhead since we already batch-fetched approver data. */
+  const ownerIds = Array.from(
+    new Set(projects.map((p) => p.ownerCustomerId).filter(Boolean)),
+  );
+  const ownerInfo =
+    ownerIds.length > 0
+      ? await getCustomersByIds(shop, ownerIds).catch(
+          () => ({}) as Record<string, CustomerInfo>,
+        )
+      : ({} as Record<string, CustomerInfo>);
+  const labelForOwner = (id: string): string | null => {
+    const c = ownerInfo[id];
+    if (!c) return null;
+    const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
+    return name || c.email || id;
+  };
+
   const payload: ProjectListItem[] = projects.map((project) => {
     const projectJobIds = new Set(project.jobs.map((j) => j.id));
     const projectApprovals = jobLevelApprovals.filter(
@@ -219,9 +257,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       })
       .filter((n): n is string => Boolean(n));
 
+    const isOwnerRow = project.ownerCustomerId === customerId;
+    const isExplicitMember = isOwnerRow; /* loader scopes via `projectsListWhere` which
+      excludes the members join fetch — approximate with owner check. For Company scope
+      the viewer is often not a member, so we fall back to a tag match. */
+    const viaCompanyRow =
+      !isOwnerRow &&
+      !isExplicitMember &&
+      !viewerIsAppAdmin &&
+      Boolean(project.visibleToCompany) &&
+      project.ownerCompanyKey != null &&
+      viewerCompanyCtx.keys.includes(project.ownerCompanyKey);
+
     return {
     id: project.id,
-    isOwner: project.ownerCustomerId === customerId,
+    isOwner: isOwnerRow,
+    viaCompany: viaCompanyRow,
+    ownerLabel: labelForOwner(project.ownerCustomerId),
     name: project.name,
     createdAt: project.createdAt.toISOString(),
     poNumber: project.poNumber,
@@ -276,6 +328,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     logoDataUrl: settings?.logoDataUrl || null,
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
     navAccountInitial,
+    scope,
+    hasCompanyScope: hasAnyCompanyTag || viewerIsAppAdmin,
+    viewerCompanyDisplayNames: viewerCompanyCtx.displayNames,
   };
 };
 
@@ -363,11 +418,30 @@ export default function ProjectsPage() {
     logoDataUrl,
     backgroundLogoDataUrl,
     navAccountInitial,
+    scope,
+    hasCompanyScope,
+    viewerCompanyDisplayNames,
   } = useLoaderData<typeof loader>();
   const inlineStyles = themeStyles?.styles || [];
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const listSearchQ = (searchParams.get("q") || "").trim();
+  /* Build links with only our own params. Shopify-signed proxy params (shop,
+     logged_in_customer_id, path_prefix, timestamp, signature) are scoped to the
+     original request — re-using them with new query strings invalidates the
+     signature and Shopify returns its own 404 before reaching the app. */
+  const scopeLinkQs = (targetScope: "mine" | "company") => {
+    const params = new URLSearchParams();
+    const q = searchParams.get("q");
+    if (q) params.set("q", q);
+    if (targetScope === "company") params.set("scope", "company");
+    const qs = params.toString();
+    return qs ? `?${qs}` : "";
+  };
+  const companyScopeTitle =
+    viewerCompanyDisplayNames && viewerCompanyDisplayNames.length > 0
+      ? `Show projects from coworkers tagged with ${viewerCompanyDisplayNames.join(", ")}`
+      : "Show projects from coworkers at the same company";
   const filteredProjects = useMemo(
     () => projects.filter((p) => projectListItemMatchesQuery(p, listSearchQ)),
     [projects, listSearchQ],
@@ -412,6 +486,30 @@ export default function ProjectsPage() {
               inAppSearch="projects"
             />
           </header>
+          {hasCompanyScope && (
+            <nav
+              className="project-clad-projects-scope"
+              aria-label="Project visibility"
+            >
+              <Link
+                to={`/apps/project-clad/projects${scopeLinkQs("mine")}`}
+                className={`project-clad-projects-scope__link${scope === "mine" ? " is-active" : ""}`}
+                aria-current={scope === "mine" ? "page" : undefined}
+                data-projectclad-no-transition
+              >
+                My projects
+              </Link>
+              <Link
+                to={`/apps/project-clad/projects${scopeLinkQs("company")}`}
+                className={`project-clad-projects-scope__link${scope === "company" ? " is-active" : ""}`}
+                aria-current={scope === "company" ? "page" : undefined}
+                title={companyScopeTitle}
+                data-projectclad-no-transition
+              >
+                Company
+              </Link>
+            </nav>
+          )}
           {variantLookupError && (
             <p className="project-clad-muted">{variantLookupError}</p>
           )}
@@ -456,6 +554,12 @@ export default function ProjectsPage() {
                       <p className="project-clad-muted project-clad-projects-tile-orders">
                         Orders: {project.jobCount}
                       </p>
+                      {!project.isOwner && project.ownerLabel && (
+                        <p className="project-clad-muted project-clad-projects-tile-owner">
+                          {project.viaCompany ? "Shared by: " : "Owner: "}
+                          {project.ownerLabel}
+                        </p>
+                      )}
                     </div>
                   </a>
                   {hideAddToCart && (() => {

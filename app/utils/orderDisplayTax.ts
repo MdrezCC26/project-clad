@@ -5,9 +5,10 @@
 export const ORDER_DISPLAY_TAX_RATE = 0.13;
 
 /**
- * Line `priceSnapshot` values come from `/cart.js` and are tax-inclusive. The **project** footer
- * uses this so we do not add another HST line on subtotal + delivery. Per-order tables can still
- * pass `{ pricesIncludeTax: false }` to show the classic subtotal + tax + total breakdown.
+ * Line `priceSnapshot` values come from `/cart.js` and are tax-inclusive. For display-only
+ * breakdowns with `{ pricesIncludeTax: false }`, pass **subtotal + delivery** as the amount
+ * when delivery should be taxed at {@link ORDER_DISPLAY_TAX_RATE} (per-order payment summary
+ * and project footer rollup).
  */
 export const ORDER_LINE_PRICES_INCLUDE_DISPLAY_TAX = true;
 

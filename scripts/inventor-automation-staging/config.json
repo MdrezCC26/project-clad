@@ -1,0 +1,109 @@
+{
+  "_comment": "Canadian Cladding Profile Generator — Template Configuration",
+  "_instructions": [
+    "Each template entry defines one Inventor parametric profile.",
+    "part_file and drawing_file must be absolute paths (or relative to this config).",
+    "Parameters list documents what the template expects; the generator sets them all.",
+    "profile_code drives part-number generation: {code}{gauge:02d}00{L1*1000:04d}"
+  ],
+
+  "default_output_dir": "C:/CladOutput",
+  "templates_dir":      "templates",
+
+  "templates": [
+    {
+      "name":         "Z-Bar Profile",
+      "profile_code": "Z",
+      "part_file":    "templates/Z_Bar.ipt",
+      "drawing_file": "templates/Z_Bar.idw",
+      "description":  "Z-section girt/purlin used in wall and roof framing",
+      "parameters": [
+        { "name": "L1",          "description": "Top flange width (inches)",    "default": 2.5  },
+        { "name": "L2",          "description": "Web height (inches)",           "default": 6.0  },
+        { "name": "L3",          "description": "Bottom flange width (inches)",  "default": 2.5  },
+        { "name": "A1",          "description": "Top bend angle (degrees)",      "default": 90.0 },
+        { "name": "A2",          "description": "Bottom bend angle (degrees)",   "default": 90.0 },
+        { "name": "Gauge",       "description": "Sheet metal gauge",             "default": 16   },
+        { "name": "TotalLength", "description": "Overall part length (inches)",  "default": 120.0}
+      ]
+    },
+    {
+      "name":         "C-Channel Profile",
+      "profile_code": "C",
+      "part_file":    "templates/C_Channel.ipt",
+      "drawing_file": "templates/C_Channel.idw",
+      "description":  "C-section stud/track for wall framing applications",
+      "parameters": [
+        { "name": "L1",          "description": "Flange width (inches)",         "default": 1.625},
+        { "name": "L2",          "description": "Web depth (inches)",            "default": 3.5  },
+        { "name": "L3",          "description": "Flange width (inches)",         "default": 1.625},
+        { "name": "A1",          "description": "Bend angle 1 (degrees)",        "default": 90.0 },
+        { "name": "A2",          "description": "Bend angle 2 (degrees)",        "default": 90.0 },
+        { "name": "Gauge",       "description": "Sheet metal gauge",             "default": 20   },
+        { "name": "TotalLength", "description": "Overall part length (inches)",  "default": 120.0}
+      ]
+    },
+    {
+      "name":         "U-Channel Profile",
+      "profile_code": "U",
+      "part_file":    "templates/U_Channel.ipt",
+      "drawing_file": "templates/U_Channel.idw",
+      "description":  "Open U-channel used as blocking, bridging, or edge trim",
+      "parameters": [
+        { "name": "L1",          "description": "Leg height (inches)",           "default": 1.5  },
+        { "name": "L2",          "description": "Base width (inches)",           "default": 4.0  },
+        { "name": "L3",          "description": "Leg height (inches)",           "default": 1.5  },
+        { "name": "A1",          "description": "Bend angle 1 (degrees)",        "default": 90.0 },
+        { "name": "A2",          "description": "Bend angle 2 (degrees)",        "default": 90.0 },
+        { "name": "Gauge",       "description": "Sheet metal gauge",             "default": 16   },
+        { "name": "TotalLength", "description": "Overall part length (inches)",  "default": 96.0 }
+      ]
+    },
+    {
+      "name":         "Hat Channel Profile",
+      "profile_code": "H",
+      "part_file":    "templates/Hat_Channel.ipt",
+      "drawing_file": "templates/Hat_Channel.idw",
+      "description":  "Hat-section furring channel for exterior cladding systems",
+      "parameters": [
+        { "name": "L1",          "description": "Brim width (inches)",           "default": 1.0  },
+        { "name": "L2",          "description": "Crown width (inches)",          "default": 1.5  },
+        { "name": "L3",          "description": "Brim width (inches)",           "default": 1.0  },
+        { "name": "A1",          "description": "Brim angle 1 (degrees)",        "default": 90.0 },
+        { "name": "A2",          "description": "Brim angle 2 (degrees)",        "default": 90.0 },
+        { "name": "Gauge",       "description": "Sheet metal gauge",             "default": 20   },
+        { "name": "TotalLength", "description": "Overall part length (inches)",  "default": 120.0}
+      ]
+    },
+    {
+      "name":         "Angle (L-Bar) Profile",
+      "profile_code": "L",
+      "part_file":    "templates/L_Bar.ipt",
+      "drawing_file": "templates/L_Bar.idw",
+      "description":  "Equal or unequal leg angle for lintels, shelf angles, and bracing",
+      "parameters": [
+        { "name": "L1",          "description": "Leg 1 length (inches)",         "default": 2.0  },
+        { "name": "L2",          "description": "Leg 2 length (inches)",         "default": 2.0  },
+        { "name": "L3",          "description": "Unused — set to 0",            "default": 0.0  },
+        { "name": "A1",          "description": "Bend angle (degrees)",          "default": 90.0 },
+        { "name": "A2",          "description": "Unused — set to 0",            "default": 0.0  },
+        { "name": "Gauge",       "description": "Sheet metal gauge",             "default": 14   },
+        { "name": "TotalLength", "description": "Overall part length (inches)",  "default": 120.0}
+      ]
+    }
+  ],
+
+  "gauge_thickness_inches": {
+    "14": 0.0747,
+    "16": 0.0598,
+    "18": 0.0478,
+    "20": 0.0359,
+    "22": 0.0299
+  },
+
+  "export_defaults": {
+    "pdf": true,
+    "dxf": true,
+    "png": false
+  }
+}

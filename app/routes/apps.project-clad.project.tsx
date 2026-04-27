@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
   DndContext,
@@ -46,6 +46,7 @@ import {
 } from "../utils/adminCustomers.server";
 import {
   customerEmailInConfiguredList,
+  getViewerCompanyContext,
   hasStaffStorefrontTag,
   hasTag,
   normalizeStorefrontCustomerId,
@@ -54,6 +55,7 @@ import {
 import {
   canAdminProjectMembers,
   canEditProject,
+  canViewProjectViaCompany,
   customerIdsMatch,
   isProjectMember,
   shopStringFilter,
@@ -70,6 +72,7 @@ import {
   sendProjectStatusNotificationEmail,
 } from "../utils/orderCreatedEmail.server";
 import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";
+import { createBackupDraftOrderForJob } from "../utils/shopifyDraftOrder.server";
 import {
   formatOrderDeliveryFootline,
   isKnownOttawaHourWindow,
@@ -120,6 +123,184 @@ function isLikelyPdfUrl(url: string): boolean {
   } catch {
     return /\.pdf(\?|$)/i.test(t);
   }
+}
+
+/* ------------------------------------------------------------------
+ * Order action-row icons (Save / Order now / Edit / lifecycle states).
+ * Module-scope constants so the two-face action cards can reference
+ * them without re-creating JSX trees on every render. Stroke + fill
+ * inherit from `currentColor` on the enclosing `.project-clad-
+ * action-card__icon` so the icon can switch to white on hover without
+ * any extra state.
+ * ------------------------------------------------------------------ */
+const PC_ICON_SVG_PROPS = {
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  "aria-hidden": true as const,
+};
+
+const PC_SAVE_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+    <polyline points="17 21 17 13 7 13 7 21" />
+    <polyline points="7 3 7 8 15 8" />
+  </svg>
+);
+
+const PC_ORDER_NOW_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <path d="M5 12h14" />
+    <path d="m12 5 7 7-7 7" />
+  </svg>
+);
+
+const PC_EDIT_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4z" />
+  </svg>
+);
+
+const PC_CHECK_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const PC_PACKAGE_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+    <path d="M3.27 6.96 12 12.01l8.73-5.05" />
+    <path d="M12 22.08V12" />
+  </svg>
+);
+
+const PC_HOURGLASS_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <path d="M5 22h14" />
+    <path d="M5 2h14" />
+    <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22" />
+    <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" />
+  </svg>
+);
+
+const PC_SEND_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <path d="m22 2-11 11" />
+    <path d="M22 2 15 22 11 13 2 9z" />
+  </svg>
+);
+
+const PC_PHOTO_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
+  </svg>
+);
+
+const PC_LOCK_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+
+/* CTA icons (round neumorphic action button on Face 2). Each card uses a
+ * unique glyph that hints at what its CTA actually does — distinct from
+ * the Face-1 label icon so the two faces don't read as duplicates. */
+const PC_CTA_CHECK_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const PC_CTA_CARD_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <rect x="2" y="5" width="20" height="14" rx="2" ry="2" />
+    <line x1="2" y1="10" x2="22" y2="10" />
+    <line x1="6" y1="15" x2="10" y2="15" />
+  </svg>
+);
+
+const PC_CTA_PENCIL_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+  </svg>
+);
+
+const PC_CTA_EXTERNAL_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <polyline points="15 3 21 3 21 9" />
+    <line x1="10" y1="14" x2="21" y2="3" />
+  </svg>
+);
+
+const PC_CTA_SEND_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <path d="m22 2-11 11" />
+    <path d="M22 2 15 22 11 13 2 9z" />
+  </svg>
+);
+
+const PC_CTA_X_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+/**
+ * Spec for a single two-face action card. The enclosing row renders the
+ * same markup for every spec; variants differ only in icon / label /
+ * description / cta / disabled.
+ */
+type ActionCardSpec = {
+  key: string;
+  icon: ReactNode;
+  label: string;
+  description: string;
+  disabled?: boolean;
+  /** Accent tone for hover label glow + CTA colors.
+   *  "go"   → green (forward actions: Save, Order now, Send for review)
+   *  "edit" → red   (destructive / informational: Edit order, Delivery photo)
+   *  Defaults to "edit" when omitted. */
+  tone?: "go" | "edit";
+  /** Face-2 confirm CTA. Omit on disabled cards. */
+  cta?: ReactNode;
+};
+
+function renderActionCard(spec: ActionCardSpec) {
+  const { icon, label, description, disabled, cta, tone } = spec;
+  const toneClass = `project-clad-action-card--tone-${tone ?? "edit"}`;
+  return (
+    <div
+      key={spec.key}
+      className={
+        "project-clad-action-card " +
+        toneClass +
+        (disabled ? " project-clad-action-card--disabled" : "")
+      }
+      data-projectclad-action-card={disabled ? undefined : ""}
+      tabIndex={disabled ? -1 : 0}
+      role={disabled ? undefined : "group"}
+      aria-label={label}
+      aria-disabled={disabled ? "true" : undefined}
+    >
+      <div className="project-clad-action-card__face project-clad-action-card__face--front">
+        <span className="project-clad-action-card__icon">{icon}</span>
+        <span className="project-clad-action-card__label">{label}</span>
+      </div>
+      <div className="project-clad-action-card__face project-clad-action-card__face--back">
+        <p className="project-clad-action-card__desc">{description}</p>
+        {cta ?? null}
+      </div>
+    </div>
+  );
 }
 
 function PdfGlyphSvg({ className }: { className?: string }) {
@@ -488,6 +669,10 @@ type ProjectView = {
   name: string;
   poNumber: string | null;
   companyName: string | null;
+  /** Normalized owner company key stamped at project creation; null for legacy/no-tag owners. */
+  ownerCompanyKey: string | null;
+  /** Owner toggle: hides the project from the Company scope for coworker viewers. */
+  visibleToCompany: boolean;
   createdAt: string;
   shipAddress1: string | null;
   shipCity: string | null;
@@ -988,18 +1173,6 @@ function OrderFinancePanel({
             </span>
           </div>
           <div className="project-clad-order-finance__fin project-clad-order-finance__fin--muted">
-            <span className="project-clad-order-finance__fin-k">
-              Tax ({taxRatePercent}%)
-            </span>
-            <span
-              className="project-clad-order-finance__fin-v"
-              data-projectclad-price
-              data-price={jobDisplayTax.toFixed(2)}
-            >
-              {pricingUnlocked ? formatPrice(jobDisplayTax.toFixed(2)) : hiddenPrice}
-            </span>
-          </div>
-          <div className="project-clad-order-finance__fin project-clad-order-finance__fin--muted">
             <span className="project-clad-order-finance__fin-k">Delivery</span>
             <span
               className="project-clad-order-finance__fin-v"
@@ -1009,6 +1182,18 @@ function OrderFinancePanel({
               {pricingUnlocked
                 ? formatPrice(jobDeliveryFeeAmount.toFixed(2))
                 : hiddenPrice}
+            </span>
+          </div>
+          <div className="project-clad-order-finance__fin project-clad-order-finance__fin--muted">
+            <span className="project-clad-order-finance__fin-k">
+              Tax ({taxRatePercent}%)
+            </span>
+            <span
+              className="project-clad-order-finance__fin-v"
+              data-projectclad-price
+              data-price={jobDisplayTax.toFixed(2)}
+            >
+              {pricingUnlocked ? formatPrice(jobDisplayTax.toFixed(2)) : hiddenPrice}
             </span>
           </div>
           <div className="project-clad-order-finance__divider" />
@@ -1235,7 +1420,6 @@ function EditProjectDeliveryAddressForm({
     <>
       <h3
         className="project-clad-section-title"
-        style={{ marginTop: "1.35rem", marginBottom: "0.5rem", fontSize: "1rem" }}
         data-projectclad-section-underline
       >
         Delivery details
@@ -1262,63 +1446,78 @@ function EditProjectDeliveryAddressForm({
           autoComplete="street-address"
           className="project-clad-pricing-password-input"
         />
-        <label htmlFor="edit-ship-city">City</label>
-        <input
-          id="edit-ship-city"
-          name="shipCity"
-          type="text"
-          value={draft.shipCity}
-          onChange={(e) =>
-            setDraft((d) => ({ ...d, shipCity: e.target.value }))
-          }
-          autoComplete="address-level2"
-          className="project-clad-pricing-password-input"
-        />
-        <label htmlFor="edit-ship-province">Province</label>
-        <select
-          id="edit-ship-province"
-          name="shipProvince"
-          value={draft.shipProvince}
-          onChange={(e) =>
-            setDraft((d) => ({ ...d, shipProvince: e.target.value }))
-          }
-          className="project-clad-pricing-password-input"
-        >
-          <option value="">—</option>
-          {CANADA_PROVINCE_OPTIONS.map(({ code, label }) => (
-            <option key={code} value={code}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <label htmlFor="edit-ship-postal">Postal code</label>
-        <input
-          id="edit-ship-postal"
-          name="shipPostal"
-          type="text"
-          value={draft.shipPostal}
-          onChange={(e) =>
-            setDraft((d) => ({ ...d, shipPostal: e.target.value }))
-          }
-          autoComplete="postal-code"
-          className="project-clad-pricing-password-input"
-        />
-        <label htmlFor="edit-ship-country">Country</label>
-        <select
-          id="edit-ship-country"
-          name="shipCountry"
-          value={draft.shipCountry}
-          onChange={(e) =>
-            setDraft((d) => ({ ...d, shipCountry: e.target.value }))
-          }
-          className="project-clad-pricing-password-input"
-        >
-          <option value="">—</option>
-          <option value="Canada">Canada</option>
-        </select>
-        <div className="project-clad-actions" style={{ marginTop: "0.75rem", gap: "0.5rem" }}>
+        <div className="project-clad-form-grid">
+          <div className="project-clad-form-grid__cell">
+            <label htmlFor="edit-ship-city">City</label>
+            <input
+              id="edit-ship-city"
+              name="shipCity"
+              type="text"
+              value={draft.shipCity}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, shipCity: e.target.value }))
+              }
+              autoComplete="address-level2"
+              className="project-clad-pricing-password-input"
+            />
+          </div>
+          <div className="project-clad-form-grid__cell">
+            <label htmlFor="edit-ship-province">Province</label>
+            <select
+              id="edit-ship-province"
+              name="shipProvince"
+              value={draft.shipProvince}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, shipProvince: e.target.value }))
+              }
+              className="project-clad-pricing-password-input"
+            >
+              <option value="">—</option>
+              {CANADA_PROVINCE_OPTIONS.map(({ code, label }) => (
+                <option key={code} value={code}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="project-clad-form-grid">
+          <div className="project-clad-form-grid__cell">
+            <label htmlFor="edit-ship-postal">Postal code</label>
+            <input
+              id="edit-ship-postal"
+              name="shipPostal"
+              type="text"
+              value={draft.shipPostal}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, shipPostal: e.target.value }))
+              }
+              autoComplete="postal-code"
+              className="project-clad-pricing-password-input"
+            />
+          </div>
+          <div className="project-clad-form-grid__cell">
+            <label htmlFor="edit-ship-country">Country</label>
+            <select
+              id="edit-ship-country"
+              name="shipCountry"
+              value={draft.shipCountry}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, shipCountry: e.target.value }))
+              }
+              className="project-clad-pricing-password-input"
+            >
+              <option value="">—</option>
+              <option value="Canada">Canada</option>
+            </select>
+          </div>
+        </div>
+        <div className="project-clad-edit-modal__section-footer">
+          <span className="project-clad-muted">
+            Leave blank for store pickup ($0 delivery).
+          </span>
           <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
-            Save details
+            Save delivery
           </button>
         </div>
       </form>
@@ -1623,17 +1822,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     normalizeStorefrontCustomerId(customerId),
   );
 
-  const isMember =
-    project.ownerCustomerId === customerId ||
-    project.members.some((member) => member.customerId === customerId) ||
-    viewerIsAppAdmin;
+  const isMember = isProjectMember(project, customerId, viewerIsAppAdmin);
 
-  if (!isMember) {
+  const viewerCompanyCtx = isMember
+    ? { tags: [], displayNames: [], keys: [] as string[] }
+    : await getViewerCompanyContext(shop, customerId);
+  const viaCompany =
+    !isMember &&
+    canViewProjectViaCompany(
+      { ownerCompanyKey: project.ownerCompanyKey, visibleToCompany: project.visibleToCompany },
+      viewerCompanyCtx.keys,
+    );
+
+  if (!isMember && !viaCompany) {
     throw new Response("Unauthorized", { status: 403 });
   }
 
   const isOwner = project.ownerCustomerId === customerId;
-  const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
+  /* Company-only viewers are read-only — explicit membership is required for edit. */
+  const canEdit = isMember && canEditProject(project, customerId, viewerIsAppAdmin);
 
   const unitPriceEditorAllowlist =
     process.env.PROJECTCLAD_UNIT_PRICE_EDITOR_EMAILS?.trim();
@@ -1646,6 +1853,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const canEditLineUnitPrices =
     Boolean(unitPriceEditorAllowlist) &&
     customerEmailInConfiguredList(viewerEmailResolved, unitPriceEditorAllowlist);
+
+  /* Per-order CSV export (finance allowlist). Set PROJECTCLAD_CSV_EXPORT_EMAILS
+     to one address or a comma-list. Legacy PROJECTCLAD_ACOMBA_EXPORT_EMAILS
+     is still read if the new var is unset. Unset = nobody can export. */
+  const csvExportEmailAllowlist =
+    process.env.PROJECTCLAD_CSV_EXPORT_EMAILS?.trim() ||
+    process.env.PROJECTCLAD_ACOMBA_EXPORT_EMAILS?.trim();
+  const canExportOrderCsv =
+    Boolean(csvExportEmailAllowlist) &&
+    customerEmailInConfiguredList(viewerEmailResolved, csvExportEmailAllowlist);
 
   const shopQ = shopStringFilter(shop);
   const otherProjects = await prisma.project.findMany({
@@ -1755,6 +1972,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     name: project.name,
     poNumber: project.poNumber,
     companyName: project.companyName,
+    ownerCompanyKey: project.ownerCompanyKey ?? null,
+    visibleToCompany: project.visibleToCompany,
     createdAt: project.createdAt.toISOString(),
     shipAddress1: project.shipAddress1 ?? null,
     shipCity: project.shipCity ?? null,
@@ -1898,6 +2117,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ? customerEmail.trim().charAt(0).toUpperCase()
       : null;
 
+  /* When the viewer arrived via a company-tag match only, pick the label that matches
+     the owner's key so the banner reads naturally (e.g. "Shared via Acme Inc."). */
+  const projectCompanyLabel = (() => {
+    if (!viaCompany || !project.ownerCompanyKey) return null;
+    const idx = viewerCompanyCtx.keys.indexOf(project.ownerCompanyKey);
+    return idx >= 0
+      ? viewerCompanyCtx.displayNames[idx] ?? project.companyName ?? null
+      : project.companyName ?? null;
+  })();
+
   return {
     proxyStylesCss,
     project: payload,
@@ -1908,9 +2137,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     canViewPricing: !hideAddToCart || hasPricingAccess(request),
     canEdit,
     canEditLineUnitPrices,
+    canExportOrderCsv,
     isOwner,
     canAdminMembers,
     hideAddToCart,
+    viaCompany,
+    viaCompanyLabel: projectCompanyLabel,
     approvalRequests: approvalRequests.map((r) => {
       const approver = r.approvedByCustomerId
         ? customerInfo[r.approvedByCustomerId]
@@ -2393,6 +2625,37 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   },
                 });
                 didChange = true;
+
+                /* Reverse cascade: when a job's site contact is filled in and the
+                   project still has no default, promote the job's value up to the
+                   project so future blank orders inherit it. We never overwrite
+                   an existing project-level default — owners can change those
+                   explicitly from the Edit project modal. */
+                const projectDefaultNameBlank =
+                  !project.defaultSiteContactName?.trim();
+                const projectDefaultPhoneBlank =
+                  !project.defaultSiteContactPhone?.trim();
+                const liftName =
+                  siteContactNameChanged &&
+                  Boolean(nextSiteContactName?.trim()) &&
+                  projectDefaultNameBlank;
+                const liftPhone =
+                  siteContactPhoneChanged &&
+                  Boolean(nextSiteContactPhone?.trim()) &&
+                  projectDefaultPhoneBlank;
+                if (liftName || liftPhone) {
+                  await prisma.project.update({
+                    where: { id: projectId },
+                    data: {
+                      ...(liftName
+                        ? { defaultSiteContactName: nextSiteContactName }
+                        : {}),
+                      ...(liftPhone
+                        ? { defaultSiteContactPhone: nextSiteContactPhone }
+                        : {}),
+                    },
+                  });
+                }
               }
               if (!isLocked) {
                 for (const u of itemUpdates) {
@@ -2607,6 +2870,49 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         console.error("[project-clad] confirm-order-now prisma error:", e);
         return Response.json({ error: detail }, { status: 500 });
       }
+
+      /* Silent backup draft order in Shopify admin. Best-effort: never blocks Order now. */
+      console.log(
+        "[project-clad] backup draft order: starting for job",
+        jobId,
+        "shop",
+        shop,
+      );
+      try {
+        const backup = await createBackupDraftOrderForJob({
+          shop,
+          jobId,
+          deliveryFeeAmount:
+            fulfillmentMethod === "delivery" ? PROJECT_DELIVERY_FEE : 0,
+        });
+        if (backup.ok) {
+          console.log(
+            "[project-clad] backup draft order: created",
+            backup.draftOrderId,
+            backup.reused ? "(reused existing)" : "",
+          );
+        } else {
+          console.error(
+            "[project-clad] backup draft order failed:",
+            backup.error,
+            backup.userErrors ?? "",
+          );
+          await logProjectActivity({
+            projectId,
+            jobId,
+            type: "shopify_draft_backup_failed",
+            visibility: "admin",
+            actorCustomerId: customerId,
+            payload: { error: backup.error },
+          }).catch(() => undefined);
+        }
+      } catch (err) {
+        console.error(
+          "[project-clad] backup draft order threw:",
+          err instanceof Error ? err.message : err,
+        );
+      }
+
       try {
         await sendOrderPlacedEmails({
           shop,
@@ -3397,28 +3703,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     const email = String(formData.get("email") || "").trim();
+    /* Optional fast-path from the typeahead — we already know the Shopify customer id
+       so we can skip the email lookup (saves a round-trip and works for customers whose
+       email is partial/unknown to the requester). */
+    const memberCustomerIdFromClient = String(
+      formData.get("memberCustomerId") || "",
+    ).trim();
     const role = String(formData.get("role") || "view");
 
-    if (!email) {
+    if (!email && !memberCustomerIdFromClient) {
       return Response.json(
         { memberError: "Email is required." },
         { status: 200 },
       );
     }
 
-    let memberCustomerId: string | null = null;
-    try {
-      memberCustomerId = await findCustomerIdByEmail(shop, email);
-    } catch (error) {
-      return Response.json(
-        {
-          memberError:
-            error instanceof Error
-              ? error.message
-              : "Customer lookup failed.",
-        },
-        { status: 200 },
-      );
+    let memberCustomerId: string | null = memberCustomerIdFromClient || null;
+    if (!memberCustomerId) {
+      try {
+        memberCustomerId = await findCustomerIdByEmail(shop, email);
+      } catch (error) {
+        return Response.json(
+          {
+            memberError:
+              error instanceof Error
+                ? error.message
+                : "Customer lookup failed.",
+          },
+          { status: 200 },
+        );
+      }
     }
 
     if (!memberCustomerId) {
@@ -3487,6 +3801,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       String(formData.get("defaultSiteContactName") || "").trim() || null;
     const defaultSiteContactPhone =
       String(formData.get("defaultSiteContactPhone") || "").trim() || null;
+    /* Checkbox presence pattern: the form posts a companion `visibleToCompanyRendered=1`
+       hidden input whenever the toggle was on-screen. Without that flag we skip writing
+       this column (older/legacy project pages without the toggle remain untouched). */
+    const visibleToCompanyRendered =
+      formData.get("visibleToCompanyRendered") === "1";
+    const visibleToCompany = visibleToCompanyRendered
+      ? formData.get("visibleToCompany") === "1"
+      : undefined;
 
     if (!name) {
       return redirectToProject(request, projectId, shop);
@@ -3500,8 +3822,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         companyName,
         defaultSiteContactName,
         defaultSiteContactPhone,
+        ...(visibleToCompany !== undefined ? { visibleToCompany } : {}),
       },
     });
+
+    /* Cascade project-level defaults into any blank job-level site contact fields.
+       "Blank" = null OR empty string. Existing per-order overrides are preserved. */
+    if (defaultSiteContactName) {
+      await prisma.job.updateMany({
+        where: {
+          projectId,
+          OR: [{ siteContactName: null }, { siteContactName: "" }],
+        },
+        data: { siteContactName: defaultSiteContactName },
+      });
+    }
+    if (defaultSiteContactPhone) {
+      await prisma.job.updateMany({
+        where: {
+          projectId,
+          OR: [{ siteContactPhone: null }, { siteContactPhone: "" }],
+        },
+        data: { siteContactPhone: defaultSiteContactPhone },
+      });
+    }
 
     await emailProjectStatusSnapshot({
       shop,
@@ -3802,6 +4146,10 @@ function OrderDragHandle() {
   return (
     <span
       ref={ctx.setActivatorNodeRef}
+      {...ctx.attributes}
+      {...(ctx.listeners ?? {})}
+      role="button"
+      tabIndex={0}
       aria-label="Drag to reorder"
       title="Drag to reorder"
       className="project-clad-order-drag-handle"
@@ -3812,8 +4160,13 @@ function OrderDragHandle() {
         event.preventDefault();
         event.stopPropagation();
       }}
-      {...ctx.attributes}
-      {...(ctx.listeners ?? {})}
+      onKeyDown={(event) => {
+        /* Satisfy a11y (click-adjacent control); drag is pointer-driven. */
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
     >
       <OrderDragHandleGlyph />
     </span>
@@ -3868,8 +4221,11 @@ export default function ProjectDetailPage() {
     canViewPricing,
     canEdit,
     canEditLineUnitPrices,
+    canExportOrderCsv,
     canAdminMembers,
     hideAddToCart,
+    viaCompany,
+    viaCompanyLabel,
     approvalRequests,
     projectTimeline,
     viewerIsAdmin,
@@ -3979,13 +4335,6 @@ export default function ProjectDetailPage() {
       typeof actionData === "object" &&
       "pricingUnlocked" in actionData &&
       Boolean(actionData.pricingUnlocked));
-  /** Tax on rolled-up line subtotals; delivery is per order (see order footers). */
-  const projectDisplayTax = orderTaxFromSubtotal(project.subtotal, {
-    pricesIncludeTax: false,
-  });
-  const projectSubtotalPlusTax = orderTotalWithTax(project.subtotal, {
-    pricesIncludeTax: false,
-  });
   const jobError =
     actionData && typeof actionData === "object" && "jobError" in actionData
       ? (actionData.jobError as string)
@@ -4015,16 +4364,6 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     setDndReady(true);
   }, []);
-  const persistOrderSortMode = (mode: OrderSortMode) => {
-    console.log("[pc] persistOrderSortMode ->", mode);
-    setOrderSortMode(mode);
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(orderSortStorageKey(project.id), mode);
-    } catch {
-      /* ignore storage failures */
-    }
-  };
   /** Job id -> timestamp (ms) of the most recent job-level approval, for the "approved" sort. */
   const approvalLookup = useMemo(() => {
     const map = new Map<string, number>();
@@ -4074,9 +4413,15 @@ export default function ProjectDetailPage() {
     (sum, job) => sum + deliveryFeeForJob(job),
     0,
   );
-  const projectTotalWithDisplayTax =
-    projectSubtotalPlusTax + projectOrderDeliveryFeesTotal;
-  const dragItemId = useRef<string | null>(null);
+  /** Display HST on project subtotal plus all per-order delivery fees (matches order tiles). */
+  const projectTaxableForDisplay =
+    project.subtotal + projectOrderDeliveryFeesTotal;
+  const projectDisplayTax = orderTaxFromSubtotal(projectTaxableForDisplay, {
+    pricesIncludeTax: false,
+  });
+  const projectTotalWithDisplayTax = orderTotalWithTax(projectTaxableForDisplay, {
+    pricesIncludeTax: false,
+  });
 
   const isOrderAwaitingApproval = (jobId: string) => {
     if (hasProjectLevelApprovalPending) return true;
@@ -4086,32 +4431,53 @@ export default function ProjectDetailPage() {
     );
   };
 
-  /** Customer-facing order lifecycle controls (Ordered / Delivered / Order now / review). */
-  const renderOrderLifecycleCustomerSummaryActions = (job: JobView) => {
+  /**
+   * Customer-facing order lifecycle card rendered as the middle slot in the
+   * new three-card action row (Save / lifecycle / Edit order). Returns an
+   * ActionCardSpec describing the variant so the row renderer can lay out
+   * all three cards with identical markup. Variants:
+   *   - paid       → disabled "Order complete" card (no reveal CTA)
+   *   - delivered  → disabled "Delivered" card
+   *   - ordered    → disabled "Ordered" card
+   *   - ready_to_order / draft (for viewers who skip the NA review flow) →
+   *     "Order now" card with a "Confirm & Pay" CTA wired to the existing
+   *     `data-projectclad-order-now-submit` delegated handler.
+   *   - NA review flow (awaiting/none) → "Send for review" or "Confirming
+   *     order" card wrapping a form with `data-projectclad-ajax`.
+   *   - other (e.g. unknown) → muted disabled card so the grid stays
+   *     balanced.
+   */
+  const renderOrderLifecycleActionCard = (job: JobView): ActionCardSpec => {
     const ls = job.orderLifecycleStatus;
     const approval = getApprovalStatus(job.id, "");
     const viewerUsesNAReviewFlow = viewerHasNATag === true;
     const skipReviewOrderFlow = !viewerUsesNAReviewFlow || viewerIsAdmin;
     if (ls === "paid") {
-      return (
-        <button type="button" className="project-clad-button" disabled>
-          Order complete
-        </button>
-      );
+      return {
+        key: "lifecycle",
+        icon: PC_CHECK_ICON,
+        label: "Paid",
+        description: "Paid in full.",
+        disabled: true,
+      };
     }
     if (ls === "delivered") {
-      return (
-        <button type="button" className="project-clad-button" disabled>
-          Delivered
-        </button>
-      );
+      return {
+        key: "lifecycle",
+        icon: PC_CHECK_ICON,
+        label: "Delivered",
+        description: "Awaiting payment.",
+        disabled: true,
+      };
     }
     if (ls === "ordered") {
-      return (
-        <button type="button" className="project-clad-button" disabled>
-          Ordered
-        </button>
-      );
+      return {
+        key: "lifecycle",
+        icon: PC_PACKAGE_ICON,
+        label: "Ordered",
+        description: "Awaiting fulfillment.",
+        disabled: true,
+      };
     }
     if (
       (ls === "ready_to_order" &&
@@ -4123,44 +4489,50 @@ export default function ProjectDetailPage() {
       );
       // PO is OPTIONAL — only Site Contact gates Order now.
       const canPlaceOrder = hasSiteContact;
-      const missingTooltip = !hasSiteContact
-        ? "Add a site contact name and phone on this order to place it."
-        : undefined;
-      return (
-        <div className="project-clad-inline-form project-clad-order-lifecycle-actions-form">
+      const isSubmitting = orderNowSubmittingJobId === job.id;
+      const missingCopy = !hasSiteContact
+        ? "Add site contact & phone first."
+        : null;
+      const pickupFallbackNotice =
+        canPlaceOrder &&
+        project.receiveMode === "delivery" &&
+        !hasCompleteDeliveryAddress
+          ? "No delivery address — will ship as pickup."
+          : null;
+      const description =
+        missingCopy ??
+        pickupFallbackNotice ??
+        "Place order; invoice emailed.";
+      return {
+        key: "lifecycle",
+        icon: PC_ORDER_NOW_ICON,
+        label: isSubmitting ? "Placing…" : "Order now",
+        description,
+        disabled: !canPlaceOrder || isSubmitting,
+        tone: "go",
+        cta: (
           <button
             type="button"
-            className="project-clad-button project-clad-button--approve"
+            className="project-clad-action-card__cta"
             data-projectclad-order-now-submit
             data-job-id={job.id}
             data-has-delivery={isDeliveryCompleteForOrderNow ? "1" : "0"}
             data-has-site-contact={hasSiteContact ? "1" : "0"}
-            disabled={orderNowSubmittingJobId === job.id || !canPlaceOrder}
+            disabled={!canPlaceOrder || isSubmitting}
+            aria-busy={isSubmitting ? "true" : undefined}
             title={
               !canPlaceOrder
-                ? missingTooltip
-                : undefined
+                ? missingCopy ?? undefined
+                : isSubmitting
+                  ? "Placing order…"
+                  : "Confirm & Pay"
             }
+            aria-label={isSubmitting ? "Placing order" : "Confirm and pay"}
           >
-            {orderNowSubmittingJobId === job.id ? "Placing…" : "Order now"}
+            {PC_CTA_CARD_ICON}
           </button>
-          {canPlaceOrder &&
-          project.receiveMode === "delivery" &&
-          !hasCompleteDeliveryAddress ? (
-            <span
-              className="project-clad-muted"
-              style={{
-                maxWidth: "16rem",
-                fontSize: "0.82rem",
-                lineHeight: 1.4,
-              }}
-            >
-              No delivery details on file — order will be placed as{" "}
-              <strong>store pickup</strong>.
-            </span>
-          ) : null}
-        </div>
-      );
+        ),
+      };
     }
     if (
       viewerUsesNAReviewFlow &&
@@ -4169,33 +4541,55 @@ export default function ProjectDetailPage() {
       ls !== "delivered" &&
       ls !== "paid"
     ) {
-      const intent =
-        approval === "awaiting"
-          ? "cancel-approval-request"
-          : "submit-for-approval";
-      const label =
-        approval === "awaiting" ? "Confirming order" : "Send for review";
-      return (
-        <form
-          method="get"
-          action="/apps/project-clad/api/project-actions"
-          className="project-clad-inline-form"
-          data-projectclad-ajax
-          data-projectclad-intent={intent}
-          data-projectclad-project-id={project.id}
-          onPointerDownCapture={(event) => event.stopPropagation()}
-        >
-          <input type="hidden" name="jobId" value={job.id} />
-          <button type="submit" className="project-clad-button">
-            {label}
-          </button>
-          <span className="project-clad-muted" data-projectclad-form-message />
-        </form>
-      );
+      const awaiting = approval === "awaiting";
+      const intent = awaiting
+        ? "cancel-approval-request"
+        : "submit-for-approval";
+      return {
+        key: "lifecycle",
+        icon: awaiting ? PC_HOURGLASS_ICON : PC_SEND_ICON,
+        label: awaiting ? "Confirming" : "Send for review",
+        description: awaiting
+          ? "Awaiting admin approval."
+          : "Send for admin review.",
+        tone: "go",
+        cta: (
+          <form
+            method="get"
+            action="/apps/project-clad/api/project-actions"
+            className="project-clad-action-card__cta-form"
+            data-projectclad-ajax
+            data-projectclad-intent={intent}
+            data-projectclad-project-id={project.id}
+            onPointerDownCapture={(event) => event.stopPropagation()}
+          >
+            <input type="hidden" name="jobId" value={job.id} />
+            <button
+              type="submit"
+              className="project-clad-action-card__cta"
+              title={awaiting ? "Cancel review request" : "Send for review"}
+              aria-label={
+                awaiting ? "Cancel review request" : "Send for review"
+              }
+            >
+              {awaiting ? PC_CTA_X_ICON : PC_CTA_SEND_ICON}
+            </button>
+            <span
+              className="project-clad-muted"
+              data-projectclad-form-message
+              style={{ display: "none" }}
+            />
+          </form>
+        ),
+      };
     }
-    return (
-      <span className="project-clad-muted">{orderLifecycleLabel(ls)}</span>
-    );
+    return {
+      key: "lifecycle",
+      icon: PC_HOURGLASS_ICON,
+      label: orderLifecycleLabel(ls),
+      description: "No action available.",
+      disabled: true,
+    };
   };
 
   /**
@@ -4305,52 +4699,6 @@ export default function ProjectDetailPage() {
       document.cookie = createPricingCookie();
     }
   }, [actionData]);
-
-  const reorderItems = async (jobId: string, overItemId: string) => {
-    if (!canEdit || !dragItemId.current || dragItemId.current === overItemId) {
-      dragItemId.current = null;
-      return;
-    }
-
-    let reordered: string[] | null = null;
-
-    setJobs((current) =>
-      current.map((job) => {
-        if (job.id !== jobId) return job;
-        const items = [...job.items];
-        const fromIndex = items.findIndex(
-          (item) => item.id === dragItemId.current,
-        );
-        const toIndex = items.findIndex((item) => item.id === overItemId);
-        if (fromIndex === -1 || toIndex === -1) return job;
-        const [moved] = items.splice(fromIndex, 1);
-        items.splice(toIndex, 0, moved);
-        reordered = items.map((item) => item.id);
-        const renumbered = items.map((item, idx) => ({
-          ...item,
-          sortOrder: idx + 1,
-        }));
-        return { ...job, items: renumbered };
-      }),
-    );
-
-    if (!reordered) {
-      dragItemId.current = null;
-      return;
-    }
-    await fetch(`${location.pathname}${location.search}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        intent: "reorder-items",
-        jobId,
-        itemIds: reordered,
-      }),
-      credentials: "include",
-    });
-
-    dragItemId.current = null;
-  };
 
   /**
    * Pointer sensor has an 8px activation distance so brief clicks on <summary> still
@@ -4610,99 +4958,163 @@ export default function ProjectDetailPage() {
             ×
           </button>
           <h2 id="edit-project-modal-title" data-projectclad-section-underline>Edit project</h2>
-          <h3
-            className="project-clad-section-title"
-            style={{ marginTop: "0.5rem", marginBottom: "0.5rem", fontSize: "1rem" }}
-            data-projectclad-section-underline
-          >
-            Project details
-          </h3>
-          <Form
-            method="post"
-            action={`/apps/project-clad/project?id=${project.id}`}
-            className="project-clad-inline-form project-clad-pricing-form"
-          >
-            <input type="hidden" name="intent" value="update-project-details" />
-            <label htmlFor="edit-project-name">Project name</label>
-            <input
-              id="edit-project-name"
-              name="projectName"
-              type="text"
-              defaultValue={project.name}
-              required
-              className="project-clad-pricing-password-input"
-            />
-            <label htmlFor="edit-project-po">PROJECT #</label>
-            <input
-              id="edit-project-po"
-              name="poNumber"
-              type="text"
-              defaultValue={project.poNumber || ""}
-              placeholder="Optional"
-              className="project-clad-pricing-password-input"
-            />
-            <label htmlFor="edit-project-company">Company name</label>
-            <input
-              id="edit-project-company"
-              name="companyName"
-              type="text"
-              defaultValue={project.companyName || ""}
-              placeholder="Optional"
-              className="project-clad-pricing-password-input"
-            />
-            <label htmlFor="edit-project-default-contact-name">
-              Default site contact name
-            </label>
-            <input
-              id="edit-project-default-contact-name"
-              name="defaultSiteContactName"
-              type="text"
-              defaultValue={project.defaultSiteContactName || ""}
-              placeholder="Autofills new orders (optional)"
-              className="project-clad-pricing-password-input"
-              autoComplete="name"
-            />
-            <label htmlFor="edit-project-default-contact-phone">
-              Default site contact phone
-            </label>
-            <input
-              id="edit-project-default-contact-phone"
-              name="defaultSiteContactPhone"
-              type="tel"
-              inputMode="tel"
-              defaultValue={project.defaultSiteContactPhone || ""}
-              placeholder="Autofills new orders (optional)"
-              className="project-clad-pricing-password-input"
-              autoComplete="tel"
-            />
-            <div className="project-clad-actions" style={{ marginTop: "0.75rem", gap: "0.5rem" }}>
-              <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
-                Save project details
-              </button>
-            </div>
-          </Form>
 
-          <EditProjectDeliveryAddressForm
-            projectId={project.id}
-            shipAddress1={project.shipAddress1}
-            shipCity={project.shipCity}
-            shipProvince={project.shipProvince}
-            shipPostal={project.shipPostal}
-          />
-
-          <div className="project-clad-actions" style={{ marginTop: "1rem", gap: "0.5rem" }}>
-            <button
-              type="button"
-              className="project-clad-button project-clad-reject-modal-btn"
-              data-projectclad-edit-project-cancel
+          {/* ── Project details ─────────────────────────────────────── */}
+          <section className="project-clad-edit-modal__section">
+            <h3
+              className="project-clad-section-title"
+              data-projectclad-section-underline
             >
-              Cancel
-            </button>
-          </div>
+              Project details
+            </h3>
+            <Form
+              method="post"
+              action={`/apps/project-clad/project?id=${project.id}`}
+              className="project-clad-inline-form project-clad-pricing-form"
+            >
+              <input type="hidden" name="intent" value="update-project-details" />
+              <div className="project-clad-form-grid">
+                <div className="project-clad-form-grid__cell">
+                  <label htmlFor="edit-project-name">Project name</label>
+                  <input
+                    id="edit-project-name"
+                    name="projectName"
+                    type="text"
+                    defaultValue={project.name}
+                    required
+                    className="project-clad-pricing-password-input"
+                  />
+                </div>
+                <div className="project-clad-form-grid__cell">
+                  <label htmlFor="edit-project-po">Project #</label>
+                  <input
+                    id="edit-project-po"
+                    name="poNumber"
+                    type="text"
+                    defaultValue={project.poNumber || ""}
+                    placeholder="Optional"
+                    className="project-clad-pricing-password-input"
+                  />
+                </div>
+              </div>
 
+              <label htmlFor="edit-project-company">Company name</label>
+              <input
+                id="edit-project-company"
+                name="companyName"
+                type="text"
+                defaultValue={project.companyName || ""}
+                placeholder="Optional"
+                className="project-clad-pricing-password-input"
+              />
+
+              {project.ownerCompanyKey && (
+                <>
+                  <input
+                    type="hidden"
+                    name="visibleToCompanyRendered"
+                    value="1"
+                  />
+                  {(() => {
+                    /* Prefer the human-typed company name on the project; fall back to
+                       a humanized version of the normalized ownerCompanyKey so the
+                       toggle still reads naturally if the field is blank. */
+                    const companyDisplay =
+                      (project.companyName && project.companyName.trim()) ||
+                      (project.ownerCompanyKey
+                        ? project.ownerCompanyKey
+                            .split(/[-_\s]+/)
+                            .filter(Boolean)
+                            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                            .join(" ")
+                        : "my company");
+                    return (
+                      <label
+                        className="project-clad-inline-checkbox project-clad-share-toggle"
+                        title="When on, anyone at this company can view (read-only) this project. Editing still requires being added as a member."
+                      >
+                        <input
+                          type="checkbox"
+                          name="visibleToCompany"
+                          value="1"
+                          defaultChecked={project.visibleToCompany}
+                        />
+                        <span className="project-clad-share-toggle__text">
+                          Visible to others at{" "}
+                          <strong>{companyDisplay}</strong>
+                          <small className="project-clad-share-toggle__hint">
+                            Read-only — they still need to be added to edit.
+                          </small>
+                        </span>
+                      </label>
+                    );
+                  })()}
+                </>
+              )}
+
+              <div className="project-clad-form-grid">
+                <div className="project-clad-form-grid__cell">
+                  <label htmlFor="edit-project-default-contact-name">
+                    Default site contact
+                  </label>
+                  <input
+                    id="edit-project-default-contact-name"
+                    name="defaultSiteContactName"
+                    type="text"
+                    defaultValue={project.defaultSiteContactName || ""}
+                    placeholder="Name (optional)"
+                    className="project-clad-pricing-password-input"
+                    autoComplete="name"
+                  />
+                </div>
+                <div className="project-clad-form-grid__cell">
+                  <label htmlFor="edit-project-default-contact-phone">
+                    Default site phone
+                  </label>
+                  <input
+                    id="edit-project-default-contact-phone"
+                    name="defaultSiteContactPhone"
+                    type="tel"
+                    inputMode="tel"
+                    defaultValue={project.defaultSiteContactPhone || ""}
+                    placeholder="Phone (optional)"
+                    className="project-clad-pricing-password-input"
+                    autoComplete="tel"
+                  />
+                </div>
+              </div>
+
+              <div className="project-clad-edit-modal__section-footer">
+                <span className="project-clad-muted">
+                  Saving fills any blank Site Contact on this project&apos;s orders.
+                </span>
+                <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
+                  Save details
+                </button>
+              </div>
+            </Form>
+          </section>
+
+          {/* ── Delivery details ────────────────────────────────────── */}
+          <section className="project-clad-edit-modal__section">
+            <EditProjectDeliveryAddressForm
+              projectId={project.id}
+              shipAddress1={project.shipAddress1}
+              shipCity={project.shipCity}
+              shipProvince={project.shipProvince}
+              shipPostal={project.shipPostal}
+            />
+          </section>
+
+          {/* ── Add an order ────────────────────────────────────────── */}
           {canEdit && (
-            <>
-              <h3 className="project-clad-section-title" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }} data-projectclad-section-underline>Create new order</h3>
+            <section className="project-clad-edit-modal__section">
+              <h3
+                className="project-clad-section-title"
+                data-projectclad-section-underline
+              >
+                Add an order
+              </h3>
               <Form
                 method="post"
                 action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
@@ -4710,32 +5122,40 @@ export default function ProjectDetailPage() {
                 data-projectclad-ajax
                 data-projectclad-intent="create-job"
                 data-projectclad-project-id={project.id}
-                style={{ marginBottom: "1rem" }}
               >
                 <input type="hidden" name="intent" value="create-job" />
+                <label htmlFor="new-job-name-modal">Order name</label>
                 <input
                   id="new-job-name-modal"
                   name="jobName"
-                  placeholder="Create new order"
+                  placeholder="e.g. Front elevation, Phase 2…"
                   required
-                  aria-label="Create new order"
+                  aria-label="Order name"
                 />
-                <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
-                  Create new order
-                </button>
-                <span
-                  className="project-clad-muted"
-                  data-projectclad-form-message
-                >
-                  {jobError || ""}
-                </span>
+                <div className="project-clad-edit-modal__section-footer">
+                  <span
+                    className="project-clad-muted"
+                    data-projectclad-form-message
+                  >
+                    {jobError || ""}
+                  </span>
+                  <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
+                    Create order
+                  </button>
+                </div>
               </Form>
-            </>
+            </section>
           )}
 
-          <h3 className="project-clad-section-title" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }} data-projectclad-section-underline>Share access</h3>
-          {canEdit ? (
-            <>
+          {/* ── Share access ────────────────────────────────────────── */}
+          <section className="project-clad-edit-modal__section">
+            <h3
+              className="project-clad-section-title"
+              data-projectclad-section-underline
+            >
+              Share access
+            </h3>
+            {canEdit ? (
               <div className="project-clad-share-access-form">
                 <Form
                   id="projectclad-add-member-form"
@@ -4749,76 +5169,96 @@ export default function ProjectDetailPage() {
                   data-projectclad-intent="add-member"
                 >
                   <input type="hidden" name="intent" value="add-member" />
-                  <label htmlFor="member-email-modal">Add project member</label>
-                  <input
-                    id="member-email-modal"
-                    name="email"
-                    type="email"
-                    placeholder="email@example.com"
-                    required
-                  />
-                  <label htmlFor="member-role-modal-role-edit">Project member role</label>
-                  <MemberRoleSelect idPrefix="member-role-modal" defaultValue="edit" />
-                  <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
-                    Add
+                  <input type="hidden" name="memberCustomerId" defaultValue="" />
+                  <div className="project-clad-form-grid">
+                    <div className="project-clad-form-grid__cell">
+                      <label htmlFor="member-email-modal">Add member</label>
+                      <div
+                        className="project-clad-member-typeahead"
+                        data-projectclad-member-typeahead
+                      >
+                        <input
+                          id="member-email-modal"
+                          name="email"
+                          type="email"
+                          placeholder="Name or email"
+                          required
+                          autoComplete="off"
+                          data-projectclad-member-typeahead-input
+                        />
+                        <ul
+                          className="project-clad-member-typeahead__list"
+                          role="listbox"
+                          hidden
+                          data-projectclad-member-typeahead-list
+                        />
+                      </div>
+                    </div>
+                    <div className="project-clad-form-grid__cell">
+                      <label htmlFor="member-role-modal-role-edit">Role</label>
+                      <MemberRoleSelect idPrefix="member-role-modal" defaultValue="edit" />
+                    </div>
+                  </div>
+                  <div className="project-clad-edit-modal__section-footer">
+                    <span
+                      className="project-clad-muted"
+                      data-projectclad-member-message
+                    >
+                      {memberError || ""}
+                    </span>
+                    <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
+                      Add member
+                    </button>
+                  </div>
+                </Form>
+                {/* Sibling form: nesting <form> inside another <form> is invalid HTML
+                    so the public-share-link action lives outside the add-member form. */}
+                <Form
+                  method="post"
+                  action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+                  className="project-clad-inline-form"
+                  style={{ display: "flex", margin: "0.6rem 0 0", justifyContent: "flex-end" }}
+                  data-projectclad-ajax
+                  data-projectclad-intent="share-project"
+                  data-projectclad-project-id={project.id}
+                >
+                  <input type="hidden" name="intent" value="share-project" />
+                  <input type="hidden" name="role" value="view" />
+                  <button
+                    type="submit"
+                    className="project-clad-button project-clad-reject-modal-btn"
+                    data-projectclad-share-submit
+                    title="Copy a public view-only link to this project"
+                  >
+                    Copy share link
                   </button>
                 </Form>
-                <div
-                  className="project-clad-actions project-clad-share-buttons"
-                  style={{ flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}
-                >
-                  <Form
-                    method="post"
-                    action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
-                    className="project-clad-inline-form"
-                    style={{ display: "inline" }}
-                    data-projectclad-ajax
-                    data-projectclad-intent="share-project"
-                    data-projectclad-project-id={project.id}
-                  >
-                    <input type="hidden" name="intent" value="share-project" />
-                    <input type="hidden" name="role" value="view" />
-                    <button
-                      type="submit"
-                      className="project-clad-button project-clad-reject-modal-btn"
-                      data-projectclad-share-submit
-                    >
-                      Share
-                    </button>
-                  </Form>
-                  <span
-                    className="project-clad-muted"
-                    data-projectclad-member-message
-                  >
-                    {memberError || ""}
-                  </span>
-                </div>
               </div>
-            </>
-          ) : (
-            <p className="project-clad-muted">
-              You have view-only access to this project.
-            </p>
-          )}
+            ) : (
+              <p className="project-clad-muted" style={{ margin: 0 }}>
+                You have view-only access to this project.
+              </p>
+            )}
+          </section>
 
-          <h3 className="project-clad-section-title" style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }} data-projectclad-section-underline>Project members</h3>
-          {memberLookupError ? (
-            <p className="project-clad-muted">{memberLookupError}</p>
-          ) : project.members.length === 0 ? (
-            <p className="project-clad-muted">No members on this project.</p>
-          ) : (
-            <table className="project-clad-table project-clad-members-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th className="project-clad-table-right">Project Member Role</th>
-                  {canAdminMembers && (
-                    <th className="project-clad-table-right">Actions</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
+          {/* ── Project members ─────────────────────────────────────── */}
+          <section className="project-clad-edit-modal__section">
+            <h3
+              className="project-clad-section-title"
+              data-projectclad-section-underline
+            >
+              Project members
+            </h3>
+            {memberLookupError ? (
+              <p className="project-clad-muted" style={{ margin: 0 }}>
+                {memberLookupError}
+              </p>
+            ) : project.members.length === 0 ? (
+              <p className="project-clad-muted" style={{ margin: 0 }}>
+                No members on this project.
+              </p>
+            ) : (
+              <ul className="project-clad-member-list">
                 {project.members.map((member) => {
                   const fullName = [member.firstName, member.lastName]
                     .filter(Boolean)
@@ -4829,24 +5269,30 @@ export default function ProjectDetailPage() {
                       : member.role === "edit"
                         ? "Edit"
                         : "View only";
+                  const isOwner = member.role === "owner";
                   return (
-                    <tr key={member.customerId}>
-                      <td>
-                        <strong>Name:</strong> {fullName || "—"}
-                      </td>
-                      <td>
-                        <strong>E-mail:</strong> {member.email || "—"}
-                      </td>
-                      <td className="project-clad-table-right">
-                        <strong>Permission:</strong> {roleLabel}
-                      </td>
+                    <li
+                      key={member.customerId}
+                      className="project-clad-member-row"
+                    >
+                      <div className="project-clad-member-row__main">
+                        <span className="project-clad-member-row__name">
+                          {fullName || member.email || "—"}
+                        </span>
+                        {member.email && fullName && (
+                          <span className="project-clad-member-row__email">
+                            {member.email}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={`project-clad-member-row__role${isOwner ? " project-clad-member-row__role--owner" : ""}`}
+                      >
+                        {roleLabel}
+                      </span>
                       {canAdminMembers && (
-                        <td className="project-clad-table-right">
-                          {member.role === "owner" ? (
-                            <span aria-hidden="true" style={{ visibility: "hidden" }}>
-                              —
-                            </span>
-                          ) : (
+                        <div className="project-clad-member-row__actions">
+                          {isOwner ? null : (
                             <Form
                               method="post"
                               action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
@@ -4861,6 +5307,7 @@ export default function ProjectDetailPage() {
                               data-projectclad-member-id={member.customerId}
                               data-projectclad-ajax
                               data-projectclad-intent="remove-member"
+                              style={{ margin: 0 }}
                             >
                               <input type="hidden" name="intent" value="remove-member" />
                               <input
@@ -4868,22 +5315,33 @@ export default function ProjectDetailPage() {
                                 name="memberCustomerId"
                                 value={member.customerId}
                               />
-                              <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
+                              <button
+                                type="submit"
+                                className="project-clad-button project-clad-reject-modal-btn"
+                                aria-label={`Remove ${fullName || member.email || "member"}`}
+                              >
                                 Remove
                               </button>
                             </Form>
                           )}
-                        </td>
+                        </div>
                       )}
-                    </tr>
+                    </li>
                   );
                 })}
-              </tbody>
-            </table>
-          )}
+              </ul>
+            )}
+          </section>
 
+          {/* ── Danger zone ─────────────────────────────────────────── */}
           {canAdminMembers && (
-            <div style={{ marginTop: "2rem" }}>
+            <section className="project-clad-edit-modal__danger">
+              <p className="project-clad-edit-modal__danger-title">
+                Danger zone
+              </p>
+              <p className="project-clad-edit-modal__danger-text">
+                Deleting this project removes it and all of its orders permanently. This cannot be undone.
+              </p>
               <button
                 type="button"
                 className="project-clad-button project-clad-button--danger project-clad-button--full project-clad-reject-modal-btn"
@@ -4891,7 +5349,7 @@ export default function ProjectDetailPage() {
               >
                 Delete this project
               </button>
-            </div>
+            </section>
           )}
         </div>
       </div>
@@ -5191,20 +5649,31 @@ export default function ProjectDetailPage() {
                             data-projectclad-intent="add-member"
                           >
                             <input type="hidden" name="intent" value="add-member" />
+                            <input type="hidden" name="memberCustomerId" defaultValue="" />
                             <label htmlFor="member-email-header">Email</label>
-                            <div className="project-clad-neu-finder-input">
+                            <div
+                              className="project-clad-neu-finder-input project-clad-member-typeahead"
+                              data-projectclad-member-typeahead
+                            >
                               <div className="project-clad-neu-finder-input__well">
                                 <input
                                   id="member-email-header"
                                   name="email"
                                   type="email"
                                   className="project-clad-neu-finder-input__field"
-                                  placeholder="customer@example.com"
+                                  placeholder="Name or email"
                                   required
-                                  autoComplete="email"
+                                  autoComplete="off"
                                   aria-label="Customer email"
+                                  data-projectclad-member-typeahead-input
                                 />
                               </div>
+                              <ul
+                                className="project-clad-member-typeahead__list"
+                                role="listbox"
+                                hidden
+                                data-projectclad-member-typeahead-list
+                              />
                             </div>
                             <label htmlFor="member-role-header-role-edit">Project member role</label>
                             <MemberRoleSelect idPrefix="member-role-header" defaultValue="edit" />
@@ -5301,6 +5770,21 @@ export default function ProjectDetailPage() {
               </section>
             ) : null;
           })()}
+
+          {viaCompany && (
+            <section
+              className="project-clad-section project-clad-shared-via-company"
+              role="status"
+            >
+              <div className="project-clad-card project-clad-shared-via-company__card">
+                <p className="project-clad-muted project-clad-shared-via-company__text">
+                  {viaCompanyLabel
+                    ? `You have read-only access to this project because you're tagged with "${viaCompanyLabel}". Ask the owner to add you as a member to make changes.`
+                    : "You have read-only access to this project through a shared company tag. Ask the owner to add you as a member to make changes."}
+                </p>
+              </div>
+            </section>
+          )}
 
           <section className="project-clad-section">
             <div className="project-clad-card project-clad-orders-shell">
@@ -5407,15 +5891,21 @@ export default function ProjectDetailPage() {
                           : "project-clad-work-order--unread"
                         : "";
                     const totalQty = job.items.reduce((sum, item) => sum + item.quantity, 0);
-                    const jobDisplayTax = orderTaxFromSubtotal(job.subtotal, {
-                      pricesIncludeTax: false,
-                    });
-                    const jobSubtotalPlusTax = orderTotalWithTax(job.subtotal, {
-                      pricesIncludeTax: false,
-                    });
                     const jobDeliveryFeeAmount = deliveryFeeForJob(job);
-                    const jobTotalWithDisplayTax =
-                      jobSubtotalPlusTax + jobDeliveryFeeAmount;
+                    const jobTaxableForDisplay =
+                      job.subtotal + jobDeliveryFeeAmount;
+                    const jobDisplayTax = orderTaxFromSubtotal(
+                      jobTaxableForDisplay,
+                      {
+                        pricesIncludeTax: false,
+                      },
+                    );
+                    const jobTotalWithDisplayTax = orderTotalWithTax(
+                      jobTaxableForDisplay,
+                      {
+                        pricesIncludeTax: false,
+                      },
+                    );
                     /**
                      * Delivery-vs-pickup for THIS job. Pickup wins explicitly;
                      * delivery wins if the job was saved with delivery OR the
@@ -5441,7 +5931,6 @@ export default function ProjectDetailPage() {
                       const country = project.shipCountry?.trim() || "Canada";
                       return [...parts, country].join(", ");
                     })();
-                    const totalOrderQtyLabel = `Total Order Quantity: ${totalQty}`;
                     const orderFootShopify = OrderFootShopifyCell(job);
                     const jobSummaryDisplayName = jobNameForOrderSummary(
                       job.name,
@@ -5485,34 +5974,97 @@ export default function ProjectDetailPage() {
                      * Click handling lives in the page inline script (same pattern as
                      * Edit order) so saves work even if React event delegation fails. */
                     const showSaveFieldsBtn = Boolean(canEdit);
+                    const actionCards: ActionCardSpec[] = [];
+                    if (showSaveFieldsBtn) {
+                      actionCards.push({
+                        key: "save",
+                        icon: PC_SAVE_ICON,
+                        label: "Save",
+                        description: "Save PO, site contact & phone.",
+                        tone: "go",
+                        cta: (
+                          <button
+                            type="button"
+                            className="project-clad-action-card__cta"
+                            data-projectclad-save-fields-btn
+                            data-job-id={job.id}
+                            title="Save details"
+                            aria-label="Save details"
+                          >
+                            {PC_CTA_CHECK_ICON}
+                          </button>
+                        ),
+                      });
+                    }
+                    if (canEdit) {
+                      actionCards.push(renderOrderLifecycleActionCard(job));
+                    }
+                    if (showEditOrderButtonForActions) {
+                      actionCards.push({
+                        key: "edit",
+                        icon: PC_EDIT_ICON,
+                        label: "Edit order",
+                        description: "Change items or quantities.",
+                        tone: "edit",
+                        cta: (
+                          <button
+                            type="button"
+                            className="project-clad-action-card__cta"
+                            data-projectclad-edit-order
+                            data-job-id={job.id}
+                            data-project-id={project.id}
+                            title="Open editor"
+                            aria-label="Open editor"
+                          >
+                            {PC_CTA_PENCIL_ICON}
+                          </button>
+                        ),
+                      });
+                    }
+                    /* Delivery photo tile (always last). Locked until staff
+                     * upload a fulfillment photo; unlocks into a "View" CTA
+                     * that opens the signed URL in a new tab. Mirrors the
+                     * audience of the other CTAs (canEdit || viewerCanFulfill). */
+                    if (canEdit || viewerCanFulfill) {
+                      const photoUnlocked =
+                        Boolean(job.hasFulfillmentPhoto) &&
+                        Boolean(job.fulfillmentPhotoUrl);
+                      actionCards.push({
+                        key: "delivery-photo",
+                        icon: photoUnlocked ? PC_PHOTO_ICON : PC_LOCK_ICON,
+                        label: photoUnlocked ? "Delivery photo" : "Locked",
+                        description: photoUnlocked
+                          ? "View fulfillment photo."
+                          : "Unlocks after staff upload.",
+                        disabled: !photoUnlocked,
+                        tone: "edit",
+                        cta: photoUnlocked && job.fulfillmentPhotoUrl ? (
+                          <a
+                            href={job.fulfillmentPhotoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="project-clad-action-card__cta"
+                            data-projectclad-view-delivery-photo
+                            data-job-id={job.id}
+                            title="Open photo in new tab"
+                            aria-label="Open delivery photo in new tab"
+                          >
+                            {PC_CTA_EXTERNAL_ICON}
+                          </a>
+                        ) : undefined,
+                      });
+                    }
                     const orderFinanceActionsSlot =
-                      canEdit || showEditOrderButtonForActions ? (
-                        <div className="project-clad-order-finance__actions-row">
-                          {showSaveFieldsBtn ? (
-                            <button
-                              type="button"
-                              className="project-clad-button project-clad-save-fields-btn"
-                              data-projectclad-save-fields-btn
-                              data-job-id={job.id}
-                              title="Save purchase order, site contact, and phone"
-                            >
-                              Save
-                            </button>
-                          ) : null}
-                          {canEdit
-                            ? renderOrderLifecycleCustomerSummaryActions(job)
-                            : null}
-                          {showEditOrderButtonForActions ? (
-                            <button
-                              type="button"
-                              className="project-clad-button"
-                              data-projectclad-edit-order
-                              data-job-id={job.id}
-                              data-project-id={project.id}
-                            >
-                              Edit order
-                            </button>
-                          ) : null}
+                      actionCards.length > 0 ? (
+                        <div
+                          className="project-clad-action-row"
+                          style={
+                            {
+                              "--pc-action-row-cols": actionCards.length,
+                            } as CSSProperties
+                          }
+                        >
+                          {actionCards.map(renderActionCard)}
                         </div>
                       ) : null;
                     return (
@@ -5567,6 +6119,7 @@ export default function ProjectDetailPage() {
                     <summary className="project-clad-summary">
                       <div className="project-clad-summary-row project-clad-order-summary-head-row">
                         <div className="project-clad-order-summary-padded">
+                          <OrderDragHandle />
                           <h3 className="project-clad-title">
                             {jobSummaryDisplayName}
                           </h3>
@@ -5600,6 +6153,33 @@ export default function ProjectDetailPage() {
                                 <line x1="12" x2="12" y1="15" y2="3" />
                               </svg>
                             </button>
+                            {canExportOrderCsv ? (
+                              <a
+                                className="project-clad-order-export-csv"
+                                href={`/apps/project-clad/api/export-csv?jobId=${encodeURIComponent(job.id)}`}
+                                data-projectclad-export-order-csv
+                                data-job-id={job.id}
+                                title="Export CSV"
+                                aria-label="Export CSV"
+                                download
+                              >
+                                <svg
+                                  className="project-clad-order-export-csv__icon"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                  <polyline points="14 2 14 8 20 8" />
+                                  <line x1="8" y1="13" x2="16" y2="13" />
+                                  <line x1="8" y1="17" x2="13" y2="17" />
+                                </svg>
+                              </a>
+                            ) : null}
                           </div>
                           <div className="project-clad-job-name-field project-clad-job-edit-field">
                             <label
@@ -6062,10 +6642,6 @@ export default function ProjectDetailPage() {
                     {(() => {
                       const awaiting = isOrderAwaitingApproval(job.id);
                       const showLineItemEditPanel = !awaiting || viewerCanFulfill;
-                      const showEditOrderButton =
-                        (canEdit || viewerCanFulfill) &&
-                        !job.isLocked &&
-                        (!awaiting || viewerCanFulfill);
                       const showPreferredDeliveryOptions =
                         project.receiveMode === "delivery" &&
                         job.orderLifecycleStatus !== "delivered" &&
@@ -6188,20 +6764,9 @@ export default function ProjectDetailPage() {
                     </div>
                     );
                     })()}
-                    {job.hasFulfillmentPhoto &&
-                    job.fulfillmentPhotoUrl &&
-                    job.orderLifecycleStatus !== "ordered" ? (
-                      <div style={{ marginTop: "1rem", textAlign: "right" }}>
-                        <a
-                          href={job.fulfillmentPhotoUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="project-clad-button"
-                        >
-                          View delivery photo
-                        </a>
-                      </div>
-                    ) : null}
+                    {/* View delivery photo now lives as the 4th action
+                        card in the Payment Summary action row — locked
+                        until staff upload the fulfillment photo. */}
                     </div>
                   </details>
                   </SortableJobShell>
@@ -6687,6 +7252,53 @@ export default function ProjectDetailPage() {
     }
   }, true);
 
+  /* Two-face action card tap-toggle (Save / Order now / Edit order).
+   *
+   * Desktop gets reveal-on-hover via CSS. Touch devices have no hover
+   * state, so on (hover: none) we toggle .is-revealed on tap:
+   *   - Tap anywhere on the card (face1 or the desc in face2): reveal
+   *     this card and collapse any previously revealed card.
+   *   - Tap the inner CTA (button/form submit): pass-through, the
+   *     underlying save/order-now/edit handlers run as usual.
+   *   - Tap outside any open card: collapse all.
+   * Runs in capture phase so the reveal toggle happens before the
+   * handlers below consume taps on disabled / non-CTA regions.
+   */
+  document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const openCards = document.querySelectorAll(
+      '.project-clad-action-card.is-revealed',
+    );
+    const cardUnderTap = target.closest(
+      '[data-projectclad-action-card]',
+    );
+    if (!(cardUnderTap instanceof HTMLElement)) {
+      openCards.forEach((other) => other.classList.remove('is-revealed'));
+      return;
+    }
+    const hoverCapable = window.matchMedia('(hover: hover)').matches;
+    if (hoverCapable) return;
+    if (cardUnderTap.classList.contains('project-clad-action-card--disabled')) {
+      return;
+    }
+    /* If the tap is on the CTA (button in face2 or its wrapping form)
+     * let the click propagate so the existing delegated handlers fire. */
+    if (
+      target.closest(
+        '.project-clad-action-card__cta, .project-clad-action-card__cta-form',
+      )
+    ) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    openCards.forEach((other) => {
+      if (other !== cardUnderTap) other.classList.remove('is-revealed');
+    });
+    cardUnderTap.classList.toggle('is-revealed');
+  }, true);
+
   document.addEventListener('click', (event) => {
     const saveFieldsBtn = event.target?.closest?.('[data-projectclad-save-fields-btn]');
     if (saveFieldsBtn instanceof HTMLButtonElement) {
@@ -6853,6 +7465,7 @@ export default function ProjectDetailPage() {
         });
       }
       document.querySelectorAll('[data-projectclad-export-order-pdf]').forEach(suppressForPrint);
+      document.querySelectorAll('[data-projectclad-export-order-csv]').forEach(suppressForPrint);
       var printRestoreDone = false;
       var printRestoreTimer = null;
       function restorePrintLayout() {
@@ -7406,6 +8019,134 @@ export default function ProjectDetailPage() {
       </main>
       <script
         dangerouslySetInnerHTML={{ __html: PROJECT_CLAD_CURSOR_GLOW_SCRIPT }}
+      />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+(function() {
+  var SEARCH_URL = '/apps/project-clad/api/customers/search';
+  var DEBOUNCE_MS = 220;
+  /* WeakMap keyed by input element -> per-input state. Event delegation attaches
+     listeners at document level so React-rendered modals work without re-init. */
+  var stateByInput = new WeakMap();
+
+  function renderLabel(c) {
+    var name = ((c.firstName || '') + ' ' + (c.lastName || '')).trim();
+    if (name && c.email) return name + ' <' + c.email + '>';
+    return name || c.email || c.id;
+  }
+
+  function setHidden(container, value) {
+    var form = container.closest('form');
+    if (!form) return;
+    var hidden = form.querySelector('input[name="memberCustomerId"]');
+    if (hidden instanceof HTMLInputElement) {
+      hidden.value = value || '';
+    }
+  }
+
+  function closeList(list) {
+    if (!(list instanceof HTMLElement)) return;
+    list.hidden = true;
+    list.innerHTML = '';
+  }
+
+  function getState(input) {
+    var s = stateByInput.get(input);
+    if (s) return s;
+    var container = input.closest('[data-projectclad-member-typeahead]');
+    var list = container ? container.querySelector('[data-projectclad-member-typeahead-list]') : null;
+    s = {
+      container: container,
+      list: list,
+      timer: null,
+      lastQ: '',
+      disabled: false,
+    };
+    stateByInput.set(input, s);
+    return s;
+  }
+
+  function runSearch(input) {
+    var s = getState(input);
+    if (!s.container || !(s.list instanceof HTMLElement)) return;
+    var q = (input.value || '').trim();
+    if (q === s.lastQ) return;
+    s.lastQ = q;
+    if (q.length < 2) { closeList(s.list); return; }
+
+    fetch(SEARCH_URL + '?q=' + encodeURIComponent(q), { credentials: 'include' })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!s.list) return;
+        if (!data || !Array.isArray(data.results)) {
+          if (data && data.reason === 'no-company-tag') {
+            s.disabled = true;
+            closeList(s.list);
+          }
+          return;
+        }
+        s.list.innerHTML = '';
+        if (data.results.length === 0) { closeList(s.list); return; }
+        data.results.forEach(function(c) {
+          var li = document.createElement('li');
+          li.setAttribute('role', 'option');
+          li.className = 'project-clad-member-typeahead__item';
+          li.textContent = renderLabel(c);
+          li.tabIndex = 0;
+          /* mousedown fires before input blur, so we can populate + close before blur hides us */
+          li.addEventListener('mousedown', function(ev) {
+            ev.preventDefault();
+            input.value = c.email || '';
+            setHidden(s.container, c.id);
+            s.lastQ = input.value;
+            closeList(s.list);
+          });
+          s.list.appendChild(li);
+        });
+        s.list.hidden = false;
+      })
+      .catch(function() { if (s.list) closeList(s.list); });
+  }
+
+  document.addEventListener('input', function(ev) {
+    var input = ev.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    if (!input.matches('[data-projectclad-member-typeahead-input]')) return;
+    var s = getState(input);
+    if (s.disabled) return;
+    setHidden(s.container, '');
+    if (s.timer) clearTimeout(s.timer);
+    s.timer = setTimeout(function() { runSearch(input); }, DEBOUNCE_MS);
+  });
+
+  document.addEventListener('focusin', function(ev) {
+    var input = ev.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    if (!input.matches('[data-projectclad-member-typeahead-input]')) return;
+    var s = getState(input);
+    if (!s.disabled && (input.value || '').trim().length >= 2) runSearch(input);
+  });
+
+  document.addEventListener('focusout', function(ev) {
+    var input = ev.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    if (!input.matches('[data-projectclad-member-typeahead-input]')) return;
+    var s = getState(input);
+    setTimeout(function() { if (s.list) closeList(s.list); }, 120);
+  });
+
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key !== 'Escape') return;
+    var input = ev.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    if (!input.matches('[data-projectclad-member-typeahead-input]')) return;
+    var s = getState(input);
+    if (s.list) closeList(s.list);
+  });
+})();
+          `,
+        }}
       />
       <script
         dangerouslySetInnerHTML={{

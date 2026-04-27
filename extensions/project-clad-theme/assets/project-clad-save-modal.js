@@ -605,6 +605,17 @@
       }
       const payload = await response.json();
       cachedProjects = payload.projects || [];
+      /* Autofill the "Company name" field from the viewer's `company:<name>` Shopify
+         customer tag when the inputs are still blank. Users can overwrite to still
+         type their own company string. */
+      const defaultCompany = (payload.viewerDefaultCompany || "").trim();
+      if (defaultCompany) {
+        companyNameInputs.forEach((el) => {
+          if (el instanceof HTMLInputElement && !el.value.trim()) {
+            el.value = defaultCompany;
+          }
+        });
+      }
       fillProjectOptions();
     };
 

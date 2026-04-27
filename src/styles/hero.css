@@ -1,0 +1,240 @@
+/* GRID + HORIZON ATMOSPHERE */
+@keyframes ccGridMove {
+  from { transform: rotateX(62deg) translateY(0); }
+  to   { transform: rotateX(62deg) translateY(70px); }
+}
+@keyframes ccBeamPulse {
+  0%, 100% { opacity: 0.18; }
+  50%      { opacity: 0.32; }
+}
+@keyframes ccStarTwinkle {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.85; }
+}
+
+.cc-grid-stage {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 55%;
+  perspective: 320px;
+  perspective-origin: 50% 0%;
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 18%, #000 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 18%, #000 100%);
+}
+.cc-grid {
+  position: absolute;
+  top: 0; left: -50%;
+  width: 200%; height: 200%;
+  background-image:
+    linear-gradient(to right, rgba(0,255,204,0.55) 0px, rgba(0,255,204,0.55) 1px, transparent 1px, transparent 70px),
+    linear-gradient(to bottom, rgba(0,255,204,0.55) 0px, rgba(0,255,204,0.55) 1px, transparent 1px, transparent 70px),
+    linear-gradient(to right, rgba(76,0,255,0.18) 0px, rgba(76,0,255,0.18) 1px, transparent 1px, transparent 70px);
+  background-size: 70px 70px, 70px 70px, 70px 70px;
+  background-position: 1px 0, 0 1px, 0 0;
+  transform-origin: 50% 0%;
+  animation: ccGridMove 2.4s linear infinite;
+}
+.cc-horizon {
+  position: absolute;
+  top: 45%; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, #00FFCC 30%, #FF0033 50%, #00FFCC 70%, transparent 100%);
+  box-shadow: 0 0 18px #00FFCC, 0 0 38px rgba(76,0,255,0.55);
+  z-index: 2;
+}
+.cc-horizon-glow {
+  position: absolute;
+  top: 38%; left: 10%; right: 10%;
+  height: 80px;
+  background: radial-gradient(ellipse at center top, rgba(76,0,255,0.35) 0%, transparent 70%);
+  filter: blur(8px);
+  z-index: 1;
+}
+.cc-beam {
+  position: absolute;
+  top: 0; bottom: 45%;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, rgba(0,255,204,0.5));
+  animation: ccBeamPulse 4s ease-in-out infinite;
+}
+.cc-beam-1 { left: 12%; animation-delay: 0s; }
+.cc-beam-2 { left: 28%; animation-delay: 1.3s; }
+.cc-beam-3 { right: 18%; animation-delay: 2.1s; }
+.cc-beam-4 { right: 8%;  animation-delay: 0.6s; }
+.cc-stars { position: absolute; top: 0; left: 0; right: 0; height: 45%; }
+.cc-star {
+  position: absolute;
+  width: 2px; height: 2px;
+  background: #00FFCC;
+  animation: ccStarTwinkle 3s ease-in-out infinite;
+}
+
+.cc-scanline {
+  position: absolute; inset: 0;
+  background-image: repeating-linear-gradient(to bottom, rgba(0,255,204,0.025) 0px, rgba(0,255,204,0.025) 1px, transparent 1px, transparent 3px);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* LEFT-SIDE TEXT (unchanged from the user's site) */
+.cc-content {
+  position: absolute;
+  top: 50%; left: 56px;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 50%;
+}
+.cc-prefix {
+  font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  font-size: 12px; letter-spacing: 0.2em;
+  color: #B3FF00; margin-bottom: 14px;
+}
+.cc-headline {
+  font-weight: 900; font-size: 60px;
+  line-height: 0.92; letter-spacing: -0.012em;
+  color: #00FFCC;
+  text-shadow: 0 0 22px rgba(0,255,204,0.45), 0 0 50px rgba(76,0,255,0.4);
+  margin-bottom: 16px;
+}
+.cc-meta {
+  display: flex; gap: 22px; align-items: center; flex-wrap: wrap;
+  font-family: ui-monospace, monospace;
+  font-size: 12px; letter-spacing: 0.16em;
+}
+.cc-meta-pip { width: 8px; height: 8px; background: #FF0033; }
+
+/* RIGHT-SIDE GENERATION STAGE */
+.cc-parts-stage {
+  position: absolute;
+  top: 12%; right: 4%;
+  width: 44%; height: 64%;
+  z-index: 8;
+}
+.cc-shape {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.cc-shape svg {
+  width: 100%; height: 80%;
+  max-width: 460px;
+}
+.cc-shape path {
+  fill: none;
+  stroke: #00FFCC;
+  stroke-width: 1.8;
+  stroke-linejoin: miter;
+  stroke-linecap: square;
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  filter: drop-shadow(0 0 5px rgba(0,255,204,0.55));
+}
+.cc-shape .accent { stroke: #B3FF00; stroke-width: 0.6; stroke-dasharray: 4 4; opacity: 0.7; }
+.cc-label {
+  font-family: ui-monospace, 'JetBrains Mono', monospace;
+  font-size: 12px; letter-spacing: 0.2em;
+  color: #00FFCC;
+  margin-top: 10px;
+  opacity: 0;
+  text-shadow: 0 0 10px rgba(0,255,204,0.6);
+}
+.cc-label .pn { color: #B3FF00; margin-right: 10px; }
+.cc-label .meta { color: rgba(245,243,238,0.55); margin-left: 10px; }
+
+/* MASTER TIMING: 24s cycle, 4 shapes × 6s slots each */
+/* Each shape: 0–1.5s draw, 1.5–5s hold, 5–6s fade */
+
+/* Shape 1 — visible 0%–25% */
+.cc-shape-1 path { animation: drawShape1 24s linear infinite; }
+.cc-shape-1 .cc-label { animation: labelShape1 24s linear infinite; }
+@keyframes drawShape1 {
+  0%   { stroke-dashoffset: 1000; opacity: 0; }
+  1%   { opacity: 1; }
+  7%   { stroke-dashoffset: 0; opacity: 1; }
+  21%  { stroke-dashoffset: 0; opacity: 1; }
+  25%  { stroke-dashoffset: 0; opacity: 0; }
+  100% { stroke-dashoffset: 1000; opacity: 0; }
+}
+@keyframes labelShape1 {
+  0%, 7%   { opacity: 0; }
+  9%       { opacity: 1; }
+  22%      { opacity: 1; }
+  25%      { opacity: 0; }
+  100%     { opacity: 0; }
+}
+
+/* Shape 2 — visible 25%–50% */
+.cc-shape-2 path { animation: drawShape2 24s linear infinite; }
+.cc-shape-2 .cc-label { animation: labelShape2 24s linear infinite; }
+@keyframes drawShape2 {
+  0%, 25%  { stroke-dashoffset: 1000; opacity: 0; }
+  26%      { opacity: 1; }
+  32%      { stroke-dashoffset: 0; opacity: 1; }
+  46%      { stroke-dashoffset: 0; opacity: 1; }
+  50%      { stroke-dashoffset: 0; opacity: 0; }
+  100%     { stroke-dashoffset: 1000; opacity: 0; }
+}
+@keyframes labelShape2 {
+  0%, 32%  { opacity: 0; }
+  34%      { opacity: 1; }
+  47%      { opacity: 1; }
+  50%      { opacity: 0; }
+  100%     { opacity: 0; }
+}
+
+/* Shape 3 — visible 50%–75% */
+.cc-shape-3 path { animation: drawShape3 24s linear infinite; }
+.cc-shape-3 .cc-label { animation: labelShape3 24s linear infinite; }
+@keyframes drawShape3 {
+  0%, 50%  { stroke-dashoffset: 1000; opacity: 0; }
+  51%      { opacity: 1; }
+  57%      { stroke-dashoffset: 0; opacity: 1; }
+  71%      { stroke-dashoffset: 0; opacity: 1; }
+  75%      { stroke-dashoffset: 0; opacity: 0; }
+  100%     { stroke-dashoffset: 1000; opacity: 0; }
+}
+@keyframes labelShape3 {
+  0%, 57%  { opacity: 0; }
+  59%      { opacity: 1; }
+  72%      { opacity: 1; }
+  75%      { opacity: 0; }
+  100%     { opacity: 0; }
+}
+
+/* Shape 4 — visible 75%–100% */
+.cc-shape-4 path { animation: drawShape4 24s linear infinite; }
+.cc-shape-4 .cc-label { animation: labelShape4 24s linear infinite; }
+@keyframes drawShape4 {
+  0%, 75%  { stroke-dashoffset: 1000; opacity: 0; }
+  76%      { opacity: 1; }
+  82%      { stroke-dashoffset: 0; opacity: 1; }
+  96%      { stroke-dashoffset: 0; opacity: 1; }
+  100%     { stroke-dashoffset: 0; opacity: 0; }
+}
+@keyframes labelShape4 {
+  0%, 82%  { opacity: 0; }
+  84%      { opacity: 1; }
+  97%      { opacity: 1; }
+  100%     { opacity: 0; }
+}
+
+/* Generation cursor — tiny pulsing crosshair next to active part */
+.cc-cursor {
+  position: absolute;
+  top: -6px; right: -6px;
+  width: 16px; height: 16px;
+  pointer-events: none;
+}
+@keyframes cursorBlink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0.25; }
+}
+.cc-cursor svg { animation: cursorBlink 0.8s steps(2) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-grid, .cc-shape path, .cc-label, .cc-cursor svg, .cc-beam, .cc-star { animation: none !important; }
+  .cc-shape path { stroke-dashoffset: 0; opacity: 1; }
+  .cc-shape-2, .cc-shape-3, .cc-shape-4 { display: none; }
+}

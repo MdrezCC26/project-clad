@@ -41,6 +41,11 @@ type ProjectForAccess = {
   members: { customerId: string; role: string }[];
 };
 
+type ProjectForCompanyAccess = {
+  ownerCompanyKey?: string | null;
+  visibleToCompany?: boolean | null;
+};
+
 export function isProjectMember(
   project: ProjectForAccess,
   customerId: string,
@@ -49,6 +54,22 @@ export function isProjectMember(
   if (viewerIsAppAdmin) return true;
   if (customerIdsMatch(project.ownerCustomerId, customerId)) return true;
   return project.members.some((m) => customerIdsMatch(m.customerId, customerId));
+}
+
+/**
+ * True when the viewer may READ the project because at least one of their `company:*` tag
+ * keys matches the project owner's company and the project is flagged visible to company.
+ * Never grants edit rights — callers still gate writes with {@link canEditProject}.
+ */
+export function canViewProjectViaCompany(
+  project: ProjectForCompanyAccess,
+  viewerCompanyKeys: string[] | null | undefined,
+): boolean {
+  if (!project.visibleToCompany) return false;
+  const key = project.ownerCompanyKey?.trim();
+  if (!key) return false;
+  if (!viewerCompanyKeys?.length) return false;
+  return viewerCompanyKeys.includes(key);
 }
 
 export function canEditProject(
@@ -79,22 +100,51 @@ export function canAdminProjectMembers(
   return canEdit && !viewerHasNATag;
 }
 
+/** Optional extras for the list/detail where-builders to support the "Company" scope. */
+export type ProjectAccessOptions = {
+  /** "mine" = owner + explicit members only (default). "company" = additionally include company-tag matches. */
+  scope?: "mine" | "company";
+  /** Normalized `company:*` keys derived from the viewer's Shopify customer tags. */
+  viewerCompanyKeys?: string[];
+};
+
+function buildCompanyVisibilityMatch(keys?: string[]) {
+  if (!keys?.length) return null;
+  return {
+    ownerCompanyKey: { in: keys },
+    visibleToCompany: true,
+  };
+}
+
 export function projectsListWhere(
   shop: string,
   customerId: string,
   viewerIsAppAdmin: boolean,
+  options: ProjectAccessOptions = {},
 ) {
   const shopQ = shopStringFilter(shop);
   if (viewerIsAppAdmin) {
     return { shop: shopQ };
   }
+
   const ids = shopifyCustomerIdVariants(customerId);
-  const memberMatch = {
-    members: { some: { customerId: { in: ids } } },
-  };
+  const ownerOrMember = [
+    { ownerCustomerId: { in: ids } },
+    { members: { some: { customerId: { in: ids } } } },
+  ];
+
+  if (options.scope !== "company") {
+    return { shop: shopQ, OR: ownerOrMember };
+  }
+
+  const companyMatch = buildCompanyVisibilityMatch(options.viewerCompanyKeys);
+  if (!companyMatch) {
+    return { shop: shopQ, OR: ownerOrMember };
+  }
+
   return {
     shop: shopQ,
-    OR: [{ ownerCustomerId: { in: ids } }, memberMatch],
+    OR: [...ownerOrMember, companyMatch],
   };
 }
 
@@ -103,18 +153,34 @@ export function projectByIdForCustomerWhere(
   shop: string,
   customerId: string,
   viewerIsAppAdmin: boolean,
+  options: ProjectAccessOptions = {},
 ) {
   const shopQ = shopStringFilter(shop);
   if (viewerIsAppAdmin) {
     return { id, shop: shopQ };
   }
+
   const ids = shopifyCustomerIdVariants(customerId);
-  const memberMatch = {
-    members: { some: { customerId: { in: ids } } },
-  };
+  const ownerOrMember = [
+    { ownerCustomerId: { in: ids } },
+    { members: { some: { customerId: { in: ids } } } },
+  ];
+
+  /* Project detail defaults to scope "company" so coworkers who click through
+     a shared URL can view read-only without needing to toggle a filter. */
+  const effectiveScope = options.scope ?? "company";
+  if (effectiveScope !== "company") {
+    return { id, shop: shopQ, OR: ownerOrMember };
+  }
+
+  const companyMatch = buildCompanyVisibilityMatch(options.viewerCompanyKeys);
+  if (!companyMatch) {
+    return { id, shop: shopQ, OR: ownerOrMember };
+  }
+
   return {
     id,
     shop: shopQ,
-    OR: [{ ownerCustomerId: { in: ids } }, memberMatch],
+    OR: [...ownerOrMember, companyMatch],
   };
 }

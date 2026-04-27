@@ -2,14 +2,43 @@ import { useMemo } from "react";
 import { useFetcher, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Prisma } from "@prisma/client";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
 import { fetchVariantPriceUsd } from "../utils/shopifyVariantPrice.server";
 import { getAdminVariantInfo } from "../utils/adminVariants.server";
 import { shopStringFilter } from "../utils/projectAccess.server";
+import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";
 
-type WoStatus = "unread" | "in_progress" | "complete";
+/** Customer-facing storefront lifecycle states; same enum as the storefront dropdown. */
+type LifecycleStatus =
+  | "draft"
+  | "pending_review"
+  | "ready_to_order"
+  | "ordered"
+  | "delivered"
+  | "paid";
+
+const LIFECYCLE_VALUES: ReadonlyArray<LifecycleStatus> = [
+  "draft",
+  "pending_review",
+  "ready_to_order",
+  "ordered",
+  "delivered",
+  "paid",
+];
+
+/** Short labels used in admin (matches the storefront pill / dropdown). */
+const LIFECYCLE_LABELS: Record<LifecycleStatus, string> = {
+  draft: "New",
+  pending_review: "Review",
+  ready_to_order: "Order now",
+  ordered: "Ordered",
+  delivered: "Delivered",
+  paid: "Paid",
+};
 
 type JobRow = {
   id: string;
@@ -18,9 +47,12 @@ type JobRow = {
   projectId: string;
   projectName: string;
   workOrderStatus: string | null;
+  /** Customer-facing storefront lifecycle (draft → … → paid) — read-only mirror in admin. */
+  orderLifecycleStatus: string;
   paidAt: string | null;
   jobApproved: boolean;
   orderName: string | null;
+  hasFulfillmentPhoto: boolean;
   items: { id: string; variantId: string; quantity: number }[];
 };
 
@@ -62,9 +94,11 @@ export const loader = async ({ request }: LoaderFunctionArgs): Promise<LoaderDat
         projectId: job.project.id,
         projectName: job.project.name,
         workOrderStatus: job.workOrderStatus ?? null,
+        orderLifecycleStatus: job.orderLifecycleStatus,
         paidAt: job.paidAt?.toISOString() ?? null,
         jobApproved: Boolean(ap?.approvedAt),
         orderName: job.orderLink?.orderName ?? null,
+        hasFulfillmentPhoto: Boolean(job.fulfillmentPhotoStorageKey),
         items: job.items.map((i) => ({
           id: i.id,
           variantId: i.variantId,
@@ -89,45 +123,173 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
       })
     : null;
 
-  if (intent === "update-work-order-status") {
+  if (intent === "update-order-lifecycle") {
     if (!job) {
       return { ok: false, error: "Job not found." };
     }
     if (job.paidAt) {
-      return { ok: false, error: "Cannot change status after payment." };
+      return {
+        ok: false,
+        error: "This order is marked Paid \u2014 status is locked.",
+      };
     }
-    const next = String(form.get("status") || "") as WoStatus;
-    if (next !== "unread" && next !== "in_progress" && next !== "complete") {
+    const next = String(form.get("status") || "") as LifecycleStatus;
+    if (!LIFECYCLE_VALUES.includes(next)) {
       return { ok: false, error: "Invalid status." };
     }
 
-    const prev = job.workOrderStatus;
-    const completedAt =
-      next === "complete" ? new Date() : null;
+    /* Mirrors the storefront's `staff-set-order-lifecycle` photo gate so the
+       customer-visible value can never be set to "delivered" without a
+       fulfillment photo on file. Staff should upload the photo from the
+       storefront project page first, then come back here. */
+    if (next === "delivered" && !job.fulfillmentPhotoStorageKey) {
+      return {
+        ok: false,
+        error:
+          'Use the "Fulfillment photo" row below to upload a photo \u2014 it will mark this order Delivered automatically.',
+      };
+    }
+
+    const prev = job.orderLifecycleStatus;
+
+    /* Auto-stamp completion / payment timestamps the same way the storefront
+       does so downstream code (emails, locking, exports) sees consistent state. */
+    const data: {
+      orderLifecycleStatus: LifecycleStatus;
+      completedAt?: Date | null;
+      paidAt?: Date | null;
+    } = { orderLifecycleStatus: next };
+
+    if (next === "delivered" && !job.completedAt) {
+      data.completedAt = new Date();
+    }
+    if (next === "paid") {
+      if (!job.paidAt) data.paidAt = new Date();
+      if (!job.completedAt) data.completedAt = new Date();
+    }
+    /* Reverting from a paid/delivered state back to a pre-delivery state clears
+       the relevant timestamps so the order can re-enter the normal flow. */
+    const isPreDelivery =
+      next === "draft" ||
+      next === "pending_review" ||
+      next === "ready_to_order" ||
+      next === "ordered";
+    if (isPreDelivery && job.paidAt) data.paidAt = null;
+    if (isPreDelivery && job.completedAt && next !== "ordered") {
+      data.completedAt = null;
+    }
 
     await prisma.job.update({
       where: { id: job.id },
-      data: {
-        workOrderStatus: next,
-        completedAt,
-      },
+      data,
     });
 
     await logProjectActivity({
       projectId: job.projectId,
       jobId: job.id,
-      type: "work_order_status",
+      type: "order_lifecycle_status",
       visibility: "member",
       actorCustomerId: null,
       payload: {
         jobName: job.name,
-        from: prev ?? null,
+        from: prev,
         to: next,
         source: "shopify_admin",
       },
     });
 
-    return { ok: true, message: "Status updated." };
+    return {
+      ok: true,
+      message: `Status updated to "${LIFECYCLE_LABELS[next]}".`,
+    };
+  }
+
+  if (intent === "upload-fulfillment-photo") {
+    if (!job) {
+      return { ok: false, error: "Job not found." };
+    }
+    if (job.paidAt) {
+      return {
+        ok: false,
+        error: "Order is Paid \u2014 photo cannot be replaced.",
+      };
+    }
+    /* Admin can upload at any unpaid stage \u2014 the upload itself fast-forwards
+       the order to "Delivered". This is intentionally more permissive than the
+       storefront flow (which only allows uploads in "Ordered" status) because
+       staff are explicitly overriding the customer-facing workflow here. */
+    const file = form.get("photo");
+    if (!(file instanceof File) || file.size === 0) {
+      return { ok: false, error: "Photo file is required." };
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      return { ok: false, error: "Photo must be 8MB or smaller." };
+    }
+    const orig = (file.name || "photo.jpg").toLowerCase();
+    const ext = orig.endsWith(".png")
+      ? ".png"
+      : orig.endsWith(".webp")
+        ? ".webp"
+        : ".jpg";
+    const shopDir = shop.replace(/[^a-zA-Z0-9._-]+/g, "_");
+    const storageKey = `${shopDir}/${job.id}-${Date.now()}${ext}`;
+    const root = path.resolve(process.cwd(), "storage", "fulfillment-photos");
+    const abs = path.resolve(root, storageKey);
+    if (!abs.startsWith(root + path.sep)) {
+      return { ok: false, error: "Invalid storage path." };
+    }
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    const buf = Buffer.from(await file.arrayBuffer());
+    await fs.writeFile(abs, buf);
+
+    await prisma.job.update({
+      where: { id: job.id },
+      data: {
+        fulfillmentPhotoStorageKey: storageKey,
+        orderLifecycleStatus: "delivered",
+        ...(job.completedAt ? {} : { completedAt: new Date() }),
+      },
+    });
+
+    /* One-shot fulfillment email — same idempotency the storefront uses. */
+    if (!job.fulfillmentNotifiedAt) {
+      try {
+        await sendFulfillmentPackageEmails({
+          shop,
+          projectId: job.projectId,
+          jobId: job.id,
+        });
+        await prisma.job.update({
+          where: { id: job.id },
+          data: { fulfillmentNotifiedAt: new Date() },
+        });
+      } catch (err) {
+        console.error(
+          "[admin work-orders] fulfillment notify failed:",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+
+    await logProjectActivity({
+      projectId: job.projectId,
+      jobId: job.id,
+      type: "order_lifecycle_status",
+      visibility: "member",
+      actorCustomerId: null,
+      payload: {
+        jobName: job.name,
+        from: job.orderLifecycleStatus,
+        to: "delivered",
+        source: "shopify_admin",
+        viaPhotoUpload: true,
+      },
+    });
+
+    return {
+      ok: true,
+      message: 'Fulfillment photo uploaded — order marked "Delivered".',
+    };
   }
 
   if (intent === "swap-job-item-variant") {
@@ -139,8 +301,14 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
     if (job.paidAt) {
       return { ok: false, error: "Cannot swap after payment." };
     }
-    if (job.workOrderStatus === "complete") {
-      return { ok: false, error: "Set status away from complete first." };
+    if (
+      job.orderLifecycleStatus === "delivered" ||
+      job.orderLifecycleStatus === "paid"
+    ) {
+      return {
+        ok: false,
+        error: "Cannot swap a line on a delivered or paid order.",
+      };
     }
 
     const item = job.items.find((i) => i.id === itemId);
@@ -200,13 +368,58 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
   return { ok: false, error: "Unknown action." };
 };
 
+/** Pill colors for the customer-facing `orderLifecycleStatus` (labels reused from `LIFECYCLE_LABELS`). */
+const LIFECYCLE_COLORS: Record<
+  LifecycleStatus,
+  { bg: string; fg: string; border: string }
+> = {
+  draft: { bg: "#f1f1f1", fg: "#5a5a5a", border: "#d9d9d9" },
+  pending_review: { bg: "#fff4d6", fg: "#7a5a00", border: "#f1d98a" },
+  ready_to_order: { bg: "#e0ecff", fg: "#1f4fa3", border: "#b9d2ff" },
+  ordered: { bg: "#d6e9ff", fg: "#0f3a83", border: "#9bc0ee" },
+  delivered: { bg: "#ece1ff", fg: "#4a2585", border: "#c8b2f1" },
+  paid: { bg: "#daf5e1", fg: "#1c5e34", border: "#9ed7b1" },
+};
+
+function LifecyclePill({ status }: { status: string }) {
+  const known = (LIFECYCLE_VALUES as ReadonlyArray<string>).includes(status)
+    ? (status as LifecycleStatus)
+    : null;
+  const label = known ? LIFECYCLE_LABELS[known] : status || "—";
+  const c = known
+    ? LIFECYCLE_COLORS[known]
+    : { bg: "#f1f1f1", fg: "#5a5a5a", border: "#d9d9d9" };
+  return (
+    <span
+      title={`Customer order status: ${label}`}
+      style={{
+        display: "inline-block",
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontSize: "0.75em",
+        fontWeight: 600,
+        lineHeight: 1.4,
+        background: c.bg,
+        color: c.fg,
+        border: `1px solid ${c.border}`,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 export default function AdminWorkOrdersPage() {
   const { jobs, shop } = useLoaderData<LoaderData>();
   const statusFetcher = useFetcher<ActionData>();
   const swapFetcher = useFetcher<ActionData>();
+  const photoFetcher = useFetcher<ActionData>();
 
   const busy =
-    statusFetcher.state !== "idle" || swapFetcher.state !== "idle";
+    statusFetcher.state !== "idle" ||
+    swapFetcher.state !== "idle" ||
+    photoFetcher.state !== "idle";
 
   const storefrontProjectBase = useMemo(
     () => `https://${shop}/apps/project-clad/project`,
@@ -233,6 +446,12 @@ export default function AdminWorkOrdersPage() {
         {swapFetcher.data?.ok === true && swapFetcher.data.message ? (
           <s-banner tone="success">{swapFetcher.data.message}</s-banner>
         ) : null}
+        {photoFetcher.data?.ok === false ? (
+          <s-banner tone="critical">{photoFetcher.data.error}</s-banner>
+        ) : null}
+        {photoFetcher.data?.ok === true && photoFetcher.data.message ? (
+          <s-banner tone="success">{photoFetcher.data.message}</s-banner>
+        ) : null}
 
         {jobs.length === 0 ? (
           <s-paragraph>No jobs found for this shop.</s-paragraph>
@@ -247,14 +466,25 @@ export default function AdminWorkOrdersPage() {
                   padding: "12px 16px",
                 }}
               >
-                <p style={{ margin: "0 0 4px", fontWeight: 600 }}>
-                  {job.name}
-                  <span style={{ fontWeight: 400, opacity: 0.85 }}>
-                    {" "}
-                    — {job.projectName}
-                    {job.orderName ? ` (${job.orderName})` : ""}
-                  </span>
-                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    margin: "0 0 4px",
+                  }}
+                >
+                  <LifecyclePill status={job.orderLifecycleStatus} />
+                  <p style={{ margin: 0, fontWeight: 600 }}>
+                    {job.projectName}
+                    <span style={{ fontWeight: 400, opacity: 0.85 }}>
+                      {" "}
+                      — {job.name}
+                      {job.orderName ? ` (${job.orderName})` : ""}
+                    </span>
+                  </p>
+                </div>
                 <p style={{ margin: "0 0 8px", fontSize: "0.9em", opacity: 0.85 }}>
                   {new Date(job.createdAt).toLocaleString()} ·{" "}
                   <a
@@ -272,18 +502,20 @@ export default function AdminWorkOrdersPage() {
                   method="post"
                   style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}
                 >
-                  <input type="hidden" name="intent" value="update-work-order-status" />
+                  <input type="hidden" name="intent" value="update-order-lifecycle" />
                   <input type="hidden" name="jobId" value={job.id} />
                   <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span style={{ fontSize: "0.9em" }}>Status</span>
+                    <span style={{ fontSize: "0.9em" }}>Order status</span>
                     <select
                       name="status"
-                      defaultValue={job.workOrderStatus ?? "unread"}
+                      defaultValue={job.orderLifecycleStatus}
                       disabled={Boolean(job.paidAt) || busy}
                     >
-                      <option value="unread">unread</option>
-                      <option value="in_progress">in_progress</option>
-                      <option value="complete">complete</option>
+                      {LIFECYCLE_VALUES.map((value) => (
+                        <option key={value} value={value}>
+                          {LIFECYCLE_LABELS[value]}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <button type="submit" disabled={Boolean(job.paidAt) || busy}>
@@ -291,7 +523,78 @@ export default function AdminWorkOrdersPage() {
                   </button>
                 </statusFetcher.Form>
 
-                {job.jobApproved && !job.paidAt && job.workOrderStatus !== "complete" ? (
+                {/* Fulfillment photo upload — uploading flips the customer-facing
+                    status to "Delivered" automatically. Always shown on unpaid
+                    rows so staff can upload at any stage if they need to fast-
+                    forward the order to delivered (e.g. when the customer never
+                    confirmed via the storefront). */}
+                {!job.paidAt ? (
+                  <photoFetcher.Form
+                    method="post"
+                    encType="multipart/form-data"
+                    style={{
+                      marginTop: 12,
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 8,
+                      alignItems: "center",
+                    }}
+                  >
+                    <input type="hidden" name="intent" value="upload-fulfillment-photo" />
+                    <input type="hidden" name="jobId" value={job.id} />
+                    <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ fontSize: "0.9em" }}>
+                        Fulfillment photo
+                        {job.hasFulfillmentPhoto ? (
+                          <span style={{ marginLeft: 6, opacity: 0.75 }}>
+                            (replace)
+                          </span>
+                        ) : null}
+                      </span>
+                      <input
+                        type="file"
+                        name="photo"
+                        accept="image/jpeg,image/png,image/webp"
+                        required
+                        disabled={busy}
+                      />
+                    </label>
+                    <button type="submit" disabled={busy}>
+                      {job.hasFulfillmentPhoto
+                        ? "Replace photo"
+                        : "Upload & mark Delivered"}
+                    </button>
+                    {job.hasFulfillmentPhoto ? (
+                      <span
+                        style={{
+                          fontSize: "0.85em",
+                          color: "#1c5e34",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        ✓ Photo on file
+                        <a
+                          href={`/app/fulfillment-photo?jobId=${encodeURIComponent(job.id)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          View
+                        </a>
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: "0.85em", opacity: 0.75 }}>
+                        Required to mark Delivered
+                      </span>
+                    )}
+                  </photoFetcher.Form>
+                ) : null}
+
+                {job.jobApproved &&
+                !job.paidAt &&
+                job.orderLifecycleStatus !== "delivered" &&
+                job.orderLifecycleStatus !== "paid" ? (
                   <swapFetcher.Form
                     method="post"
                     style={{

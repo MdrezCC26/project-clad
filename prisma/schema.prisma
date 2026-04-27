@@ -78,6 +78,10 @@ model Project {
   defaultSiteContactName  String?
   /// Default site contact phone autofilled into new orders.
   defaultSiteContactPhone String?
+  /// Normalized company key (lowercased, whitespace-collapsed) derived from the owner's first `company:<name>` Shopify customer tag at project creation. Powers "projects from coworkers at the same company" read access.
+  ownerCompanyKey   String?
+  /// Owner switch to share a specific project with company viewers (read-only). Owner + members always see it regardless. Off by default — owners must opt in.
+  visibleToCompany  Boolean           @default(false)
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   jobs             Job[]
@@ -89,6 +93,7 @@ model Project {
 
   @@index([shop])
   @@index([ownerCustomerId])
+  @@index([shop, ownerCompanyKey])
 }
 
 model Job {
@@ -124,6 +129,7 @@ model Job {
   project           Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   items             JobItem[]
   orderLink         JobOrderLink?
+  draftOrderLink    JobDraftOrderLink?
 
   @@index([projectId])
   @@index([projectId, sortOrder])
@@ -205,6 +211,16 @@ model JobOrderLink {
   orderName  String?
   createdAt  DateTime @default(now())
   job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+/// Silent backup copy of a placed order in Shopify admin (Drafts). Never shown to customers.
+model JobDraftOrderLink {
+  id                  String   @id @default(cuid())
+  jobId               String   @unique
+  /// Shopify DraftOrder GID, e.g. "gid://shopify/DraftOrder/12345".
+  shopifyDraftOrderId String   @unique
+  createdAt           DateTime @default(now())
+  job                 Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
 }
 
 model ProjectActivityEvent {

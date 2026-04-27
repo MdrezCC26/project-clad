@@ -11,7 +11,7 @@
  *   - one-item payload builder (incl. lineMeta hydrated from /products/<h>.js)
  *   - inline error rendering
  *   - sessionStorage round-trip across the auth redirect
- *   - success toast (stays on PDP after save)
+ *   - inline saved indicator (stays on PDP after save)
  *
  * The block can be added on any product template (enabled_on: product) and
  * should be placed under the merchant's "Buy buttons" block.
@@ -19,7 +19,6 @@
 (() => {
   const STORAGE_PREFIX = "projectclad:product-save:";
   const RETURN_QUERY_KEY = "projectclad-save";
-  const TOAST_AUTO_DISMISS_MS = 5000;
   const INLINE_SAVED_VISIBLE_MS = 60000;
 
   function findRoot() {
@@ -281,64 +280,6 @@
     el.textContent = "";
     el.hidden = true;
     el.classList.remove("projectclad-product-save__error--visible");
-  }
-
-  function ensureToastContainer() {
-    let host = document.querySelector("[data-projectclad-toast-container]");
-    if (host instanceof HTMLElement) return host;
-    host = document.createElement("div");
-    host.className = "projectclad-toast-container";
-    host.setAttribute("data-projectclad-toast-container", "");
-    document.body.appendChild(host);
-    return host;
-  }
-
-  function showSuccessToast({ projectName, projectId }) {
-    const host = ensureToastContainer();
-    const toast = document.createElement("div");
-    toast.className = "projectclad-toast";
-    toast.setAttribute("role", "status");
-
-    const title = document.createElement("p");
-    title.className = "projectclad-toast__title";
-    title.textContent = projectName
-      ? `Saved to ${projectName}`
-      : "Saved to project";
-    toast.appendChild(title);
-
-    if (projectId) {
-      const link = document.createElement("a");
-      link.className = "projectclad-toast__action";
-      link.href = `/apps/project-clad/project?id=${encodeURIComponent(projectId)}`;
-      link.textContent = "View project";
-      toast.appendChild(link);
-    }
-
-    const close = document.createElement("button");
-    close.type = "button";
-    close.className = "projectclad-toast__close";
-    close.setAttribute("aria-label", "Dismiss");
-    close.textContent = "×";
-    toast.appendChild(close);
-
-    host.appendChild(toast);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        toast.classList.add("projectclad-toast--open");
-      });
-    });
-
-    let dismissed = false;
-    const dismiss = () => {
-      if (dismissed) return;
-      dismissed = true;
-      toast.classList.remove("projectclad-toast--open");
-      window.setTimeout(() => {
-        if (toast.parentNode) toast.parentNode.removeChild(toast);
-      }, 300);
-    };
-    close.addEventListener("click", dismiss);
-    window.setTimeout(dismiss, TOAST_AUTO_DISMISS_MS);
   }
 
   /*

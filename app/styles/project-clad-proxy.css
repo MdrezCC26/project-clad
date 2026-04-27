@@ -2148,6 +2148,184 @@ html:has(.project-clad-page--projects) body {
   white-space: nowrap;
 }
 
+.project-clad-page--projects .project-clad-projects-tile-owner {
+  grid-column: 1 / -1;
+  grid-row: 4;
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+/* Scope switch (My projects / Company) */
+.project-clad-projects-scope {
+  display: inline-flex;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  margin: 0 0 1rem 0;
+  border-radius: var(--pc-neu-radius, 1rem);
+  background: var(--pc-neu-bg, #e8edf2);
+  box-shadow:
+    inset 2px 2px 4px rgba(163, 177, 198, 0.45),
+    inset -2px -2px 4px rgba(255, 255, 255, 0.75);
+}
+
+.project-clad-projects-scope__link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.85rem;
+  border-radius: calc(var(--pc-neu-radius, 1rem) - 0.25rem);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--pc-text-muted, #5a6578);
+  text-decoration: none;
+  transition: color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.project-clad-projects-scope__link:hover {
+  color: var(--pc-text, #2f3542);
+}
+
+.project-clad-projects-scope__link.is-active {
+  color: var(--pc-text, #2f3542);
+  background: var(--pc-neu-bg, #e8edf2);
+  box-shadow:
+    2px 2px 5px rgba(163, 177, 198, 0.4),
+    -2px -2px 5px rgba(255, 255, 255, 0.8);
+}
+
+/* Shared-via-company banner on project detail */
+.project-clad-shared-via-company__card {
+  border-left: 3px solid rgba(210, 80, 80, 0.55);
+}
+
+.project-clad-shared-via-company__text {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Member typeahead suggestions (Add Member form) */
+.project-clad-member-typeahead {
+  position: relative;
+}
+
+.project-clad-member-typeahead__list {
+  list-style: none;
+  margin: 0.25rem 0 0 0;
+  padding: 0.25rem;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 40;
+  max-height: 14rem;
+  overflow-y: auto;
+  background: var(--pc-neu-bg, #e8edf2);
+  border-radius: 0.75rem;
+  box-shadow:
+    5px 5px 10px rgba(163, 177, 198, 0.55),
+    -5px -5px 10px rgba(255, 255, 255, 0.9);
+}
+
+.project-clad-member-typeahead__item {
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--pc-text, #2f3542);
+}
+
+.project-clad-member-typeahead__item:hover,
+.project-clad-member-typeahead__item:focus {
+  background: rgba(210, 80, 80, 0.08);
+  color: var(--pc-text, #2f3542);
+  outline: none;
+}
+
+/* Inline checkbox row used in the edit-project modal */
+.project-clad-inline-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.25rem 0 0.25rem 0;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.project-clad-inline-checkbox input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: #8a96aa;
+}
+
+/* Nicer "Visible to others at <Company>" toggle inside the edit-project modal.
+   Renders as a soft neumorphic pill that wraps the checkbox + two lines of text
+   (primary label with the company name in bold, plus a muted helper line). */
+.project-clad-share-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin: 0.35rem 0 0.5rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--pc-neu-surface, #f3f5f9);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 0.85rem;
+  box-shadow:
+    inset 2px 2px 5px rgba(174, 184, 200, 0.35),
+    inset -2px -2px 5px rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.project-clad-share-toggle:hover {
+  background: var(--pc-neu-surface-hover, #eef1f6);
+}
+
+.project-clad-share-toggle:has(input[type="checkbox"]:checked) {
+  box-shadow:
+    inset 2px 2px 5px rgba(174, 184, 200, 0.45),
+    inset -2px -2px 5px rgba(255, 255, 255, 0.9),
+    0 0 0 1px rgba(95, 121, 173, 0.25);
+}
+
+/* Override the modal's blanket `input { width: 100% }` which would otherwise
+   stretch the checkbox to fill the flex row and squeeze the label text. */
+.project-clad-share-toggle input[type="checkbox"],
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal]
+  .project-clad-inline-form
+  .project-clad-share-toggle
+  input[type="checkbox"] {
+  width: 1.05rem;
+  min-width: 1.05rem;
+  max-width: 1.05rem;
+  height: 1.05rem;
+  margin: 0.15rem 0 0;
+  accent-color: #5f79ad;
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
+
+.project-clad-share-toggle__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  line-height: 1.25;
+  color: var(--pc-text, #2f3542);
+  font-size: 0.92rem;
+}
+
+.project-clad-share-toggle__text strong {
+  font-weight: 600;
+}
+
+.project-clad-share-toggle__hint {
+  font-size: 0.78rem;
+  color: var(--pc-muted, #6b7280);
+  font-weight: 400;
+}
+
 .project-clad-page--projects .project-clad-card-link {
   position: relative;
   border-radius: var(--pc-neu-radius);
@@ -4646,6 +4824,179 @@ details.project-clad-edit-mode
   min-height: 40px;
 }
 
+/* ----------------------------------------------------------------
+ * Edit-project modal: simplified, sectioned layout
+ *
+ * Each top-level area (Project details, Delivery, Add an order,
+ * Share access, Members, Danger zone) is wrapped in a soft inset
+ * panel so the modal reads as a stack of grouped cards instead of
+ * one undifferentiated scroll. The headings inside each panel use
+ * the existing neon `.project-clad-section-title` treatment but
+ * with tightened spacing (no longer needs its own gigantic
+ * `marginTop: 1.5rem` because the panel provides the rhythm).
+ * -------------------------------------------------------------- */
+
+.project-clad-edit-modal__section {
+  margin: 0 0 0.85rem;
+  padding: 1rem 1.05rem 1.1rem;
+  border-radius: 1.1rem;
+  background: rgba(255, 255, 255, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    inset 1px 1px 2px rgba(255, 255, 255, 0.55),
+    inset -1px -1px 3px rgba(174, 184, 200, 0.22),
+    0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal]
+  .project-clad-edit-modal__section
+  .project-clad-section-title {
+  margin-top: 0 !important;
+  margin-bottom: 0.85rem !important;
+  font-size: clamp(0.95rem, 3.4vw, 1.25rem) !important;
+}
+
+.project-clad-edit-modal__section .project-clad-inline-form {
+  margin-bottom: 0;
+}
+
+/* Two-column responsive grid for paired short fields (e.g. City + Province).
+   Children should be plain <label>+<input> sequences; we split each
+   `.project-clad-form-grid__cell` div into its own column. */
+.project-clad-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem 0.7rem;
+}
+
+.project-clad-form-grid__cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .project-clad-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Footer row inside a section: aligns the Save button + any helper text. */
+.project-clad-edit-modal__section-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.project-clad-edit-modal__section-footer .project-clad-muted {
+  margin-right: auto;
+  font-size: 0.82rem;
+}
+
+/* Members list — rows of (name+email | role | actions). Replaces the old
+   4-column table that wrapped awkwardly inside a 520px modal. */
+.project-clad-member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.project-clad-member-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.project-clad-member-row__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.project-clad-member-row__name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--pc-text, #2f3542);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-clad-member-row__email {
+  font-size: 0.78rem;
+  color: var(--pc-muted, #6b7280);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-clad-member-row__role {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--pc-muted, #6b7280);
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(95, 121, 173, 0.08);
+  border: 1px solid rgba(95, 121, 173, 0.18);
+}
+
+.project-clad-member-row__role--owner {
+  color: #5f79ad;
+  background: rgba(95, 121, 173, 0.14);
+  border-color: rgba(95, 121, 173, 0.3);
+}
+
+.project-clad-member-row__actions {
+  flex-shrink: 0;
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal]
+  .project-clad-member-row__actions
+  .project-clad-button {
+  padding-left: 0.85rem !important;
+  padding-right: 0.85rem !important;
+  min-height: 32px;
+  font-size: 0.78rem;
+}
+
+/* Danger zone: red-tinted panel that visually separates destructive actions. */
+.project-clad-edit-modal__danger {
+  margin-top: 1.25rem;
+  padding: 0.95rem 1.05rem 1.05rem;
+  border-radius: 1.1rem;
+  background: rgba(220, 38, 38, 0.05);
+  border: 1px solid rgba(220, 38, 38, 0.22);
+}
+
+.project-clad-edit-modal__danger-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #b91c1c;
+}
+
+.project-clad-edit-modal__danger-text {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  color: var(--pc-muted, #6b7280);
+}
+
 /* Edit-save modal: compact layout, cleaner formatting */
 .project-clad-edit-save-modal {
   padding: 1.25rem 1.5rem;
@@ -6211,6 +6562,369 @@ input[data-projectclad-unit-price-input] {
   cursor: progress;
 }
 
+/* Two-face action cards — row of reveal cards underneath the Payment
+   Summary tile. Face 1 (icon + label) sits at the top of the card at
+   rest, snug under the totals tile. On hover / focus-within / tap
+   (`.is-revealed`) Face 1 slides DOWN into the bottom half, revealing
+   Face 2 (description + dashed CTA) pinned at the top. Face 2 never
+   moves.
+
+   Hover look is the standard neumorphic caesura tile hover: white rim +
+   accent-colored label + soft text glow. Each card picks its accent via
+   `--tone-go` (green) or `--tone-edit` (red). Disabled variants stay
+   frozen with no reveal or accent. */
+.project-clad-action-row {
+  display: grid;
+  grid-template-columns: repeat(var(--pc-action-row-cols, 3), 1fr);
+  gap: calc(1.1rem * var(--pc-text-scale, 1));
+  margin-top: calc(0.4rem * var(--pc-text-scale, 1));
+  width: 100%;
+}
+
+.project-clad-action-card {
+  position: relative;
+  height: calc(8rem * var(--pc-text-scale, 1));
+  cursor: pointer;
+  outline: none;
+  border-radius: 18px;
+  -webkit-tap-highlight-color: transparent;
+  /* NO overflow:hidden here — it would clip Face 1's neumorphic drop
+     shadow at rest and the red outer glow on hover. Face 2 below has
+     its own overflow:hidden to keep the dashed CTA outline contained. */
+  /* Accent tone (default to edit/red; .--tone-go overrides to green). */
+  --pc-action-accent: var(--color-1);
+  --pc-action-accent-glow:
+    0 1px 0 rgba(255, 255, 255, 0.32),
+    0 0 6px rgba(196, 0, 0, 0.28),
+    0 0 14px rgba(196, 0, 0, 0.16);
+}
+
+.project-clad-action-card--tone-go {
+  --pc-action-accent: var(--color-2);
+  --pc-action-accent-glow:
+    0 1px 0 rgba(255, 255, 255, 0.32),
+    0 0 6px rgba(0, 196, 98, 0.3),
+    0 0 14px rgba(0, 196, 98, 0.18);
+}
+
+.project-clad-action-card--tone-edit {
+  --pc-action-accent: var(--color-1);
+  --pc-action-accent-glow:
+    0 1px 0 rgba(255, 255, 255, 0.32),
+    0 0 6px rgba(196, 0, 0, 0.28),
+    0 0 14px rgba(196, 0, 0, 0.16);
+}
+
+.project-clad-action-card--disabled {
+  cursor: default;
+}
+
+.project-clad-action-card__face {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: calc(4rem * var(--pc-text-scale, 1));
+  border-radius: 18px;
+  background: var(--pc-caesura-bg);
+  box-sizing: border-box;
+  border: var(--pc-caesura-border);
+  transition:
+    transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 280ms ease-in-out,
+    background-color 280ms ease-in-out,
+    border-color 250ms ease-in-out,
+    color 250ms ease-in-out,
+    text-shadow 250ms ease-in-out;
+}
+
+/* FACE 1 — raised neumorphic pill. Lives at the TOP of the card at rest
+   so the closed-state button sits snug under the Payment Summary tile.
+   Slides DOWN by one face-height on reveal to uncover Face 2. */
+.project-clad-action-card__face--front {
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0 0.9rem;
+  color: var(--pc-btn-neu-fg);
+  font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  font-size: calc(0.82rem * var(--pc-text-scale, 1));
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-align: center;
+  transform: translateY(0);
+  /* Rest shadow: caesura neumorphic geometry. Dark side stays strong so
+     the pills don't dissolve into the page bg; light side is softened
+     (alpha 0.7, smaller spread/blur) so it doesn't read as glass and
+     doesn't bleed upward onto the Payment Summary tile sitting above. */
+  box-shadow:
+    9px 9px 16px -2px rgba(72, 79, 96, 0.45),
+    -5px -5px 10px -2px rgba(255, 255, 255, 0.7);
+  text-shadow: var(--pc-btn-neu-label-shadow);
+}
+
+.project-clad-action-card__icon {
+  width: calc(1.2rem * var(--pc-text-scale, 1));
+  height: calc(1.2rem * var(--pc-text-scale, 1));
+  display: grid;
+  place-items: center;
+  color: inherit;
+  opacity: 0.7;
+  transition: opacity 250ms ease-in-out, color 250ms ease-in-out,
+    filter 250ms ease-in-out;
+}
+
+.project-clad-action-card__icon svg {
+  width: 100%;
+  height: 100%;
+  stroke-width: 2;
+}
+
+.project-clad-action-card__label {
+  display: inline-block;
+  opacity: 0.82;
+  transition: opacity 250ms ease-in-out, color 250ms ease-in-out,
+    text-shadow 250ms ease-in-out, filter 250ms ease-in-out;
+}
+
+/* Reveal: hover, keyboard focus-within, or tap-toggled `.is-revealed`
+   (driven by the mobile JS below). Face 1 slides down to the bottom
+   half and lights up with the synthwave two-tone red inset glow +
+   white glowing label/icon (CodePen-inspired). Per-card tone only
+   colors the Face-2 CTA, not the Face-1 glow itself. */
+.project-clad-action-card:not(.project-clad-action-card--disabled):hover
+  .project-clad-action-card__face--front,
+.project-clad-action-card:not(.project-clad-action-card--disabled):focus-within
+  .project-clad-action-card__face--front,
+.project-clad-action-card.is-revealed:not(.project-clad-action-card--disabled)
+  .project-clad-action-card__face--front {
+  transform: translateY(calc(4rem * var(--pc-text-scale, 1)));
+  /* Vibrant LED red — solid background-color so it interpolates
+     smoothly from the rest grey (no gradient snap). */
+  background: #ee1f3a;
+  color: #ffffff;
+  border-color: transparent;
+  /* Futuristic neon glow:
+       1) subtle inner light film keeps the surface from looking flat
+       2) a hot pink-red ring along the inside edge for that LED rim
+       3) a tight bright halo just outside the tile (the "lit" feel)
+       4) a wide soft red glow extending far out (the "atmosphere")
+       5) a deep downward-biased shadow so the tile still feels lifted
+     No dark insets — the previous bottom-right near-black wash was
+     killing the glow and making the tile feel heavy/dark. */
+  box-shadow:
+    inset 0 0 36px rgba(255, 220, 225, 0.32),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 0 14px rgba(255, 50, 80, 0.85),
+    0 0 32px rgba(255, 30, 60, 0.65),
+    0 0 64px 4px rgba(230, 0, 40, 0.5),
+    0 0 110px 8px rgba(200, 0, 30, 0.32),
+    0 18px 36px -8px rgba(150, 0, 20, 0.55);
+  text-shadow:
+    0 0 4px rgba(255, 255, 255, 0.95),
+    0 0 12px rgba(255, 255, 255, 0.55),
+    0 0 22px rgba(255, 60, 90, 0.7);
+}
+
+.project-clad-action-card:not(.project-clad-action-card--disabled):hover
+  .project-clad-action-card__label,
+.project-clad-action-card:not(.project-clad-action-card--disabled):hover
+  .project-clad-action-card__icon,
+.project-clad-action-card:not(.project-clad-action-card--disabled):focus-within
+  .project-clad-action-card__label,
+.project-clad-action-card:not(.project-clad-action-card--disabled):focus-within
+  .project-clad-action-card__icon,
+.project-clad-action-card.is-revealed:not(.project-clad-action-card--disabled)
+  .project-clad-action-card__label,
+.project-clad-action-card.is-revealed:not(.project-clad-action-card--disabled)
+  .project-clad-action-card__icon {
+  opacity: 1;
+  color: #ffffff;
+  /* Layered glow on the icon — bright white core + hot red bloom for
+     the LED feel. Matches the text-shadow stack on the label. */
+  filter:
+    drop-shadow(0 0 5px rgba(255, 255, 255, 0.95))
+    drop-shadow(0 0 10px rgba(255, 60, 90, 0.85))
+    drop-shadow(0 0 18px rgba(255, 30, 60, 0.6));
+}
+
+/* FACE 2 — engraved panel pinned at the TOP of the card. Covered by
+   Face 1 at rest; becomes visible when Face 1 slides down on hover. */
+.project-clad-action-card__face--back {
+  top: 0;
+  z-index: 1;
+  padding: 0.55rem 0.7rem 0.55rem 0.85rem;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  box-shadow: var(--pc-caesura-inset);
+  /* Clip overflow defensively so the round CTA halo can't spill if a
+     translation makes the description wrap unusually wide. */
+  overflow: hidden;
+}
+
+.project-clad-action-card__desc {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: calc(0.66rem * var(--pc-text-scale, 1));
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--pc-caesura-dark);
+  line-height: 1.3;
+}
+
+/* CTA-form wrapper (used by Send-for-review / Cancel-request). Keeps
+   the inner round button vertically aligned and prevents the form from
+   stretching across Face 2's row. */
+.project-clad-action-card__cta-form {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+
+/* Round neumorphic CTA — same circular icon-button pattern as
+   .project-clad-order-finance__icon used in the Site contact +
+   Delivery sections. Each card supplies a unique inner SVG glyph
+   that hints at the action (check, card, pencil, external, send, x). */
+.project-clad-action-card__cta {
+  flex: 0 0 auto;
+  width: calc(2.1rem * var(--pc-text-scale, 1));
+  height: calc(2.1rem * var(--pc-text-scale, 1));
+  padding: 0;
+  border-radius: 50%;
+  background: var(--pc-caesura-bg);
+  box-shadow: var(--pc-caesura-drop);
+  border: var(--pc-caesura-border);
+  border-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pc-btn-neu-fg);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.project-clad-action-card__cta svg {
+  width: calc(0.95rem * var(--pc-text-scale, 1));
+  height: calc(0.95rem * var(--pc-text-scale, 1));
+  stroke-width: 2;
+  transition: filter 0.18s ease;
+}
+
+.project-clad-action-card__cta:hover,
+.project-clad-action-card__cta:focus-visible {
+  border-color: var(--pc-caesura-border-hover);
+  color: var(--pc-action-accent);
+  box-shadow:
+    var(--pc-caesura-drop),
+    0 0 12px var(--pc-action-accent);
+  transform: translateY(-1px);
+}
+
+.project-clad-action-card__cta:hover svg,
+.project-clad-action-card__cta:focus-visible svg {
+  filter: drop-shadow(0 0 4px var(--pc-action-accent));
+}
+
+.project-clad-action-card__cta:active {
+  transform: translateY(0);
+  box-shadow: var(--pc-btn-neu-shadow-active);
+}
+
+.project-clad-action-card__cta:disabled,
+.project-clad-action-card__cta[aria-busy="true"] {
+  opacity: 0.55;
+  cursor: progress;
+  transform: none;
+}
+
+.project-clad-action-card__cta:disabled:hover,
+.project-clad-action-card__cta[aria-busy="true"]:hover {
+  border-color: transparent;
+  color: var(--pc-btn-neu-fg);
+  box-shadow: var(--pc-caesura-drop);
+}
+
+.project-clad-action-card__cta:disabled:hover svg,
+.project-clad-action-card__cta[aria-busy="true"]:hover svg {
+  filter: none;
+}
+
+/* Disabled card (Ordered / Delivered / Paid / blocked Order now /
+   Locked delivery photo): frozen, no reveal, no pointer cursor.
+   Face 1 stays opaque at the top covering Face 2. */
+.project-clad-action-card--disabled .project-clad-action-card__face--front {
+  color: var(--pc-caesura-fg);
+  background: var(--pc-caesura-bg);
+}
+
+.project-clad-action-card--disabled .project-clad-action-card__icon,
+.project-clad-action-card--disabled .project-clad-action-card__label {
+  opacity: 0.7;
+}
+
+/* Save busy-state while the POST flies. */
+.project-clad-action-card__cta[data-projectclad-save-fields-btn][aria-busy="true"] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* Mid-viewport (tablet): 4-card rows wrap to 2x2 so cards stay readable.
+   Rows with 1-3 cards keep their natural column count. */
+@media (max-width: 1100px) {
+  .project-clad-action-row:has(> .project-clad-action-card:nth-child(4)) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Small-viewport stack: single column, slightly shorter cards. */
+@media (max-width: 780px) {
+  .project-clad-action-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .project-clad-action-card {
+    height: calc(7rem * var(--pc-text-scale, 1));
+  }
+
+  .project-clad-action-card__face {
+    height: calc(3.5rem * var(--pc-text-scale, 1));
+  }
+
+  .project-clad-action-card__face--front {
+    font-size: calc(0.78rem * var(--pc-text-scale, 1));
+  }
+
+  .project-clad-action-card:not(.project-clad-action-card--disabled):hover
+    .project-clad-action-card__face--front,
+  .project-clad-action-card:not(.project-clad-action-card--disabled):focus-within
+    .project-clad-action-card__face--front,
+  .project-clad-action-card.is-revealed:not(.project-clad-action-card--disabled)
+    .project-clad-action-card__face--front {
+    transform: translateY(calc(3.5rem * var(--pc-text-scale, 1)));
+  }
+}
+
+/* Print: hide the entire action row — orders exported as PDF shouldn't
+   carry interactive CTAs. */
+@media print {
+  .project-clad-action-row {
+    display: none !important;
+  }
+}
+
 /* Inline middot + muted secondary unit (e.g. linear ft beside unit count). */
 .project-clad-order-finance__v-sep {
   display: inline-block;
@@ -7588,7 +8302,8 @@ details.project-clad-edit-mode .project-clad-edit-view {
   line-height: 1.25;
 }
 
-#project-clad-orders-font-scope .project-clad-order-export-pdf {
+#project-clad-orders-font-scope .project-clad-order-export-pdf,
+#project-clad-orders-font-scope .project-clad-order-export-csv {
   margin: 0;
   padding: 0.1rem;
   border: none;
@@ -7602,6 +8317,7 @@ details.project-clad-edit-mode .project-clad-edit-view {
   color: var(--pc-muted, #6b6b6b);
   border-radius: 0.2rem;
   transition: color 0.15s ease, filter 0.15s ease;
+  text-decoration: none;
 }
 
 #project-clad-orders-font-scope .project-clad-order-export-pdf__icon {
@@ -7613,8 +8329,19 @@ details.project-clad-edit-mode .project-clad-edit-view {
   transform: translateY(-0.06em);
 }
 
+#project-clad-orders-font-scope .project-clad-order-export-csv__icon {
+  display: block;
+  width: calc(0.68rem * var(--pc-text-scale, 1));
+  height: calc(0.68rem * var(--pc-text-scale, 1));
+  flex-shrink: 0;
+  /* Document glyph sits visually slightly low against cap height; tiny lift */
+  transform: translateY(-0.04em);
+}
+
 #project-clad-orders-font-scope .project-clad-order-export-pdf:hover,
-#project-clad-orders-font-scope .project-clad-order-export-pdf:focus-visible {
+#project-clad-orders-font-scope .project-clad-order-export-pdf:focus-visible,
+#project-clad-orders-font-scope .project-clad-order-export-csv:hover,
+#project-clad-orders-font-scope .project-clad-order-export-csv:focus-visible {
   color: var(--color-1, #c40000);
   outline: none;
   filter:
@@ -7623,7 +8350,8 @@ details.project-clad-edit-mode .project-clad-edit-view {
     drop-shadow(0 0 16px rgba(196, 0, 0, 0.35));
 }
 
-#project-clad-orders-font-scope .project-clad-order-export-pdf:focus-visible {
+#project-clad-orders-font-scope .project-clad-order-export-pdf:focus-visible,
+#project-clad-orders-font-scope .project-clad-order-export-csv:focus-visible {
   outline: 2px solid rgba(196, 0, 0, 0.35);
   outline-offset: 2px;
 }
