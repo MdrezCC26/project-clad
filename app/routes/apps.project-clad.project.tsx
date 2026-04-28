@@ -398,7 +398,13 @@ function OrderLinePropertyChips({ item }: { item: JobItemView }) {
   if (calcPayload?.value) {
     try {
       const parsed = JSON.parse(calcPayload.value) as Record<string, unknown>;
-      const entries = Object.entries(parsed);
+      const entries = Object.entries(parsed).filter(([key, value]) => {
+        const k = key.trim().toLowerCase();
+        if (k === "product_price") return false;
+        if (value == null) return false;
+        if (typeof value === "string" && value.trim() === "") return false;
+        return true;
+      });
       if (!entries.length) return null;
       return (
         <div className="project-clad-order-card-specs">
@@ -555,6 +561,7 @@ function formatJobCreatedMmDdYyyy(iso: string): string {
 type JobView = {
   id: string;
   name: string;
+  orderNumber: number | null;
   createdAt: string;
   isLocked: boolean;
   workOrderStatus: string | null;
@@ -585,6 +592,7 @@ function jobMatchesOrderSearch(job: JobView, qRaw: string): boolean {
   const hay = [
     job.name,
     job.orderName || "",
+    job.orderNumber != null ? String(job.orderNumber) : "",
     job.purchaseOrderNumber || "",
     ...job.items.map((item) => item.displayName),
   ]
@@ -1995,6 +2003,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return {
         id: job.id,
         name: job.name,
+        orderNumber: job.orderNumber ?? null,
         createdAt: job.createdAt.toISOString(),
         isLocked: job.isLocked || Boolean(job.orderLink),
         workOrderStatus: job.workOrderStatus ?? null,
@@ -2861,12 +2870,35 @@ export const action = async ({ request }: ActionFunctionArgs) => {
          above so the warehouse / driver can reach someone on delivery.) */
 
       try {
-        await prisma.job.update({
-          where: { id: jobId },
-          data: {
-            orderLifecycleStatus: "ordered",
-            fulfillmentMethod,
-          },
+        await prisma.$transaction(async (tx) => {
+          const fresh = await tx.job.findFirst({
+            where: { id: jobId, projectId },
+            select: { orderNumber: true },
+          });
+          if (!fresh) {
+            throw new Error("Order not found.");
+          }
+          let nextOrderNumber = fresh.orderNumber;
+          if (nextOrderNumber == null) {
+            const rows = await tx.$queryRaw<Array<{ nextval: bigint | number }>>`
+              SELECT nextval('"Job_orderNumber_seq"') AS nextval
+            `;
+            const raw = rows[0]?.nextval;
+            const parsed =
+              typeof raw === "bigint" ? Number(raw) : Number(raw ?? Number.NaN);
+            if (!Number.isFinite(parsed)) {
+              throw new Error("Could not allocate order number.");
+            }
+            nextOrderNumber = parsed;
+          }
+          await tx.job.update({
+            where: { id: jobId },
+            data: {
+              orderLifecycleStatus: "ordered",
+              fulfillmentMethod,
+              orderNumber: nextOrderNumber,
+            },
+          });
         });
       } catch (e) {
         const detail =
@@ -3366,6 +3398,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (storageKeyToRemove) {
       await removeFulfillmentPhotoFromDisk(storageKeyToRemove);
+    }
+
+    if (next === "delivered") {
+      const post = await prisma.job.findFirst({
+        where: { id: jobId, projectId },
+        select: { fulfillmentNotifiedAt: true },
+      });
+      if (post && !post.fulfillmentNotifiedAt) {
+        try {
+          await sendFulfillmentPackageEmails({
+            shop,
+            projectId,
+            jobId,
+          });
+          await prisma.job.update({
+            where: { id: jobId },
+            data: { fulfillmentNotifiedAt: new Date() },
+          });
+        } catch (err) {
+          console.error(
+            "[project] staff-set-order-lifecycle delivered notify failed:",
+            err instanceof Error ? err.message : err,
+          );
+        }
+      }
     }
 
     return redirectToProject(request, projectId, shop);
@@ -6127,6 +6184,14 @@ export default function ProjectDetailPage() {
                           <h3 className="project-clad-title">
                             {jobSummaryDisplayName}
                           </h3>
+                          {job.orderNumber != null ? (
+                            <span
+                              className="project-clad-muted"
+                              style={{ fontWeight: 700, marginRight: 8 }}
+                            >
+                              #{job.orderNumber}
+                            </span>
+                          ) : null}
                           <div className="project-clad-order-summary-title-meta">
                             <time
                               className="project-clad-order-created-date"

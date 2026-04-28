@@ -8,6 +8,47 @@ import { shopStringFilter } from "../utils/projectAccess.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
 import { fetchVariantPriceUsd } from "../utils/shopifyVariantPrice.server";
 
+function parseNumericPrice(input: unknown): number | null {
+  if (typeof input === "number") {
+    return Number.isFinite(input) ? input : null;
+  }
+  if (typeof input === "string") {
+    const n = Number(input.replace(/[^0-9.-]/g, "").trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function customConfiguredPrice(customData: Prisma.JsonValue | null | undefined): number | null {
+  if (!Array.isArray(customData)) return null;
+  let best: number | null = null;
+
+  for (const row of customData) {
+    if (!row || typeof row !== "object") continue;
+    const rec = row as { name?: unknown; value?: unknown };
+    const key = String(rec.name ?? "").trim().toLowerCase();
+    if (!key) continue;
+
+    if (key === "product_price") {
+      const n = parseNumericPrice(rec.value);
+      if (n != null && n > 0) best = best == null ? n : Math.max(best, n);
+      continue;
+    }
+
+    if (key === "__oocalcpayload" && typeof rec.value === "string") {
+      try {
+        const payload = JSON.parse(rec.value) as Record<string, unknown>;
+        const n = parseNumericPrice(payload.PRODUCT_PRICE ?? payload.product_price);
+        if (n != null && n > 0) best = best == null ? n : Math.max(best, n);
+      } catch {
+        // Ignore malformed calculator payload.
+      }
+    }
+  }
+
+  return best;
+}
+
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
@@ -120,19 +161,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     const prevVariantId = item.variantId;
-    const price = await fetchVariantPriceUsd(shop, newVariantId);
-    if (price == null || Number.isNaN(price)) {
+    const variantPrice = await fetchVariantPriceUsd(shop, newVariantId);
+    if (variantPrice == null || Number.isNaN(variantPrice)) {
       return Response.json(
         { error: "Could not resolve price for new variant." },
         { status: 400 },
       );
     }
+    const priorPrice = Number(item.priceSnapshot?.toString?.() ?? item.priceSnapshot ?? 0);
+    const configuredPrice = customConfiguredPrice(item.customData);
+    const resolvedPrice =
+      variantPrice > 0
+        ? variantPrice
+        : configuredPrice != null && configuredPrice > 0
+          ? configuredPrice
+          : priorPrice > 0
+            ? priorPrice
+            : variantPrice;
 
     await prisma.jobItem.update({
       where: { id: itemId },
       data: {
         variantId: newVariantId,
-        priceSnapshot: new Prisma.Decimal(price),
+        priceSnapshot: new Prisma.Decimal(resolvedPrice),
       },
     });
 

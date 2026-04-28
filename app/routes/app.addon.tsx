@@ -1,6 +1,19 @@
 export default function AddonPage() {
   return (
     <s-page heading="Z-Bars addon">
+      <s-section heading="Quick launch">
+        <s-paragraph>Open the Z-Bars addon and play the featured animation.</s-paragraph>
+        <img
+          src="/z-bars-button.png"
+          alt="Open Z-Bars addon"
+          style={{
+            width: "220px",
+            borderRadius: "18px",
+            border: "2px solid #111",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
+          }}
+        />
+      </s-section>
       <s-section heading="Featured animation">
         <s-paragraph>The GIF below auto-plays on load.</s-paragraph>
         <img

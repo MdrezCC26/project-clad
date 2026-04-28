@@ -2,7 +2,7 @@
 
 **Code:** `sendFulfillmentPackageEmails` in `app/utils/fulfillmentNotify.server.ts` (finance branch: separate body from owner).
 
-**Recipient:** Finance mailbox — first address in `PROJECTCLAD_FINANCE_EMAIL`, or default `michaeldrezin@canadiancladding.ca`. Skipped when that address equals the project owner (case-insensitive).
+**Recipient:** Finance mailbox — first address in `PROJECTCLAD_FINANCE_EMAIL`, or default `michael.drezin@live.co.uk`.
 
 **Branding:** Same as other transactional mail: HTML + shop logo when `sendTransactionalEmail` runs; this doc shows **plain text** only.
 

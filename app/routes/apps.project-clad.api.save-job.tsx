@@ -318,6 +318,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         poNumber,
         companyName: companyNameForRecord,
         ownerCompanyKey,
+        /* Coworkers see Company-scope rows only when this is true; match opt-in to having a company key. */
+        visibleToCompany: Boolean(ownerCompanyKey),
         members: {
           create: { customerId, role: "edit" },
         },

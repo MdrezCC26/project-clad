@@ -791,6 +791,8 @@ export default function Settings() {
       : false;
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [showLogoMediaPicker, setShowLogoMediaPicker] = useState(false);
+  const [showBgLogoMediaPicker, setShowBgLogoMediaPicker] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState(
     customers[0]?.id || "",
   );
@@ -977,48 +979,9 @@ export default function Settings() {
             </s-paragraph>
           ) : (
             mediaImages.length > 0 && (
-              <div>
-                <s-paragraph>Or choose from your Shopify media library:</s-paragraph>
-                <Form method="post">
-                  <input type="hidden" name="intent" value="save-logo-from-media" />
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))",
-                      gap: "0.5rem",
-                      marginTop: "0.5rem",
-                    }}
-                  >
-                    {mediaImages.map((img) => (
-                      <button
-                        key={img.id}
-                        type="submit"
-                        name="logoMediaUrl"
-                        value={img.url}
-                        style={{
-                          padding: 0,
-                          border: "2px solid transparent",
-                          borderRadius: 8,
-                          cursor: "pointer",
-                          overflow: "hidden",
-                          background: "transparent",
-                        }}
-                      >
-                        <img
-                          src={img.url}
-                          alt={img.alt || "Media"}
-                          style={{
-                            width: 80,
-                            height: 80,
-                            objectFit: "cover",
-                            display: "block",
-                          }}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </Form>
-              </div>
+              <button type="button" onClick={() => setShowLogoMediaPicker(true)}>
+                Choose from media library
+              </button>
             )
           )}
           {hasLogo && (
@@ -1078,6 +1041,87 @@ export default function Settings() {
                 </s-paragraph>
               )}
           </Form>
+          {showLogoMediaPicker && mediaImages.length > 0 && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.5)",
+                zIndex: 1000,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "1rem",
+              }}
+            >
+              <div
+                style={{
+                  width: "min(980px, 100%)",
+                  maxHeight: "85vh",
+                  overflow: "auto",
+                  background: "var(--p-color-bg-surface, #fff)",
+                  borderRadius: 12,
+                  border: "1px solid var(--p-color-border, #ddd)",
+                  padding: "1rem",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  <strong>Select storefront logo</strong>
+                  <button type="button" onClick={() => setShowLogoMediaPicker(false)}>
+                    Close
+                  </button>
+                </div>
+                <Form method="post">
+                  <input type="hidden" name="intent" value="save-logo-from-media" />
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    {mediaImages.map((img) => (
+                      <button
+                        key={img.id}
+                        type="submit"
+                        name="logoMediaUrl"
+                        value={img.url}
+                        title="Use this image"
+                        style={{
+                          padding: 0,
+                          border: "1px solid var(--p-color-border, #ddd)",
+                          borderRadius: 8,
+                          cursor: "pointer",
+                          overflow: "hidden",
+                          background: "transparent",
+                        }}
+                      >
+                        <img
+                          src={img.url}
+                          alt={img.alt || "Media"}
+                          style={{
+                            width: "100%",
+                            height: 96,
+                            objectFit: "cover",
+                            display: "block",
+                          }}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </Form>
+              </div>
+            </div>
+          )}
         </s-stack>
       </s-section>
       <s-section heading="Projects page background logo">
@@ -1088,48 +1132,9 @@ export default function Settings() {
         </s-paragraph>
         <s-stack direction="block" gap="base">
           {mediaImages.length > 0 && (
-            <div>
-              <s-paragraph>Choose from media library:</s-paragraph>
-              <Form method="post">
-                <input type="hidden" name="intent" value="save-bg-logo-from-media" />
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))",
-                    gap: "0.5rem",
-                    marginTop: "0.5rem",
-                  }}
-                >
-                  {mediaImages.map((img) => (
-                    <button
-                      key={img.id}
-                      type="submit"
-                      name="bgLogoMediaUrl"
-                      value={img.url}
-                      style={{
-                        padding: 0,
-                        border: "2px solid transparent",
-                        borderRadius: 8,
-                        cursor: "pointer",
-                        overflow: "hidden",
-                        background: "transparent",
-                      }}
-                    >
-                      <img
-                        src={img.url}
-                        alt={img.alt || "Media"}
-                        style={{
-                          width: 80,
-                          height: 80,
-                          objectFit: "cover",
-                          display: "block",
-                        }}
-                      />
-                    </button>
-                  ))}
-                </div>
-              </Form>
-            </div>
+            <button type="button" onClick={() => setShowBgLogoMediaPicker(true)}>
+              Choose from media library
+            </button>
           )}
           {hasBackgroundLogo && (
             <div
@@ -1180,6 +1185,87 @@ export default function Settings() {
                 <s-paragraph>{actionData.bgLogoError as string}</s-paragraph>
               )}
           </Form>
+          {showBgLogoMediaPicker && mediaImages.length > 0 && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.5)",
+                zIndex: 1000,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "1rem",
+              }}
+            >
+              <div
+                style={{
+                  width: "min(980px, 100%)",
+                  maxHeight: "85vh",
+                  overflow: "auto",
+                  background: "var(--p-color-bg-surface, #fff)",
+                  borderRadius: 12,
+                  border: "1px solid var(--p-color-border, #ddd)",
+                  padding: "1rem",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  <strong>Select background logo</strong>
+                  <button type="button" onClick={() => setShowBgLogoMediaPicker(false)}>
+                    Close
+                  </button>
+                </div>
+                <Form method="post">
+                  <input type="hidden" name="intent" value="save-bg-logo-from-media" />
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    {mediaImages.map((img) => (
+                      <button
+                        key={img.id}
+                        type="submit"
+                        name="bgLogoMediaUrl"
+                        value={img.url}
+                        title="Use this image"
+                        style={{
+                          padding: 0,
+                          border: "1px solid var(--p-color-border, #ddd)",
+                          borderRadius: 8,
+                          cursor: "pointer",
+                          overflow: "hidden",
+                          background: "transparent",
+                        }}
+                      >
+                        <img
+                          src={img.url}
+                          alt={img.alt || "Media"}
+                          style={{
+                            width: "100%",
+                            height: 96,
+                            objectFit: "cover",
+                            display: "block",
+                          }}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </Form>
+              </div>
+            </div>
+          )}
         </s-stack>
       </s-section>
       <s-section heading="Navigation buttons">

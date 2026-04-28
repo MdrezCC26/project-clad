@@ -81,7 +81,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     prisma.job.update({
       where: { id: link.jobId },
       data: {
+        orderLifecycleStatus: "paid",
         paidAt: new Date(),
+        completedAt: link.job.completedAt ?? new Date(),
         receiptSnapshot,
       },
     }),

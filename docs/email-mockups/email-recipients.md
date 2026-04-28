@@ -6,7 +6,7 @@ Plain list of **every** `sendEmail` path and **who receives** it. Use this when 
 |---|-----------------|--------------|--------|
 | 1 | **Cart / order saved** (`sendOrderCreatedNotificationEmail` — new project, new order on project, order updated from cart) | **`PROJECTCLAD_ORDER_NOTIFY_EMAIL`** (comma/semicolon split) **+** Shopify emails for **project owner** and **actor** (person who saved), deduped | If env + lookups yield no addresses, send is skipped. |
 | 2 | **Project status / snapshot** (`sendProjectStatusNotificationEmail` — reorder, edit, delivery settings, move/copy, delete line, etc.) | **Same as row 1** | One combined `To:` with all addresses. |
-| 3 | **Order delivered / fulfilled** (`sendFulfillmentPackageEmails`) | **(A)** Project **owner** Shopify email — one mail. **(B)** Each address in **`PROJECTCLAD_FINANCE_EMAIL`** (or code default), **except** skips finance address if it equals owner (case-insensitive) | **Product target for finance (see below):** only **`michaeldrezin@canadiancladding.ca`**. Today’s code may still read a list from env; align env or code when you implement. |
+| 3 | **Order delivered / fulfilled** (`sendFulfillmentPackageEmails`) | **(A)** Project **owner** Shopify email — one mail (when enabled). **(B)** Finance mail: first address in **`PROJECTCLAD_FINANCE_EMAIL`**, or code default **`michael.drezin@live.co.uk`** | Finance sends even when same mailbox as owner (different subject/body). |
 | 4 | **Approval requested** (`submit-for-approval`) | Each email of **project members who do not have the `NA` Shopify tag**, **excluding the submitter** (`customerId`). Must have at least one approver mailbox or API returns 400. | Submitters are typically NA-tagged per product rules. |
 | 5 | **Order approved** (`approve`) | **Project owner** + **every project member** with a known email (same set used for approval flow, plus approver id `vid` deduped in `memberIds`) | Includes NA-tagged members; each address gets its own send in a loop. |
 | 6 | **Order rejected** (POST `cancel-approval-request` with reason — `action` handler) | **Project owner** + **every project member** with a known email | Includes the person who rejected, if they are owner/member. |
@@ -25,7 +25,7 @@ Plain list of **every** `sendEmail` path and **who receives** it. Use this when 
 
 | Mail | Recipients |
 |------|------------|
-| **Finance — delivered** (`fulfillmentNotify` finance send) | **`michaeldrezin@canadiancladding.ca`** only |
+| **Finance — delivered** (`fulfillmentNotify` finance send) | Default **`michael.drezin@live.co.uk`**, or override with **`PROJECTCLAD_FINANCE_EMAIL`** |
 | **Shop — order placed** (`confirm-order-now`, when built) | **`mike@canadiancladding.ca`** **and** **`michaeldrezin@canadiancladding.ca`** |
 
 ## Env / constants quick reference
@@ -33,6 +33,6 @@ Plain list of **every** `sendEmail` path and **who receives** it. Use this when 
 | Variable / constant | Used for |
 |---------------------|----------|
 | `PROJECTCLAD_ORDER_NOTIFY_EMAIL` | Rows **1** and **2** |
-| `PROJECTCLAD_FINANCE_EMAIL` | Row **3** (finance list) — set to **`michaeldrezin@canadiancladding.ca`** only to match product target |
+| `PROJECTCLAD_FINANCE_EMAIL` | Row **3** — first address used for finance delivered mail; omit to use code default **`michael.drezin@live.co.uk`** |
 | `PROJECTCLAD_SHOP_ORDER_NOTIFY_EMAIL` (planned) | Shop order-placed: e.g. **`mike@canadiancladding.ca,michaeldrezin@canadiancladding.ca`** |
 | `backupEmail` in `projects.tsx` | Row **7** |

@@ -12,6 +12,45 @@ import { getAdminVariantInfo } from "../utils/adminVariants.server";
 import { shopStringFilter } from "../utils/projectAccess.server";
 import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";
 
+function parseNumericPrice(input: unknown): number | null {
+  if (typeof input === "number") return Number.isFinite(input) ? input : null;
+  if (typeof input === "string") {
+    const n = Number(input.replace(/[^0-9.-]/g, "").trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function customConfiguredPrice(customData: Prisma.JsonValue | null | undefined): number | null {
+  if (!Array.isArray(customData)) return null;
+  let best: number | null = null;
+
+  for (const row of customData) {
+    if (!row || typeof row !== "object") continue;
+    const rec = row as { name?: unknown; value?: unknown };
+    const key = String(rec.name ?? "").trim().toLowerCase();
+    if (!key) continue;
+
+    if (key === "product_price") {
+      const n = parseNumericPrice(rec.value);
+      if (n != null && n > 0) best = best == null ? n : Math.max(best, n);
+      continue;
+    }
+
+    if (key === "__oocalcpayload" && typeof rec.value === "string") {
+      try {
+        const payload = JSON.parse(rec.value) as Record<string, unknown>;
+        const n = parseNumericPrice(payload.PRODUCT_PRICE ?? payload.product_price);
+        if (n != null && n > 0) best = best == null ? n : Math.max(best, n);
+      } catch {
+        // Ignore malformed calculator payload.
+      }
+    }
+  }
+
+  return best;
+}
+
 /** Customer-facing storefront lifecycle states; same enum as the storefront dropdown. */
 type LifecycleStatus =
   | "draft"
@@ -43,6 +82,7 @@ const LIFECYCLE_LABELS: Record<LifecycleStatus, string> = {
 type JobRow = {
   id: string;
   name: string;
+  orderNumber: number | null;
   createdAt: string;
   projectId: string;
   projectName: string;
@@ -90,6 +130,7 @@ export const loader = async ({ request }: LoaderFunctionArgs): Promise<LoaderDat
       return {
         id: job.id,
         name: job.name,
+        orderNumber: job.orderNumber ?? null,
         createdAt: job.createdAt.toISOString(),
         projectId: job.project.id,
         projectName: job.project.name,
@@ -317,16 +358,26 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
     }
 
     const prevVariantId = item.variantId;
-    const price = await fetchVariantPriceUsd(shop, newVariantId);
-    if (price == null || Number.isNaN(price)) {
+    const variantPrice = await fetchVariantPriceUsd(shop, newVariantId);
+    if (variantPrice == null || Number.isNaN(variantPrice)) {
       return { ok: false, error: "Could not resolve variant price." };
     }
+    const priorPrice = Number(item.priceSnapshot?.toString?.() ?? item.priceSnapshot ?? 0);
+    const configuredPrice = customConfiguredPrice(item.customData);
+    const resolvedPrice =
+      variantPrice > 0
+        ? variantPrice
+        : configuredPrice != null && configuredPrice > 0
+          ? configuredPrice
+          : priorPrice > 0
+            ? priorPrice
+            : variantPrice;
 
     await prisma.jobItem.update({
       where: { id: itemId },
       data: {
         variantId: newVariantId,
-        priceSnapshot: new Prisma.Decimal(price),
+        priceSnapshot: new Prisma.Decimal(resolvedPrice),
       },
     });
 
@@ -477,6 +528,7 @@ export default function AdminWorkOrdersPage() {
                 >
                   <LifecyclePill status={job.orderLifecycleStatus} />
                   <p style={{ margin: 0, fontWeight: 600 }}>
+                    {job.orderNumber != null ? `#${job.orderNumber} · ` : ""}
                     {job.projectName}
                     <span style={{ fontWeight: 400, opacity: 0.85 }}>
                       {" "}

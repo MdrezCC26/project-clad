@@ -353,6 +353,7 @@ export async function createBackupDraftOrderForJob(args: {
   }
 
   const noteLines = [
+    job.orderNumber != null ? `Order #: ${job.orderNumber}` : null,
     `Project: ${project.name}`,
     project.poNumber ? `Project PO: ${project.poNumber}` : null,
     job.purchaseOrderNumber ? `Job PO: ${job.purchaseOrderNumber}` : null,
@@ -362,6 +363,9 @@ export async function createBackupDraftOrderForJob(args: {
     { key: "projectCladJobId", value: jobId },
     { key: "projectCladProjectId", value: project.id },
     { key: "projectCladProjectName", value: project.name },
+    ...(job.orderNumber != null
+      ? [{ key: "projectCladOrderNumber", value: String(job.orderNumber) }]
+      : []),
     {
       key: "projectCladFulfillmentMethod",
       value: job.fulfillmentMethod ?? "unspecified",
@@ -402,6 +406,7 @@ export async function createBackupDraftOrderForJob(args: {
     "project-clad",
     `project:${project.id}`,
     `job:${jobId}`,
+    ...(job.orderNumber != null ? [`order-number:${job.orderNumber}`] : []),
   ];
 
   const shippingLine =

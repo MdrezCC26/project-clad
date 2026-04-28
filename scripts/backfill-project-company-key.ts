@@ -230,7 +230,10 @@ async function main() {
   for (const u of updates) {
     await prisma.project.update({
       where: { id: u.projectId },
-      data: { ownerCompanyKey: u.ownerCompanyKey },
+      data: {
+        ownerCompanyKey: u.ownerCompanyKey,
+        visibleToCompany: true,
+      },
     });
     written += 1;
   }

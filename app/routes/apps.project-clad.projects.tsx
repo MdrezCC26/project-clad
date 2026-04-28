@@ -39,6 +39,7 @@ import {
 } from "../utils/customerTags.server";
 import {
   canAdminProjectMembers,
+  customerIdsMatch,
   projectsListWhere,
   shopStringFilter,
 } from "../utils/projectAccess.server";
@@ -127,6 +128,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       viewerCompanyKeys: viewerCompanyCtx.keys,
     }),
     include: {
+      members: { select: { customerId: true } },
       jobs: {
         orderBy: { sortOrder: "asc" },
         include: {
@@ -257,10 +259,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       })
       .filter((n): n is string => Boolean(n));
 
-    const isOwnerRow = project.ownerCustomerId === customerId;
-    const isExplicitMember = isOwnerRow; /* loader scopes via `projectsListWhere` which
-      excludes the members join fetch — approximate with owner check. For Company scope
-      the viewer is often not a member, so we fall back to a tag match. */
+    const isOwnerRow = customerIdsMatch(project.ownerCustomerId, customerId);
+    const isExplicitMember =
+      !isOwnerRow &&
+      project.members.some((m) => customerIdsMatch(m.customerId, customerId));
     const viaCompanyRow =
       !isOwnerRow &&
       !isExplicitMember &&

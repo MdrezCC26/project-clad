@@ -2,7 +2,7 @@
 
 **Intent:** During the **same delivered / fulfillment** phase as the customer-facing **delivered** mail, send a **second, finance-only** message (not the same body as the owner).
 
-**Recipients (product):** **`michaeldrezin@canadiancladding.ca`** only. _(Today’s code may use `PROJECTCLAD_FINANCE_EMAIL` or a default list — set env to this single address when implementing the new finance body.)_
+**Recipients (product):** default **`michael.drezin@live.co.uk`**, or first address in **`PROJECTCLAD_FINANCE_EMAIL`** when set.
 
 **Today:** `sendFulfillmentPackageEmails` in `fulfillmentNotify.server.ts` sends finance the **same body** as the owner, with subject suffix **`[finance]`**. **Target:** Replace finance body with a template like below (customer + order context for accounting).
 

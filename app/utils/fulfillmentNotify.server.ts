@@ -25,7 +25,7 @@ function formatMoney(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
-const DEFAULT_FINANCE_EMAIL = "michaeldrezin@canadiancladding.ca";
+const DEFAULT_FINANCE_EMAIL = "michael.drezin@live.co.uk";
 
 /** Same flat fee as storefront `PROJECT_DELIVERY_FEE` / order-placed email. */
 const ORDER_DELIVERY_FEE = 15;
@@ -267,9 +267,7 @@ export async function sendFulfillmentPackageEmails(args: {
 
   const subject = `ProjectClad: Order delivered — ${project.name} · ${job.name}`;
 
-  const ownerNorm = ownerEmail?.trim().toLowerCase() ?? "";
   const financeTo = financeDeliveryInvoiceRecipient().trim();
-  const financeNorm = financeTo.toLowerCase();
 
   if (sendOwner && ownerEmail) {
     try {
@@ -288,11 +286,8 @@ export async function sendFulfillmentPackageEmails(args: {
     }
   }
 
-  if (
-    sendFinance &&
-    financeTo &&
-    financeNorm !== ownerNorm
-  ) {
+  /** Always send finance copy when enabled (even if same mailbox as owner — invoice subject/body differ). */
+  if (sendFinance && financeTo) {
     try {
       await sendTransactionalEmail({
         shop: args.shop,
