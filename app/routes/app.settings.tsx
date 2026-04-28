@@ -29,6 +29,10 @@ import {
   parseStorefrontNavLinksJson,
   STOREFRONT_APP_NAV_JSON_PLACEHOLDER,
 } from "../utils/storefrontAppNav";
+import {
+  assignNextJobOrderNumberForShop,
+  setManualJobOrderNumberForShop,
+} from "../utils/jobOrderNumber.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -145,6 +149,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       jobs: project.jobs.map((job) => ({
         id: job.id,
         name: job.name,
+        orderNumber: job.orderNumber ?? null,
         isLocked: job.isLocked,
         items: job.items.map((item) => {
           const info = variantInfo[item.variantId];
@@ -397,6 +402,45 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       create: { shop: session.shop, storefrontNavLinksJson: raw || null },
     });
     return { ok: true, storefrontNavSaved: true };
+  }
+
+  if (intent === "assign-next-order-number") {
+    const jobId = String(formData.get("jobId") || "").trim();
+    if (!jobId) {
+      return { orderNumberError: "Select a project and order." };
+    }
+    const result = await assignNextJobOrderNumberForShop(session.shop, jobId);
+    if (!result.ok) {
+      return { orderNumberError: result.error };
+    }
+    return {
+      ok: true,
+      orderNumberSuccess: `Assigned order number #${result.orderNumber}.`,
+    };
+  }
+
+  if (intent === "set-order-number-manual") {
+    const jobId = String(formData.get("jobId") || "").trim();
+    const raw = String(formData.get("manualOrderNumber") || "").trim();
+    if (!jobId) {
+      return { orderNumberError: "Select a project and order." };
+    }
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n)) {
+      return { orderNumberError: "Enter a valid order number (whole number)." };
+    }
+    const result = await setManualJobOrderNumberForShop(
+      session.shop,
+      jobId,
+      n,
+    );
+    if (!result.ok) {
+      return { orderNumberError: result.error };
+    }
+    return {
+      ok: true,
+      orderNumberSuccess: `Saved order number #${result.orderNumber}.`,
+    };
   }
 
   if (intent === "update-project") {
@@ -789,10 +833,38 @@ export default function Settings() {
     "emailNotificationPrefsSaved" in actionData
       ? Boolean(actionData.emailNotificationPrefsSaved)
       : false;
+  const orderNumberError =
+    actionData && typeof actionData === "object" && "orderNumberError" in actionData
+      ? (actionData.orderNumberError as string)
+      : null;
+  const orderNumberSuccess =
+    actionData && typeof actionData === "object" && "orderNumberSuccess" in actionData
+      ? (actionData.orderNumberSuccess as string)
+      : null;
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [showLogoMediaPicker, setShowLogoMediaPicker] = useState(false);
   const [showBgLogoMediaPicker, setShowBgLogoMediaPicker] = useState(false);
+  const [orderNumberProjectId, setOrderNumberProjectId] = useState(
+    projects[0]?.id || "",
+  );
+  const orderNumberJobs = useMemo(() => {
+    const p = projects.find((x) => x.id === orderNumberProjectId);
+    return p?.jobs ?? [];
+  }, [projects, orderNumberProjectId]);
+  const [orderNumberJobId, setOrderNumberJobId] = useState(
+    orderNumberJobs[0]?.id || "",
+  );
+  const selectedOrderJob = useMemo(
+    () => orderNumberJobs.find((j) => j.id === orderNumberJobId),
+    [orderNumberJobs, orderNumberJobId],
+  );
+  useEffect(() => {
+    if (orderNumberJobId && orderNumberJobs.some((j) => j.id === orderNumberJobId)) {
+      return;
+    }
+    setOrderNumberJobId(orderNumberJobs[0]?.id || "");
+  }, [orderNumberProjectId, orderNumberJobs, orderNumberJobId]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(
     customers[0]?.id || "",
   );
@@ -1388,6 +1460,106 @@ export default function Settings() {
             )}
           </s-stack>
         </Form>
+      </s-section>
+      <s-section heading="Order numbers">
+        <s-paragraph>
+          Assign the internal order number used on admin queues and the storefront.
+          Use <strong>Assign next number</strong> when an order is already &quot;Ordered&quot;
+          but has no number (e.g. status was set from admin). Use <strong>Set number</strong>
+          only to correct a value; it must be unique and at least 1100.
+        </s-paragraph>
+        {orderNumberError ? (
+          <s-paragraph>
+            <span style={{ color: "var(--p-color-text-critical, #c00)" }}>{orderNumberError}</span>
+          </s-paragraph>
+        ) : null}
+        {orderNumberSuccess ? (
+          <s-paragraph>{orderNumberSuccess}</s-paragraph>
+        ) : null}
+        {projects.length === 0 ? (
+          <s-paragraph>No projects yet — create a project on the storefront first.</s-paragraph>
+        ) : (
+          <s-stack direction="block" gap="base">
+            <label style={{ display: "grid", gap: "0.25rem", maxWidth: 480 }}>
+              <span>Project</span>
+              <select
+                value={orderNumberProjectId}
+                onChange={(e) => {
+                  setOrderNumberProjectId(e.target.value);
+                }}
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {orderNumberJobs.length === 0 ? (
+              <s-paragraph>This project has no orders (jobs) yet.</s-paragraph>
+            ) : (
+              <>
+                <label style={{ display: "grid", gap: "0.25rem", maxWidth: 480 }}>
+                  <span>Order (job)</span>
+                  <select
+                    value={orderNumberJobId}
+                    onChange={(e) => setOrderNumberJobId(e.target.value)}
+                  >
+                    {orderNumberJobs.map((j) => (
+                      <option key={j.id} value={j.id}>
+                        {j.name}
+                        {j.orderNumber != null ? ` · #${j.orderNumber}` : " · (no number)"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <s-paragraph>
+                  Current number:{" "}
+                  {selectedOrderJob?.orderNumber != null ? (
+                    <strong>#{selectedOrderJob.orderNumber}</strong>
+                  ) : (
+                    <span style={{ opacity: 0.8 }}>None assigned</span>
+                  )}
+                </s-paragraph>
+                <s-stack direction="inline" gap="base" alignItems="end">
+                  <Form method="post">
+                    <input type="hidden" name="intent" value="assign-next-order-number" />
+                    <input type="hidden" name="jobId" value={orderNumberJobId} />
+                    <button
+                      type="submit"
+                      disabled={!orderNumberJobId}
+                      title="Uses the next value from the global sequence"
+                    >
+                      Assign next number
+                    </button>
+                  </Form>
+                </s-stack>
+                <Form method="post">
+                  <s-stack direction="inline" gap="base" alignItems="end">
+                    <input type="hidden" name="intent" value="set-order-number-manual" />
+                    <input type="hidden" name="jobId" value={orderNumberJobId} />
+                    <label style={{ display: "grid", gap: "0.25rem" }}>
+                      <span>Set number (manual, ≥ 1100)</span>
+                      <input
+                        name="manualOrderNumber"
+                        type="number"
+                        min={1100}
+                        step={1}
+                        placeholder="e.g. 1150"
+                        style={{ width: 140 }}
+                        defaultValue={selectedOrderJob?.orderNumber ?? ""}
+                        key={selectedOrderJob?.id}
+                      />
+                    </label>
+                    <button type="submit" disabled={!orderNumberJobId}>
+                      Save number
+                    </button>
+                  </s-stack>
+                </Form>
+              </>
+            )}
+          </s-stack>
+        )}
       </s-section>
       <s-section heading="Projects">
         <s-stack direction="block" gap="base">
