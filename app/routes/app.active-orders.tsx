@@ -116,7 +116,7 @@ export default function ActiveOrdersPage() {
                   <strong>{job.orderLifecycleStatus === "ordered" ? "Ordered" : "Delivered"}</strong>
                   {" · "}
                   <a
-                    href={`${storefrontProjectBase}?id=${encodeURIComponent(job.projectId)}`}
+                    href={`${storefrontProjectBase}?id=${encodeURIComponent(job.projectId)}&job=${encodeURIComponent(job.id)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >

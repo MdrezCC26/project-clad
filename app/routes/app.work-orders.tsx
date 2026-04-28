@@ -540,7 +540,7 @@ export default function AdminWorkOrdersPage() {
                 <p style={{ margin: "0 0 8px", fontSize: "0.9em", opacity: 0.85 }}>
                   {new Date(job.createdAt).toLocaleString()} ·{" "}
                   <a
-                    href={`${storefrontProjectBase}?id=${encodeURIComponent(job.projectId)}`}
+                    href={`${storefrontProjectBase}?id=${encodeURIComponent(job.projectId)}&job=${encodeURIComponent(job.id)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >

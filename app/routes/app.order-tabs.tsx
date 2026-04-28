@@ -117,7 +117,7 @@ function QueueSection({
                 <strong>{row.status}</strong>
                 {" · "}
                 <a
-                  href={`${storefrontProjectBase}?id=${encodeURIComponent(row.projectId)}`}
+                  href={`${storefrontProjectBase}?id=${encodeURIComponent(row.projectId)}&job=${encodeURIComponent(row.id)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
