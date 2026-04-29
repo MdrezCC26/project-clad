@@ -240,11 +240,39 @@ function buildLineItemInput(
   return out;
 }
 
+/**
+ * `DraftOrderInput.shippingAddress` is `MailingAddressInput` — it has `firstName` / `lastName`,
+ * not a single `name` field. Passing `name` causes: "Field is not defined on MailingAddressInput".
+ */
 function cleanAddress(input: DraftOrderAddressInput) {
   const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(input)) {
-    if (typeof value === "string" && value.trim()) {
-      out[key] = value.trim();
+  for (const key of [
+    "address1",
+    "address2",
+    "city",
+    "zip",
+    "phone",
+    "company",
+  ] as const) {
+    const v = input[key];
+    if (typeof v === "string" && v.trim()) {
+      out[key] = v.trim();
+    }
+  }
+  if (input.province?.trim()) {
+    out.province = input.province.trim();
+  }
+  if (input.country?.trim()) {
+    out.country = input.country.trim();
+  }
+  if (input.name?.trim()) {
+    const n = input.name.trim();
+    const sp = n.indexOf(" ");
+    if (sp > 0) {
+      out.firstName = n.slice(0, sp);
+      out.lastName = n.slice(sp + 1).trim() || "-";
+    } else {
+      out.firstName = n;
     }
   }
   return out;
