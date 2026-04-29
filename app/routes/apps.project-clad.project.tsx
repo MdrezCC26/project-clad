@@ -71,6 +71,7 @@ import {
   sendOrderPlacedEmails,
   sendProjectStatusNotificationEmail,
 } from "../utils/orderCreatedEmail.server";
+import { notifyOrderNowStaff } from "../utils/orderNowStaffPush.server";
 import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";
 import { createBackupDraftOrderForJob } from "../utils/shopifyDraftOrder.server";
 import {
@@ -1853,6 +1854,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const isOwner = project.ownerCustomerId === customerId;
   /* Company-only viewers are read-only — explicit membership is required for edit. */
   const canEdit = isMember && canEditProject(project, customerId, viewerIsAppAdmin);
+  const ownerCompanyForShare = canEdit
+    ? await getViewerCompanyContext(shop, project.ownerCustomerId)
+    : { tags: [] as string[], displayNames: [] as string[], keys: [] as string[] };
 
   const unitPriceEditorAllowlist =
     process.env.PROJECTCLAD_UNIT_PRICE_EDITOR_EMAILS?.trim();
@@ -2209,6 +2213,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     viewerHasNATag: hasNATag,
     storefrontAppNav: getStorefrontAppNav(settings),
     navAccountInitial,
+    /** Owner's `company:` tags — for org-visibility toggle when `ownerCompanyKey` is not yet on the project. */
+    ownerCompanyForShare: {
+      hasCompanyTag: ownerCompanyForShare.keys.length > 0,
+      displayName: ownerCompanyForShare.displayNames[0] ?? null,
+      firstKey: ownerCompanyForShare.keys[0] ?? null,
+    },
   };
 };
 
@@ -2949,20 +2959,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         );
       }
 
-      try {
-        await sendOrderPlacedEmails({
-          shop,
-          projectId,
-          jobId,
-          fulfillmentMethod,
-          actorCustomerId: customerId,
-        });
-      } catch (err) {
-        console.error(
-          "[project] order placed email failed:",
-          err instanceof Error ? err.message : err,
-        );
-      }
+      /* Run in parallel: SMTP can be slow; phone push (ntfy) should not wait on email. */
+      await Promise.allSettled([
+        (async () => {
+          try {
+            await sendOrderPlacedEmails({
+              shop,
+              projectId,
+              jobId,
+              fulfillmentMethod,
+              actorCustomerId: customerId,
+            });
+          } catch (err) {
+            console.error(
+              "[project] order placed email failed:",
+              err instanceof Error ? err.message : err,
+            );
+          }
+        })(),
+        (async () => {
+          try {
+            /* Await so the ntfy/webhook fetch finishes before the response. */
+            await notifyOrderNowStaff({ shop, projectId, jobId });
+          } catch (err) {
+            console.error(
+              "[project] order now staff push failed:",
+              err instanceof Error ? err.message : err,
+            );
+          }
+        })(),
+      ]);
       return Response.json({ ok: true });
     }
 
@@ -3875,6 +3901,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return redirectToProject(request, projectId, shop);
     }
 
+    let ownerCompanyKeyToSet: string | undefined;
+    if (visibleToCompanyRendered && visibleToCompany) {
+      if (!project.ownerCompanyKey?.trim()) {
+        const ownerCtx = await getViewerCompanyContext(shop, project.ownerCustomerId);
+        const k = ownerCtx.keys[0];
+        if (k) ownerCompanyKeyToSet = k;
+      }
+    }
+
     await prisma.project.update({
       where: { id: projectId },
       data: {
@@ -3884,6 +3919,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         defaultSiteContactName,
         defaultSiteContactPhone,
         ...(visibleToCompany !== undefined ? { visibleToCompany } : {}),
+        ...(ownerCompanyKeyToSet ? { ownerCompanyKey: ownerCompanyKeyToSet } : {}),
       },
     });
 
@@ -4300,6 +4336,7 @@ export default function ProjectDetailPage() {
     viewerCanFulfill,
     viewerHasNATag,
     navAccountInitial,
+    ownerCompanyForShare,
   } = useLoaderData<typeof loader>();
 
   const orderLifecycleLabel = (status: string) => {
@@ -5069,7 +5106,7 @@ export default function ProjectDetailPage() {
                 className="project-clad-pricing-password-input"
               />
 
-              {project.ownerCompanyKey && (
+              {(project.ownerCompanyKey || ownerCompanyForShare.hasCompanyTag) && (
                 <>
                   <input
                     type="hidden"
@@ -5088,7 +5125,15 @@ export default function ProjectDetailPage() {
                             .filter(Boolean)
                             .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
                             .join(" ")
-                        : "my company");
+                        : (ownerCompanyForShare.displayName &&
+                            ownerCompanyForShare.displayName.trim()) ||
+                          (ownerCompanyForShare.firstKey
+                            ? ownerCompanyForShare.firstKey
+                                .split(/[-_\s]+/)
+                                .filter(Boolean)
+                                .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                                .join(" ")
+                            : "my company"));
                     return (
                       <label
                         className="project-clad-inline-checkbox project-clad-share-toggle"

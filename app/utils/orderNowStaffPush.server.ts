@@ -26,7 +26,8 @@ export async function notifyOrderNowStaff(
   const topic = process.env.PROJECTCLAD_ORDER_NOW_NTFY_TOPIC?.trim();
   const webhookUrl = process.env.PROJECTCLAD_ORDER_NOW_WEBHOOK_URL?.trim();
   if (!topic && !webhookUrl) {
-    console.info(
+    /* Use console.log — some hosts (e.g. Render) omit or de-prioritize console.info in the log UI. */
+    console.log(
       "[orderNowStaffPush] skip — set PROJECTCLAD_ORDER_NOW_NTFY_TOPIC and/or PROJECTCLAD_ORDER_NOW_WEBHOOK_URL on the host (e.g. Render → Environment).",
     );
     return;
@@ -45,7 +46,7 @@ export async function notifyOrderNowStaff(
     },
   });
   if (!job) {
-    console.warn("[orderNowStaffPush] job not found; skipping");
+    console.log("[orderNowStaffPush] job not found; skipping");
     return;
   }
 
@@ -61,7 +62,7 @@ export async function notifyOrderNowStaff(
     projectUrl,
   ].join("\n");
 
-  console.info(
+  console.log(
     "[orderNowStaffPush] sending",
     JSON.stringify({
       ntfy: Boolean(topic),
@@ -139,7 +140,7 @@ async function postToNtfy(args: {
     });
     const bodyText = await res.text().catch(() => "");
     if (res.ok) {
-      console.info("[orderNowStaffPush] ntfy ok", res.status);
+      console.log("[orderNowStaffPush] ntfy ok", res.status);
     } else {
       console.error("[orderNowStaffPush] ntfy failed:", res.status, bodyText);
       if (res.status === 401 || res.status === 403) {
@@ -196,7 +197,7 @@ async function postToWebhook(args: {
       signal: ac.signal,
     });
     if (res.ok) {
-      console.info("[orderNowStaffPush] webhook ok", res.status);
+      console.log("[orderNowStaffPush] webhook ok", res.status);
     } else {
       console.error(
         "[orderNowStaffPush] webhook failed:",
