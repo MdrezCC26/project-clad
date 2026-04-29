@@ -25,7 +25,7 @@ function formatMoney(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
-const DEFAULT_FINANCE_EMAIL = "michael.drezin@live.co.uk";
+const DEFAULT_FINANCE_EMAIL = "michaeldrezin@canadiancladding.ca";
 
 /** Same flat fee as storefront `PROJECT_DELIVERY_FEE` / order-placed email. */
 const ORDER_DELIVERY_FEE = 15;
@@ -118,6 +118,19 @@ function formatJobPoLine(jobPurchaseOrderNumber?: string | null): string {
   return `PO Number: ${v || "—"}`;
 }
 
+function formatOrderNumberLine(orderNumber?: number | null): string {
+  return `Order number: ${orderNumber ?? "—"}`;
+}
+
+function adminAppHomeUrl(shopDomain: string): string {
+  const storeSlug = shopDomain
+    .replace(/\.myshopify\.com$/i, "")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return `https://admin.shopify.com/store/${storeSlug}/apps/projectclad/app/active-orders`;
+}
+
 /**
  * After fulfillment photo: owner gets customer-facing delivered copy; finance gets invoice-oriented copy.
  * Idempotent caller should set fulfillmentNotifiedAt only after success.
@@ -173,6 +186,7 @@ export async function sendFulfillmentPackageEmails(args: {
   });
 
   const projectUrl = `https://${args.shop}/apps/project-clad/project?id=${encodeURIComponent(args.projectId)}`;
+  const adminHomeUrl = adminAppHomeUrl(args.shop);
 
   const isDelivery =
     String(job.fulfillmentMethod || "").trim().toLowerCase() === "delivery";
@@ -247,8 +261,9 @@ export async function sendFulfillmentPackageEmails(args: {
     `Project / order`,
     `Project: ${project.name}`,
     formatProjectNumberLine(project.poNumber),
-    `Order: ${job.name}`,
     formatJobPoLine(job.purchaseOrderNumber),
+    `Order: ${job.name}`,
+    formatOrderNumberLine(job.orderNumber),
     ``,
     isDelivery ? `${shippingBlock(project)}` : `Fulfillment: Store pickup`,
     ``,
@@ -261,7 +276,7 @@ export async function sendFulfillmentPackageEmails(args: {
     `Tax: ${formatMoney(tax)}`,
     `Total: ${formatMoney(total)}`,
     ``,
-    `View project (ProjectClad): ${projectUrl}`,
+    `Open app home: ${adminHomeUrl}`,
     ``,
   ].join("\n");
 

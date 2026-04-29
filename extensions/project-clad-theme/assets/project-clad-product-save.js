@@ -92,6 +92,46 @@
     return { shapeType, variantId, L1, L2, A1, L3, hasL3Input, gauge, quantity };
   }
 
+  /**
+   * Same pricing endpoint as `project-clad-custom-part.js` — variant list price
+   * is often $0 for calculator SKUs; save-to-project must persist unit price here.
+   */
+  async function fetchCustomPartUnitPrice(cpRoot, cp) {
+    if (!cpRoot || !cp) return null;
+    const priceUrl = (cpRoot.dataset.priceUrl || "").trim();
+    if (!priceUrl) return null;
+    const params = new URLSearchParams({
+      shapeType: cp.shapeType,
+      gauge: String(cp.gauge),
+      L1: String(cp.L1),
+      L2: String(cp.L2),
+      quantity: String(cp.quantity),
+    });
+    if (cp.shapeType === "Z" || cp.shapeType === "U") {
+      params.set("L3", String(cp.L3));
+    }
+    try {
+      const r = await fetch(`${priceUrl}?${params.toString()}`, {
+        credentials: "same-origin",
+      });
+      if (!r.ok) return null;
+      const data = await r.json();
+      if (typeof data.unitPrice === "number" && Number.isFinite(data.unitPrice)) {
+        return data.unitPrice;
+      }
+      if (
+        typeof data.totalPrice === "number" &&
+        Number.isFinite(data.totalPrice) &&
+        cp.quantity > 0
+      ) {
+        return Math.round((data.totalPrice / cp.quantity) * 100) / 100;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   function customPartProperties(cp) {
     if (!cp) return [];
     const props = [
@@ -429,6 +469,13 @@
         priceSnapshot = fallbackPrice / 100;
       }
       if (!cp) variantTitle = variantTitleFromOptions(options);
+    }
+
+    if (cp && cpRoot) {
+      const calcUnit = await fetchCustomPartUnitPrice(cpRoot, cp);
+      if (calcUnit != null && Number.isFinite(calcUnit) && calcUnit > 0) {
+        priceSnapshot = calcUnit;
+      }
     }
 
     const productTitle =

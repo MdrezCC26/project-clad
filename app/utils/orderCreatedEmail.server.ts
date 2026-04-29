@@ -50,6 +50,15 @@ function formatOrderPlacedTimestamp(instant: Date): string {
   return `${datePart} at ${timePart}`;
 }
 
+function adminAppHomeUrl(shopDomain: string): string {
+  const storeSlug = shopDomain
+    .replace(/\.myshopify\.com$/i, "")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return `https://admin.shopify.com/store/${storeSlug}/apps/projectclad/app/active-orders`;
+}
+
 function parseShopOrderPlacedRecipients(): string[] {
   const raw = process.env.PROJECTCLAD_SHOP_ORDER_NOTIFY_EMAIL?.trim();
   if (raw) {
@@ -242,6 +251,10 @@ function formatProjectNumberLine(poNumber?: string | null): string {
 function formatJobPoLine(jobPurchaseOrderNumber?: string | null): string {
   const v = (jobPurchaseOrderNumber ?? "").trim();
   return `PO Number: ${v || "—"}`;
+}
+
+function formatOrderNumberTag(orderNumber: number | null | undefined): string {
+  return `ORDER ${orderNumber ?? "—"}`;
 }
 
 /**
@@ -524,6 +537,7 @@ export async function sendOrderPlacedEmails(args: {
   const total = Math.round((subtotal + tax + deliveryFee) * 100) / 100;
 
   const projectUrl = `https://${args.shop}/apps/project-clad/project?id=${encodeURIComponent(args.projectId)}`;
+  const adminHomeUrl = adminAppHomeUrl(args.shop);
 
   const headerLines = [
     `Project: ${project.name}`,
@@ -539,7 +553,7 @@ export async function sendOrderPlacedEmails(args: {
       : [`This order is store pickup (no delivery address).`, ``];
 
   const customerBody = [
-    `Your order has been successfully placed, thank you for choosing Canadian Cladding.`,
+    `${formatOrderNumberTag(job.orderNumber)} has been successfully placed, thank you for choosing Canadian Cladding.`,
     ``,
     ...headerLines,
     ``,
@@ -582,7 +596,7 @@ export async function sendOrderPlacedEmails(args: {
   const shopLines = buildShopOrderLinesNoPricingBlock(args.shop, freshItems, live);
 
   const shopBody = [
-    `Order placed on ${placedAt},`,
+    `${formatOrderNumberTag(job.orderNumber)} has been placed on ${placedAt},`,
     ``,
     `Placed by`,
     `Customer name: ${actorName}`,
@@ -605,7 +619,7 @@ export async function sendOrderPlacedEmails(args: {
     ``,
     shopLines,
     ``,
-    `Open project: ${projectUrl}`,
+    `Open app home: ${adminHomeUrl}`,
   ].join("\n");
 
   const customerTo = ac?.email?.trim();

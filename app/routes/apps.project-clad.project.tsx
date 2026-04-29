@@ -4690,48 +4690,37 @@ export default function ProjectDetailPage() {
     };
   };
 
-  /**
-   * Compact action shown in the order tile's TOP-RIGHT summary header
-   * (next to the Subtotal). The full Order now / Send for review CTA
-   * lives in the bottom finance panel — the header keeps the row scannable
-   * by showing only:
-   *   - "Order again" button when the order has been delivered (via
-   *     `copy-job` → duplicates this job + all items as a fresh draft).
-   *   - A green "Delivered" chip when the order has been paid, so
-   *     the user gets a clear "this is done" signal on finished rows.
-   *   - Nothing for every other lifecycle state.
-   */
+  /** Compact status chip shown in the order tile's top-right summary header. */
   const renderOrderLifecycleHeaderAction = (job: JobView) => {
     const ls = job.orderLifecycleStatus;
-    if (ls === "delivered") {
+    if (ls === "ordered") {
       return (
-        <Form
-          method="post"
-          action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
-          className="project-clad-inline-form"
-          onPointerDownCapture={(event) => event.stopPropagation()}
-          onClickCapture={(event) => event.stopPropagation()}
-        >
-          <input type="hidden" name="intent" value="copy-job" />
-          <input type="hidden" name="jobId" value={job.id} />
-          <input type="hidden" name="targetProjectId" value={project.id} />
-          <button
-            type="submit"
-            className="project-clad-button project-clad-button--approve"
-            title="Create a new order with the same items so you can place it again"
-          >
-            Order again
-          </button>
-        </Form>
+        <span className="project-clad-order-lifecycle-chip project-clad-order-lifecycle-chip--complete">
+          Ordered
+        </span>
       );
     }
-    if (ls === "paid") {
+    if (ls === "delivered") {
       return (
         <span className="project-clad-order-lifecycle-chip project-clad-order-lifecycle-chip--complete">
           Delivered
         </span>
       );
     }
+    if (ls === "paid") {
+      return (
+        <span className="project-clad-order-lifecycle-chip project-clad-order-lifecycle-chip--complete">
+          Order Complete
+        </span>
+      );
+    }
+    return null;
+  };
+
+  const subtotalStatusLabel = (status: string): string | null => {
+    if (status === "ordered") return "Ordered";
+    if (status === "delivered") return "Delivered";
+    if (status === "paid") return "Order Complete";
     return null;
   };
 
@@ -6244,13 +6233,19 @@ export default function ProjectDetailPage() {
                             >
                               {formatJobCreatedMmDdYyyy(job.createdAt)}
                             </time>
+                            {/*
+                             * PDF exports:
+                             * - Packing slip (no pricing) is always available.
+                             * - Invoice (with pricing) appears once delivered/paid.
+                             */}
                             <button
                               type="button"
                               className="project-clad-order-export-pdf"
                               data-projectclad-export-order-pdf
+                              data-print-mode="packing"
                               data-job-id={job.id}
-                              title="Opens print — choose Save as PDF in the print dialog"
-                              aria-label="Export order as PDF"
+                              title="Export packing slip (without prices)"
+                              aria-label="Export packing slip PDF"
                             >
                               <svg
                                 className="project-clad-order-export-pdf__icon"
@@ -6262,11 +6257,40 @@ export default function ProjectDetailPage() {
                                 strokeLinejoin="round"
                                 aria-hidden="true"
                               >
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" x2="12" y1="15" y2="3" />
+                                <rect x="5" y="3" width="14" height="18" rx="2" />
+                                <line x1="8" y1="8" x2="16" y2="8" />
+                                <line x1="8" y1="12" x2="13" y2="12" />
+                                <rect x="8" y="15" width="4" height="4" rx="0.5" />
                               </svg>
                             </button>
+                            {job.orderLifecycleStatus === "delivered" ||
+                            job.orderLifecycleStatus === "paid" ? (
+                              <button
+                                type="button"
+                                className="project-clad-order-export-pdf project-clad-order-export-pdf--invoice"
+                                data-projectclad-export-order-pdf
+                                data-print-mode="invoice"
+                                data-job-id={job.id}
+                                title="Export invoice (with prices)"
+                                aria-label="Export invoice PDF"
+                              >
+                                <svg
+                                  className="project-clad-order-export-pdf__icon"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16l3-2 3 2 3-2 3 2V8z" />
+                                  <polyline points="14 2 14 8 20 8" />
+                                  <line x1="8" y1="12" x2="16" y2="12" />
+                                  <line x1="8" y1="16" x2="16" y2="16" />
+                                </svg>
+                              </button>
+                            ) : null}
                             {canExportOrderCsv ? (
                               <a
                                 className="project-clad-order-export-csv"
@@ -7525,6 +7549,7 @@ export default function ProjectDetailPage() {
       event.preventDefault();
       event.stopPropagation();
       const jobId = exportPdfBtn.getAttribute('data-job-id') || '';
+      const printMode = (exportPdfBtn.getAttribute('data-print-mode') || 'packing').toLowerCase();
       const safeId = jobId.replace(/"/g, '');
       const target = document.querySelector(
         'details.project-clad-order-row[data-job-id="' + safeId + '"]',
@@ -7543,6 +7568,9 @@ export default function ProjectDetailPage() {
         }
       }
       document.body.classList.add('project-clad-print-order-only');
+      if (printMode === 'packing') {
+        document.body.classList.add('project-clad-print-hide-prices');
+      }
       var hdr = document.querySelector('header.project-clad-header');
       if (hdr) suppressForPrint(hdr);
       var container = document.querySelector('.project-clad-container');
@@ -7594,6 +7622,7 @@ export default function ProjectDetailPage() {
         });
         suppressed.length = 0;
         document.body.classList.remove('project-clad-print-order-only');
+        document.body.classList.remove('project-clad-print-hide-prices');
         target.open = wasOpen;
       }
       window.addEventListener('afterprint', restorePrintLayout, { once: true });

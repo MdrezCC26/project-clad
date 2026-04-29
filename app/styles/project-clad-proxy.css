@@ -2002,6 +2002,13 @@ html:has(.project-clad-page--projects) body {
   font-weight: 400 !important;
 }
 
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-order-row
+  .project-clad-order-summary-head-row__status {
+  display: inline-block;
+  margin-right: 0.1rem;
+}
+
 /*
  * Header total: inner spans/button match .project-clad-page * { Helvetica !important } — they do not
  * inherit font-family from the parent div; set Bakbak on each (same pattern as list tile link *).
@@ -8373,6 +8380,10 @@ details.project-clad-edit-mode .project-clad-edit-view {
   outline-offset: 2px;
 }
 
+#project-clad-orders-font-scope .project-clad-order-export-pdf--invoice {
+  color: var(--color-1, #c40000);
+}
+
 /*
  * Single-order PDF: JS adds body.project-clad-print-order-only and .project-clad-print-suppressed
  * on nodes outside the chosen order tile so print is only the order details + contents.
@@ -8463,6 +8474,30 @@ details.project-clad-edit-mode .project-clad-edit-view {
 
   /* Save / Order now (or lifecycle) / Edit order — not part of the PDF */
   body.project-clad-print-order-only .project-clad-order-finance__actions {
+    display: none !important;
+  }
+
+  /* Packing slip mode: suppress all monetary values/price blocks. */
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-order-summary-head-row__subtotal,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-order-line-tile__col--price,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-order-finance__right,
+  body.project-clad-print-order-only.project-clad-print-hide-prices [data-projectclad-price] {
+    display: none !important;
+  }
+
+  /* Packing slip mode: hide receipt unit/line columns and receipt totals. */
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-receipt table th:nth-child(3),
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-receipt table th:nth-child(4),
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-receipt table td:nth-child(3),
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-receipt table td:nth-child(4),
+  body.project-clad-print-order-only.project-clad-print-hide-prices .project-clad-receipt tfoot {
     display: none !important;
   }
 
