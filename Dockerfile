@@ -10,6 +10,7 @@ WORKDIR /app
 ENV NPM_CONFIG_ENGINE_STRICT=false
 
 COPY package.json package-lock.json* ./
+COPY .npmrc ./
 
 # Workspace packages must exist before `npm ci` (see `package.json` → `workspaces`).
 COPY extensions ./extensions
