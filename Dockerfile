@@ -1,17 +1,16 @@
-FROM node:22-alpine
-RUN apk add --no-cache openssl libc6-compat
+# Minimal image: workspaces paths, relax engine.strict in Docker, reproducible prod node_modules.
+
+FROM node:20-alpine
+RUN apk add --no-cache openssl
 
 EXPOSE 3000
 
 WORKDIR /app
 
-# Use Node 22 + relax engine check in the image only (see `package.json` `engines` + `.npmrc` `engine-strict`).
 ENV NPM_CONFIG_ENGINE_STRICT=false
 
 COPY package.json package-lock.json* ./
 COPY .npmrc ./
-
-# Workspace paths must exist before `npm ci`.
 COPY extensions ./extensions
 
 RUN npm ci && npm cache clean --force
