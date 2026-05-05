@@ -8,8 +8,8 @@ import {
   getEmailNotificationPrefs,
   isEmailNotificationEnabled,
 } from "./emailNotificationPrefs.server";
-import { isEmailConfigured } from "./email.server";
-import { sendTransactionalEmail } from "./transactionalEmail.server";
+import { dedupeEmailAddresses, isEmailConfigured } from "./email.server";
+import { sendTransactionalEmailToRecipients } from "./transactionalEmail.server";
 import { formatPreferredDeliveryDisplay } from "./preferredDeliveryFormat";
 import {
   buildVariantPresentation,
@@ -18,6 +18,7 @@ import {
   type VariantDisplayInfo,
 } from "./variantInfo.server";
 import { shopStringFilter } from "./projectAccess.server";
+import { STOREFRONT_ORDER_CONFIRMED_ACTIVITY } from "./projectActivity.server";
 import { orderTaxFromSubtotal } from "./orderDisplayTax";
 
 function formatMoney(amount: number): string {
@@ -30,17 +31,57 @@ const DEFAULT_FINANCE_EMAIL = "michaeldrezin@canadiancladding.ca";
 /** Same flat fee as storefront `PROJECT_DELIVERY_FEE` / order-placed email. */
 const ORDER_DELIVERY_FEE = 15;
 
-/** Single finance mailbox for delivered / invoice mail (env may override first address only). */
-function financeDeliveryInvoiceRecipient(): string {
+function dedupeCustomerIds(ids: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of ids) {
+    const t = raw.trim();
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
+
+/**
+ * Who should get the customer-facing delivered email: project owner plus whoever confirmed
+ * Order now / reorder (logged as `STOREFRONT_ORDER_CONFIRMED_ACTIVITY`). Older jobs without
+ * that event resolve to owner only.
+ */
+async function customerIdsForDeliveredEmailNotify(args: {
+  projectId: string;
+  jobId: string;
+  ownerCustomerId: string;
+}): Promise<string[]> {
+  const placerRow = await prisma.projectActivityEvent.findFirst({
+    where: {
+      projectId: args.projectId,
+      jobId: args.jobId,
+      type: STOREFRONT_ORDER_CONFIRMED_ACTIVITY,
+    },
+    orderBy: { createdAt: "desc" },
+    select: { actorCustomerId: true },
+  });
+  const placerId = placerRow?.actorCustomerId?.trim();
+  return dedupeCustomerIds(
+    placerId
+      ? [args.ownerCustomerId, placerId]
+      : [args.ownerCustomerId],
+  );
+}
+
+/** All finance mailboxes from PROJECTCLAD_FINANCE_EMAIL (`a@x;b@y`). Fallback when unset. */
+function financeDeliveryInvoiceRecipients(): string[] {
   const raw = process.env.PROJECTCLAD_FINANCE_EMAIL?.trim();
   if (raw) {
-    const first = raw
-      .split(/[,;]+/)
-      .map((s) => s.trim())
-      .find(Boolean);
-    if (first) return first;
+    const list = dedupeEmailAddresses(
+      raw.split(/[,;]+/).map((s) => s.trim()).filter(Boolean),
+    );
+    if (list.length > 0) return list;
   }
-  return DEFAULT_FINANCE_EMAIL;
+  return [DEFAULT_FINANCE_EMAIL];
 }
 
 function shippingBlock(project: {
@@ -132,7 +173,8 @@ function adminAppHomeUrl(shopDomain: string): string {
 }
 
 /**
- * After fulfillment photo: owner gets customer-facing delivered copy; finance gets invoice-oriented copy.
+ * After fulfillment photo: project owner and the customer who placed the order get the delivered copy
+ * (when we have a `storefront_order_confirmed` activity); finance gets invoice-oriented copy.
  * Idempotent caller should set fulfillmentNotifiedAt only after success.
  */
 export async function sendFulfillmentPackageEmails(args: {
@@ -231,14 +273,27 @@ export async function sendFulfillmentPackageEmails(args: {
   const ownerBody = headerBlock.join("\n");
 
   const ownerId = project.ownerCustomerId;
-  let ownerEmail: string | null = null;
+  const deliveredNotifyIds = await customerIdsForDeliveredEmailNotify({
+    projectId: args.projectId,
+    jobId: args.jobId,
+    ownerCustomerId: ownerId,
+  });
+
   let ownerCustomerRow: CustomerInfo | undefined;
+  let customerDeliveryEmails: string[] = [];
   try {
-    const info = await getCustomersByIds(args.shop, [ownerId]);
-    ownerCustomerRow = info[ownerId];
-    ownerEmail = ownerCustomerRow?.email?.trim() || null;
+    const info = await getCustomersByIds(args.shop, deliveredNotifyIds);
+    const pick = (id: string) =>
+      info[id] ?? info[id.replace(/\D/g, "")];
+    ownerCustomerRow = pick(ownerId);
+    customerDeliveryEmails = dedupeEmailAddresses(
+      deliveredNotifyIds
+        .map((id) => pick(id)?.email?.trim())
+        .filter((e): e is string => Boolean(e)),
+    );
   } catch {
-    ownerEmail = null;
+    ownerCustomerRow = undefined;
+    customerDeliveryEmails = [];
   }
 
   const ownerName =
@@ -282,34 +337,59 @@ export async function sendFulfillmentPackageEmails(args: {
 
   const subject = `ProjectClad: Order delivered — ${project.name} · ${job.name}`;
 
-  const financeTo = financeDeliveryInvoiceRecipient().trim();
+  const financeRecipients = financeDeliveryInvoiceRecipients();
 
-  if (sendOwner && ownerEmail) {
+  if (sendOwner && customerDeliveryEmails.length > 0) {
     try {
-      await sendTransactionalEmail({
+      const ok = await sendTransactionalEmailToRecipients({
         shop: args.shop,
-        to: ownerEmail,
+        recipients: customerDeliveryEmails,
         subject,
         text: ownerBody,
       });
+      if (ok === 0) {
+        throw new Error(
+          `[fulfillmentNotify] customer delivered-mail failed for all ${customerDeliveryEmails.length} recipient(s)`,
+        );
+      }
+      if (ok < customerDeliveryEmails.length) {
+        console.warn(
+          `[fulfillmentNotify] customer delivered-mail partial success: ${ok}/${customerDeliveryEmails.length}`,
+        );
+      }
     } catch (err) {
       console.error(
-        "[fulfillmentNotify] owner send failed:",
+        "[fulfillmentNotify] customer delivered-mail send failed:",
         err instanceof Error ? err.message : err,
       );
       throw err;
     }
+  } else if (sendOwner && customerDeliveryEmails.length === 0) {
+    console.warn(
+      "[fulfillmentNotify] fulfillmentOwner is on but no customer emails (check Shopify customer email on file and Admin API session).",
+    );
   }
 
-  /** Always send finance copy when enabled (even if same mailbox as owner — invoice subject/body differ). */
-  if (sendFinance && financeTo) {
+  /** Always send finance copy when enabled (each list address gets its own message; subject/body differ from owner). */
+  if (sendFinance && financeRecipients.length > 0) {
     try {
-      await sendTransactionalEmail({
+      const financeSubject = `ProjectClad: Finance — Order delivered — ${project.name} · ${job.name}`;
+      const ok = await sendTransactionalEmailToRecipients({
         shop: args.shop,
-        to: financeTo,
-        subject: `ProjectClad: Finance — Order delivered — ${project.name} · ${job.name}`,
+        recipients: financeRecipients,
+        subject: financeSubject,
         text: financeBody,
       });
+      if (ok === 0) {
+        throw new Error(
+          `[fulfillmentNotify] finance send failed for all ${financeRecipients.length} recipient(s)`,
+        );
+      }
+      if (ok < financeRecipients.length) {
+        console.warn(
+          `[fulfillmentNotify] finance send partial success: ${ok}/${financeRecipients.length}`,
+        );
+      }
     } catch (err) {
       console.error(
         "[fulfillmentNotify] finance send failed:",

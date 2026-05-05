@@ -66,7 +66,10 @@ import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowS
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
 import { getStorefrontAppNav } from "../utils/storefrontAppNav";
-import { logProjectActivity } from "../utils/projectActivity.server";
+import {
+  logProjectActivity,
+  STOREFRONT_ORDER_CONFIRMED_ACTIVITY,
+} from "../utils/projectActivity.server";
 import {
   sendOrderPlacedEmails,
   sendProjectStatusNotificationEmail,
@@ -93,6 +96,8 @@ import {
   jobNameForOrderSummary,
   jobPurchaseOrderDisplay,
 } from "../utils/jobNameDisplay";
+import { resolveColourCatalogueLine } from "../utils/colourCatalogue";
+import { duplicateUploadPartMirrorsForCopiedJobItem } from "../utils/uploadPartMirror.server";
 
 type JobItemView = {
   id: string;
@@ -395,6 +400,11 @@ function OrderLineThumbMedia({ item }: { item: JobItemView }) {
 function OrderLinePropertyChips({ item }: { item: JobItemView }) {
   if (!item.properties?.length) return null;
 
+  const chips: ReactNode[] = [];
+  const blocks: ReactNode[] = [];
+  let calcKeysLower = new Set<string>();
+  let calcParseNote: ReactNode = null;
+
   const calcPayload = item.properties.find((p) => p.name === "__ooCalcPayload");
   if (calcPayload?.value) {
     try {
@@ -406,19 +416,17 @@ function OrderLinePropertyChips({ item }: { item: JobItemView }) {
         if (typeof value === "string" && value.trim() === "") return false;
         return true;
       });
-      if (!entries.length) return null;
-      return (
-        <div className="project-clad-order-card-specs">
-          {entries.map(([key, value], index) => (
-            <span key={`calc-${index}`} className="project-clad-order-card-chip">
-              <span className="project-clad-order-card-chip__k">{key}</span>
-              <span className="project-clad-order-card-chip__v">{String(value)}</span>
-            </span>
-          ))}
-        </div>
-      );
+      entries.forEach(([key, value], index) => {
+        calcKeysLower.add(key.trim().toLowerCase());
+        chips.push(
+          <span key={`calc-${key}-${index}`} className="project-clad-order-card-chip">
+            <span className="project-clad-order-card-chip__k">{key}</span>
+            <span className="project-clad-order-card-chip__v">{String(value)}</span>
+          </span>,
+        );
+      });
     } catch {
-      return (
+      calcParseNote = (
         <p className="project-clad-order-card-sub project-clad-muted" style={{ margin: "0.2rem 0 0" }}>
           <strong>Details:</strong> {calcPayload.value}
         </p>
@@ -434,12 +442,12 @@ function OrderLinePropertyChips({ item }: { item: JobItemView }) {
     return true;
   });
 
-  if (!filtered.length) return null;
-
-  const chips: ReactNode[] = [];
-  const blocks: ReactNode[] = [];
-
   filtered.forEach((prop, index) => {
+    const nameLower = prop.name.trim().toLowerCase();
+    if (calcKeysLower.has(nameLower)) {
+      return;
+    }
+
     const v = prop.value.trim();
     if (v.startsWith("http://") || v.startsWith("https://")) {
       if (isLikelyPdfUrl(v)) {
@@ -476,6 +484,30 @@ function OrderLinePropertyChips({ item }: { item: JobItemView }) {
       );
       return;
     }
+
+    if (nameLower === "color") {
+      const cat = resolveColourCatalogueLine(v);
+      if (cat) {
+        chips.push(
+          <span
+            key={`c-colour-${index}`}
+            className="project-clad-order-card-chip project-clad-order-card-chip--colour"
+            title={v}
+          >
+            <span
+              className="project-clad-order-card-colour-swatch"
+              style={{ backgroundColor: cat.hex }}
+              aria-hidden
+            />
+            <span className="project-clad-order-card-chip__v project-clad-order-card-chip__v--colour">
+              {cat.display}
+            </span>
+          </span>,
+        );
+        return;
+      }
+    }
+
     chips.push(
       <span key={`c-${index}`} className="project-clad-order-card-chip">
         <span className="project-clad-order-card-chip__k">{prop.name}</span>
@@ -484,15 +516,25 @@ function OrderLinePropertyChips({ item }: { item: JobItemView }) {
     );
   });
 
+  if (!chips.length && !blocks.length && !calcParseNote) return null;
+
   return (
     <>
+      {calcParseNote}
       {chips.length > 0 ? <div className="project-clad-order-card-specs">{chips}</div> : null}
       {blocks.length > 0 ? <div className="project-clad-order-card-prop-blocks">{blocks}</div> : null}
     </>
   );
 }
 
-function OrderLineDetailsColumn({ item }: { item: JobItemView }) {
+function OrderLineDetailsColumn({
+  item,
+  reorderOpen,
+}: {
+  item: JobItemView;
+  /** When set, show Reorder control (opens modal → creates new ordered job). */
+  reorderOpen?: { itemId: string; defaultQty: number; lineLabel: string } | null;
+}) {
   const isUploadPart = item.displayName.toLowerCase().includes("upload part");
   const href = isUploadPart
     ? item.uploadPartFileUrl || item.imageUrl
@@ -540,6 +582,21 @@ function OrderLineDetailsColumn({ item }: { item: JobItemView }) {
         </p>
       ) : null}
       <OrderLinePropertyChips item={item} />
+      {reorderOpen ? (
+        <div className="project-clad-order-line-reorder-wrap">
+          <button
+            type="button"
+            className="project-clad-button project-clad-order-line-reorder-btn"
+            data-projectclad-reorder-open
+            data-item-id={reorderOpen.itemId}
+            data-default-qty={String(reorderOpen.defaultQty)}
+            data-line-label={reorderOpen.lineLabel}
+            onClick={(event) => event.stopPropagation()}
+          >
+            Reorder
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1630,6 +1687,10 @@ function formatActivitySummary(ev: ActivityFeedItem): string {
   switch (ev.type) {
     case "order_created": {
       const jn = String(p.jobName || "Order");
+      const reorderFrom = String(p.reorderedFromJobName || "").trim();
+      if (reorderFrom) {
+        return `New order ${jn} (reorder from ${reorderFrom})`;
+      }
       const from = String(p.copiedFrom || "").trim();
       return from ? `New order ${jn} (from ${from})` : `New order ${jn}`;
     }
@@ -2917,6 +2978,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return Response.json({ error: detail }, { status: 500 });
       }
 
+      await logProjectActivity({
+        projectId,
+        jobId,
+        type: STOREFRONT_ORDER_CONFIRMED_ACTIVITY,
+        visibility: "member",
+        actorCustomerId: customerId,
+      }).catch(() => undefined);
+
       /* Silent backup draft order in Shopify admin. Best-effort: never blocks Order now. */
       console.log(
         "[project-clad] backup draft order: starting for job",
@@ -3710,6 +3779,219 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         });
       }
     }
+
+    return redirectToProject(request, projectId, shop);
+  }
+
+  if (intent === "reorder-from-complete-line") {
+    if (!canEdit) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+
+    const sourceItemId = String(formData.get("sourceItemId") || "").trim();
+    const quantity = Math.floor(Number(formData.get("quantity")));
+    if (
+      !sourceItemId ||
+      !Number.isFinite(quantity) ||
+      quantity < 1 ||
+      quantity > 99_999
+    ) {
+      throw new Response("Invalid item or quantity.", { status: 400 });
+    }
+
+    const sourceItem = await prisma.jobItem.findFirst({
+      where: { id: sourceItemId },
+      include: { job: true },
+    });
+
+    if (!sourceItem || sourceItem.job.projectId !== projectId) {
+      throw new Response("Item not found", { status: 404 });
+    }
+
+    if (sourceItem.job.orderLifecycleStatus !== "paid") {
+      throw new Response(
+        "Reorder is only available from completed orders.",
+        { status: 403 },
+      );
+    }
+
+    if (!String(sourceItem.variantId || "").trim()) {
+      throw new Response("This line has no variant to reorder.", {
+        status: 400,
+      });
+    }
+
+    const snap = parseOrderLineCapture(sourceItem.orderLineCapture);
+    const vs = parseVariantSnapshot(sourceItem.variantSnapshot);
+    const label =
+      snap?.displayLabel?.trim() ||
+      [vs?.productTitle, vs?.variantTitle].filter(Boolean).join(" — ") ||
+      "Line";
+    const short = label.replace(/\s+/g, " ").trim().slice(0, 56);
+    const ordRef =
+      sourceItem.job.orderNumber != null
+        ? `#${sourceItem.job.orderNumber}`
+        : "order";
+    let baseName = `Reorder ${ordRef} — ${short}`;
+    if (baseName.length > 180) {
+      baseName = `${baseName.slice(0, 177)}…`;
+    }
+
+    const existingNames = await prisma.job.findMany({
+      where: { projectId },
+      select: { name: true },
+    });
+    const taken = new Set(
+      existingNames.map((j) => j.name.trim().toLowerCase()),
+    );
+    let name = baseName;
+    let suffix = 2;
+    while (taken.has(name.trim().toLowerCase())) {
+      name = `${baseName} (${suffix})`;
+      suffix += 1;
+      if (suffix > 500) {
+        throw new Response("Could not allocate a unique order name.", {
+          status: 500,
+        });
+      }
+    }
+
+    const maxOrder = await prisma.job.aggregate({
+      where: { projectId },
+      _max: { sortOrder: true },
+    });
+    const nextSortOrder = (maxOrder._max.sortOrder ?? 0) + 1;
+
+    const fulfillmentMethod: "pickup" | "delivery" =
+      sourceItem.job.fulfillmentMethod === "delivery"
+        ? "delivery"
+        : "pickup";
+
+    const { newJobId, newItemId } = await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ nextval: bigint | number }>>`
+        SELECT nextval('"Job_orderNumber_seq"') AS nextval
+      `;
+      const raw = rows[0]?.nextval;
+      const parsed =
+        typeof raw === "bigint" ? Number(raw) : Number(raw ?? Number.NaN);
+      if (!Number.isFinite(parsed)) {
+        throw new Error("Could not allocate order number.");
+      }
+
+      const newJob = await tx.job.create({
+        data: {
+          projectId,
+          name,
+          sortOrder: nextSortOrder,
+          orderLifecycleStatus: "ordered",
+          orderNumber: parsed,
+          fulfillmentMethod,
+          siteContactName: sourceItem.job.siteContactName ?? null,
+          siteContactPhone: sourceItem.job.siteContactPhone ?? null,
+          purchaseOrderNumber: sourceItem.job.purchaseOrderNumber ?? undefined,
+          isLocked: false,
+        },
+      });
+
+      const newItem = await tx.jobItem.create({
+        data: {
+          jobId: newJob.id,
+          variantId: sourceItem.variantId,
+          quantity,
+          priceSnapshot: sourceItem.priceSnapshot,
+          sortOrder: 1,
+          variantSnapshot: sourceItem.variantSnapshot ?? undefined,
+          customData: sourceItem.customData ?? undefined,
+          orderLineCapture: sourceItem.orderLineCapture ?? undefined,
+          catalogProductId: sourceItem.catalogProductId ?? undefined,
+          catalogSku: sourceItem.catalogSku ?? undefined,
+        },
+      });
+
+      return { newJobId: newJob.id, newItemId: newItem.id };
+    });
+
+    try {
+      await duplicateUploadPartMirrorsForCopiedJobItem({
+        shop,
+        oldItem: {
+          id: sourceItem.id,
+          customData: sourceItem.customData,
+          uploadPartMirrorKeysJson: sourceItem.uploadPartMirrorKeysJson,
+        },
+        newJobItemId: newItemId,
+      });
+    } catch (mirrorErr) {
+      console.error(
+        "[project-clad] reorder upload-part mirror duplicate failed:",
+        mirrorErr instanceof Error ? mirrorErr.message : mirrorErr,
+      );
+    }
+
+    await logProjectActivity({
+      projectId,
+      jobId: newJobId,
+      type: "order_created",
+      visibility: "member",
+      actorCustomerId: customerId,
+      payload: {
+        jobName: name,
+        reorderedFromJobName: sourceItem.job.name,
+      },
+    });
+
+    await logProjectActivity({
+      projectId,
+      jobId: newJobId,
+      type: STOREFRONT_ORDER_CONFIRMED_ACTIVITY,
+      visibility: "member",
+      actorCustomerId: customerId,
+    }).catch(() => undefined);
+
+    await emailProjectStatusSnapshot({
+      shop,
+      projectId,
+      actorCustomerId: customerId,
+      headline: "Reorder from completed order",
+      introLines: [
+        `New order "${name}" was created with ${quantity} unit(s), copied from completed order "${sourceItem.job.name}".`,
+        "It is marked as ordered and appears in your project.",
+      ],
+    });
+
+    try {
+      await createBackupDraftOrderForJob({
+        shop,
+        jobId: newJobId,
+        deliveryFeeAmount:
+          fulfillmentMethod === "delivery" ? PROJECT_DELIVERY_FEE : 0,
+      });
+    } catch (err) {
+      console.error("[project-clad] reorder backup draft failed:", err);
+    }
+
+    await Promise.allSettled([
+      (async () => {
+        try {
+          await sendOrderPlacedEmails({
+            shop,
+            projectId,
+            jobId: newJobId,
+            fulfillmentMethod,
+            actorCustomerId: customerId,
+          });
+        } catch (e) {
+          console.error("[project] reorder order-placed email failed:", e);
+        }
+      })(),
+      (async () => {
+        try {
+          await notifyOrderNowStaff({ shop, projectId, jobId: newJobId });
+        } catch (e) {
+          console.error("[project] reorder staff push failed:", e);
+        }
+      })(),
+    ]);
 
     return redirectToProject(request, projectId, shop);
   }
@@ -5019,6 +5301,69 @@ export default function ProjectDetailPage() {
               Cancel
             </button>
             <span className="project-clad-muted" data-projectclad-form-message />
+          </Form>
+        </div>
+      </div>
+      <div
+        className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
+        data-projectclad-reorder-modal
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reorder-modal-title"
+        style={{ display: "none" }}
+      >
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal card: stop mousedown so backdrop logic ignores inner surface */}
+        <div
+          className="project-clad-card project-clad-modal project-clad-reject-modal"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <h2 id="reorder-modal-title" data-projectclad-reorder-modal-title>
+            Reorder
+          </h2>
+          <p className="project-clad-muted">
+            Choose a quantity. A new order will be created and marked{" "}
+            <strong>ordered</strong>, using the same product, price, and line
+            details as this completed line.
+          </p>
+          <Form
+            method="post"
+            action={`${storefrontProjectActionPath}?id=${encodeURIComponent(project.id)}`}
+            className="project-clad-reject-form"
+          >
+            <input type="hidden" name="id" value={project.id} />
+            <input type="hidden" name="intent" value="reorder-from-complete-line" />
+            <input
+              type="hidden"
+              name="sourceItemId"
+              id="projectclad-reorder-source-item-id"
+              defaultValue=""
+            />
+            <label htmlFor="projectclad-reorder-qty">Quantity</label>
+            <input
+              id="projectclad-reorder-qty"
+              name="quantity"
+              type="number"
+              min={1}
+              max={99999}
+              step={1}
+              required
+              defaultValue={1}
+              className="project-clad-pricing-password-input"
+              inputMode="numeric"
+              aria-label="Quantity for reorder"
+            />
+            <div className="project-clad-actions project-clad-reject-modal-actions">
+              <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
+                Reorder
+              </button>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                data-projectclad-reorder-cancel
+              >
+                Cancel
+              </button>
+            </div>
           </Form>
         </div>
       </div>
@@ -6467,7 +6812,21 @@ export default function ProjectDetailPage() {
                                         </div>
                                       </div>
                                       <div className="project-clad-order-line-tile__col project-clad-order-line-tile__col--details">
-                                        <OrderLineDetailsColumn item={item} />
+                                        <OrderLineDetailsColumn
+                                          item={item}
+                                          reorderOpen={
+                                            canEdit &&
+                                            job.orderLifecycleStatus === "paid" &&
+                                            item.quantity > 0 &&
+                                            String(item.variantId || "").trim()
+                                              ? {
+                                                  itemId: item.id,
+                                                  defaultQty: item.quantity,
+                                                  lineLabel: item.displayName,
+                                                }
+                                              : null
+                                          }
+                                        />
                                       </div>
                                       <div
                                         className="project-clad-order-line-tile__col project-clad-order-line-tile__col--qty project-clad-table-right"
@@ -7323,6 +7682,7 @@ export default function ProjectDetailPage() {
     }
   };
   const rejectModal = document.querySelector('[data-projectclad-reject-modal]');
+  const reorderModal = document.querySelector('[data-projectclad-reorder-modal]');
   const rejectForm = document.querySelector('[data-projectclad-reject-form]');
   const rejectReasonInput = document.getElementById('reject-reason');
   let rejectProjectId = '';
@@ -7693,6 +8053,40 @@ export default function ProjectDetailPage() {
     }
     if (event.target?.closest?.('[data-projectclad-reject-cancel]') || event.target === rejectModal) {
       if (rejectModal instanceof HTMLElement) rejectModal.style.display = 'none';
+    }
+    const reorderOpenBtn = event.target?.closest?.('[data-projectclad-reorder-open]');
+    if (reorderOpenBtn instanceof HTMLElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      const itemId = reorderOpenBtn.getAttribute('data-item-id') || '';
+      const defQty = reorderOpenBtn.getAttribute('data-default-qty') || '1';
+      const lineLabel = reorderOpenBtn.getAttribute('data-line-label') || '';
+      const hid = document.getElementById('projectclad-reorder-source-item-id');
+      const qtyInp = document.getElementById('projectclad-reorder-qty');
+      const titleEl = document.querySelector('[data-projectclad-reorder-modal-title]');
+      if (hid instanceof HTMLInputElement) hid.value = itemId;
+      if (qtyInp instanceof HTMLInputElement) {
+        var q0 = parseInt(defQty, 10);
+        qtyInp.value = !isNaN(q0) && q0 > 0 ? String(q0) : '1';
+      }
+      if (titleEl) {
+        titleEl.textContent = lineLabel ? 'Reorder: ' + lineLabel : 'Reorder';
+      }
+      if (reorderModal instanceof HTMLElement) {
+        reorderModal.style.display = 'flex';
+        setTimeout(function () {
+          if (qtyInp instanceof HTMLInputElement) {
+            qtyInp.focus();
+            qtyInp.select();
+          }
+        }, 50);
+      }
+    }
+    if (
+      event.target?.closest?.('[data-projectclad-reorder-cancel]') ||
+      event.target === reorderModal
+    ) {
+      if (reorderModal instanceof HTMLElement) reorderModal.style.display = 'none';
     }
     const editSaveClose = event.target?.closest?.('[data-projectclad-edit-save-close]');
     if (editSaveClose) {

@@ -1,6 +1,9 @@
 import type { Prisma } from "@prisma/client";
 import prisma from "../db.server";
 
+/** Logged when a customer confirms Order now or reorders (for delivery email recipients). */
+export const STOREFRONT_ORDER_CONFIRMED_ACTIVITY = "storefront_order_confirmed";
+
 export type ActivityVisibility = "member" | "admin";
 
 export async function logProjectActivity(input: {

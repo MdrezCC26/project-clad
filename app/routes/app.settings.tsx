@@ -743,8 +743,8 @@ const EMAIL_NOTIFICATION_LABELS: Record<
     hint: "Operations copy (PROJECTCLAD_SHOP_ORDER_NOTIFY_EMAIL).",
   },
   fulfillmentOwner: {
-    title: "Delivered — customer (owner)",
-    hint: "After fulfillment photo upload.",
+    title: "Delivered — customer",
+    hint: "Project owner plus whoever confirmed Order now / reorder (after fulfillment photo).",
   },
   fulfillmentFinance: {
     title: "Delivered — finance",
