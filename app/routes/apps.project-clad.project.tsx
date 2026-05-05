@@ -43,6 +43,7 @@ import {
   fetchCustomerTagsRest,
   findCustomerIdByEmail,
   getCustomersByIds,
+  resolvePlacerNotifyEmail,
 } from "../utils/adminCustomers.server";
 import {
   customerEmailInConfiguredList,
@@ -2978,12 +2979,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return Response.json({ error: detail }, { status: 500 });
       }
 
+      const notifyEmail = await resolvePlacerNotifyEmail(
+        shop,
+        customerId,
+        customerEmail,
+      );
       await logProjectActivity({
         projectId,
         jobId,
         type: STOREFRONT_ORDER_CONFIRMED_ACTIVITY,
         visibility: "member",
         actorCustomerId: customerId,
+        payload: notifyEmail ? { notifyEmail } : undefined,
       }).catch(() => undefined);
 
       /* Silent backup draft order in Shopify admin. Best-effort: never blocks Order now. */
@@ -3940,12 +3947,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
 
+    const reorderNotifyEmail = await resolvePlacerNotifyEmail(
+      shop,
+      customerId,
+      customerEmail,
+    );
     await logProjectActivity({
       projectId,
       jobId: newJobId,
       type: STOREFRONT_ORDER_CONFIRMED_ACTIVITY,
       visibility: "member",
       actorCustomerId: customerId,
+      payload: reorderNotifyEmail ? { notifyEmail: reorderNotifyEmail } : undefined,
     }).catch(() => undefined);
 
     await emailProjectStatusSnapshot({

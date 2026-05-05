@@ -36,6 +36,25 @@ export function shopifyCustomerIdVariants(customerId: string): string[] {
   return [...out];
 }
 
+/** Digits-only ids for Admin API lookups that prepend `gid://shopify/Customer/` per id. */
+export function customerNumericIdsForAdminApi(customerIdRaw: string): string[] {
+  const set = new Set<string>();
+  for (const v of shopifyCustomerIdVariants(customerIdRaw)) {
+    const tail = v.includes("/")
+      ? v.split("/").pop() ?? v
+      : v;
+    const digits = String(tail).replace(/\D/g, "");
+    if (digits.length >= 6) {
+      set.add(digits);
+    }
+  }
+  const d = String(customerIdRaw).replace(/\D/g, "");
+  if (d.length >= 6) {
+    set.add(d);
+  }
+  return [...set];
+}
+
 type ProjectForAccess = {
   ownerCustomerId: string;
   members: { customerId: string; role: string }[];

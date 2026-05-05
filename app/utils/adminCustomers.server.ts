@@ -1,5 +1,10 @@
 import prisma from "../db.server";
 import { sessionStorage } from "../shopify.server";
+import {
+  customerIdsMatch,
+  customerNumericIdsForAdminApi,
+  shopifyCustomerIdVariants,
+} from "./projectAccess.server";
 
 const CUSTOMER_API_VERSION = "2024-10";
 
@@ -400,4 +405,49 @@ export async function fetchCustomerTagsRest(
   }
 
   return [];
+}
+
+/** Lookup in {@link getCustomersByIds} results when stored ids may vary (GID vs numeric). */
+export function getCustomerRowFromFetchedMap(
+  storefrontCustomerId: string,
+  info: Record<string, CustomerInfo>,
+): CustomerInfo | undefined {
+  for (const variant of shopifyCustomerIdVariants(storefrontCustomerId)) {
+    const row = info[variant];
+    if (row) {
+      return row;
+    }
+  }
+  for (const row of Object.values(info)) {
+    if (row?.id && customerIdsMatch(row.id, storefrontCustomerId)) {
+      return row;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Best email for the storefront session that placed an order: signed proxy string when Shopify
+ * includes it on the URL, otherwise the Admin API customer profile.
+ */
+export async function resolvePlacerNotifyEmail(
+  shop: string,
+  storefrontCustomerId: string,
+  signedProxyEmail?: string | null,
+): Promise<string | null> {
+  const fromProxy = signedProxyEmail?.trim();
+  if (fromProxy) {
+    return fromProxy;
+  }
+  const keys = customerNumericIdsForAdminApi(storefrontCustomerId);
+  if (keys.length === 0) {
+    return null;
+  }
+  try {
+    const map = await getCustomersByIds(shop, keys);
+    const em = getCustomerRowFromFetchedMap(storefrontCustomerId, map)?.email?.trim();
+    return em || null;
+  } catch {
+    return null;
+  }
 }

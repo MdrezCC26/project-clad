@@ -1,5 +1,6 @@
 import prisma from "../db.server";
 import {
+  getCustomerRowFromFetchedMap,
   getCustomersByIds,
   type CustomerInfo,
 } from "./adminCustomers.server";
@@ -17,7 +18,10 @@ import {
   resolveVariantDisplayInfo,
   type VariantDisplayInfo,
 } from "./variantInfo.server";
-import { shopStringFilter } from "./projectAccess.server";
+import {
+  customerNumericIdsForAdminApi,
+  shopStringFilter,
+} from "./projectAccess.server";
 import { STOREFRONT_ORDER_CONFIRMED_ACTIVITY } from "./projectActivity.server";
 import { orderTaxFromSubtotal } from "./orderDisplayTax";
 
@@ -45,16 +49,32 @@ function dedupeCustomerIds(ids: string[]): string[] {
   return out;
 }
 
+function notifyEmailFromActivityPayload(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+  const raw = (payload as Record<string, unknown>).notifyEmail;
+  if (typeof raw !== "string") {
+    return null;
+  }
+  const t = raw.trim();
+  return t || null;
+}
+
 /**
- * Who should get the customer-facing delivered email: project owner plus whoever confirmed
- * Order now / reorder (logged as `STOREFRONT_ORDER_CONFIRMED_ACTIVITY`). Older jobs without
- * that event resolve to owner only.
+ * Who gets the customer-facing delivered email: project owner plus whoever confirmed Order now /
+ * reorder (`STOREFRONT_ORDER_CONFIRMED_ACTIVITY`). Payload may carry `notifyEmail` when Shopify’s
+ * customer record has no email but the storefront session supplies one.
  */
-async function customerIdsForDeliveredEmailNotify(args: {
+async function resolveDeliveredCustomerNotifyContext(args: {
   projectId: string;
   jobId: string;
   ownerCustomerId: string;
-}): Promise<string[]> {
+}): Promise<{
+  customerIds: string[];
+  placerCustomerId: string | null;
+  placerNotifyEmail: string | null;
+}> {
   const placerRow = await prisma.projectActivityEvent.findFirst({
     where: {
       projectId: args.projectId,
@@ -62,14 +82,18 @@ async function customerIdsForDeliveredEmailNotify(args: {
       type: STOREFRONT_ORDER_CONFIRMED_ACTIVITY,
     },
     orderBy: { createdAt: "desc" },
-    select: { actorCustomerId: true },
+    select: { actorCustomerId: true, payload: true },
   });
-  const placerId = placerRow?.actorCustomerId?.trim();
-  return dedupeCustomerIds(
-    placerId
-      ? [args.ownerCustomerId, placerId]
-      : [args.ownerCustomerId],
-  );
+  const placerCustomerId = placerRow?.actorCustomerId?.trim() || null;
+  return {
+    customerIds: dedupeCustomerIds(
+      placerCustomerId
+        ? [args.ownerCustomerId, placerCustomerId]
+        : [args.ownerCustomerId],
+    ),
+    placerCustomerId,
+    placerNotifyEmail: notifyEmailFromActivityPayload(placerRow?.payload),
+  };
 }
 
 /** All finance mailboxes from PROJECTCLAD_FINANCE_EMAIL (`a@x;b@y`). Fallback when unset. */
@@ -273,27 +297,60 @@ export async function sendFulfillmentPackageEmails(args: {
   const ownerBody = headerBlock.join("\n");
 
   const ownerId = project.ownerCustomerId;
-  const deliveredNotifyIds = await customerIdsForDeliveredEmailNotify({
+  const {
+    customerIds: deliveredNotifyIds,
+    placerCustomerId,
+    placerNotifyEmail,
+  } = await resolveDeliveredCustomerNotifyContext({
     projectId: args.projectId,
     jobId: args.jobId,
     ownerCustomerId: ownerId,
   });
 
+  const fetchKeys = Array.from(
+    new Set(
+      deliveredNotifyIds.flatMap((id) =>
+        customerNumericIdsForAdminApi(id),
+      ),
+    ),
+  );
+
   let ownerCustomerRow: CustomerInfo | undefined;
   let customerDeliveryEmails: string[] = [];
+  let customerInfoMap: Record<string, CustomerInfo> = {};
   try {
-    const info = await getCustomersByIds(args.shop, deliveredNotifyIds);
-    const pick = (id: string) =>
-      info[id] ?? info[id.replace(/\D/g, "")];
-    ownerCustomerRow = pick(ownerId);
+    customerInfoMap = await getCustomersByIds(
+      args.shop,
+      fetchKeys.length > 0 ? fetchKeys : deliveredNotifyIds,
+    );
+    ownerCustomerRow = getCustomerRowFromFetchedMap(ownerId, customerInfoMap);
     customerDeliveryEmails = dedupeEmailAddresses(
       deliveredNotifyIds
-        .map((id) => pick(id)?.email?.trim())
+        .map((id) =>
+          getCustomerRowFromFetchedMap(id, customerInfoMap)?.email?.trim(),
+        )
         .filter((e): e is string => Boolean(e)),
     );
   } catch {
     ownerCustomerRow = undefined;
     customerDeliveryEmails = [];
+    customerInfoMap = {};
+  }
+
+  if (
+    placerCustomerId &&
+    placerNotifyEmail &&
+    placerNotifyEmail.includes("@")
+  ) {
+    const placerHadProfileEmail = Boolean(
+      getCustomerRowFromFetchedMap(placerCustomerId, customerInfoMap)?.email?.trim(),
+    );
+    if (!placerHadProfileEmail) {
+      customerDeliveryEmails = dedupeEmailAddresses([
+        ...customerDeliveryEmails,
+        placerNotifyEmail,
+      ]);
+    }
   }
 
   const ownerName =
