@@ -257,7 +257,8 @@ export async function sendFulfillmentPackageEmails(args: {
   const isDelivery =
     String(job.fulfillmentMethod || "").trim().toLowerCase() === "delivery";
   const deliveryFee = isDelivery ? ORDER_DELIVERY_FEE : 0;
-  const tax = orderTaxFromSubtotal(subtotal, { pricesIncludeTax: false });
+  const taxableBase = subtotal + deliveryFee;
+  const tax = orderTaxFromSubtotal(taxableBase, { pricesIncludeTax: false });
   const total = Math.round((subtotal + tax + deliveryFee) * 100) / 100;
 
   const prefLine = formatPreferredDeliveryDisplay(

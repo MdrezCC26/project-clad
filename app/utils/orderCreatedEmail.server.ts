@@ -532,8 +532,9 @@ export async function sendOrderPlacedEmails(args: {
   );
   const deliveryFee =
     args.fulfillmentMethod === "delivery" ? ORDER_PLACED_DELIVERY_FEE : 0;
-  /** Match storefront order table: HST on line subtotal, then add flat delivery (not taxed here). */
-  const tax = orderTaxFromSubtotal(subtotal, { pricesIncludeTax: false });
+  /** Match storefront order table: HST on subtotal + delivery. */
+  const taxableBase = subtotal + deliveryFee;
+  const tax = orderTaxFromSubtotal(taxableBase, { pricesIncludeTax: false });
   const total = Math.round((subtotal + tax + deliveryFee) * 100) / 100;
 
   const projectUrl = `https://${args.shop}/apps/project-clad/project?id=${encodeURIComponent(args.projectId)}`;
