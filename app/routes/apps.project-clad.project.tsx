@@ -436,7 +436,15 @@ function OrderLinePropertyChips({ item }: { item: JobItemView }) {
   }
 
   const filtered = item.properties.filter((p) => {
-    if (!p.value || p.value.trim() === "" || p.name.startsWith("__oo")) return false;
+    const rawName = p.name.trim();
+    if (
+      !p.value ||
+      p.value.trim() === "" ||
+      rawName.startsWith("__oo") ||
+      rawName.startsWith("_")
+    ) {
+      return false;
+    }
     if (item.displayName.toLowerCase().includes("upload part") && p.name.toLowerCase() === "file") {
       return false;
     }
