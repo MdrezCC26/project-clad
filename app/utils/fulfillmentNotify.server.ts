@@ -1,3 +1,5 @@
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import prisma from "../db.server";
 import {
   getCustomerRowFromFetchedMap,
@@ -187,13 +189,45 @@ function formatOrderNumberLine(orderNumber?: number | null): string {
   return `Order number: ${orderNumber ?? "—"}`;
 }
 
-function adminAppHomeUrl(shopDomain: string): string {
-  const storeSlug = shopDomain
-    .replace(/\.myshopify\.com$/i, "")
-    .replace(/[^a-z0-9]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .toLowerCase();
-  return `https://admin.shopify.com/store/${storeSlug}/apps/projectclad/app/active-orders`;
+async function buildFinanceFulfillmentPhotoAttachment(
+  storageKey: string | null | undefined,
+): Promise<
+  | {
+      filename: string;
+      content: Buffer;
+      contentType: string;
+    }
+  | null
+> {
+  const key = (storageKey ?? "").trim();
+  if (!key) return null;
+  if (key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
+    return null;
+  }
+
+  const root = path.resolve(process.cwd(), "storage", "fulfillment-photos");
+  const abs = path.resolve(root, key);
+  if (!abs.startsWith(root + path.sep) && abs !== root) {
+    return null;
+  }
+
+  let content: Buffer;
+  try {
+    content = await fs.readFile(abs);
+  } catch {
+    return null;
+  }
+
+  const ext = path.extname(key).toLowerCase();
+  const contentType =
+    ext === ".png"
+      ? "image/png"
+      : ext === ".webp"
+        ? "image/webp"
+        : "image/jpeg";
+
+  const filename = `delivery-photo-${key.split(/[\\/]/).pop() || "image.jpg"}`;
+  return { filename, content, contentType };
 }
 
 /**
@@ -252,7 +286,7 @@ export async function sendFulfillmentPackageEmails(args: {
   });
 
   const projectUrl = `https://${args.shop}/apps/project-clad/project?id=${encodeURIComponent(args.projectId)}`;
-  const adminHomeUrl = adminAppHomeUrl(args.shop);
+  const projectOrderUrl = `${projectUrl}&job=${encodeURIComponent(args.jobId)}`;
 
   const isDelivery =
     String(job.fulfillmentMethod || "").trim().toLowerCase() === "delivery";
@@ -389,13 +423,16 @@ export async function sendFulfillmentPackageEmails(args: {
     `Tax: ${formatMoney(tax)}`,
     `Total: ${formatMoney(total)}`,
     ``,
-    `Open app home: ${adminHomeUrl}`,
+    `Open order in app: ${projectOrderUrl}`,
     ``,
   ].join("\n");
 
   const subject = `ProjectClad: Order delivered — ${project.name} · ${job.name}`;
 
   const financeRecipients = financeDeliveryInvoiceRecipients();
+  const financePhotoAttachment = await buildFinanceFulfillmentPhotoAttachment(
+    job.fulfillmentPhotoStorageKey,
+  );
 
   if (sendOwner && customerDeliveryEmails.length > 0) {
     try {
@@ -437,6 +474,9 @@ export async function sendFulfillmentPackageEmails(args: {
         recipients: financeRecipients,
         subject: financeSubject,
         text: financeBody,
+        ...(financePhotoAttachment
+          ? { extraAttachments: [financePhotoAttachment] }
+          : {}),
       });
       if (ok === 0) {
         throw new Error(
