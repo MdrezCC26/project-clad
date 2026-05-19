@@ -8,6 +8,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { shop, customerId } = requireAppProxyCustomer(request);
   const token = params.token ?? "";
 
+  /* One invite row per project (`ProjectShareToken.projectId` is unique): token stays stable;
+     acceptance assigns `shareToken.role` to `ProjectMember`. */
   const shareToken = await prisma.projectShareToken.findFirst({
     where: { token, project: { shop: shopStringFilter(shop) } },
     include: { project: true },

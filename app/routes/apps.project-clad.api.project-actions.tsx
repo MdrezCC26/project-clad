@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
@@ -16,6 +15,7 @@ import {
   canAdminProjectMembers,
   canEditProject,
   isProjectMember,
+  isProjectOwner,
   shopStringFilter,
 } from "../utils/projectAccess.server";
 import { dedupeEmailAddresses, isEmailConfigured } from "../utils/email.server";
@@ -31,6 +31,7 @@ import {
   parseVariantSnapshot,
   resolveVariantDisplayInfo,
 } from "../utils/variantInfo.server";
+import { upsertProjectShareInvite } from "../utils/projectShareInvite.server";
 
 const PRICING_COOKIE = "projectclad_pricing=1";
 
@@ -137,11 +138,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       where: { id: projectId },
       select: { defaultSiteContactName: true, defaultSiteContactPhone: true },
     });
+    const purchaseOrderNumberRaw = (
+      url.searchParams.get("purchaseOrderNumber") || ""
+    ).trim();
+    const purchaseOrderNumber = purchaseOrderNumberRaw
+      ? purchaseOrderNumberRaw
+      : null;
+
     const newJob = await prisma.job.create({
       data: {
         projectId,
         name,
         sortOrder: nextSortOrder,
+        purchaseOrderNumber,
         siteContactName: projectDefaults?.defaultSiteContactName ?? null,
         siteContactPhone: projectDefaults?.defaultSiteContactPhone ?? null,
       },
@@ -211,19 +220,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   if (intent === "share-project") {
-    if (!canEdit) {
-      return Response.json({ error: "Forbidden." }, { status: 403 });
+    if (!isProjectOwner(project, customerId)) {
+      return Response.json(
+        { error: "Only the project owner can create a share invite." },
+        { status: 403 },
+      );
     }
     const role = url.searchParams.get("role") || "view";
-    const token = crypto.randomBytes(16).toString("hex");
-    await prisma.projectShareToken.create({
-      data: {
-        projectId,
-        token,
-        role: role === "edit" ? "edit" : "view",
-      },
-    });
-    return Response.json({ shareLink: `/apps/project-clad/share/${token}` });
+    const inviteRole = role === "edit" ? "edit" : "view";
+    const { shareLinkPath } = await upsertProjectShareInvite(
+      projectId,
+      inviteRole,
+    );
+    return Response.json({ shareLink: shareLinkPath });
   }
 
   if (intent === "add-member") {

@@ -91,6 +91,14 @@ export function canViewProjectViaCompany(
   return viewerCompanyKeys.includes(key);
 }
 
+/** True when the viewer is the Shopify customer who owns the project (handles GID vs numeric id). */
+export function isProjectOwner(
+  project: Pick<ProjectForAccess, "ownerCustomerId">,
+  customerId: string,
+): boolean {
+  return customerIdsMatch(project.ownerCustomerId, customerId);
+}
+
 export function canEditProject(
   project: ProjectForAccess,
   customerId: string,

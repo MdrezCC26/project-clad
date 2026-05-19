@@ -55,12 +55,12 @@
         <div class="projectclad-modal-buttons projectclad-actions">
           <button
             type="button"
-            class="projectclad-button projectclad-button--primary projectclad-reject-modal-btn"
+            class="projectclad-button projectclad-button--primary projectclad-flat-btn"
             data-projectclad-checkout-fulfill-continue
           >
             Continue to checkout
           </button>
-          <button type="button" class="projectclad-button projectclad-reject-modal-btn" data-projectclad-checkout-fulfill-cancel>
+          <button type="button" class="projectclad-button projectclad-flat-btn" data-projectclad-checkout-fulfill-cancel>
             Cancel
           </button>
         </div>
@@ -82,7 +82,7 @@
       <button class="projectclad-button" type="button" data-projectclad-save>
         Save Order
       </button>
-      <form method="post" action="/cart/clear" style="display:inline;">
+      <form method="post" action="/cart/clear" class="projectclad-cart-actions__clear-form">
         <input type="hidden" name="return_to" value="/cart" />
         <button class="projectclad-button" type="submit">
           Clear cart

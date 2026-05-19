@@ -1,0 +1,81 @@
+{% comment %}
+  Canadian Cladding storefront header (fragment).
+  Wired from blocks/canadian-cladding-header.liquid (body app embed).
+{% endcomment %}
+
+{% liquid
+  assign account_href = routes.account_login_url
+  if customer
+    assign account_href = routes.account_url
+  endif
+  assign catalogue_href = routes.all_products_collection_url
+  assign path = request.path
+  assign nav_home_active = false
+  if template.name == 'index' or path == catalogue_href
+    assign nav_home_active = true
+  endif
+%}
+<header class="cc-header" id="ccHeader" data-cc-header>
+
+  <div class="cc-topbar">
+    <div class="tb-info">
+      <div class="tb-dot"></div>
+      <span class="hi">OPEN</span>
+      <span class="sep">|</span>
+      <span>72HR LEAD TIME</span>
+      <span class="sep">|</span>
+      <span>OTTAWA, ON</span>
+      <span class="sep">|</span>
+      <span class="hi">245 PARTS IN SHOP</span>
+    </div>
+
+    <nav class="tb-right">
+      <a href="#" class="hide-mobile">CONTACT</a>
+      <a href="#" class="hide-mobile">COLOURS</a>
+      <a href="{{ account_href }}">ACCOUNT</a>
+      <a href="{{ routes.cart_url }}">CART <span class="cart-count">[{{ cart.item_count }}]</span></a>
+    </nav>
+  </div>
+
+  <div class="cc-mainbar">
+    <button type="button" class="cc-ham" aria-label="Menu" aria-expanded="false">☰</button>
+
+    <a href="{{ routes.root_url }}" class="cc-logo" aria-label="Canadian Cladding">
+      <span class="word">Canadian</span>
+      <span class="cc-leaf">
+        <img
+          src="{{ 'cc-leaf.png' | asset_url }}"
+          alt=""
+          width="42"
+          height="48"
+          loading="eager"
+        >
+      </span>
+      <span class="word">Cladding</span>
+    </a>
+
+    <nav class="cc-nav" aria-label="Primary">
+      <a href="{{ catalogue_href }}" class="{% if nav_home_active %}active{% endif %}">
+        {% if nav_home_active %}<span class="active-tick"></span>{% endif %}
+        Shop<span class="sub">PART.CATALOGUE</span>
+        <span class="laser-r"></span>
+      </a>
+      <a href="#">
+        Roofing<span class="sub">METAL.ROOFING</span>
+        <span class="laser-r"></span>
+      </a>
+      <a href="#">
+        Custom<span class="sub">72HR.QUOTE</span>
+        <span class="laser-r"></span>
+      </a>
+      <a href="#">
+        Projects<span class="sub">FIELD.GALLERY</span>
+        <span class="laser-r"></span>
+      </a>
+    </nav>
+
+    <div class="cc-tools">
+      <a href="{{ routes.search_url }}" aria-label="Search">⌕</a>
+    </div>
+  </div>
+</header>

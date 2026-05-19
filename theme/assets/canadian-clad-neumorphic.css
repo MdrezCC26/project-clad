@@ -8,14 +8,64 @@
  */
 
 @import url("https://fonts.googleapis.com/css2?family=Bakbak+One&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Onest:wght@300;400;500;600;700&display=swap");
 
 body.cc-store-neu {
-  /* project-clad-proxy .project-clad-page / .project-clad-modal-backdrop (exact caesura tokens) */
-  --pc-caesura-bg: #ebecf0;
-  /* Slightly lighter than tray so convex pills/icons read as separate tiles */
-  --pc-caesura-raised: #f1f2f6;
-  --pc-caesura-fg: #6c7587;
-  --pc-caesura-dark: #484f60;
+  /*
+   * CC Design System v2 (cc_design_system_v2.html) — canonical storefront palette.
+   * Header/nav tokens live in cc-storefront-header.css (out of scope here).
+   */
+  --cc-ds-sky-top: #c8d5e2;
+  --cc-ds-sky-mid: #dbe3ec;
+  --cc-ds-sky-low: #e8ecf1;
+  --cc-ds-haze-warm: rgba(255, 225, 200, 0.22);
+  --cc-ds-haze-cool: rgba(165, 190, 215, 0.55);
+  --cc-ds-haze-foreground: rgba(220, 230, 240, 0.4);
+  --cc-ds-glass-top: rgba(255, 255, 255, 0.72);
+  --cc-ds-glass-bot: rgba(230, 238, 245, 0.42);
+  --cc-ds-glass-edge: rgba(255, 255, 255, 0.95);
+  --cc-ds-glass-rim: rgba(180, 195, 210, 0.3);
+  --cc-ds-ink-1: #0e1a26;
+  --cc-ds-ink-2: #3d4d5c;
+  --cc-ds-ink-3: #5e6e7e;
+  --cc-ds-ink-4: #94a4b4;
+  --cc-ds-ink-5: #b8c5d2;
+  --cc-ds-oxblood-1: #7f1d1d;
+  --cc-ds-oxblood-2: #5c1414;
+  --cc-ds-leaf: #c41e1e;
+  --cc-ds-leaf-glow: rgba(196, 30, 30, 0.3);
+  --cc-ds-emerald: #16a34a;
+  --cc-ds-emerald-glow: rgba(22, 163, 74, 0.55);
+  --cc-ds-amber: #d97706;
+  --cc-ds-slate: #94a4b4;
+  --cc-ds-font-display: "Onest", system-ui, sans-serif;
+  --cc-ds-font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --cc-ds-sky-gradient: linear-gradient(
+    180deg,
+    var(--cc-ds-sky-top) 0%,
+    var(--cc-ds-sky-mid) 40%,
+    var(--cc-ds-sky-low) 100%
+  );
+  --cc-ds-glass-gradient: linear-gradient(
+    180deg,
+    var(--cc-ds-glass-top) 0%,
+    var(--cc-ds-glass-bot) 100%
+  );
+  --cc-ds-glass-shadow:
+    0 1px 0 rgba(255, 255, 255, 1) inset,
+    0 0 0 1px var(--cc-ds-glass-rim),
+    0 30px 60px -25px rgba(60, 80, 100, 0.2),
+    0 8px 20px -8px rgba(60, 80, 100, 0.08);
+  /* Project Clad projects list shell (proxy ~689–696) */
+  --cc-ds-projects-shell:
+    radial-gradient(ellipse 120% 85% at 50% -15%, rgba(196, 30, 30, 0.06) 0%, transparent 42%),
+    linear-gradient(180deg, #fdfdfd 0%, #f6f6f8 45%, #f0f0f3 100%);
+
+  /* Caesura aliases → design system (neumorphic chrome keeps structure, DS colors) */
+  --pc-caesura-bg: var(--cc-ds-sky-low);
+  --pc-caesura-raised: #f4f7fa;
+  --pc-caesura-fg: var(--cc-ds-ink-3);
+  --pc-caesura-dark: var(--cc-ds-ink-1);
   --pc-caesura-light: #ffffff;
   --pc-caesura-drop:
     8px 8px 12px -2px rgba(72, 79, 96, 0.4),
@@ -25,8 +75,8 @@ body.cc-store-neu {
     inset 2px 2px 8px -1px rgba(72, 79, 96, 0.5);
   /* project-clad-proxy --pc-btn-neu-label-shadow (ADD MEMBER–style type fringe) */
   --pc-btn-neu-label-shadow:
-    -0.45px 0 0 rgba(255, 118, 64, 0.22),
-    0.45px 0 0 rgba(72, 168, 255, 0.2);
+    -0.45px 0 0 rgba(255, 118, 64, 0.26),
+    0.45px 0 0 rgba(72, 168, 255, 0.24);
   --pc-caesura-border: 3px solid transparent;
   /* project-clad-proxy .project-clad-button:hover */
   --pc-caesura-border-hover: rgba(255, 255, 255, 0.5);
@@ -50,29 +100,88 @@ body.cc-store-neu {
     0 0 52px 20px rgba(255, 255, 255, 0.5),
     10px 14px 30px -8px rgba(72, 79, 96, 0.12),
     -8px -10px 26px rgba(255, 255, 255, 0.55);
-  --color-1: #c40000;
+  /*
+   * Collection / PLP <product-card>: shorter transition + tighter halo so Horizon’s
+   * red primary does not mix with huge white blurs into an intense pink outer glow.
+   */
+  --pc-neu-product-card-hover-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.78),
+    0 0 10px 3px rgba(255, 255, 255, 0.42),
+    0 3px 14px rgba(72, 79, 96, 0.09),
+    -3px -4px 12px rgba(255, 255, 255, 0.38);
+  --pc-product-card-transition:
+    box-shadow 115ms ease-out, border-color 115ms ease-out, background-color 115ms ease-out,
+    color 115ms ease-out, filter 115ms ease-out;
+  --color-1: var(--cc-ds-leaf);
+  --color-2: var(--cc-ds-emerald);
+  --color-3: var(--cc-ds-amber);
   --pc-caesura-hover-red-text: var(--color-1);
   --pc-caesura-hover-red-text-glow:
     0 1px 0 rgba(255, 255, 255, 0.28),
-    0 0 6px rgba(196, 0, 0, 0.22),
-    0 0 14px rgba(196, 0, 0, 0.12);
+    0 0 6px var(--cc-ds-leaf-glow),
+    0 0 14px rgba(196, 30, 30, 0.12);
+  --pc-approval-glow-text: var(--color-3);
+  --pc-approval-glow-shadow: none;
   /* project-clad-proxy [data-projectclad-add-member-popover-toggle][aria-expanded="true"] label */
   --pc-pill-text-glow-hover: var(--color-1);
+  --pc-pill-text-glow-shadow: none;
+  --pc-section-heading-text-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.5),
+    0 2px 5px rgba(0, 0, 0, 0.52),
+    0 6px 18px rgba(0, 0, 0, 0.22);
   --pc-accent-heading-shadow:
     0.75px 0.75px 0 rgba(255, 255, 255, 0.78),
-    -0.65px -0.65px 0 rgba(72, 79, 96, 0.28),
+    -0.65px -0.65px 0 rgba(72, 79, 96, 0.16),
     0 1px 0 rgba(255, 255, 255, 0.38),
-    0 3px 10px rgba(0, 0, 0, 0.14),
-    0 0 14px rgba(196, 0, 0, 0.22),
-    0 0 28px rgba(196, 0, 0, 0.09);
+    0 2px 8px rgba(0, 0, 0, 0.1),
+    0 0 14px var(--cc-ds-leaf-glow),
+    0 0 28px rgba(196, 30, 30, 0.09);
+  --pc-accent-heading-shadow-soft:
+    0.65px 0.65px 0 rgba(255, 255, 255, 0.72),
+    -0.55px -0.55px 0 rgba(14, 26, 38, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.32),
+    0 2px 6px rgba(0, 0, 0, 0.07),
+    0 0 10px rgba(196, 30, 30, 0.16),
+    0 0 20px rgba(196, 30, 30, 0.06);
+  --pc-red-button-hover-label-glow:
+    0 0 10px rgba(255, 235, 235, 0.55),
+    0 0 22px rgba(255, 200, 200, 0.28);
+  --pc-text-deboss-neu:
+    0 1px 0 rgba(255, 255, 255, 0.48),
+    0 -1px 1px rgba(57, 48, 44, 0.18),
+    0 2px 4px rgba(57, 48, 44, 0.07);
+  --pc-text-deboss-on-red:
+    0 -1px 0 rgba(0, 0, 0, 0.52),
+    0 1px 0 rgba(255, 255, 255, 0.14);
+  --pc-text-machined-into:
+    0 1px 0 rgba(255, 255, 255, 0.52),
+    0 2px 4px rgba(255, 255, 255, 0.14),
+    0 -1px 2px rgba(57, 48, 44, 0.2),
+    0 1px 4px rgba(45, 38, 35, 0.1);
   --pc-caesura-transition:
     box-shadow 250ms ease-in-out, border-color 250ms ease-in-out, color 250ms ease-in-out,
     filter 250ms ease-in-out, background 250ms ease-in-out;
   --pc-btn-neu-transition: var(--pc-caesura-transition);
+  --pc-btn-active-blur: 0.6px;
   --pc-btn-neu-fg: var(--pc-caesura-dark);
   --pc-btn-neu-shadow: var(--pc-caesura-drop);
   --pc-btn-neu-shadow-hover: none;
   --pc-btn-neu-shadow-active: var(--pc-caesura-inset);
+  --pc-btn-neu-red-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.32) inset,
+    0 -1px 1px rgba(0, 0, 0, 0.18) inset,
+    20px 20px 42px rgba(0, 0, 0, 0.32),
+    -20px -20px 42px rgba(255, 180, 180, 0.42);
+  --pc-btn-neu-red-shadow-hover:
+    0 1px 0 rgba(255, 255, 255, 0.38) inset,
+    0 -1px 1px rgba(0, 0, 0, 0.2) inset,
+    22px 22px 48px rgba(0, 0, 0, 0.36),
+    -22px -22px 48px rgba(255, 195, 195, 0.46);
+  --pc-btn-neu-red-shadow-active:
+    inset 0 2px 4px rgba(0, 0, 0, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+    inset 20px 20px 42px rgba(0, 0, 0, 0.34),
+    inset -20px -20px 42px rgba(255, 210, 210, 0.28);
   /* project-clad-proxy (nested cards / gradients — not used by split tiles) */
   --pc-btn-neu-bg: #e8eaed;
   --pc-neu-face-gradient: linear-gradient(
@@ -110,6 +219,8 @@ body.cc-store-neu {
     inset 0 -2px 4px -1px rgba(255, 255, 255, 0.42);
   /* Gap under browser UI; must match transparent header `top` (see header block below) */
   --cc-header-top-air: clamp(1rem, 2.8vw, 1.65rem);
+  font-family: var(--cc-ds-font-body);
+  background: var(--cc-ds-sky-gradient) !important;
   background-color: var(--pc-caesura-bg) !important;
   color: var(--pc-caesura-dark);
   min-height: 100%;
@@ -133,8 +244,9 @@ body.cc-store-neu #header-component .menu-list--mobile a.menu-list__item {
   text-transform: uppercase !important;
 }
 
-/* Same off-white field as Project Clad app (.project-clad-page) site-wide */
+/* Same sky field as CC v2 / design system site-wide */
 html:has(body.cc-store-neu) {
+  background: var(--cc-ds-sky-gradient) !important;
   background-color: var(--pc-caesura-bg) !important;
 }
 
@@ -190,10 +302,19 @@ body.cc-store-neu #header-group .shopify-section .section,
 body.cc-store-neu #MainContent .shopify-section .section,
 body.cc-store-neu > footer .shopify-section .section {
   --color-background: var(--pc-caesura-bg);
-  /* #ebecf0 — keep rgb in sync with --pc-caesura-bg for rgba() scheme surfaces */
-  --color-background-rgb: 235 236 240;
+  /* #e8ecf1 — keep rgb in sync with --pc-caesura-bg for rgba() scheme surfaces */
+  --color-background-rgb: 232 236 241;
   --color-foreground: var(--pc-caesura-dark);
-  --color-foreground-rgb: 72 79 96;
+  --color-foreground-rgb: 14 26 38;
+}
+
+/* Homepage v8: ink + sky (Horizon scheme-1 greys fight CC v2) */
+body.cc-store-neu .shopify-section:has(.cc-home-v8) .section,
+body.cc-store-neu .cc-home-v8-section .section {
+  --color-foreground: var(--cc-ds-ink-1);
+  --color-foreground-rgb: 14 26 38;
+  --color-background: transparent;
+  --color-background-rgb: 232 236 241;
 }
 
 /* --- Header: inset caesura “tray” (full pill) + circular icon actions --- */
@@ -1764,15 +1885,18 @@ body.cc-store-neu .product-grid__item {
 
 body.cc-store-neu .product-card {
   box-sizing: border-box;
-  border: var(--pc-caesura-border) !important;
+  /* Rim comes from neu box-shadow only — never a painted border (Horizon primary can read as red). */
+  border: 3px solid transparent !important;
   border-color: transparent !important;
   border-radius: var(--pc-neu-radius) !important;
   background: var(--pc-caesura-light) !important;
   box-shadow: var(--pc-btn-neu-shadow) !important;
-  transition: var(--pc-caesura-transition) !important;
+  transition: var(--pc-product-card-transition) !important;
   overflow: hidden;
   --color-foreground: var(--pc-caesura-dark);
   --color-foreground-rgb: 72 79 96;
+  outline: none !important;
+  filter: none !important;
 }
 
 @media screen and (max-width: 749px) {
@@ -1803,8 +1927,30 @@ body.cc-store-neu .product-card:hover,
 body.cc-store-neu .product-card:focus-within {
   z-index: 1;
   background: var(--pc-caesura-light) !important;
-  box-shadow: var(--pc-neu-white-tile-hover-shadow) !important;
-  border-color: var(--pc-caesura-border-hover) !important;
+  box-shadow: var(--pc-neu-product-card-hover-shadow) !important;
+  border-color: transparent !important;
+  outline: none !important;
+  filter: none !important;
+}
+
+/* Custom element + inner link: kill theme focus/hover strokes that use scheme red */
+body.cc-store-neu product-card.product-card:hover,
+body.cc-store-neu product-card.product-card:focus-within {
+  border-color: transparent !important;
+  outline: none !important;
+}
+
+body.cc-store-neu .product-card:is(:hover, :focus-within) a:focus-visible,
+body.cc-store-neu .product-card:is(:hover, :focus-within) .product-card__link:focus-visible {
+  outline: 2px solid rgba(72, 79, 96, 0.32) !important;
+  outline-offset: 2px;
+}
+
+/* Keep product names caesura ink — scheme primary + accent shadows read as red “neon” on the tile */
+body.cc-store-neu .product-card:is(:hover, :focus-within)
+  :is(.product-card__title, .product-title, h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6) {
+  color: var(--pc-caesura-dark) !important;
+  text-shadow: none !important;
 }
 
 /* Lift/scale card hover would move the tile; keep it planted like neu buttons */
@@ -1843,8 +1989,10 @@ body.cc-store-neu .recently-viewed-wrapper .predictive-search-results__card--pro
   border-radius: clamp(6px, 1.2vw, 10px) !important;
   background: var(--pc-caesura-light) !important;
   box-shadow: var(--pc-btn-neu-shadow) !important;
-  transition: var(--pc-caesura-transition) !important;
+  transition: var(--pc-product-card-transition) !important;
   overflow: hidden;
+  outline: none !important;
+  filter: none !important;
 }
 
 @media screen and (max-width: 749px) {
@@ -1860,8 +2008,22 @@ body.cc-store-neu .predictive-search-results__card--product:focus-within .resour
 body.cc-store-neu .recently-viewed-wrapper .predictive-search-results__card--product:focus-within .resource-card {
   z-index: 1;
   background: var(--pc-caesura-light) !important;
-  box-shadow: var(--pc-neu-white-tile-hover-shadow) !important;
-  border-color: var(--pc-caesura-border-hover) !important;
+  box-shadow: var(--pc-neu-product-card-hover-shadow) !important;
+  border-color: transparent !important;
+  outline: none !important;
+  filter: none !important;
+}
+
+/* Product name on search tiles: caesura ink only — no red accent text-shadow / filter “halo” */
+body.cc-store-neu .predictive-search-results__card--product .resource-card :is(h3, h4, .resource-card__title),
+body.cc-store-neu
+  .recently-viewed-wrapper
+  .predictive-search-results__card--product
+  .resource-card
+  :is(h3, h4, .resource-card__title) {
+  color: var(--pc-caesura-dark) !important;
+  text-shadow: none !important;
+  filter: none !important;
 }
 
 /* Theme hovers add padding/margin on the <li>; keep layout fixed so the neu tile reads cleanly */

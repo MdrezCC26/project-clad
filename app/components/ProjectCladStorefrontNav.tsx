@@ -1,12 +1,13 @@
 import {
   forwardRef,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type MutableRefObject,
   type ReactNode,
 } from "react";
-import { useSearchParams } from "react-router";
+import { useLocation } from "react-router";
 import type { StorefrontAppNavLink } from "../types/storefrontAppNav";
 
 function IconMenu({ className }: { className?: string }) {
@@ -66,10 +67,13 @@ type InAppSearchMode = "projects" | "orders";
 
 const StorefrontNavInAppSearch = forwardRef<HTMLDetailsElement, {
   mode: InAppSearchMode;
+  query: string;
+  onApplyQuery: (query: string) => void;
+  onClearQuery: () => void;
   onCloseActionsMenuDrawer: () => void;
   onCloseStoreMenuDrawer: () => void;
 }>(function StorefrontNavInAppSearch(
-  { mode, onCloseActionsMenuDrawer, onCloseStoreMenuDrawer },
+  { mode, query, onApplyQuery, onClearQuery, onCloseActionsMenuDrawer, onCloseStoreMenuDrawer },
   ref,
 ) {
   const detailsEl = useRef<HTMLDetailsElement | null>(null);
@@ -82,13 +86,11 @@ const StorefrontNavInAppSearch = forwardRef<HTMLDetailsElement, {
     }
   };
 
-  const [searchParams, setSearchParams] = useSearchParams();
-  const qFromUrl = searchParams.get("q") ?? "";
-  const [draft, setDraft] = useState(qFromUrl);
+  const [draft, setDraft] = useState(query);
 
   useEffect(() => {
-    setDraft(qFromUrl);
-  }, [qFromUrl]);
+    setDraft(query);
+  }, [query]);
 
   const closeDetails = () => {
     const el = detailsEl.current;
@@ -97,15 +99,7 @@ const StorefrontNavInAppSearch = forwardRef<HTMLDetailsElement, {
 
   const apply = () => {
     const trimmed = draft.trim();
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (trimmed) next.set("q", trimmed);
-        else next.delete("q");
-        return next;
-      },
-      { replace: true },
-    );
+    onApplyQuery(trimmed);
     onCloseActionsMenuDrawer();
     onCloseStoreMenuDrawer();
     closeDetails();
@@ -113,14 +107,7 @@ const StorefrontNavInAppSearch = forwardRef<HTMLDetailsElement, {
 
   const clear = () => {
     setDraft("");
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete("q");
-        return next;
-      },
-      { replace: true },
-    );
+    onClearQuery();
     onCloseActionsMenuDrawer();
     onCloseStoreMenuDrawer();
     closeDetails();
@@ -178,7 +165,7 @@ const StorefrontNavInAppSearch = forwardRef<HTMLDetailsElement, {
           <button type="button" className="project-clad-button project-clad-reject-modal-btn" onClick={apply}>
             Search
           </button>
-          {qFromUrl ? (
+          {query ? (
             <button type="button" className="project-clad-button project-clad-reject-modal-btn" onClick={clear}>
               Clear
             </button>
@@ -208,6 +195,27 @@ export function ProjectCladStorefrontNav({
    * storefront search page.
    */
   inAppSearch = null,
+  inAppSearchQuery = "",
+  onInAppSearchQueryChange,
+  /**
+   * When true, menu stays left, logo + optional suffix are centered, tools (+ shellExtra) align right
+   * (projects list mockup).
+   */
+  brandCenterLayout = false,
+  /** e.g. "PROJECTS" → rendered as "/ PROJECTS" next to the logo when `brandCenterLayout`. */
+  brandSuffix = null,
+  /** Uses the literal Canadian Cladding header structure (top black bar + main nav). */
+  htmlTemplateHeader = false,
+  /**
+   * When set with `htmlTemplateHeader`, forces which main-nav item shows the active underline
+   * (overrides pathname-based detection — useful for app proxy / locale paths).
+   */
+  htmlTemplateNavActive = null,
+  /**
+   * When true with `htmlTemplateHeader`, omits search / account / cart icon cluster (e.g. projects
+   * list where the top bar already links to account & cart).
+   */
+  hideTrailingIcons = false,
 }: {
   logoDataUrl: string | null;
   logoAlt?: string;
@@ -222,6 +230,13 @@ export function ProjectCladStorefrontNav({
   cartItemCount?: number;
   shellExtra?: ReactNode;
   inAppSearch?: InAppSearchMode | null;
+  inAppSearchQuery?: string;
+  onInAppSearchQueryChange?: (query: string) => void;
+  brandCenterLayout?: boolean;
+  brandSuffix?: string | null;
+  htmlTemplateHeader?: boolean;
+  htmlTemplateNavActive?: "shop" | "projects" | null;
+  hideTrailingIcons?: boolean;
 }) {
   const initial = accountInitial?.trim().charAt(0).toUpperCase() ?? "";
   const storeMenuDrawerRef = useRef<HTMLDetailsElement>(null);
@@ -229,6 +244,7 @@ export function ProjectCladStorefrontNav({
   const [liveCartCount, setLiveCartCount] = useState(() =>
     Math.max(0, Math.floor(Number(cartItemCount) || 0)),
   );
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   useEffect(() => {
     setLiveCartCount(Math.max(0, Math.floor(Number(cartItemCount) || 0)));
@@ -255,12 +271,50 @@ export function ProjectCladStorefrontNav({
     };
   }, []);
 
+  useEffect(() => {
+    if (!htmlTemplateHeader) {
+      setShowBackToTop(false);
+      return;
+    }
+
+    const onScroll = () => {
+      setShowBackToTop(window.scrollY > 120);
+    };
+
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [htmlTemplateHeader]);
+
+  const location = useLocation();
+  /** Pathname-based guess when `htmlTemplateNavActive` is null. */
+  const derivedHtmlTemplatePrimaryNavActive = useMemo((): "shop" | "projects" => {
+    if (!htmlTemplateHeader) return "shop";
+    const path = location.pathname.replace(/\/+$/, "") || "/";
+    // With or without leading /apps — e.g. /apps/project-clad/projects or /project-clad/projects
+    if (/\/project-clad\/projects(\/|$)/.test(path)) return "projects";
+    // Singular /project — must not use .includes("...project") or it matches .../projects
+    if (/\/project-clad\/project(\/|\?|$)/.test(path)) return "projects";
+    if (path.includes("/project-clad/work-orders")) return "projects";
+    return "shop";
+  }, [htmlTemplateHeader, location.pathname]);
+
+  const htmlTemplatePrimaryNavActive =
+    htmlTemplateHeader && htmlTemplateNavActive != null
+      ? htmlTemplateNavActive
+      : derivedHtmlTemplatePrimaryNavActive;
+
   const closeStoreMenuDrawer = () => {
     const el = storeMenuDrawerRef.current;
     if (el) el.open = false;
   };
 
   const showCartBadge = liveCartCount > 0;
+  const handleBackToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const toolsInner = (
     <>
@@ -268,6 +322,13 @@ export function ProjectCladStorefrontNav({
         <StorefrontNavInAppSearch
           ref={searchDrawerRef}
           mode={inAppSearch}
+          query={inAppSearchQuery}
+          onApplyQuery={(query) => {
+            onInAppSearchQueryChange?.(query);
+          }}
+          onClearQuery={() => {
+            onInAppSearchQueryChange?.("");
+          }}
           onCloseActionsMenuDrawer={() => {}}
           onCloseStoreMenuDrawer={closeStoreMenuDrawer}
         />
@@ -361,16 +422,147 @@ export function ProjectCladStorefrontNav({
     </a>
   );
 
-  return (
-    <div className="project-clad-storefront-nav" data-projectclad-storefront-nav>
-      <div className="project-clad-storefront-nav__shell project-clad-storefront-nav__shell--flat">
-        <div className="project-clad-storefront-nav__shell-primary">
-          {storeMenuDrawer}
-          {logoBlock}
-        </div>
-        {shellExtraSlot}
-        {toolsRow}
+  const suffixText = brandSuffix?.trim() ?? "";
+  const brandLockup =
+    suffixText && brandCenterLayout ? (
+      <div className="project-clad-storefront-nav__brand-lockup">
+        {logoBlock}
+        <span className="project-clad-storefront-nav__brand-suffix">
+          <span className="project-clad-storefront-nav__brand-slash" aria-hidden="true">
+            /
+          </span>
+          <strong className="project-clad-storefront-nav__brand-context">{suffixText}</strong>
+        </span>
       </div>
+    ) : null;
+
+  const htmlHeaderMainNav = (
+    <nav className="project-clad-storefront-nav__html-nav" aria-label="Primary">
+      <a
+        href={links[0]?.url || "#"}
+        className={htmlTemplatePrimaryNavActive === "shop" ? "is-active" : undefined}
+        aria-current={htmlTemplatePrimaryNavActive === "shop" ? "page" : undefined}
+      >
+        Shop
+      </a>
+      <a href="#">Roofing</a>
+      <a href="#">Custom</a>
+      <a
+        href={logoHref || "/apps/project-clad/projects"}
+        className={htmlTemplatePrimaryNavActive === "projects" ? "is-active" : undefined}
+        aria-current={htmlTemplatePrimaryNavActive === "projects" ? "page" : undefined}
+      >
+        Projects
+      </a>
+    </nav>
+  );
+
+  const htmlLeadingBrand = (
+    <div className="project-clad-storefront-nav__html-leading">
+      <div className="project-clad-storefront-nav__html-brand">
+        {logoBlock}
+        {suffixText ? (
+          <>
+            <span className="project-clad-storefront-nav__html-slash" aria-hidden="true">
+              /
+            </span>
+            <strong className="project-clad-storefront-nav__html-context">{suffixText}</strong>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      className={`project-clad-storefront-nav${htmlTemplateHeader ? " project-clad-storefront-nav--html" : ""}`}
+      data-projectclad-storefront-nav
+    >
+      {htmlTemplateHeader ? (
+        <>
+          <div className="project-clad-storefront-nav__html-topbar">
+            <div className="project-clad-storefront-nav__html-topbar-left">
+              <span className="project-clad-storefront-nav__html-live">
+                <span className="project-clad-storefront-nav__html-dot" aria-hidden="true" />
+                <span>Open</span>
+              </span>
+              <span className="project-clad-storefront-nav__html-sep" aria-hidden="true">
+                ·
+              </span>
+              <span>72hr lead time</span>
+              <span className="project-clad-storefront-nav__html-sep" aria-hidden="true">
+                ·
+              </span>
+              <span>Ottawa, ON</span>
+            </div>
+            <nav className="project-clad-storefront-nav__html-topbar-right" aria-label="Quick links">
+              {showBackToTop ? (
+                <button
+                  type="button"
+                  className="project-clad-storefront-nav__html-back-to-top"
+                  onClick={handleBackToTop}
+                  aria-label="Back to top"
+                >
+                  Back to top
+                </button>
+              ) : null}
+              <a href="#" className="hide-mobile">
+                Contact
+              </a>
+              <a href="#" className="hide-mobile">
+                Colours
+              </a>
+              <a href={accountUrl}>Account</a>
+              <a href={cartUrl} className="project-clad-storefront-nav__html-cart-with-icon">
+                <span className="project-clad-storefront-nav__html-cart-icon-wrap" aria-hidden="true">
+                  <IconCart className="project-clad-storefront-nav__html-cart-icon" />
+                </span>
+                <span>
+                  Cart{showCartBadge ? ` [${liveCartCount}]` : ""}
+                </span>
+              </a>
+            </nav>
+          </div>
+          <div
+            className={`project-clad-storefront-nav__html-mainbar${
+              hideTrailingIcons ? " project-clad-storefront-nav__html-mainbar--no-tools" : ""
+            }`}
+          >
+            {htmlLeadingBrand}
+            <div className="project-clad-storefront-nav__html-center">
+              {htmlHeaderMainNav}
+            </div>
+            <div className="project-clad-storefront-nav__html-trailing">
+              {shellExtraSlot}
+              {!hideTrailingIcons ? toolsRow : null}
+            </div>
+          </div>
+        </>
+      ) : (
+        <div
+          className={`project-clad-storefront-nav__shell project-clad-storefront-nav__shell--flat${brandCenterLayout ? " project-clad-storefront-nav__shell--brand-center" : ""}`}
+        >
+          {brandCenterLayout ? (
+            <>
+              <div className="project-clad-storefront-nav__shell-leading">{storeMenuDrawer}</div>
+              <div className="project-clad-storefront-nav__shell-brand">{brandLockup ?? logoBlock}</div>
+              <div className="project-clad-storefront-nav__shell-trailing">
+                {shellExtraSlot}
+                {toolsRow}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="project-clad-storefront-nav__shell-primary">
+                {storeMenuDrawer}
+                {logoBlock}
+              </div>
+              {shellExtraSlot}
+              {toolsRow}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

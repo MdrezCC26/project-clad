@@ -5,9 +5,8 @@ import {
   redirect,
   useLoaderData,
   useLocation,
-  useSearchParams,
 } from "react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import {
@@ -43,29 +42,39 @@ import {
   projectsListWhere,
   shopStringFilter,
 } from "../utils/projectAccess.server";
+import { ProjectCladStorefrontFooter } from "../components/ProjectCladStorefrontFooter";
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
 import { getStorefrontAppNav } from "../utils/storefrontAppNav";
+import type {
+  OrderLifecycleStatus,
+  ProjectStorefrontStatus,
+} from "@prisma/client";
 
 type ProjectListItem = {
   id: string;
   isOwner: boolean;
   /** True when this row is only visible because viewer's `company:*` tag matches the owner's. */
   viaCompany: boolean;
-  /** Display name for the owner (falls back to email / id). Populated only in Company scope. */
+  /** Display name for the owner when the viewer is not the owner. */
   ownerLabel: string | null;
   name: string;
   createdAt: string;
   poNumber: string | null;
   companyName: string | null;
   jobCount: number;
-  approvedJobCount: number;
+  /** Pending approval rows tied to orders/lines (jobId non-empty), not project-level. */
+  pendingOrderApprovalCount: number;
+  /** Sum of (unit price × qty) for all line items; tax-inclusive snapshot lines. */
+  lineItemsSubtotal: number;
   approvedBy: string[];
   approvalStatus: { requested: boolean; approved: boolean };
+  storefrontStatus: ProjectStorefrontStatus;
   jobs: {
     id: string;
     name: string;
     createdAt: string;
     isLocked: boolean;
+    orderLifecycleStatus: OrderLifecycleStatus;
     itemCount: number;
     items: {
       id: string;
@@ -79,18 +88,214 @@ type ProjectListItem = {
   }[];
 };
 
+/** YYYY.MM.DD — matches dashboard-style project tiles */
+function formatProjectTileDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}.${m}.${day}`;
+}
+
+function formatProjectTileMoney(amount: number): string {
+  if (!Number.isFinite(amount)) return "—";
+  const rounded = Math.round(amount * 100) / 100;
+  return new Intl.NumberFormat("en-CA", {
+    style: "currency",
+    currency: "CAD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(rounded);
+}
+
+function getProjectTileMetrics(project: ProjectListItem): {
+  deliveredCount: number;
+} {
+  const deliveredCount = project.jobs.filter(
+    (j) => j.orderLifecycleStatus === "delivered",
+  ).length;
+
+  return { deliveredCount };
+}
+
+function getProjectUnitCount(project: ProjectListItem): number {
+  let units = 0;
+  for (const j of project.jobs) {
+    for (const it of j.items) {
+      units += it.quantity ?? 0;
+    }
+  }
+  return units;
+}
+
+/** Base path fragment for nested project-detail detection (`.../projects/:id`). */
+const STOREFRONT_PROJECTS_LIST_MARKER = "/apps/project-clad/projects";
+
+/** Matches nested detail URLs even with a storefront locale prefix (e.g. `/fr-ca/.../projects/foo`). */
+function pathnameHasProjectsListDetailSegment(pathname: string): boolean {
+  const marker = `${STOREFRONT_PROJECTS_LIST_MARKER}/`;
+  const i = pathname.indexOf(marker);
+  if (i === -1) return false;
+  const rest = pathname.slice(i + marker.length).split(/[/#?]/)[0] ?? "";
+  return rest.length > 0;
+}
+
+/** Header pill (matches prototype layout; not the old PHASE metric line). */
+function getProjectTileStatusPill(project: ProjectListItem): {
+  label: string;
+  tone: "approval" | "active" | "complete" | "inactive";
+} {
+  const ar = project.approvalStatus;
+  if (ar?.requested && !ar?.approved) {
+    return { label: "APPROVAL", tone: "approval" };
+  }
+  switch (project.storefrontStatus) {
+    case "complete":
+      return { label: "COMPLETE", tone: "complete" };
+    case "inactive":
+      return { label: "INACTIVE", tone: "inactive" };
+    case "active":
+    default:
+      return { label: "ACTIVE", tone: "active" };
+  }
+}
+
+type ProjectsStatusFilter = "all" | "active" | "complete" | "inactive" | "approval";
+type ProjectsViewFilter = "all" | "mine" | "company";
+type ProjectsSortKey = "recent" | "newest" | "oldest" | "name" | "orders";
+type ProjectsListUiState = {
+  q: string;
+  status: ProjectsStatusFilter;
+  view: ProjectsViewFilter;
+  sort: ProjectsSortKey;
+};
+
+function parseStatusFilter(raw: string | null): ProjectsStatusFilter {
+  const s = (raw || "").trim().toLowerCase();
+  if (
+    s === "active" ||
+    s === "complete" ||
+    s === "inactive" ||
+    s === "approval"
+  ) {
+    return s;
+  }
+  return "all";
+}
+
+function parseViewFilter(raw: string | null): ProjectsViewFilter {
+  const s = (raw || "").trim().toLowerCase();
+  if (s === "mine" || s === "company") return s;
+  return "all";
+}
+
+function parseSortKey(raw: string | null): ProjectsSortKey {
+  const s = (raw || "").trim().toLowerCase();
+  if (s === "newest" || s === "oldest" || s === "name" || s === "orders") {
+    return s;
+  }
+  return "recent";
+}
+
+function projectMatchesStatusFilter(
+  project: ProjectListItem,
+  status: ProjectsStatusFilter,
+): boolean {
+  if (status === "all") return true;
+  if (status === "approval") {
+    const ar = project.approvalStatus;
+    const projectPending = Boolean(ar?.requested && !ar?.approved);
+    return projectPending || (project.pendingOrderApprovalCount ?? 0) > 0;
+  }
+  return project.storefrontStatus === status;
+}
+
+function projectMatchesViewFilter(
+  project: ProjectListItem,
+  view: ProjectsViewFilter,
+): boolean {
+  if (view === "all") return true;
+  if (view === "mine") return !project.viaCompany;
+  return project.viaCompany;
+}
+
+function listRankForSort(p: ProjectListItem): number {
+  return p.isOwner ? 0 : p.viaCompany ? 2 : 1;
+}
+
+function sortFilteredProjects(
+  list: ProjectListItem[],
+  sort: ProjectsSortKey,
+): ProjectListItem[] {
+  const out = [...list];
+  if (sort === "recent") {
+    out.sort((a, b) => {
+      const ra = listRankForSort(a);
+      const rb = listRankForSort(b);
+      if (ra !== rb) return ra - rb;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+    return out;
+  }
+  if (sort === "newest") {
+    out.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+    return out;
+  }
+  if (sort === "oldest") {
+    out.sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+    return out;
+  }
+  if (sort === "name") {
+    out.sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+    );
+    return out;
+  }
+  if (sort === "orders") {
+    out.sort((a, b) => {
+      const d = b.jobCount - a.jobCount;
+      if (d !== 0) return d;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    });
+    return out;
+  }
+  return out;
+}
+
+function projectsListQueryString(
+  base: URLSearchParams,
+  updates: Record<string, string | null>,
+): string {
+  const next = new URLSearchParams(base);
+  for (const [k, v] of Object.entries(updates)) {
+    if (v === null || v === "") next.delete(k);
+    else next.set(k, v);
+  }
+  return next.toString();
+}
+
 function projectListItemMatchesQuery(project: ProjectListItem, qRaw: string): boolean {
   const q = qRaw.trim().toLowerCase();
   if (!q) return true;
   const parts = q.split(/\s+/).filter(Boolean);
+  const pill = getProjectTileStatusPill(project);
   const hay = [
     project.name,
     project.poNumber || "",
     project.companyName || "",
     String(project.jobCount),
+    project.storefrontStatus,
+    pill.label,
     ...project.jobs.flatMap((job) => [
       job.name,
-      ...job.items.map((item) => item.displayName),
+      ...job.items.map((item) => item.displayName ?? ""),
     ]),
   ]
     .join(" ")
@@ -111,20 +316,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     customerEmail,
   );
 
-  /* "mine" shows owner + explicit membership. "company" additionally surfaces coworker
-     projects via matching `company:*` customer tags (read-only). Default "mine". */
-  const url = new URL(request.url);
-  const scopeParam = url.searchParams.get("scope");
-  const scope: "mine" | "company" = scopeParam === "company" ? "company" : "mine";
-
+  /* Single list: yours (owner or member) + company-visible coworker projects when applicable. */
   const viewerCompanyCtx = viewerIsAppAdmin
     ? { tags: [], displayNames: [], keys: [] as string[] }
     : await getViewerCompanyContext(shop, customerId);
-  const hasAnyCompanyTag = viewerCompanyCtx.keys.length > 0;
 
   const projects = await prisma.project.findMany({
     where: projectsListWhere(shop, customerId, viewerIsAppAdmin, {
-      scope,
+      scope: "company",
       viewerCompanyKeys: viewerCompanyCtx.keys,
     }),
     include: {
@@ -182,6 +381,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const projectIds = projects.map((p) => p.id);
+
+  const pendingOrderApprovalRows = await prisma.approvalRequest.findMany({
+    where: {
+      projectId: { in: projectIds },
+      approvedAt: null,
+      NOT: { jobId: "" },
+    },
+    select: { projectId: true },
+  });
+  const pendingApprovalCountByProjectId = new Map<string, number>();
+  for (const row of pendingOrderApprovalRows) {
+    pendingApprovalCountByProjectId.set(
+      row.projectId,
+      (pendingApprovalCountByProjectId.get(row.projectId) ?? 0) + 1,
+    );
+  }
+
   const projectLevelApprovals = await prisma.approvalRequest.findMany({
     where: {
       projectId: { in: projectIds },
@@ -204,7 +420,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       approvedAt: { not: null },
     },
   });
-  const approvedJobIds = new Set(jobLevelApprovals.map((a) => a.jobId));
   const approverCustomerIds = [
     ...new Set(
       jobLevelApprovals
@@ -219,9 +434,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         )
       : {};
 
-  /* Owner attribution for the Company scope. In "mine" scope every row is either the
-     viewer's or a project they're explicitly a member of, so we still compute it cheaply
-     here — adds minimal overhead since we already batch-fetched approver data. */
+  /* Owner attribution for rows where the viewer is not the owner. */
   const ownerIds = Array.from(
     new Set(projects.map((p) => p.ownerCustomerId).filter(Boolean)),
   );
@@ -271,6 +484,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       project.ownerCompanyKey != null &&
       viewerCompanyCtx.keys.includes(project.ownerCompanyKey);
 
+    const lineItemsSubtotal = Math.round(
+      project.jobs.reduce(
+        (sum, job) =>
+          sum +
+          job.items.reduce((js, item) => {
+            const unit = Number(item.priceSnapshot.toString());
+            return js + (Number.isFinite(unit) ? unit * item.quantity : 0);
+          }, 0),
+        0,
+      ) * 100,
+    ) / 100;
+
     return {
     id: project.id,
     isOwner: isOwnerRow,
@@ -280,16 +505,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     createdAt: project.createdAt.toISOString(),
     poNumber: project.poNumber,
     companyName: project.companyName,
+    storefrontStatus: project.storefrontStatus,
     jobCount: project.jobs.length,
-    approvedJobCount: project.jobs.filter((job) =>
-      approvedJobIds.has(job.id),
-    ).length,
+    pendingOrderApprovalCount:
+      pendingApprovalCountByProjectId.get(project.id) ?? 0,
+    lineItemsSubtotal,
     approvedBy: approvedByNames,
     jobs: project.jobs.map((job) => ({
       id: job.id,
       name: job.name,
       createdAt: job.createdAt.toISOString(),
       isLocked: job.isLocked || Boolean(job.orderLink),
+      orderLifecycleStatus: job.orderLifecycleStatus,
       itemCount: job.items.reduce((sum, item) => sum + item.quantity, 0),
       items: job.items.map((item) => {
         const pres = buildVariantPresentation({
@@ -314,7 +541,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       requested: false,
       approved: false,
     },
-  };
+    };
+  });
+
+  const listRank = (p: ProjectListItem) =>
+    p.isOwner ? 0 : p.viaCompany ? 2 : 1;
+
+  payload.sort((a, b) => {
+    const ra = listRank(a);
+    const rb = listRank(b);
+    if (ra !== rb) return ra - rb;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
   const storefrontAppNav = getStorefrontAppNav(settings);
@@ -330,9 +567,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     logoDataUrl: settings?.logoDataUrl || null,
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
     navAccountInitial,
-    scope,
-    hasCompanyScope: hasAnyCompanyTag || viewerIsAppAdmin,
-    viewerCompanyDisplayNames: viewerCompanyCtx.displayNames,
+    viewerIsAppAdmin,
   };
 };
 
@@ -420,38 +655,85 @@ export default function ProjectsPage() {
     logoDataUrl,
     backgroundLogoDataUrl,
     navAccountInitial,
-    scope,
-    hasCompanyScope,
-    viewerCompanyDisplayNames,
+    viewerIsAppAdmin,
   } = useLoaderData<typeof loader>();
   const inlineStyles = themeStyles?.styles || [];
   const { pathname } = useLocation();
-  const [searchParams] = useSearchParams();
-  const listSearchQ = (searchParams.get("q") || "").trim();
-  /* Build links with only our own params. Shopify-signed proxy params (shop,
-     logged_in_customer_id, path_prefix, timestamp, signature) are scoped to the
-     original request — re-using them with new query strings invalidates the
-     signature and Shopify returns its own 404 before reaching the app. */
-  const scopeLinkQs = (targetScope: "mine" | "company") => {
-    const params = new URLSearchParams();
-    const q = searchParams.get("q");
-    if (q) params.set("q", q);
-    if (targetScope === "company") params.set("scope", "company");
-    const qs = params.toString();
-    return qs ? `?${qs}` : "";
+  const [listUiState, setListUiState] = useState<ProjectsListUiState>({
+    q: "",
+    status: "all",
+    view: "all",
+    sort: "recent",
+  });
+  const listSearchQ = listUiState.q;
+  const statusFilter = listUiState.status;
+  const viewFilter = listUiState.view;
+  const sortKey = listUiState.sort;
+
+  const hasCompanyRows = useMemo(
+    () => projects.some((p) => p.viaCompany),
+    [projects],
+  );
+  const hasApprovalRows = useMemo(
+    () =>
+      projects.some(
+        (p) =>
+          (p.approvalStatus?.requested && !p.approvalStatus?.approved) ||
+          (p.pendingOrderApprovalCount ?? 0) > 0,
+      ),
+    [projects],
+  );
+
+  const filteredProjects = useMemo(() => {
+    let list = projects.filter((p) =>
+      projectListItemMatchesQuery(p, listSearchQ),
+    );
+    list = list.filter((p) => projectMatchesStatusFilter(p, statusFilter));
+    list = list.filter((p) => projectMatchesViewFilter(p, viewFilter));
+    return sortFilteredProjects(list, sortKey);
+  }, [projects, listSearchQ, statusFilter, viewFilter, sortKey]);
+
+  const listTotals = useMemo(() => {
+    let totalOrders = 0;
+    let totalApprovals = 0;
+    for (const p of filteredProjects) {
+      totalOrders += p.jobCount;
+      totalApprovals += p.pendingOrderApprovalCount ?? 0;
+    }
+    return {
+      projectCount: filteredProjects.length,
+      totalOrders,
+      totalApprovals,
+    };
+  }, [filteredProjects]);
+
+  const hasNonDefaultFilters =
+    statusFilter !== "all" ||
+    viewFilter !== "all" ||
+    sortKey !== "recent";
+
+  const updateListUiState = (updates: Record<string, string | null>) => {
+    setListUiState((prev) => ({
+      q: updates.q !== undefined ? (updates.q || "").trim() : prev.q,
+      status:
+        updates.status !== undefined
+          ? parseStatusFilter(updates.status)
+          : prev.status,
+      view:
+        updates.view !== undefined
+          ? parseViewFilter(updates.view)
+          : prev.view,
+      sort:
+        updates.sort !== undefined
+          ? parseSortKey(updates.sort)
+          : prev.sort,
+    }));
   };
-  const companyScopeTitle =
-    viewerCompanyDisplayNames && viewerCompanyDisplayNames.length > 0
-      ? `Show projects from coworkers tagged with ${viewerCompanyDisplayNames.join(", ")}`
-      : "Show projects from coworkers at the same company";
-  const filteredProjects = useMemo(
-    () => projects.filter((p) => projectListItemMatchesQuery(p, listSearchQ)),
-    [projects, listSearchQ],
-  );
+  const clearListUiParams = () =>
+    setListUiState({ q: "", status: "all", view: "all", sort: "recent" });
+
   /** Nested legacy route `apps.project-clad.projects.$projectId` — parent must render `<Outlet />`. */
-  const isNestedProjectDetail = /\/apps\/project-clad\/projects\/[^/?#]+/.test(
-    pathname,
-  );
+  const isNestedProjectDetail = pathnameHasProjectsListDetailSegment(pathname);
 
   if (isNestedProjectDetail) {
     return <Outlet />;
@@ -459,6 +741,10 @@ export default function ProjectsPage() {
 
   return (
     <>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Onest:wght@300;400;500;600;700&display=swap"
+      />
       {(themeStyles?.urls ?? []).map((href: string) => (
         <link key={href} rel="stylesheet" href={href} />
       ))}
@@ -468,50 +754,268 @@ export default function ProjectsPage() {
       {/* After theme inlines so Project Clad rules win over storefront base.css */}
       <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       <main
-        className={`project-clad-page project-clad-page--projects${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
+        className={`project-clad-page project-clad-page--projects project-clad-page--cc-v2${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
         style={
           backgroundLogoDataUrl
             ? { ["--project-clad-bg-logo" as string]: `url(${backgroundLogoDataUrl})` }
             : undefined
         }
       >
+        <header className="project-clad-header project-clad-header--fullbleed">
+          <ProjectCladStorefrontNav
+            logoDataUrl={logoDataUrl}
+            logoHref="/"
+            logoAlt="Canadian Cladding"
+            links={storefrontAppNav.links}
+            cartUrl={storefrontAppNav.cartUrl}
+            searchUrl={storefrontAppNav.searchUrl}
+            accountUrl={storefrontAppNav.accountUrl}
+            accountInitial={navAccountInitial}
+            inAppSearch="projects"
+            inAppSearchQuery={listSearchQ}
+            onInAppSearchQueryChange={(query) =>
+              updateListUiState({ q: query || null })
+            }
+            htmlTemplateHeader
+            htmlTemplateNavActive="projects"
+            hideTrailingIcons={true}
+          />
+        </header>
         <div className="page-width project-clad-container project-clad-container--full-width">
-          <header className="project-clad-header">
-            <ProjectCladStorefrontNav
-              logoDataUrl={logoDataUrl}
-              logoHref="/"
-              links={storefrontAppNav.links}
-              cartUrl={storefrontAppNav.cartUrl}
-              searchUrl={storefrontAppNav.searchUrl}
-              accountUrl={storefrontAppNav.accountUrl}
-              accountInitial={navAccountInitial}
-              inAppSearch="projects"
-            />
-          </header>
-          {hasCompanyScope && (
-            <nav
-              className="project-clad-projects-scope"
-              aria-label="Project visibility"
-            >
-              <Link
-                to={`/apps/project-clad/projects${scopeLinkQs("mine")}`}
-                className={`project-clad-projects-scope__link${scope === "mine" ? " is-active" : ""}`}
-                aria-current={scope === "mine" ? "page" : undefined}
-                data-projectclad-no-transition
+          {projects.length > 0 ? (
+            <>
+              <div
+                className="project-clad-projects-controls-grid"
+                role="region"
+                aria-label="Filter, sort, and search projects"
               >
-                My projects
-              </Link>
-              <Link
-                to={`/apps/project-clad/projects${scopeLinkQs("company")}`}
-                className={`project-clad-projects-scope__link${scope === "company" ? " is-active" : ""}`}
-                aria-current={scope === "company" ? "page" : undefined}
-                title={companyScopeTitle}
-                data-projectclad-no-transition
-              >
-                Company
-              </Link>
-            </nav>
-          )}
+                <div className="project-clad-projects-controls-grid__col project-clad-projects-controls-grid__col--left">
+                  <div className="project-clad-projects-control-tile project-clad-projects-control-tile--status">
+                    <div className="project-clad-projects-toolbar__cluster project-clad-projects-toolbar__cluster--status">
+                      <span className="project-clad-projects-toolbar__label">Status</span>
+                      <nav className="project-clad-projects-toolbar__chips" aria-label="Filter by status">
+                        <button
+                          type="button"
+                          data-pc-status="all"
+                          className={`project-clad-projects-toolbar__chip${statusFilter === "all" ? " is-active" : ""}`}
+                          data-projectclad-no-transition
+                        >
+                          All
+                        </button>
+                        <button
+                          type="button"
+                          data-pc-status="active"
+                          className={`project-clad-projects-toolbar__chip${statusFilter === "active" ? " is-active" : ""}`}
+                          data-projectclad-no-transition
+                        >
+                          Active
+                        </button>
+                        <button
+                          type="button"
+                          data-pc-status="complete"
+                          className={`project-clad-projects-toolbar__chip${statusFilter === "complete" ? " is-active" : ""}`}
+                          data-projectclad-no-transition
+                        >
+                          Complete
+                        </button>
+                        <button
+                          type="button"
+                          data-pc-status="inactive"
+                          className={`project-clad-projects-toolbar__chip${statusFilter === "inactive" ? " is-active" : ""}`}
+                          data-projectclad-no-transition
+                        >
+                          Inactive
+                        </button>
+                        {hasApprovalRows ? (
+                          <button
+                            type="button"
+                            data-pc-status="approval"
+                            className={`project-clad-projects-toolbar__chip${statusFilter === "approval" ? " is-active" : ""}`}
+                            data-projectclad-no-transition
+                          >
+                            Approval
+                          </button>
+                        ) : null}
+                      </nav>
+                    </div>
+                    {hasCompanyRows ? (
+                      <div className="project-clad-projects-toolbar__row project-clad-projects-toolbar__row--view">
+                        <span className="project-clad-projects-toolbar__label">View</span>
+                        <nav
+                          className="project-clad-projects-toolbar__chips"
+                          aria-label="Filter by how you access the project"
+                        >
+                          <button
+                            type="button"
+                            data-pc-view="all"
+                            className={`project-clad-projects-toolbar__chip${viewFilter === "all" ? " is-active" : ""}`}
+                            data-projectclad-no-transition
+                          >
+                            All
+                          </button>
+                          <button
+                            type="button"
+                            data-pc-view="mine"
+                            className={`project-clad-projects-toolbar__chip${viewFilter === "mine" ? " is-active" : ""}`}
+                            data-projectclad-no-transition
+                          >
+                            Mine
+                          </button>
+                          <button
+                            type="button"
+                            data-pc-view="company"
+                            className={`project-clad-projects-toolbar__chip${viewFilter === "company" ? " is-active" : ""}`}
+                            title="Projects visible because of your company tag (read-only browsing)"
+                            data-projectclad-no-transition
+                          >
+                            Company
+                          </button>
+                        </nav>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="project-clad-projects-control-tile project-clad-projects-control-tile--sort">
+                    <div className="project-clad-projects-toolbar__cluster project-clad-projects-toolbar__cluster--sort">
+                      <span className="project-clad-projects-toolbar__label">Sort</span>
+                      <nav className="project-clad-projects-toolbar__chips" aria-label="Sort project list">
+                        <button
+                          type="button"
+                          data-pc-sort="recent"
+                          className={`project-clad-projects-toolbar__chip${sortKey === "recent" ? " is-active" : ""}`}
+                          data-projectclad-no-transition
+                        >
+                          Recent
+                        </button>
+                        <button
+                          type="button"
+                          data-pc-sort="newest"
+                          className={`project-clad-projects-toolbar__chip${sortKey === "newest" ? " is-active" : ""}`}
+                          data-projectclad-no-transition
+                        >
+                          Newest
+                        </button>
+                        <button
+                          type="button"
+                          data-pc-sort="oldest"
+                          className={`project-clad-projects-toolbar__chip${sortKey === "oldest" ? " is-active" : ""}`}
+                          data-projectclad-no-transition
+                        >
+                          Oldest
+                        </button>
+                        <button
+                          type="button"
+                          data-pc-sort="name"
+                          className={`project-clad-projects-toolbar__chip${sortKey === "name" ? " is-active" : ""}`}
+                          data-projectclad-no-transition
+                        >
+                          Name
+                        </button>
+                        <button
+                          type="button"
+                          data-pc-sort="orders"
+                          className={`project-clad-projects-toolbar__chip${sortKey === "orders" ? " is-active" : ""}`}
+                          data-projectclad-no-transition
+                        >
+                          Orders
+                        </button>
+                      </nav>
+                    </div>
+                  </div>
+                </div>
+                <div className="project-clad-projects-controls-grid__col project-clad-projects-controls-grid__col--right">
+                  <section
+                    className="project-clad-projects-control-tile project-clad-projects-control-tile--summary project-clad-projects-summary"
+                    aria-label="Totals for the filtered project list"
+                  >
+                    <div className="project-clad-projects-summary__stat">
+                      <span
+                        className="project-clad-tile-dash__stat-num"
+                        data-pc-summary-value="projects"
+                      >
+                        {listTotals.projectCount}
+                      </span>
+                      <span className="project-clad-tile-dash__stat-label">
+                        PROJECTS
+                      </span>
+                    </div>
+                    <div className="project-clad-projects-summary__stat">
+                      <span
+                        className="project-clad-tile-dash__stat-num"
+                        data-pc-summary-value="orders"
+                      >
+                        {listTotals.totalOrders}
+                      </span>
+                      <span className="project-clad-tile-dash__stat-label">ORDERS</span>
+                    </div>
+                    <div
+                      className={`project-clad-projects-summary__stat project-clad-projects-summary__stat--approvals${listTotals.totalApprovals === 0 ? " project-clad-projects-summary__stat--dim" : ""}`}
+                    >
+                      <span
+                        className="project-clad-tile-dash__stat-num"
+                        data-pc-summary-value="approvals"
+                      >
+                        {listTotals.totalApprovals}
+                      </span>
+                      <span className="project-clad-tile-dash__stat-label">
+                        APPROVALS
+                      </span>
+                    </div>
+                  </section>
+                  <div className="project-clad-projects-control-tile project-clad-projects-control-tile--search">
+                    <div className="project-clad-projects-toolbar__cluster project-clad-projects-toolbar__cluster--search">
+                      <div className="project-clad-projects-toolbar__search-row">
+                        <div className="project-clad-projects-toolbar__search-wrap">
+                          <span
+                            className="project-clad-projects-toolbar__search-icon"
+                            aria-hidden="true"
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                              <path
+                                d="M20 20l-4.2-4.2"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          </span>
+                          <label
+                            className="project-clad-sr-only"
+                            htmlFor="project-clad-projects-search"
+                          >
+                            Search Projects
+                          </label>
+                          <input
+                            id="project-clad-projects-search"
+                            type="search"
+                            className="project-clad-projects-toolbar__search"
+                            placeholder="Search Projects"
+                            value={listSearchQ}
+                            onChange={(e) =>
+                              updateListUiState({ q: e.target.value || null })
+                            }
+                            autoComplete="off"
+                            data-pc-search
+                          />
+                        </div>
+                        {listSearchQ || hasNonDefaultFilters ? (
+                          <button
+                            type="button"
+                            onClick={clearListUiParams}
+                            className="project-clad-projects-toolbar__clear"
+                            data-pc-reset
+                            data-projectclad-no-transition
+                          >
+                            Reset all
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : null}
           {variantLookupError && (
             <p className="project-clad-muted">{variantLookupError}</p>
           )}
@@ -524,48 +1028,183 @@ export default function ProjectsPage() {
           ) : filteredProjects.length === 0 ? (
             <section className="project-clad-card">
               <p className="project-clad-muted">
-                No projects match &ldquo;{listSearchQ}&rdquo;. Try different words or{" "}
-                <Link to="/apps/project-clad/projects" className="project-clad-hidden-link" style={{ textDecoration: "underline" }}>
-                  clear the search
-                </Link>
+                {listSearchQ ? (
+                  <>
+                    No projects match &ldquo;{listSearchQ}&rdquo;
+                    {hasNonDefaultFilters ? " with the current filters" : ""}.
+                  </>
+                ) : (
+                  <>No projects match the current filters.</>
+                )}{" "}
+                <button
+                  type="button"
+                  onClick={clearListUiParams}
+                  className="project-clad-hidden-link"
+                  style={{ textDecoration: "underline" }}
+                >
+                  Reset search and filters
+                </button>
                 .
               </p>
             </section>
           ) : (
             <section className="project-clad-grid">
-              {filteredProjects.map((project) => (
+              {filteredProjects.map((project) => {
+                const m = getProjectTileMetrics(project);
+                const pill = getProjectTileStatusPill(project);
+                const unitCount = getProjectUnitCount(project);
+                const ownsTile =
+                  project.isOwner || viewerIsAppAdmin;
+                const ownershipCls = ownsTile
+                  ? " project-clad-card--tile-ownership-owned"
+                  : " project-clad-card--tile-ownership-shared";
+                return (
                 <div
                   key={project.id}
-                  className={`project-clad-card${project.approvalStatus.requested ? " project-clad-card--confirming" : ""}`}
+                  className={`project-clad-card project-clad-card--project-list-dash project-clad-card--tile-status-${project.storefrontStatus}${ownershipCls}${
+                    project.approvalStatus?.requested &&
+                    !project.approvalStatus?.approved
+                      ? " project-clad-card--confirming"
+                      : ""
+                  }`}
+                  data-pc-project-card="1"
+                  data-pc-status={project.storefrontStatus}
+                  data-pc-owner={ownsTile ? "1" : "0"}
+                  data-pc-via-company={project.viaCompany ? "1" : "0"}
+                  data-pc-pending-approvals={String(project.pendingOrderApprovalCount ?? 0)}
+                  data-pc-project-approval-pending={
+                    project.approvalStatus?.requested &&
+                    !project.approvalStatus?.approved
+                      ? "1"
+                      : "0"
+                  }
+                  data-pc-created-at={String(new Date(project.createdAt).getTime())}
+                  data-pc-name={project.name.toLowerCase()}
+                  data-pc-search={`${project.name} ${project.poNumber || ""} ${project.companyName || ""}`.toLowerCase()}
+                  data-pc-orders={String(project.jobCount)}
+                  data-pc-units={String(unitCount)}
                 >
                   <a
                     href={`/apps/project-clad/project?id=${encodeURIComponent(project.id)}`}
                     className="project-clad-card-link"
                   >
-                    <div className="project-clad-projects-tile-head">
-                      <h2 className="project-clad-title">{project.name}</h2>
-                      <p className="project-clad-muted project-clad-projects-tile-company">
-                        Company name: {project.companyName || "—"}
-                      </p>
-                      <p className="project-clad-muted project-clad-projects-tile-po">
-                        Project #: {project.poNumber || "—"}
-                      </p>
-                      <p className="project-clad-muted project-clad-projects-tile-created">
-                        Created: {new Date(project.createdAt).toLocaleDateString()}
-                      </p>
-                      <p className="project-clad-muted project-clad-projects-tile-orders">
-                        Orders: {project.jobCount}
-                      </p>
-                      {!project.isOwner && project.ownerLabel && (
-                        <p className="project-clad-muted project-clad-projects-tile-owner">
+                    <div className="project-clad-tile-dash">
+                      <div className="project-clad-tile-dash__header">
+                        <div className="project-clad-tile-dash__head-left">
+                          <h2 className="project-clad-title project-clad-tile-dash__title project-clad-project-card__title">
+                            {project.name}
+                          </h2>
+                          <div className="project-clad-tile-dash__ref project-clad-tile-dash__ref--mono">
+                            {(project.poNumber ?? "").trim()
+                              ? `Project #${(project.poNumber ?? "").trim()}`
+                              : "—"}
+                          </div>
+                        </div>
+                        <span
+                          className={`project-clad-tile-dash__status-pill project-clad-tile-dash__status-pill--${pill.tone}`}
+                        >
+                          <span
+                            className="project-clad-tile-dash__status-dot"
+                            aria-hidden="true"
+                          />
+                          {pill.label}
+                        </span>
+                      </div>
+                      <div
+                        className="project-clad-tile-dash__stat-row"
+                        aria-label={`${project.pendingOrderApprovalCount ?? 0} pending approval requests across orders in this project`}
+                      >
+                        <div className="project-clad-tile-dash__stat">
+                          <span className="project-clad-tile-dash__stat-num">
+                            {project.jobCount}
+                          </span>
+                          <span className="project-clad-tile-dash__stat-label">
+                            ORDERS
+                          </span>
+                        </div>
+                        <div
+                          className={`project-clad-tile-dash__stat${m.deliveredCount === 0 ? " project-clad-tile-dash__stat--dim" : ""}`}
+                        >
+                          <span className="project-clad-tile-dash__stat-num">
+                            {m.deliveredCount}
+                          </span>
+                          <span className="project-clad-tile-dash__stat-label">
+                            DELIVERED
+                          </span>
+                        </div>
+                        <div
+                          className={`project-clad-tile-dash__stat${
+                            (project.pendingOrderApprovalCount ?? 0) === 0
+                              ? " project-clad-tile-dash__stat--dim"
+                              : " project-clad-tile-dash__stat--alert"
+                          }`}
+                        >
+                          <span className="project-clad-tile-dash__stat-num">
+                            {project.pendingOrderApprovalCount ?? 0}
+                          </span>
+                          <span className="project-clad-tile-dash__stat-label">
+                            APPROVALS
+                          </span>
+                        </div>
+                      </div>
+                      <div
+                        className="project-clad-tile-dash__meta-row"
+                        role="group"
+                        aria-label="Project details"
+                      >
+                        <div className="project-clad-tile-dash__meta-pair">
+                          <span className="project-clad-tile-dash__meta-k">
+                            CREATED
+                          </span>
+                          <span className="project-clad-tile-dash__meta-v project-clad-tile-dash__meta-v--mono">
+                            {formatProjectTileDate(project.createdAt)}
+                          </span>
+                        </div>
+                        <span
+                          className="project-clad-tile-dash__meta-sep"
+                          aria-hidden="true"
+                        />
+                        <div className="project-clad-tile-dash__meta-pair">
+                          <span className="project-clad-tile-dash__meta-k">
+                            COMPANY
+                          </span>
+                          <span className="project-clad-tile-dash__meta-v">
+                            {project.companyName || "—"}
+                          </span>
+                        </div>
+                        {project.storefrontStatus === "complete" ? (
+                          <>
+                            <span
+                              className="project-clad-tile-dash__meta-sep"
+                              aria-hidden="true"
+                            />
+                            <div className="project-clad-tile-dash__meta-pair">
+                              <span className="project-clad-tile-dash__meta-k">
+                                TOTAL
+                              </span>
+                              <span
+                                className="project-clad-tile-dash__meta-v project-clad-tile-dash__meta-v--mono"
+                                title="Sum of all saved line items (store unit prices × quantity; storefront tax-inclusive pricing)"
+                              >
+                                {formatProjectTileMoney(project.lineItemsSubtotal)}
+                              </span>
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
+                      {!project.isOwner && project.ownerLabel ? (
+                        <p className="project-clad-tile-dash__owner">
                           {project.viaCompany ? "Shared by: " : "Owner: "}
                           {project.ownerLabel}
                         </p>
-                      )}
+                      ) : null}
                     </div>
                   </a>
                   {hideAddToCart && (() => {
-                    const status = project.approvalStatus;
+                    const status = project.approvalStatus ?? {
+                      requested: false,
+                      approved: false,
+                    };
                     if (status.approved) {
                       return (
                         <div className="project-clad-actions">
@@ -610,10 +1249,16 @@ export default function ProjectsPage() {
                     return null;
                   })()}
                 </div>
-              ))}
+                );
+              })}
             </section>
           )}
         </div>
+        <ProjectCladStorefrontFooter
+          logoDataUrl={logoDataUrl}
+          logoAlt="Canadian Cladding"
+          logoHref="/"
+        />
       </main>
       <script
         dangerouslySetInnerHTML={{ __html: PROJECT_CLAD_CURSOR_GLOW_SCRIPT }}
@@ -622,6 +1267,14 @@ export default function ProjectsPage() {
         dangerouslySetInnerHTML={{
           __html: `
 (function() {
+  var APP_PROXY_KEYS = {
+    signature: true,
+    shop: true,
+    path_prefix: true,
+    timestamp: true,
+    logged_in_customer_id: true,
+    logged_in_customer_email: true
+  };
   var main = document.querySelector('.project-clad-page');
   if (main) {
     requestAnimationFrame(function() {
@@ -630,9 +1283,15 @@ export default function ProjectsPage() {
       });
     });
   }
+  /* Only animate tile click-throughs. Query-only controls (filter/sort/search links) must remain SPA
+     navigations; forcing full reload in app-proxy context can break URL signatures and appear as 404/no-op. */
   document.addEventListener('click', function(e) {
-    var a = e.target.closest('a[href]');
-    if (!a || a.target === '_blank' || a.getAttribute('data-projectclad-no-transition')) return;
+    var target = e.target;
+    if (target && target.nodeType === Node.TEXT_NODE) target = target.parentElement;
+    if (!(target instanceof Element)) return;
+    var a = target.closest('a[href]');
+    if (!a || a.target === '_blank' || a.hasAttribute('data-projectclad-no-transition')) return;
+    if (!a.classList.contains('project-clad-card-link')) return;
     var href = a.getAttribute('href');
     if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
     try {
@@ -642,7 +1301,20 @@ export default function ProjectsPage() {
     e.preventDefault();
     e.stopPropagation();
     document.body.classList.add('project-clad-leaving');
-    setTimeout(function() { window.location.href = href; }, 180);
+    setTimeout(function() {
+      try {
+        var nextUrl = new URL(href, location.origin);
+        var currentParams = new URLSearchParams(location.search);
+        currentParams.forEach(function(value, key) {
+          if (APP_PROXY_KEYS[key] && !nextUrl.searchParams.has(key)) {
+            nextUrl.searchParams.set(key, value);
+          }
+        });
+        window.location.href = nextUrl.pathname + nextUrl.search + nextUrl.hash;
+      } catch (err) {
+        window.location.href = href;
+      }
+    }, 180);
   }, true);
   window.addEventListener('pageshow', function(ev) {
     if (ev.persisted) window.location.reload();
@@ -655,6 +1327,150 @@ export default function ProjectsPage() {
         dangerouslySetInnerHTML={{
           __html: `
 (function() {
+  var root = document.querySelector('.project-clad-page--projects');
+  var controlsRoot = root && root.querySelector('.project-clad-projects-controls-grid');
+  var grid = root && root.querySelector('.project-clad-grid');
+  if (controlsRoot && grid) {
+    var searchInput = controlsRoot.querySelector('[data-pc-search]');
+    var summary = root && root.querySelector('.project-clad-projects-summary');
+    var ui = {
+      status: 'all',
+      view: 'all',
+      sort: 'recent',
+      q:
+        searchInput && 'value' in searchInput
+          ? String(searchInput.value || '').trim().toLowerCase()
+          : ''
+    };
+    function getCards() {
+      return Array.prototype.slice.call(grid.querySelectorAll('[data-pc-project-card="1"]'));
+    }
+    function setActive(groupAttr, value) {
+      controlsRoot.querySelectorAll('[' + groupAttr + ']').forEach(function(btn) {
+        if (!(btn instanceof Element)) return;
+        if (btn.getAttribute(groupAttr) === value) btn.classList.add('is-active');
+        else btn.classList.remove('is-active');
+      });
+    }
+    function matches(card) {
+      var status = card.getAttribute('data-pc-status') || 'active';
+      var viaCompany = card.getAttribute('data-pc-via-company') === '1';
+      var isOwner = card.getAttribute('data-pc-owner') === '1';
+      var pending = Number(card.getAttribute('data-pc-pending-approvals') || '0');
+      var projApproval = card.getAttribute('data-pc-project-approval-pending') === '1';
+      var searchHay = (card.getAttribute('data-pc-search') || '').toLowerCase();
+      if (ui.status === 'active' && status !== 'active') return false;
+      if (ui.status === 'complete' && status !== 'complete') return false;
+      if (ui.status === 'inactive' && status !== 'inactive') return false;
+      if (ui.status === 'approval' && !projApproval && pending <= 0) return false;
+      if (ui.view === 'mine' && !isOwner) return false;
+      if (ui.view === 'company' && !viaCompany) return false;
+      if (ui.q && searchHay.indexOf(ui.q) === -1) return false;
+      return true;
+    }
+    function comparator(a, b) {
+      var aCreated = Number(a.getAttribute('data-pc-created-at') || '0');
+      var bCreated = Number(b.getAttribute('data-pc-created-at') || '0');
+      if (ui.sort === 'newest') return bCreated - aCreated;
+      if (ui.sort === 'oldest') return aCreated - bCreated;
+      if (ui.sort === 'name') {
+        var an = a.getAttribute('data-pc-name') || '';
+        var bn = b.getAttribute('data-pc-name') || '';
+        return an.localeCompare(bn);
+      }
+      if (ui.sort === 'orders') {
+        var ao = Number(a.getAttribute('data-pc-orders') || '0');
+        var bo = Number(b.getAttribute('data-pc-orders') || '0');
+        if (bo !== ao) return bo - ao;
+        return bCreated - aCreated;
+      }
+      var aOwner = a.getAttribute('data-pc-owner') === '1' ? 0 : 1;
+      var bOwner = b.getAttribute('data-pc-owner') === '1' ? 0 : 1;
+      if (aOwner !== bOwner) return aOwner - bOwner;
+      return bCreated - aCreated;
+    }
+    function writeSummary() {
+      if (!summary) return;
+      var cards = getCards();
+      var pv = 0;
+      var ov = 0;
+      var av = 0;
+      cards.forEach(function(card) {
+        if (!matches(card)) return;
+        pv += 1;
+        ov += Number(card.getAttribute('data-pc-orders') || '0');
+        av += Number(card.getAttribute('data-pc-pending-approvals') || '0');
+      });
+      function setVal(key, n) {
+        var el = summary.querySelector('[data-pc-summary-value="' + key + '"]');
+        if (el) el.textContent = String(n);
+      }
+      setVal('projects', pv);
+      setVal('orders', ov);
+      setVal('approvals', av);
+      var apprEl = summary.querySelector('.project-clad-projects-summary__stat--approvals');
+      if (apprEl) {
+        if (av === 0) apprEl.classList.add('project-clad-projects-summary__stat--dim');
+        else apprEl.classList.remove('project-clad-projects-summary__stat--dim');
+      }
+    }
+    function apply() {
+      var cards = getCards();
+      var ordered = cards.slice().sort(comparator);
+      ordered.forEach(function(card) {
+        card.style.display = matches(card) ? '' : 'none';
+        grid.appendChild(card);
+      });
+      setActive('data-pc-status', ui.status);
+      setActive('data-pc-view', ui.view);
+      setActive('data-pc-sort', ui.sort);
+      writeSummary();
+    }
+    controlsRoot.addEventListener('click', function(ev) {
+      var target = ev.target;
+      if (target && target.nodeType === Node.TEXT_NODE) target = target.parentElement;
+      if (!(target instanceof Element)) return;
+      var statusBtn = target.closest('[data-pc-status]');
+      if (statusBtn) {
+        ev.preventDefault();
+        ui.status = statusBtn.getAttribute('data-pc-status') || 'all';
+        apply();
+        return;
+      }
+      var viewBtn = target.closest('[data-pc-view]');
+      if (viewBtn) {
+        ev.preventDefault();
+        ui.view = viewBtn.getAttribute('data-pc-view') || 'all';
+        apply();
+        return;
+      }
+      var sortBtn = target.closest('[data-pc-sort]');
+      if (sortBtn) {
+        ev.preventDefault();
+        ui.sort = sortBtn.getAttribute('data-pc-sort') || 'recent';
+        apply();
+        return;
+      }
+      var resetBtn = target.closest('[data-pc-reset]');
+      if (resetBtn) {
+        ev.preventDefault();
+        ui.status = 'all';
+        ui.view = 'all';
+        ui.sort = 'recent';
+        ui.q = '';
+        if (searchInput && 'value' in searchInput) searchInput.value = '';
+        apply();
+      }
+    }, true);
+    if (searchInput) {
+      searchInput.addEventListener('input', function() {
+        ui.q = String(searchInput.value || '').trim().toLowerCase();
+        apply();
+      });
+    }
+    apply();
+  }
+
   document.querySelectorAll('[data-projectclad-submit-approval]').forEach(function(form) {
     if (!(form instanceof HTMLFormElement)) return;
     form.addEventListener('submit', function(e) {

@@ -34,6 +34,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       name: project.name,
       poNumber: project.poNumber,
       companyName: project.companyName,
+      storefrontStatus: project.storefrontStatus,
       jobs: project.jobs.map((job) => ({
         id: job.id,
         name: job.name,

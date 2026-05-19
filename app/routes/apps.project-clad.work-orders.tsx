@@ -7,6 +7,7 @@ import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
+import { ProjectCladStorefrontFooter } from "../components/ProjectCladStorefrontFooter";
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
 import { getStorefrontAppNav } from "../utils/storefrontAppNav";
 
@@ -72,30 +73,39 @@ export default function StorefrontWorkOrdersInfo() {
             : undefined
         }
       >
+        <header className="project-clad-header project-clad-header--fullbleed">
+          <ProjectCladStorefrontNav
+            logoDataUrl={data.logoDataUrl}
+            logoHref="/"
+            logoAlt="Canadian Cladding"
+            links={storefrontAppNav.links}
+            cartUrl={storefrontAppNav.cartUrl}
+            searchUrl={storefrontAppNav.searchUrl}
+            accountUrl={storefrontAppNav.accountUrl}
+            accountInitial={data.navAccountInitial}
+            brandSuffix="WORK ORDERS"
+            htmlTemplateHeader
+            htmlTemplateNavActive="projects"
+          />
+        </header>
         <div className="page-width project-clad-container project-clad-container--full-width">
-          <header className="project-clad-header">
-            <ProjectCladStorefrontNav
-              logoDataUrl={data.logoDataUrl}
-              logoHref="/"
-              links={storefrontAppNav.links}
-              cartUrl={storefrontAppNav.cartUrl}
-              searchUrl={storefrontAppNav.searchUrl}
-              accountUrl={storefrontAppNav.accountUrl}
-              accountInitial={data.navAccountInitial}
-            />
-            <h1 className="main-page-title page-title">Work orders</h1>
-            <p className="project-clad-muted">
-              Work orders are managed in <strong>Shopify Admin</strong>: open the{" "}
-              <strong>ProjectClad</strong> app, then use <strong>Work orders</strong> in the app
-              navigation.
-            </p>
-            <p style={{ marginTop: "1rem" }}>
-              <a className="project-clad-button" href="/apps/project-clad/projects">
-                Back to projects
-              </a>
-            </p>
-          </header>
+          <h1 className="main-page-title page-title">Work orders</h1>
+          <p className="project-clad-muted">
+            Work orders are managed in <strong>Shopify Admin</strong>: open the{" "}
+            <strong>ProjectClad</strong> app, then use <strong>Work orders</strong> in the app
+            navigation.
+          </p>
+          <p style={{ marginTop: "1rem" }}>
+            <a className="project-clad-button" href="/apps/project-clad/projects">
+              Back to projects
+            </a>
+          </p>
         </div>
+        <ProjectCladStorefrontFooter
+          logoDataUrl={data.logoDataUrl}
+          logoAlt="Canadian Cladding"
+          logoHref="/"
+        />
       </main>
       <script
         dangerouslySetInnerHTML={{ __html: PROJECT_CLAD_CURSOR_GLOW_SCRIPT }}

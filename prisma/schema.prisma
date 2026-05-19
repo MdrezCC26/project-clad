@@ -58,6 +58,13 @@ enum ProjectReceiveMode {
   pickup
 }
 
+/// Storefront projects list tile / owner-set lifecycle (separate from job order lifecycle).
+enum ProjectStorefrontStatus {
+  active
+  complete
+  inactive
+}
+
 model Project {
   id                String            @id @default(cuid())
   shop              String
@@ -82,11 +89,12 @@ model Project {
   ownerCompanyKey   String?
   /// Owner switch to share a specific project with company viewers (read-only). Owner + members always see it regardless. Off by default — owners must opt in.
   visibleToCompany  Boolean           @default(false)
+  storefrontStatus  ProjectStorefrontStatus @default(active)
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   jobs             Job[]
   members          ProjectMember[]
-  shareTokens      ProjectShareToken[]
+  shareToken       ProjectShareToken?
   approvalRequests ApprovalRequest[]
   activityEvents   ProjectActivityEvent[]
   comments         ProjectComment[]
@@ -197,13 +205,11 @@ model ProjectMember {
 
 model ProjectShareToken {
   id        String      @id @default(cuid())
-  projectId String
+  projectId String      @unique
   token     String      @unique
   role      ProjectRole
   createdAt DateTime    @default(now())
   project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([projectId])
 }
 
 model JobOrderLink {

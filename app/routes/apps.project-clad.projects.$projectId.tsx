@@ -1,5 +1,6 @@
 
-import crypto from "node:crypto";
+
+
 import { useEffect, useRef, useState } from "react";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "react-router";
 import {
@@ -19,14 +20,18 @@ import {
 import {
   canEditProject,
   isProjectMember,
+  isProjectOwner,
   shopStringFilter,
 } from "../utils/projectAccess.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
+import { ProjectCladStorefrontFooter } from "../components/ProjectCladStorefrontFooter";
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
 import { getStorefrontAppNav } from "../utils/storefrontAppNav";
+import type { ProjectStorefrontStatus } from "@prisma/client";
+import { upsertProjectShareInvite } from "../utils/projectShareInvite.server";
 
 type JobItemView = {
   id: string;
@@ -48,6 +53,7 @@ type ProjectView = {
   name: string;
   poNumber: string | null;
   companyName: string | null;
+  storefrontStatus: ProjectStorefrontStatus;
   createdAt: string;
   jobs: JobView[];
 };
@@ -122,6 +128,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   }
 
   const canEdit = canEditProject(project, customerId, viewerIsAppAdmin);
+  const isOwner = isProjectOwner(project, customerId);
 
   const shopQ = shopStringFilter(shop);
   const otherProjects = await prisma.project.findMany({
@@ -153,6 +160,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     name: project.name,
     poNumber: project.poNumber,
     companyName: project.companyName,
+    storefrontStatus: project.storefrontStatus,
     createdAt: project.createdAt.toISOString(),
     jobs: project.jobs.map((job) => ({
       id: job.id,
@@ -178,6 +186,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     })),
     canViewPricing: !hideAddToCart || hasPricingAccess(request),
     canEdit,
+    isOwner,
     themeStyles,
     logoDataUrl: settings?.logoDataUrl || null,
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
@@ -329,11 +338,16 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       select: { defaultSiteContactName: true, defaultSiteContactPhone: true },
     });
 
+    const purchaseOrderNumber = String(
+      formData.get("purchaseOrderNumber") || "",
+    ).trim();
+
     await prisma.job.create({
       data: {
         projectId,
         name,
         sortOrder: nextSortOrder,
+        purchaseOrderNumber: purchaseOrderNumber || null,
         siteContactName: projectDefaults?.defaultSiteContactName ?? null,
         siteContactPhone: projectDefaults?.defaultSiteContactPhone ?? null,
       },
@@ -484,22 +498,18 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 
 
   if (intent === "share-project") {
-    if (!canEdit) {
+    if (!isProjectOwner(project, customerId)) {
       throw new Response("Forbidden", { status: 403 });
     }
 
     const role = String(formData.get("role") || "view");
-    const token = crypto.randomBytes(16).toString("hex");
+    const inviteRole = role === "edit" ? "edit" : "view";
+    const { shareLinkPath } = await upsertProjectShareInvite(
+      projectId,
+      inviteRole,
+    );
 
-    await prisma.projectShareToken.create({
-      data: {
-        projectId,
-        token,
-        role: role === "edit" ? "edit" : "view",
-      },
-    });
-
-    return { shareLink: `/apps/project-clad/share/${token}` };
+    return { shareLink: shareLinkPath };
   }
 
   if (intent === "unlock-pricing") {
@@ -551,6 +561,7 @@ export default function ProjectDetailPage() {
     otherProjects,
     canViewPricing,
     canEdit,
+    isOwner,
     themeStyles,
     storefrontAppNav,
     logoDataUrl,
@@ -787,29 +798,32 @@ export default function ProjectDetailPage() {
             : undefined
         }
       >
+        <header className="project-clad-header project-clad-header--fullbleed">
+          <ProjectCladStorefrontNav
+            logoDataUrl={logoDataUrl}
+            logoHref="/"
+            logoAlt="Canadian Cladding"
+            links={storefrontAppNav.links}
+            cartUrl={storefrontAppNav.cartUrl}
+            searchUrl={storefrontAppNav.searchUrl}
+            accountUrl={storefrontAppNav.accountUrl}
+            accountInitial={navAccountInitial}
+            htmlTemplateHeader
+            htmlTemplateNavActive="projects"
+          />
+        </header>
         <div className="page-width project-clad-container project-clad-container--full-width">
-          <header className="project-clad-header">
-            <ProjectCladStorefrontNav
-              logoDataUrl={logoDataUrl}
-              logoHref="/"
-              links={storefrontAppNav.links}
-              cartUrl={storefrontAppNav.cartUrl}
-              searchUrl={storefrontAppNav.searchUrl}
-              accountUrl={storefrontAppNav.accountUrl}
-              accountInitial={navAccountInitial}
-            />
-            <h1 className="main-page-title page-title">{project.name}</h1>
-            <div className="project-clad-header-meta">
-              <span className="project-clad-header-meta__project-ref">
-                <span className="project-clad-header-meta__project-ref-label">
-                  Project #:
-                </span>{" "}
-                {project.poNumber || "—"}
-              </span>
-              <span>Created: {new Date(project.createdAt).toLocaleDateString()}</span>
-              <span>Company name: {project.companyName || "—"}</span>
-            </div>
-          </header>
+          <h1 className="main-page-title page-title">{project.name}</h1>
+          <div className="project-clad-header-meta">
+            <span className="project-clad-header-meta__project-ref">
+              <span className="project-clad-header-meta__project-ref-label">
+                Project #:
+              </span>{" "}
+              {project.poNumber || "—"}
+            </span>
+            <span>Created: {new Date(project.createdAt).toLocaleDateString()}</span>
+            <span>Company name: {project.companyName || "—"}</span>
+          </div>
 
           <section className="project-clad-section">
             <h2 className="project-clad-section-title">Orders</h2>
@@ -823,6 +837,8 @@ export default function ProjectDetailPage() {
                   placeholder="Order name"
                   required
                 />
+                <label htmlFor="new-job-po">Purchase order # (optional)</label>
+                <input id="new-job-po" name="purchaseOrderNumber" placeholder="PO / ref" />
                 <button type="submit" className="project-clad-button">
                   Add order
                 </button>
@@ -1024,7 +1040,7 @@ export default function ProjectDetailPage() {
 
           <section className="project-clad-section">
             <h2 className="project-clad-section-title">Share access</h2>
-            {canEdit ? (
+            {isOwner ? (
               <>
                 <Form method="post" className="project-clad-inline-form">
                   <input type="hidden" name="intent" value="share-project" />
@@ -1046,6 +1062,10 @@ export default function ProjectDetailPage() {
                   </button>
                 </Form>
               </>
+            ) : canEdit ? (
+              <p className="project-clad-muted">
+                Only the project owner can copy a share invite link.
+              </p>
             ) : (
               <p className="project-clad-muted">
                 You have view-only access to this project.
@@ -1053,6 +1073,11 @@ export default function ProjectDetailPage() {
             )}
           </section>
         </div>
+        <ProjectCladStorefrontFooter
+          logoDataUrl={logoDataUrl}
+          logoAlt="Canadian Cladding"
+          logoHref="/"
+        />
       </main>
       <script
         dangerouslySetInnerHTML={{ __html: PROJECT_CLAD_CURSOR_GLOW_SCRIPT }}
