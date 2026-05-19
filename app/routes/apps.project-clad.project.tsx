@@ -62,10 +62,7 @@ import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles
 import { ProjectCladStorefrontFooter } from "../components/ProjectCladStorefrontFooter";
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
 import { getStorefrontAppNav } from "../utils/storefrontAppNav";
-import {
-  logProjectActivity,
-  STOREFRONT_ORDER_CONFIRMED_ACTIVITY,
-} from "../utils/projectActivity.server";
+import { STOREFRONT_ORDER_CONFIRMED_ACTIVITY } from "../utils/projectActivity.shared";
 import {
   sendOrderPlacedEmails,
   sendProjectStatusNotificationEmail,
@@ -3000,6 +2997,7 @@ async function createEmptyJobOnProject(args: {
     },
   });
 
+  const { logProjectActivity } = await import("../utils/projectActivity.server");
   await logProjectActivity({
     projectId,
     jobId: newJob.id,
@@ -3024,6 +3022,7 @@ async function createEmptyJobOnProject(args: {
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  const { logProjectActivity } = await import("../utils/projectActivity.server");
   const contentType = request.headers.get("Content-Type") || "";
   const declaresJson = /application\/json|\+json/i.test(contentType);
   // Only skip reading the body as text for multipart uploads. Shopify’s app proxy
