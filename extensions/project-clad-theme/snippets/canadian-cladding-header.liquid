@@ -8,11 +8,29 @@
   if customer
     assign account_href = routes.account_url
   endif
-  assign catalogue_href = routes.all_products_collection_url
   assign path = request.path
-  assign nav_home_active = false
-  if template.name == 'index' or path == catalogue_href
-    assign nav_home_active = true
+  assign nav_siding_url = '/collections/main-products'
+  assign nav_roofing_url = '/pages/roofing-shop'
+  assign nav_glazing_url = '/pages/glazing-shop'
+  assign nav_custom_url = '/pages/custompart'
+  assign nav_projects_url = '/apps/project-clad/projects'
+  assign nav_colours_url = '/pages/colours'
+  assign nav_contact_url = '/pages/contact'
+  assign nav_siding_active = false
+  assign nav_roofing_active = false
+  assign nav_glazing_active = false
+  assign nav_custom_active = false
+  assign nav_projects_active = false
+  if path == nav_siding_url or path contains nav_siding_url
+    assign nav_siding_active = true
+  elsif path == nav_roofing_url or path contains nav_roofing_url
+    assign nav_roofing_active = true
+  elsif path == nav_glazing_url or path contains nav_glazing_url
+    assign nav_glazing_active = true
+  elsif path == nav_custom_url or path contains nav_custom_url
+    assign nav_custom_active = true
+  elsif path contains '/apps/project-clad/projects' or path contains '/apps/project-clad/project' or path contains '/apps/project-clad/work-orders'
+    assign nav_projects_active = true
   endif
 %}
 <header class="cc-header" id="ccHeader" data-cc-header>
@@ -30,8 +48,8 @@
     </div>
 
     <nav class="tb-right">
-      <a href="#" class="hide-mobile">CONTACT</a>
-      <a href="#" class="hide-mobile">COLOURS</a>
+      <a href="{{ nav_contact_url }}" class="hide-mobile">CONTACT</a>
+      <a href="{{ nav_colours_url }}" class="hide-mobile">COLOURS</a>
       <a href="{{ account_href }}">ACCOUNT</a>
       <a href="{{ routes.cart_url }}">CART <span class="cart-count">[{{ cart.item_count }}]</span></a>
     </nav>
@@ -54,23 +72,26 @@
       <span class="word">Cladding</span>
     </a>
 
-    <nav class="cc-nav" aria-label="Primary">
-      <a href="{{ catalogue_href }}" class="{% if nav_home_active %}active{% endif %}">
-        {% if nav_home_active %}<span class="active-tick"></span>{% endif %}
-        Shop<span class="sub">PART.CATALOGUE</span>
-        <span class="laser-r"></span>
+    <nav class="cc-nav cc-nav--primary" aria-label="Primary">
+      <a href="{{ nav_siding_url }}" class="{% if nav_siding_active %}active{% endif %}">
+        {% if nav_siding_active %}<span class="active-tick"></span>{% endif %}
+        Siding
       </a>
-      <a href="#">
-        Roofing<span class="sub">METAL.ROOFING</span>
-        <span class="laser-r"></span>
+      <a href="{{ nav_roofing_url }}" class="{% if nav_roofing_active %}active{% endif %}">
+        {% if nav_roofing_active %}<span class="active-tick"></span>{% endif %}
+        Roofing
       </a>
-      <a href="#">
-        Custom<span class="sub">72HR.QUOTE</span>
-        <span class="laser-r"></span>
+      <a href="{{ nav_glazing_url }}" class="{% if nav_glazing_active %}active{% endif %}">
+        {% if nav_glazing_active %}<span class="active-tick"></span>{% endif %}
+        Glazing
       </a>
-      <a href="#">
-        Projects<span class="sub">FIELD.GALLERY</span>
-        <span class="laser-r"></span>
+      <a href="{{ nav_custom_url }}" class="{% if nav_custom_active %}active{% endif %}">
+        {% if nav_custom_active %}<span class="active-tick"></span>{% endif %}
+        Custom
+      </a>
+      <a href="{{ nav_projects_url }}" class="{% if nav_projects_active %}active{% endif %}">
+        {% if nav_projects_active %}<span class="active-tick"></span>{% endif %}
+        Projects
       </a>
     </nav>
 

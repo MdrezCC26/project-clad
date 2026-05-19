@@ -1,7 +1,6 @@
 import {
   forwardRef,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type MutableRefObject,
@@ -9,6 +8,11 @@ import {
 } from "react";
 import { useLocation } from "react-router";
 import type { StorefrontAppNavLink } from "../types/storefrontAppNav";
+import {
+  CANADIAN_CLADDING_PRIMARY_NAV,
+  CANADIAN_CLADDING_TOPBAR_LINKS,
+  matchCanadianCladdingPrimaryNavActive,
+} from "../utils/canadianCladdingPrimaryNav";
 
 function IconMenu({ className }: { className?: string }) {
   return (
@@ -289,22 +293,7 @@ export function ProjectCladStorefrontNav({
   }, [htmlTemplateHeader]);
 
   const location = useLocation();
-  /** Pathname-based guess when `htmlTemplateNavActive` is null. */
-  const derivedHtmlTemplatePrimaryNavActive = useMemo((): "shop" | "projects" => {
-    if (!htmlTemplateHeader) return "shop";
-    const path = location.pathname.replace(/\/+$/, "") || "/";
-    // With or without leading /apps — e.g. /apps/project-clad/projects or /project-clad/projects
-    if (/\/project-clad\/projects(\/|$)/.test(path)) return "projects";
-    // Singular /project — must not use .includes("...project") or it matches .../projects
-    if (/\/project-clad\/project(\/|\?|$)/.test(path)) return "projects";
-    if (path.includes("/project-clad/work-orders")) return "projects";
-    return "shop";
-  }, [htmlTemplateHeader, location.pathname]);
-
-  const htmlTemplatePrimaryNavActive =
-    htmlTemplateHeader && htmlTemplateNavActive != null
-      ? htmlTemplateNavActive
-      : derivedHtmlTemplatePrimaryNavActive;
+  const htmlPrimaryNavPath = location.pathname;
 
   const closeStoreMenuDrawer = () => {
     const el = storeMenuDrawerRef.current;
@@ -438,22 +427,27 @@ export function ProjectCladStorefrontNav({
 
   const htmlHeaderMainNav = (
     <nav className="project-clad-storefront-nav__html-nav" aria-label="Primary">
-      <a
-        href={links[0]?.url || "#"}
-        className={htmlTemplatePrimaryNavActive === "shop" ? "is-active" : undefined}
-        aria-current={htmlTemplatePrimaryNavActive === "shop" ? "page" : undefined}
-      >
-        Shop
-      </a>
-      <a href="#">Roofing</a>
-      <a href="#">Custom</a>
-      <a
-        href={logoHref || "/apps/project-clad/projects"}
-        className={htmlTemplatePrimaryNavActive === "projects" ? "is-active" : undefined}
-        aria-current={htmlTemplatePrimaryNavActive === "projects" ? "page" : undefined}
-      >
-        Projects
-      </a>
+      {CANADIAN_CLADDING_PRIMARY_NAV.map((item) => {
+        const active =
+          (htmlTemplateNavActive === "projects" && item.key === "projects") ||
+          (htmlTemplateNavActive === "shop" && item.key === "siding") ||
+          (htmlTemplateNavActive == null &&
+            matchCanadianCladdingPrimaryNavActive(
+              htmlPrimaryNavPath,
+              item.key,
+              item.url,
+            ));
+        return (
+          <a
+            key={item.key}
+            href={item.url}
+            className={active ? "is-active" : undefined}
+            aria-current={active ? "page" : undefined}
+          >
+            {item.label}
+          </a>
+        );
+      })}
     </nav>
   );
 
@@ -506,10 +500,10 @@ export function ProjectCladStorefrontNav({
                   Back to top
                 </button>
               ) : null}
-              <a href="#" className="hide-mobile">
+              <a href={CANADIAN_CLADDING_TOPBAR_LINKS.contact} className="hide-mobile">
                 Contact
               </a>
-              <a href="#" className="hide-mobile">
+              <a href={CANADIAN_CLADDING_TOPBAR_LINKS.colours} className="hide-mobile">
                 Colours
               </a>
               <a href={accountUrl}>Account</a>

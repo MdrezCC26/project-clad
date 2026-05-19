@@ -18,9 +18,10 @@ export type ShopSettingsNavSlice = {
 
 /** Example for admin placeholder — Canadian Cladding storefront paths (same host as app proxy). */
 export const STOREFRONT_APP_NAV_JSON_PLACEHOLDER = `[
-  { "label": "HOME", "url": "/" },
-  { "label": "SHOP", "url": "/collections/main-products" },
-  { "label": "CUSTOM PART", "url": "/pages/custompart" },
+  { "label": "SIDING", "url": "/collections/main-products" },
+  { "label": "ROOFING", "url": "/pages/roofing-shop" },
+  { "label": "GLAZING", "url": "/pages/glazing-shop" },
+  { "label": "CUSTOM", "url": "/pages/custompart" },
   { "label": "PROJECTS", "url": "/apps/project-clad/projects" },
   { "label": "COLOURS", "url": "/pages/colours" },
   { "label": "CONTACT", "url": "/pages/contact" }
@@ -60,14 +61,15 @@ export function defaultStorefrontAppNavLinks(
   const projectsLabel = (settings.navButton1Label || "PROJECTS").trim();
   const projectsUrl =
     settings.navButton1Url?.trim() || "/apps/project-clad/projects";
-  const shopLabel = (settings.navButton2Label || "SHOP").trim();
-  const shopUrl =
+  const sidingLabel = (settings.navButton2Label || "SIDING").trim();
+  const sidingUrl =
     settings.navButton2Url?.trim() || "/collections/main-products";
 
   return [
-    { label: "HOME", url: "/" },
-    { label: shopLabel.toUpperCase(), url: shopUrl },
-    { label: "CUSTOM PART", url: "/pages/custompart" },
+    { label: sidingLabel.toUpperCase(), url: sidingUrl },
+    { label: "ROOFING", url: "/pages/roofing-shop" },
+    { label: "GLAZING", url: "/pages/glazing-shop" },
+    { label: "CUSTOM", url: "/pages/custompart" },
     { label: projectsLabel.toUpperCase(), url: projectsUrl },
     { label: "COLOURS", url: "/pages/colours" },
     { label: "CONTACT", url: "/pages/contact" },

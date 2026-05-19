@@ -203,6 +203,16 @@
   transition: color 0.2s;
 }
 
+.cc-nav--primary a {
+  flex-direction: row;
+  padding: 10px 14px;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .cc-nav a .sub {
   font-family: var(--mono);
   font-weight: 400;
