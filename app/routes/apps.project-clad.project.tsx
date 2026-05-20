@@ -6747,7 +6747,7 @@ export default function ProjectDetailPage() {
       ))}
       <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       <main
-        className={`project-clad-page project-clad-page--detail project-clad-page--projects project-clad-page--cc-v2${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
+        className={`project-clad-page project-clad-page--detail project-clad-page--projects project-clad-page--cc-v2 cc-store-neu${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
         data-pc-na-workflow={viewerHasNATag === true ? "1" : "0"}
         style={
           backgroundLogoDataUrl
@@ -8356,14 +8356,14 @@ export default function ProjectDetailPage() {
                 </div>
 
                 <div className="project-clad-cc-v2-tile project-clad-cc-v2-tile--totals project-clad-orders-shell__footer project-clad-project-totals-card">
-                  <p className="project-clad-project-totals-card__heading">Totals</p>
+                  <p className="project-clad-project-totals-card__heading">Project Totals</p>
                   <div className="project-clad-summary-row project-clad-cc-v2-totals-line">
                     <div>
                       <h2
                         className="project-clad-title project-clad-project-footer-metric-label"
                         style={{ marginBottom: 0 }}
                       >
-                        Subtotal
+                        Project Subtotal
                       </h2>
                     </div>
                     <div
@@ -8417,7 +8417,7 @@ export default function ProjectDetailPage() {
                         className="project-clad-title project-clad-project-footer-metric-label"
                         style={{ marginBottom: 0 }}
                       >
-                        Total
+                        Project Total
                       </h2>
                     </div>
                     <div

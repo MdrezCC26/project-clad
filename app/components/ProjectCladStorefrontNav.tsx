@@ -13,6 +13,10 @@ import {
   CANADIAN_CLADDING_TOPBAR_LINKS,
   matchCanadianCladdingPrimaryNavActive,
 } from "../utils/canadianCladdingPrimaryNav";
+import {
+  buildCanadianCladdingLogoSrcSet,
+  CANADIAN_CLADDING_STOREFRONT_LOGO_URL,
+} from "../utils/canadianCladdingStorefrontLogo";
 
 function IconMenu({ className }: { className?: string }) {
   return (
@@ -44,8 +48,8 @@ function IconAccount({ className }: { className?: string }) {
   );
 }
 
-/** Matches Shopify Horizon `assets/icon-cart.svg` (storefront header bag). */
-function IconCart({ className }: { className?: string }) {
+/** Matches theme `cc-storefront-header` cart icon (stroke-width 1.5). */
+function IconCart({ className, strokeWidth = 1.5 }: { className?: string; strokeWidth?: number }) {
   return (
     <svg
       className={className}
@@ -60,7 +64,7 @@ function IconCart({ className }: { className?: string }) {
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth={1}
+        strokeWidth={strokeWidth}
         d="M3.392 6.875h13.216v8.016c0 .567-.224 1.112-.624 1.513-.4.402-.941.627-1.506.627H5.522a2.13 2.13 0 0 1-1.506-.627 2.15 2.15 0 0 1-.624-1.513zM8.818 2.969h2.333c.618 0 1.211.247 1.649.686a2.35 2.35 0 0 1 .683 1.658v1.562H6.486V5.313c0-.622.246-1.218.683-1.658a2.33 2.33 0 0 1 1.65-.686"
       />
     </svg>
@@ -425,8 +429,12 @@ export function ProjectCladStorefrontNav({
       </div>
     ) : null;
 
-  const htmlHeaderMainNav = (
-    <nav className="project-clad-storefront-nav__html-nav" aria-label="Primary">
+  /* Header uses the live theme wordmark asset (not admin logoDataUrl — that asset is often smaller). */
+  const storefrontLogoSrc = CANADIAN_CLADDING_STOREFRONT_LOGO_URL;
+  const storefrontLogoSrcSet = buildCanadianCladdingLogoSrcSet(storefrontLogoSrc);
+
+  const ccAppHeaderMainNav = (
+    <nav className="cc-app-header__nav" aria-label="Primary">
       {CANADIAN_CLADDING_PRIMARY_NAV.map((item) => {
         const active =
           (htmlTemplateNavActive === "projects" && item.key === "projects") ||
@@ -451,80 +459,80 @@ export function ProjectCladStorefrontNav({
     </nav>
   );
 
-  const htmlLeadingBrand = (
-    <div className="project-clad-storefront-nav__html-leading">
-      <div className="project-clad-storefront-nav__html-brand">
-        {logoBlock}
-        {suffixText ? (
-          <>
-            <span className="project-clad-storefront-nav__html-slash" aria-hidden="true">
-              /
+  const ccAppHeader = (
+    <header className="cc-app-header" id="ccAppHeader" data-cc-app-header>
+      <div className="cc-app-header__topbar">
+        <div className="cc-app-header__topbar-left">
+          <span className="cc-app-header__live">
+            <span className="cc-app-header__dot" aria-hidden="true" />
+            <span>Open</span>
+          </span>
+          <span className="cc-app-header__sep" aria-hidden="true">
+            ·
+          </span>
+          <span>72hr lead time</span>
+          <span className="cc-app-header__sep" aria-hidden="true">
+            ·
+          </span>
+          <span>Ottawa, ON</span>
+        </div>
+        <nav className="cc-app-header__topbar-right" aria-label="Quick links">
+          {showBackToTop ? (
+            <button
+              type="button"
+              className="project-clad-storefront-nav__html-back-to-top"
+              onClick={handleBackToTop}
+              aria-label="Back to top"
+            >
+              Back to top
+            </button>
+          ) : null}
+          <a href={CANADIAN_CLADDING_TOPBAR_LINKS.contact} className="cc-app-header__hide-mobile">
+            Contact
+          </a>
+          <a href={CANADIAN_CLADDING_TOPBAR_LINKS.colours} className="cc-app-header__hide-mobile">
+            Colours
+          </a>
+          <a href={accountUrl}>Account</a>
+          <a href={cartUrl} className="cc-app-header__topbar-cart">
+            <span className="cc-app-header__cart-icon-wrap" aria-hidden="true">
+              <IconCart className="cc-app-header__cart-icon" strokeWidth={1.5} />
             </span>
-            <strong className="project-clad-storefront-nav__html-context">{suffixText}</strong>
-          </>
-        ) : null}
+            <span>Cart{showCartBadge ? ` [${liveCartCount}]` : ""}</span>
+          </a>
+        </nav>
       </div>
-    </div>
+      <div className="cc-app-header__inner">
+        <div className="cc-app-header__mainbar">
+          <div className="cc-app-header__leading">
+            <a href={logoHref} className="cc-app-header__logo-link" aria-label={logoAlt}>
+              <img
+                src={storefrontLogoSrc}
+                alt={logoAlt}
+                srcSet={storefrontLogoSrcSet}
+                height={60}
+                loading="eager"
+                className="cc-app-header__logo-img"
+                sizes="(max-width: 749px) 52vw, 560px"
+              />
+            </a>
+          </div>
+          {ccAppHeaderMainNav}
+          {!hideTrailingIcons ? (
+            <div className="project-clad-storefront-nav__html-trailing">
+              {shellExtraSlot}
+              {toolsRow}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </header>
   );
 
   return (
-    <div
-      className={`project-clad-storefront-nav${htmlTemplateHeader ? " project-clad-storefront-nav--html" : ""}`}
-      data-projectclad-storefront-nav
-    >
+    <div className="project-clad-storefront-nav" data-projectclad-storefront-nav>
       {htmlTemplateHeader ? (
-        <>
-          <div className="project-clad-storefront-nav__html-topbar">
-            <div className="project-clad-storefront-nav__html-topbar-left">
-              <span>48hr lead time</span>
-              <span className="project-clad-storefront-nav__html-sep" aria-hidden="true">
-                ·
-              </span>
-              <span>Ottawa, ON</span>
-            </div>
-            <nav className="project-clad-storefront-nav__html-topbar-right" aria-label="Quick links">
-              {showBackToTop ? (
-                <button
-                  type="button"
-                  className="project-clad-storefront-nav__html-back-to-top"
-                  onClick={handleBackToTop}
-                  aria-label="Back to top"
-                >
-                  Back to top
-                </button>
-              ) : null}
-              <a href={CANADIAN_CLADDING_TOPBAR_LINKS.contact} className="hide-mobile">
-                Contact
-              </a>
-              <a href={CANADIAN_CLADDING_TOPBAR_LINKS.colours} className="hide-mobile">
-                Colours
-              </a>
-              <a href={accountUrl}>Account</a>
-              <a href={cartUrl} className="project-clad-storefront-nav__html-cart-with-icon">
-                <span className="project-clad-storefront-nav__html-cart-icon-wrap" aria-hidden="true">
-                  <IconCart className="project-clad-storefront-nav__html-cart-icon" />
-                </span>
-                <span>
-                  Cart{showCartBadge ? ` [${liveCartCount}]` : ""}
-                </span>
-              </a>
-            </nav>
-          </div>
-          <div
-            className={`project-clad-storefront-nav__html-mainbar${
-              hideTrailingIcons ? " project-clad-storefront-nav__html-mainbar--no-tools" : ""
-            }`}
-          >
-            {htmlLeadingBrand}
-            <div className="project-clad-storefront-nav__html-center">
-              {htmlHeaderMainNav}
-            </div>
-            <div className="project-clad-storefront-nav__html-trailing">
-              {shellExtraSlot}
-              {!hideTrailingIcons ? toolsRow : null}
-            </div>
-          </div>
-        </>
+        ccAppHeader
       ) : (
         <div
           className={`project-clad-storefront-nav__shell project-clad-storefront-nav__shell--flat${brandCenterLayout ? " project-clad-storefront-nav__shell--brand-center" : ""}`}

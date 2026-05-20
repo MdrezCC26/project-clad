@@ -64,7 +64,7 @@ export default function StorefrontWorkOrdersInfo() {
       ))}
       <style dangerouslySetInnerHTML={{ __html: data.proxyStylesCss }} />
       <main
-        className={`project-clad-page project-clad-page--projects${data.backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
+        className={`project-clad-page project-clad-page--projects project-clad-page--cc-v2 cc-store-neu${data.backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
         style={
           data.backgroundLogoDataUrl
             ? {
@@ -86,6 +86,7 @@ export default function StorefrontWorkOrdersInfo() {
             brandSuffix="WORK ORDERS"
             htmlTemplateHeader
             htmlTemplateNavActive="projects"
+            hideTrailingIcons={true}
           />
         </header>
         <div className="page-width project-clad-container project-clad-container--full-width">

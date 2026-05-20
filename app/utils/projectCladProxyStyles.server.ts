@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import storefrontHeaderStylesRaw from "../styles/cc-storefront-header.css?raw";
 import proxyStylesRaw from "../styles/project-clad-proxy.css?raw";
 
 /**
@@ -30,7 +31,9 @@ function withInlinedNulshock(css: string): string {
   }
 }
 
-const proxyStylesBase = withInlinedNulshock(proxyStylesRaw);
+const proxyStylesBase = withInlinedNulshock(
+  `${proxyStylesRaw}\n${storefrontHeaderStylesRaw}`,
+);
 
 export function rewriteProjectCladProxyFontUrls(request: Request): string {
   let origin: string;

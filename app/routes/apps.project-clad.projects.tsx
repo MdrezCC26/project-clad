@@ -754,7 +754,7 @@ export default function ProjectsPage() {
       {/* After theme inlines so Project Clad rules win over storefront base.css */}
       <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       <main
-        className={`project-clad-page project-clad-page--projects project-clad-page--cc-v2${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
+        className={`project-clad-page project-clad-page--projects project-clad-page--cc-v2 cc-store-neu${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
         style={
           backgroundLogoDataUrl
             ? { ["--project-clad-bg-logo" as string]: `url(${backgroundLogoDataUrl})` }

@@ -6,6 +6,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Bakbak+One&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap");
 
 /* Licensed Nulshock: public/fonts/nulshock/nulshock-bd.woff2 — inlined as data: in app proxy CSS (CORS-safe on storefront). */
 @font-face {
@@ -677,10 +678,8 @@ html:has(.project-clad-page--projects) body {
  * slightly wider than the layout viewport and nudge the document sideways.
  * Root clip removes that without touching `.project-clad-page` overflow (sticky
  * header on the flex column still works). */
-@media (min-width: 750px) {
-  html:has(.project-clad-page) {
-    overflow-x: clip;
-  }
+html:has(.project-clad-page) {
+  overflow-x: clip;
 }
 
 /*
@@ -4576,7 +4575,7 @@ html:has(.project-clad-page--projects) body {
     padding: 0;
     border: none;
     font-family: "Inter", system-ui, sans-serif !important;
-    font-size: 11px !important;
+    font-size: 13px !important;
     font-weight: 600 !important;
     letter-spacing: 0.02em !important;
     text-transform: none;
@@ -4593,7 +4592,7 @@ html:has(.project-clad-page--projects) body {
     border: none;
     border-bottom: none;
     gap: 0.75rem;
-    font-size: 12px;
+    font-size: 14px;
     font-family: "Inter", system-ui, sans-serif !important;
   }
 
@@ -4618,7 +4617,7 @@ html:has(.project-clad-page--projects) body {
     color: #64748b !important;
     font-family: "Inter", system-ui, sans-serif !important;
     font-weight: 600 !important;
-    font-size: 11px !important;
+    font-size: 13px !important;
     letter-spacing: 0.02em !important;
     text-transform: none !important;
     text-shadow: none !important;
@@ -4628,7 +4627,7 @@ html:has(.project-clad-page--projects) body {
     .project-clad-cc-v2-tile--totals
     .project-clad-cc-v2-totals-grand
     h2.project-clad-project-footer-metric-label {
-    font-size: 11px !important;
+    font-size: 13px !important;
     font-weight: 500 !important;
   }
 
@@ -4642,6 +4641,7 @@ html:has(.project-clad-page--projects) body {
     color: #0f172a !important;
     font-family: "Inter", system-ui, sans-serif !important;
     font-weight: 500 !important;
+    font-size: 15px !important;
     font-variant-numeric: tabular-nums;
     text-shadow: none !important;
     text-transform: none;
@@ -4657,7 +4657,7 @@ html:has(.project-clad-page--projects) body {
     .project-clad-cc-v2-totals-grand
     .project-clad-summary-action
     .project-clad-hidden-link {
-    font-size: 20px !important;
+    font-size: 24px !important;
     font-weight: 500 !important;
   }
 
@@ -5928,8 +5928,9 @@ html:has(.project-clad-page--projects) body {
   background: #000;
   color: #a0a0a0;
   font-family: "Share Tech Mono", ui-monospace, monospace;
-  font-size: 9px;
-  letter-spacing: 0.12em;
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
 }
 
 .project-clad-storefront-nav__html-topbar-left {
@@ -5979,7 +5980,7 @@ html:has(.project-clad-page--projects) body {
 .project-clad-storefront-nav__html-topbar-right a {
   display: inline-flex;
   align-items: center;
-  padding: 0 12px;
+  padding: 0 14px;
   color: #9d9d9d;
   text-decoration: none;
   border-left: 0;
@@ -7040,10 +7041,11 @@ html:has(.project-clad-page--projects) body {
 }
 
 .project-clad-page--projects .project-clad-header--fullbleed {
-  width: 100vw;
-  max-width: 100vw;
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
+  /* Stay within <main> width — `100vw` + breakout margins leave a light strip beside the scrollbar. */
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
   padding-inline: 0;
   background: transparent;
   background-image: none;
@@ -7051,7 +7053,8 @@ html:has(.project-clad-page--projects) body {
   overflow-x: clip;
 }
 
-/* Canadian Cladding HTML header: stick utility + logo row to the viewport while scrolling. */
+/* Canadian Cladding storefront header: stick utility + logo row while scrolling. */
+.project-clad-page--projects .project-clad-header--fullbleed:has(.cc-app-header),
 .project-clad-page--projects .project-clad-header--fullbleed:has(.project-clad-storefront-nav--html) {
   position: sticky;
   top: 0;
@@ -7177,12 +7180,13 @@ html:has(.project-clad-page--projects) body {
 }
 
 .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2 .project-clad-storefront-nav__html-mainbar {
-  min-height: 0;
-  padding-block: 0.35rem;
+  min-height: 96px;
+  padding-block: 0.25rem;
   /* Match `.project-clad-container--full-width` so logo + nav line up with body content. */
   padding-inline: max(clamp(1rem, 5vw, 6rem), var(--page-margin, 0px));
   box-sizing: border-box;
-  align-items: stretch;
+  gap: 0;
+  align-items: center;
 }
 
 .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2 .project-clad-storefront-nav__html-leading,
@@ -7223,13 +7227,13 @@ html:has(.project-clad-page--projects) body {
 }
 
 .project-clad-page--projects:not(.project-clad-page--detail) .project-clad-storefront-nav__html-mainbar {
-  min-height: 0;
-  padding-block: 0.35rem;
+  min-height: 96px;
+  padding-block: 0.25rem;
   /* Match .page-width.project-clad-container--full-width so logo lines up with list / control tiles. */
   padding-inline: max(clamp(1rem, 5vw, 6rem), var(--page-margin, 0px));
   box-sizing: border-box;
-  /* Stretch columns to the row height, then flex-center contents — aligns logo + nav on one axis. */
-  align-items: stretch;
+  gap: 0;
+  align-items: center;
 }
 
 .project-clad-page--projects:not(.project-clad-page--detail) .project-clad-storefront-nav__html-leading,
@@ -7239,6 +7243,7 @@ html:has(.project-clad-page--projects) body {
   align-items: center;
   min-width: 0;
 }
+
 
 /*
  * Projects list — Canadian Cladding HTML header: logo uses real layout bounds (no flat-shell transform scale),
@@ -7271,6 +7276,13 @@ html:has(.project-clad-page--projects) body {
   max-height: clamp(44px, 5.5vw, 68px);
   /* Cap width so the center nav column keeps room; height drives scale via object-fit. */
   max-width: min(560px, 52vw);
+}
+
+.project-clad-page--projects.project-clad-page--cc-v2
+  .project-clad-storefront-nav--html
+  .project-clad-storefront-nav__logo-img {
+  max-height: clamp(56px, 6.5vw, 64px);
+  max-width: min(400px, 48vw);
 }
 
 /* Padding is now fluid via `clamp(1rem, 5vw, 6rem)` on the rule above; no
@@ -13611,10 +13623,9 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 
 /* CC v2 — utility bar: Option B “tinted blue-grey haze”, slightly deeper + room under fixed bar for main row. */
 .project-clad-page--cc-v2 .project-clad-storefront-nav--html {
-  /* Utility bar height; keep in sync with .html-topbar padding/line-height. */
+  /* CC v2 light utility strip: compact height, readable type (not theme black bar scale). */
   --pc-html-topbar-height: 28px;
-  /* Space between utility strip and logo row (was padding-top reserve for fixed topbar). */
-  --pc-html-topbar-below-gap: 12px;
+  --pc-html-topbar-below-gap: 0;
   padding-top: 0;
   background: transparent !important;
   border: none !important;
@@ -13623,14 +13634,28 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 
 .project-clad-page--cc-v2 .project-clad-storefront-nav__html-mainbar {
   margin-top: var(--pc-html-topbar-below-gap);
+  min-height: 96px;
+  padding-block: 0.25rem;
+  gap: 0;
+  align-items: center;
+}
+
+.project-clad-page--cc-v2.project-clad-page--projects .project-clad-storefront-nav__html-center {
+  margin-left: 28px;
 }
 
 .project-clad-page--cc-v2 .project-clad-storefront-nav__html-topbar {
   box-sizing: border-box;
   align-items: center;
-  min-height: var(--pc-html-topbar-height);
-  padding: 5px 22px;
-  line-height: 1.2;
+  height: var(--pc-html-topbar-height);
+  min-height: 0;
+  max-height: var(--pc-html-topbar-height);
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 18px;
+  padding-right: 18px;
+  line-height: 1;
+  overflow: hidden;
   background: linear-gradient(
     180deg,
     rgba(206, 214, 220, 0.68) 0%,
@@ -13645,12 +13670,16 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 
 /* CC v2: same horizontal inset as .project-clad-container--full-width (projects list + project/orders page). */
 .project-clad-page--projects.project-clad-page--cc-v2 .project-clad-storefront-nav__html-topbar {
-  padding: 5px max(1rem, var(--page-margin, 16px)) !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: max(1rem, var(--page-margin, 16px)) !important;
+  padding-right: max(1rem, var(--page-margin, 16px)) !important;
 }
 
 @media screen and (min-width: 750px) {
   .project-clad-page--projects.project-clad-page--cc-v2 .project-clad-storefront-nav__html-topbar {
-    padding: 5px max(1rem, var(--page-margin, 40px)) !important;
+    padding-left: max(1rem, var(--page-margin, 40px)) !important;
+    padding-right: max(1rem, var(--page-margin, 40px)) !important;
   }
 }
 
@@ -13661,7 +13690,11 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 }
 
 .project-clad-page--cc-v2 .project-clad-storefront-nav__html-topbar-left {
-  gap: 12px;
+  gap: 10px;
+}
+
+.project-clad-page--cc-v2 .project-clad-storefront-nav__html-topbar-right {
+  align-items: center;
 }
 
 .project-clad-page--cc-v2 .project-clad-storefront-nav__html-sep {
@@ -13677,8 +13710,7 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 }
 
 .project-clad-page--cc-v2 .project-clad-storefront-nav__html-topbar-right {
-  gap: 12px;
-  align-items: center;
+  gap: 0;
 }
 
 .project-clad-page--cc-v2 .project-clad-storefront-nav__html-topbar-left,
@@ -13695,7 +13727,11 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 }
 
 .project-clad-page--cc-v2 .project-clad-storefront-nav__html-topbar-right a {
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 0;
+  height: 100%;
+  padding: 0 12px;
   transition: color 0.15s ease;
 }
 
@@ -13732,7 +13768,7 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 .project-clad-page--cc-v2 .project-clad-storefront-nav__html-topbar span,
 .project-clad-page--cc-v2 .project-clad-storefront-nav__html-topbar a,
 .project-clad-page--cc-v2 .project-clad-storefront-nav__html-topbar button {
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 11px;
   font-weight: 400;
   letter-spacing: 0.04em;
@@ -14699,7 +14735,7 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 
 .project-clad-page.project-clad-page--cc-v2.project-clad-page--projects
   .project-clad-storefront-nav__html-nav {
-  gap: 32px !important;
+  gap: 6px !important;
 }
 
 /* CC v2: drop base template’s `a::before` corner strokes (read as vertical rules between links). */
@@ -14717,16 +14753,15 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
   position: relative !important;
   flex-direction: row !important;
   align-items: center !important;
-  padding: 8px 0 !important;
+  padding: 11px 15px !important;
   border: none !important;
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
-  /* Match project card title (.project-clad-title.project-clad-tile-dash__title on CC v2). */
-  font-family: "Onest", "Inter", system-ui, sans-serif !important;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif !important;
   font-variant-ligatures: none !important;
   font-weight: 700 !important;
-  font-size: clamp(1.05rem, 0.88rem + 0.65vw, 1.35rem) !important;
+  font-size: 16px !important;
   letter-spacing: -0.038em !important;
   line-height: 1.15 !important;
   text-transform: none !important;
@@ -15460,4 +15495,113 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
   color: #94a4b4;
   margin-left: 0.35rem;
   letter-spacing: 0.04em;
+}
+
+/* App proxy: live theme header (cc-storefront-header.css) — layout + sticky wrapper */
+.project-clad-page.cc-store-neu .cc-app-header {
+  --cc-header-topbar-height: 28px;
+  --cc-header-topbar-below-gap: 12px;
+  --cc-header-nav-gap: 32px;
+  --cc-header-active: var(--color-1, #c40000);
+  --cc-header-ink: var(--pc-caesura-dark, #484f60);
+  --cc-header-topbar-ink: #2f3d4c;
+  --cc-header-live-dot: #16a34a;
+  --cc-header-page-margin: 16px;
+  --cc-header-logo-padding-bottom: 12px;
+  --cc-header-topbar-bg-top: #ced6dc;
+  --cc-header-topbar-bg-bottom: #b8c4ce;
+  --cc-header-topbar-border: rgba(168, 180, 192, 0.32);
+  --cc-header-topbar-highlight: rgba(252, 252, 253, 0.52);
+  --cc-header-mainbar-haze-0: rgba(178, 198, 218, 0.44);
+  --cc-header-mainbar-haze-20: rgba(204, 218, 234, 0.54);
+  --cc-header-mainbar-haze-45: rgba(222, 230, 242, 0.82);
+  --cc-header-mainbar-haze-100: rgba(236, 241, 248, 0.95);
+}
+
+@media screen and (min-width: 750px) {
+  .project-clad-page.cc-store-neu .cc-app-header {
+    --cc-header-page-margin: 40px;
+  }
+}
+
+.project-clad-page--cc-v2 .project-clad-header--fullbleed:has(.cc-app-header),
+.project-clad-page--projects .project-clad-header--fullbleed:has(.cc-app-header) {
+  position: sticky;
+  top: -1px;
+  z-index: 110;
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  margin-bottom: 0;
+  overflow: visible;
+  background: transparent;
+  background-image: none;
+}
+
+.project-clad-page--cc-v2 .project-clad-header--fullbleed:has(.cc-app-header) .project-clad-storefront-nav,
+.project-clad-page--projects .project-clad-header--fullbleed:has(.cc-app-header) .project-clad-storefront-nav {
+  margin-bottom: 0;
+}
+
+.project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
+  .project-clad-header--fullbleed:has(.cc-app-header) {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(178, 198, 218, 0.44) 0%,
+      rgba(204, 218, 234, 0.54) 20%,
+      rgba(222, 230, 242, 0.82) 45%,
+      rgba(236, 241, 248, 0.95) 100%
+    );
+}
+
+.cc-app-header__mainbar:has(.project-clad-storefront-nav__html-trailing) {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.project-clad-storefront-nav__html-trailing .project-clad-storefront-nav__tools {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.project-clad-storefront-nav__html-back-to-top {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.project-clad-storefront-nav__html-back-to-top:hover,
+.project-clad-storefront-nav__html-back-to-top:focus-visible {
+  color: var(--cc-header-active, #c40000);
+}
+
+/* cc-app-header logo: match theme cc-storefront-header.css (beat base theme img { max-width: 100% }). */
+.project-clad-page .project-clad-storefront-nav .cc-app-header__leading {
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: visible;
+}
+
+.project-clad-page .project-clad-storefront-nav .cc-app-header__logo-link {
+  display: inline-flex !important;
+  align-items: center !important;
+  flex: 0 0 auto !important;
+  max-width: none !important;
+  width: auto !important;
+  overflow: visible !important;
+}
+
+.project-clad-page .project-clad-storefront-nav .cc-app-header__logo-img {
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  max-height: clamp(44px, 5.5vw, 68px) !important;
+  max-width: min(560px, 52vw) !important;
+  object-fit: contain !important;
 }

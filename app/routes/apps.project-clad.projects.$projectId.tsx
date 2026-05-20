@@ -789,7 +789,7 @@ export default function ProjectDetailPage() {
       ))}
       <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
       <main
-        className={`project-clad-page project-clad-page--detail project-clad-page--projects${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
+        className={`project-clad-page project-clad-page--detail project-clad-page--projects project-clad-page--cc-v2 cc-store-neu${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
         style={
           backgroundLogoDataUrl
             ? {
@@ -810,6 +810,7 @@ export default function ProjectDetailPage() {
             accountInitial={navAccountInitial}
             htmlTemplateHeader
             htmlTemplateNavActive="projects"
+            hideTrailingIcons={true}
           />
         </header>
         <div className="page-width project-clad-container project-clad-container--full-width">
