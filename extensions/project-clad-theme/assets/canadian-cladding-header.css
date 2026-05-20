@@ -10,6 +10,9 @@
   --mono: "Share Tech Mono", monospace;
   --disp: "Big Shoulders Display", sans-serif;
   --logo: "Lobster", cursive;
+  /* Match ProjectClad app proxy primary nav (CC v2). */
+  --cc-nav-link: #3d4d5c;
+  --cc-nav-link-hover: #dc2626;
 }
 
 .cc-header,
@@ -209,8 +212,43 @@
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-weight: 700;
   font-size: 15px;
-  letter-spacing: 0;
+  letter-spacing: -0.038em;
+  line-height: 1.15;
   text-transform: none;
+  color: var(--cc-nav-link);
+}
+
+/* Primary nav: same hover/active as app proxy (red text + bottom rule). */
+.cc-nav--primary a::before {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--cc-nav-link-hover);
+  box-shadow: none;
+}
+
+.cc-nav--primary a::after,
+.cc-nav--primary a > .laser-r {
+  display: none;
+}
+
+.cc-nav--primary a:hover,
+.cc-nav--primary a:focus-visible,
+.cc-nav--primary a.active {
+  color: var(--cc-nav-link-hover);
+}
+
+.cc-nav--primary a:hover::before,
+.cc-nav--primary a:focus-visible::before,
+.cc-nav--primary a.active::before {
+  transform: scaleX(1);
+}
+
+.cc-nav--primary a:hover::after,
+.cc-nav--primary a:focus-visible::after,
+.cc-nav--primary a.active::after {
+  transform: none;
 }
 
 .cc-nav a .sub {
