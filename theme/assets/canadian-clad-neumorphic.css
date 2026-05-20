@@ -2525,3 +2525,19 @@ body.cc-store-neu .content-for-layout > .shopify-section:first-child:has(+ .shop
     border-radius: clamp(6px, 2vw, 10px) !important;
   }
 }
+
+/* Homepage cc-home-v8 profiles grid: larger tile labels (cc-home-v8.css defaults 14px). */
+body.cc-store-neu .cc-home-v8__tile-name {
+  font-size: clamp(1.0625rem, 0.75rem + 0.55vw, 1.25rem) !important;
+  line-height: 1.15 !important;
+}
+
+body.cc-store-neu .cc-home-v8__tile-label {
+  padding: 46px 14px 14px;
+}
+
+@media screen and (max-width: 580px) {
+  body.cc-store-neu .cc-home-v8__tile-name {
+    font-size: clamp(1rem, 2.5vw + 0.7rem, 1.125rem) !important;
+  }
+}
