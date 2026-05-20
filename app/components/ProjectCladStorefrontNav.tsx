@@ -476,14 +476,7 @@ export function ProjectCladStorefrontNav({
         <>
           <div className="project-clad-storefront-nav__html-topbar">
             <div className="project-clad-storefront-nav__html-topbar-left">
-              <span className="project-clad-storefront-nav__html-live">
-                <span className="project-clad-storefront-nav__html-dot" aria-hidden="true" />
-                <span>Open</span>
-              </span>
-              <span className="project-clad-storefront-nav__html-sep" aria-hidden="true">
-                ·
-              </span>
-              <span>72hr lead time</span>
+              <span>48hr lead time</span>
               <span className="project-clad-storefront-nav__html-sep" aria-hidden="true">
                 ·
               </span>
