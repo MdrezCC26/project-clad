@@ -4300,11 +4300,11 @@ html:has(.project-clad-page--projects) body {
     .project-clad-cc-v2-tile__label {
     margin: 0 0 12px;
     font-family: "Inter", system-ui, sans-serif !important;
-    font-size: 11px !important;
-    font-weight: 600 !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
     letter-spacing: 0.02em !important;
     text-transform: none;
-    color: #64748b !important;
+    color: #000000 !important;
     text-shadow: none !important;
   }
 
@@ -4575,12 +4575,12 @@ html:has(.project-clad-page--projects) body {
     padding: 0;
     border: none;
     font-family: "Inter", system-ui, sans-serif !important;
-    font-size: 13px !important;
-    font-weight: 600 !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
     letter-spacing: 0.02em !important;
     text-transform: none;
     font-variant: normal;
-    color: #64748b !important;
+    color: #000000 !important;
     opacity: 1;
     text-shadow: none !important;
   }

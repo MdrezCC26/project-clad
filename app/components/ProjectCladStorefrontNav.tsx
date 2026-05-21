@@ -463,14 +463,7 @@ export function ProjectCladStorefrontNav({
     <header className="cc-app-header" id="ccAppHeader" data-cc-app-header>
       <div className="cc-app-header__topbar">
         <div className="cc-app-header__topbar-left">
-          <span className="cc-app-header__live">
-            <span className="cc-app-header__dot" aria-hidden="true" />
-            <span>Open</span>
-          </span>
-          <span className="cc-app-header__sep" aria-hidden="true">
-            ·
-          </span>
-          <span>72hr lead time</span>
+          <span>48 Hour lead time</span>
           <span className="cc-app-header__sep" aria-hidden="true">
             ·
           </span>

@@ -8356,7 +8356,7 @@ export default function ProjectDetailPage() {
                 </div>
 
                 <div className="project-clad-cc-v2-tile project-clad-cc-v2-tile--totals project-clad-orders-shell__footer project-clad-project-totals-card">
-                  <p className="project-clad-project-totals-card__heading">Project Totals</p>
+                  <p className="project-clad-project-totals-card__heading">Your Project Total</p>
                   <div className="project-clad-summary-row project-clad-cc-v2-totals-line">
                     <div>
                       <h2
