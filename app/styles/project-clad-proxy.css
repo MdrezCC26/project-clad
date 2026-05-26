@@ -15380,6 +15380,7 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
   background: transparent;
   box-shadow: none;
   cursor: pointer;
+  display: inline-block;
   font-family: "Inter", system-ui, sans-serif;
   font-size: 11px;
   font-weight: 700;
@@ -15387,18 +15388,51 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
   text-transform: uppercase;
   color: #000000;
   line-height: 1.3;
+  position: relative;
   transition: color 0.15s ease;
 }
 
 .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
-  .project-clad-orders-page-edit-project:hover {
+  .project-clad-orders-page-edit-project::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -0.12em;
+  width: 100%;
+  height: 1.35px;
+  background: #dc2626;
+  border-radius: 0;
+  pointer-events: none;
+  transform: scaleX(0);
+  transform-origin: left bottom;
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
+  .project-clad-orders-page-edit-project:hover,
+.project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
+  .project-clad-orders-page-edit-project:focus-visible {
   color: #0e1a26;
+}
+
+.project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
+  .project-clad-orders-page-edit-project:hover::after,
+.project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
+  .project-clad-orders-page-edit-project:focus-visible::after {
+  transform: scaleX(1);
 }
 
 .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
   .project-clad-orders-page-edit-project:focus-visible {
   outline: 2px solid rgba(180, 35, 45, 0.45);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
+    .project-clad-orders-page-edit-project::after {
+    transition: none;
+  }
 }
 
 .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
