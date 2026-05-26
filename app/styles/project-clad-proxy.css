@@ -13395,14 +13395,20 @@ details.project-clad-edit-mode .project-clad-edit-view {
  * on nodes outside the chosen order tile so print is only the order details + contents.
  */
 @media print {
+  @page {
+    margin: 0;
+  }
+
   body.project-clad-print-order-only .project-clad-print-suppressed {
     display: none !important;
   }
 
   body.project-clad-print-order-only {
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 0.18in 0.22in !important;
     background: #fff !important;
+    box-sizing: border-box !important;
+    font-size: 10px !important;
     /* Shared face for project strip + order tile in PDF (keep in sync) */
     --pc-print-order-shell-bg: #f9fafc;
     --pc-print-order-shell-border: 1px solid rgba(0, 0, 0, 0.07);
@@ -13416,9 +13422,24 @@ details.project-clad-edit-mode .project-clad-edit-view {
   body.project-clad-print-order-only .project-clad-section {
     margin: 0 !important;
     padding: 0 !important;
+    min-height: 0 !important;
     max-width: none !important;
     background: #fff !important;
     box-shadow: none !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-container {
+    zoom: 0.9;
+    transform: none !important;
+    width: 100% !important;
+  }
+
+  body.project-clad-print-order-only *,
+  body.project-clad-print-order-only *::before,
+  body.project-clad-print-order-only *::after {
+    max-height: none !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
   }
 
   body.project-clad-print-order-only .project-clad-orders-shell {
@@ -13439,6 +13460,8 @@ details.project-clad-edit-mode .project-clad-edit-view {
   body.project-clad-print-order-only .project-clad-order-row-shell {
     margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   /*
@@ -13449,6 +13472,18 @@ details.project-clad-edit-mode .project-clad-edit-view {
     break-inside: auto;
     page-break-inside: auto;
     margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  body.project-clad-print-order-only
+    details.project-clad-order-row.project-clad-details[open]::details-content {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    padding: 0.35rem 0.45rem 0.7rem !important;
+    overflow: visible !important;
   }
 
   body.project-clad-print-order-only details.project-clad-order-row > summary {
@@ -13465,6 +13500,18 @@ details.project-clad-edit-mode .project-clad-edit-view {
   body.project-clad-print-order-only .project-clad-order-finance {
     break-inside: avoid;
     page-break-inside: avoid;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 13.5rem !important;
+    gap: 1.2rem !important;
+    width: 100% !important;
+    align-items: start !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-order-finance__right {
+    justify-self: end !important;
+    width: 13.5rem !important;
+    max-width: 13.5rem !important;
+    margin-left: auto !important;
   }
 
   body.project-clad-print-order-only .project-clad-order-finance__row,
@@ -13476,6 +13523,97 @@ details.project-clad-edit-mode .project-clad-edit-view {
   body.project-clad-print-order-only .project-clad-order-tfoot-summary-cell {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  body.project-clad-print-order-only .project-clad-receipt {
+    display: none !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-orders-table,
+  body.project-clad-print-order-only .project-clad-receipt,
+  body.project-clad-print-order-only .project-clad-receipt table {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-table-x-scroll {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-order-line-tile__grid,
+  body.project-clad-print-order-only .project-clad-order-line-tile__grid--with-actions {
+    grid-template-columns:
+      minmax(56px, 0.45fr)
+      minmax(0, 2fr)
+      minmax(4.5rem, 0.55fr)
+      minmax(5.5rem, 0.7fr) !important;
+    gap: 0.45rem !important;
+    align-items: start !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-order-line-tile__col--actions,
+  body.project-clad-print-order-only .project-clad-order-summary-title-meta,
+  body.project-clad-print-order-only .project-clad-job-edit-field {
+    display: none !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-order-line-title,
+  body.project-clad-print-order-only .project-clad-order-line-titlelink,
+  body.project-clad-print-order-only .project-clad-item-properties,
+  body.project-clad-print-order-only .project-clad-item-properties * {
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-thumb,
+  body.project-clad-print-order-only .project-clad-order-card-thumb-frame {
+    max-width: 132px !important;
+    max-height: 132px !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-order-card-thumb-frame,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    .project-clad-order-card-thumb-frame {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+    padding: 0 !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-thumb,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    .project-clad-thumb {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+    padding: 0 !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    .project-clad-order-line-tile__col--thumb
+    .project-clad-order-card-thumb-frame,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-table
+    .project-clad-order-line-tile__col--thumb
+    .project-clad-thumb:not(.project-clad-thumb--placeholder):not(.project-clad-thumb--pdf) {
+    width: 132px !important;
+    max-width: 132px !important;
+    height: auto !important;
   }
 
   /* Save / Order now (or lifecycle) / Edit order — not part of the PDF */
@@ -13541,9 +13679,18 @@ details.project-clad-edit-mode .project-clad-edit-view {
     .project-clad-page--projects.project-clad-page--detail
     .project-clad-orders-shell
     .project-clad-orders-page-section-bar {
-    margin-bottom: 0.5rem !important;
-    padding-bottom: 0.65rem !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.12) !important;
+    display: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-orders-page-crumbs,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-orders-page-crumb {
+    display: none !important;
   }
 
   body.project-clad-print-order-only
@@ -13599,6 +13746,493 @@ details.project-clad-edit-mode .project-clad-edit-view {
     details.project-clad-order-row.project-clad-details[open]
     > summary.project-clad-summary {
     background: transparent !important;
+  }
+
+  /*
+   * Print document polish: do not inherit the narrow-screen stacked card
+   * layout. The print dialog often reports a small CSS viewport, so the
+   * mobile rules above can win unless this uses equal/higher specificity.
+   */
+  body.project-clad-print-order-only .project-clad-page--projects.project-clad-page--detail {
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif !important;
+    color: #0e1a26 !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-orders-page-banner {
+    margin-bottom: 0.45rem !important;
+    padding: 0.25rem 0 0.45rem !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.14) !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-orders-page-name {
+    font-family: "Inter", system-ui, sans-serif !important;
+    font-size: 20px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.15 !important;
+    text-transform: none !important;
+    color: #0e1a26 !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-orders-page-name-num {
+    margin-top: 0.22rem !important;
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-orders-page-status-stack,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-orders-page-edit-project,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-orders-page-pill {
+    display: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-orders-page-facts {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 0.45rem !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-row-shell
+    details.project-clad-order-row.project-clad-details {
+    border: 1px solid rgba(15, 23, 42, 0.14) !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    color: #0e1a26 !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-row-shell
+    details.project-clad-order-row.project-clad-details[open]
+    > summary.project-clad-summary {
+    padding: 0.5rem 0.65rem !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.12) !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-summary-head-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.35rem !important;
+    align-items: start !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-summary-name,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-summary-order-no,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-summary-id-row__date,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-summary-head-row__subtotal,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-summary-qty__sub-amount {
+    font-family: "Inter", system-ui, sans-serif !important;
+    text-shadow: none !important;
+    text-align: left !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-summary-name {
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.015em !important;
+    color: #0e1a26 !important;
+    text-transform: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-summary-lifecycle-cluster {
+    display: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-summary-head-row__subtotal {
+    display: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-lifecycle-chip {
+    border: 1px solid rgba(21, 128, 61, 0.24) !important;
+    background: rgba(21, 128, 61, 0.08) !important;
+    box-shadow: none !important;
+    color: #15803d !important;
+    text-shadow: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance {
+    margin: 0.55rem 0 0.35rem !important;
+    padding: 0 !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__label {
+    font-family: "Inter", system-ui, sans-serif !important;
+    font-size: 9px !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.14em !important;
+    color: #0e1a26 !important;
+    text-shadow: none !important;
+    margin: 0 0 0.42rem !important;
+    padding-left: 0 !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__row {
+    border: none !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.12) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__row:last-child {
+    border-bottom: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__card {
+    border: 1px solid rgba(15, 23, 42, 0.12) !important;
+    border-radius: 8px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__row {
+    padding: 0.22rem 0 !important;
+    margin-bottom: 0 !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0 !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__icon,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__check,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__badge {
+    display: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__k,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__v,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__fin-k,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__fin-v,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__tax-meta {
+    font-family: "Inter", system-ui, sans-serif !important;
+    text-shadow: none !important;
+    color: #0e1a26 !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__card {
+    padding: 0.6rem 0.75rem !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__fin {
+    gap: 0.55rem !important;
+    margin-bottom: 0.24rem !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__fin-k {
+    font-size: 9px !important;
+    letter-spacing: 0.13em !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__fin-v {
+    font-size: 12px !important;
+    font-weight: 600 !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__tax-meta {
+    font-size: 8.5px !important;
+    margin-top: 0.3rem !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__fin--total
+    .project-clad-order-finance__fin-v {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.04em !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-orders-table thead {
+    display: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-orders-table tbody,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-orders-table tfoot {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-orders-table tbody tr,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-orders-table tfoot tr {
+    display: block !important;
+    width: 100% !important;
+    padding: 0 !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-orders-table tbody td,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-orders-table tfoot td {
+    display: block !important;
+    width: 100% !important;
+    padding: 0.35rem 0 !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-line-tile
+    .project-clad-order-line-tile__grid,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-line-tile
+    .project-clad-order-line-tile__grid--with-actions {
+    display: grid !important;
+    grid-template-columns: 145px minmax(0, 1fr) 4.5rem 7.5rem !important;
+    gap: 0.75rem !important;
+    align-items: center !important;
+    justify-items: stretch !important;
+    width: 100% !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile {
+    padding: 0.65rem 0 0.55rem !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-num {
+    color: #0e1a26 !important;
+    font-family: "Inter", system-ui, sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    text-shadow: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--details::before,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--qty::before,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--price::before,
+  body.project-clad-print-order-only
+    .project-clad-orders-table
+    .project-clad-order-line-tile__col--qty::before,
+  body.project-clad-print-order-only
+    .project-clad-orders-table
+    .project-clad-order-line-tile__col--price::before {
+    display: none !important;
+    content: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--details,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--qty,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--price {
+    text-align: left !important;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--details {
+    justify-self: stretch !important;
+    text-align: left !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--qty {
+    justify-self: end !important;
+    text-align: right !important;
+    align-items: flex-end !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--price {
+    justify-self: end !important;
+    text-align: right !important;
+    align-items: flex-end !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-title,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-titlelink,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    span[data-projectclad-item-name] {
+    font-family: "Inter", system-ui, sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.01em !important;
+    color: #0e1a26 !important;
+    text-shadow: none !important;
+    text-align: left !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--qty,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--price,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-card-price-stack,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-card-price-stack * {
+    font-family: "Inter", system-ui, sans-serif !important;
+    color: #0e1a26 !important;
+    text-shadow: none !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-card-price-stack {
+    align-items: flex-end !important;
+    text-align: right !important;
   }
 }
 

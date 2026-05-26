@@ -346,7 +346,8 @@ type OrderActionSpec =
       label: string;
       description: string;
       tone?: "go" | "edit";
-      buttonProps: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children">;
+      buttonProps: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> &
+        Record<`data-${string}`, string | undefined>;
     }
   | {
       key: string;
@@ -355,7 +356,8 @@ type OrderActionSpec =
       label: string;
       description: string;
       tone?: "go" | "edit";
-      anchorProps: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "children">;
+      anchorProps: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "children"> &
+        Record<`data-${string}`, string | undefined>;
     }
   | {
       key: string;
@@ -5571,9 +5573,17 @@ export default function ProjectDetailPage() {
   const location = useLocation();
   const projectsListHref = useMemo(() => {
     const q = new URLSearchParams(location.search);
-    q.delete("id");
-    q.delete("job");
-    q.delete("sort");
+    [
+      "id",
+      "job",
+      "sort",
+      "signature",
+      "shop",
+      "path_prefix",
+      "timestamp",
+      "logged_in_customer_id",
+      "logged_in_customer_email",
+    ].forEach((key) => q.delete(key));
     const s = q.toString();
     return `/apps/project-clad/projects${s ? `?${s}` : ""}`;
   }, [location.search]);
@@ -7662,7 +7672,8 @@ export default function ProjectDetailPage() {
                             <rect x="8" y="15" width="4" height="4" rx="0.5" />
                           </svg>
                         </button>
-                        {job.orderLifecycleStatus === "delivered" ||
+                        {viewerIsAdmin ||
+                        job.orderLifecycleStatus === "delivered" ||
                         job.orderLifecycleStatus === "paid" ? (
                           <button
                             type="button"
@@ -7670,8 +7681,8 @@ export default function ProjectDetailPage() {
                             data-projectclad-export-order-pdf
                             data-print-mode="invoice"
                             data-job-id={job.id}
-                            title="Export invoice (with prices)"
-                            aria-label="Export invoice PDF"
+                            title="Print order with prices"
+                            aria-label="Print order with prices"
                           >
                             <svg
                               className="project-clad-order-export-pdf__icon"
@@ -9249,7 +9260,8 @@ export default function ProjectDetailPage() {
       var container = document.querySelector('.project-clad-container');
       if (container) {
         Array.from(container.children).forEach(function (el) {
-          if (el instanceof HTMLElement && el.tagName !== 'SECTION') {
+          if (!(el instanceof HTMLElement)) return;
+          if (!el.contains(target)) {
             suppressForPrint(el);
           }
         });
@@ -9265,7 +9277,6 @@ export default function ProjectDetailPage() {
           if (
             el.classList.contains("project-clad-project-meta-strip") ||
             el.classList.contains("project-clad-orders-page-banner") ||
-            el.classList.contains("project-clad-orders-page-section-bar") ||
             el.hasAttribute("data-projectclad-project-meta-print-banner")
           )
             return;
@@ -9287,6 +9298,7 @@ export default function ProjectDetailPage() {
       }
       document.querySelectorAll('[data-projectclad-export-order-pdf]').forEach(suppressForPrint);
       document.querySelectorAll('[data-projectclad-export-order-csv]').forEach(suppressForPrint);
+      document.querySelectorAll('.project-clad-storefront-footer--fullbleed, .project-clad-storefront-footer').forEach(suppressForPrint);
       var printRestoreDone = false;
       var printRestoreTimer = null;
       function restorePrintLayout() {
@@ -10537,14 +10549,25 @@ export default function ProjectDetailPage() {
     if (typeof ev.stopImmediatePropagation === 'function') {
       ev.stopImmediatePropagation();
     }
-    /* Soft fade-out matches the rest of the page's nav transitions. */
+    /* Signed app-proxy params are only valid for the current proxy request.
+       Reusing them on /projects can produce a Shopify 404. */
     document.body.classList.add('project-clad-leaving');
     window.setTimeout(function() {
       try {
         var url = new URL(href, location.origin);
+        [
+          'signature',
+          'shop',
+          'path_prefix',
+          'timestamp',
+          'logged_in_customer_id',
+          'logged_in_customer_email'
+        ].forEach(function(key) {
+          url.searchParams.delete(key);
+        });
         window.location.href = url.pathname + url.search + url.hash;
       } catch (e) {
-        window.location.href = href;
+        window.location.href = '/apps/project-clad/projects';
       }
     }, 120);
   }, true);
