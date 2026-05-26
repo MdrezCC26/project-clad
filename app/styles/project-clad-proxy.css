@@ -15337,10 +15337,10 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
   cursor: pointer;
   font-family: "Inter", system-ui, sans-serif;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #5e6e7e;
+  color: #000000;
   line-height: 1.3;
   transition: color 0.15s ease;
 }
@@ -15558,6 +15558,106 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 
 .cc-app-header__mainbar:has(.project-clad-storefront-nav__html-trailing) {
   grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.cc-app-header__mainbar.cc-app-header__mainbar--with-nav-cart {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.project-clad-page .cc-app-header__nav-cart {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  padding: 8px 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  text-decoration: none;
+  font-family: "Onest", "Inter", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.05rem, 0.88rem + 0.65vw, 1.35rem);
+  letter-spacing: -0.038em;
+  line-height: 1.15;
+  text-transform: none;
+  color: var(--cc-header-ink, var(--pc-caesura-dark, #484f60));
+  text-shadow: none;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.project-clad-page .cc-app-header__nav-cart::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  border-radius: 0;
+  background: var(--cc-header-active, #c40000);
+  transform: scaleX(0);
+  transform-origin: left bottom;
+  pointer-events: none;
+  transition:
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.18s ease;
+}
+
+.project-clad-page .cc-app-header__nav-cart:hover,
+.project-clad-page .cc-app-header__nav-cart:focus-visible {
+  color: var(--cc-header-active, #c40000);
+}
+
+.project-clad-page .cc-app-header__nav-cart:hover::after,
+.project-clad-page .cc-app-header__nav-cart:focus-visible::after {
+  transform: scaleX(1);
+  height: 1.35px;
+  transition:
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.18s ease 0.3s;
+}
+
+.project-clad-page .cc-app-header__nav-cart-icon {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
+
+.project-clad-page .cc-app-header__topbar-extra,
+.project-clad-page .project-clad-utility-add-member {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.project-clad-page .cc-app-header__topbar-button {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.project-clad-page .cc-app-header__topbar-button:hover,
+.project-clad-page .cc-app-header__topbar-button:focus-visible {
+  color: var(--cc-header-active, #c40000);
+}
+
+.project-clad-page .project-clad-add-member-popover--utility {
+  top: calc(100% + 0.55rem);
+  left: auto;
+  right: 0;
+  z-index: 160;
 }
 
 .project-clad-storefront-nav__html-trailing .project-clad-storefront-nav__tools {

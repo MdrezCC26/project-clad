@@ -811,6 +811,7 @@ const ORDER_SPEC_GRID_SKIP_KEYS = new Set([
 ]);
 
 function humanizeOrderSpecKey(normalizedKey: string): string {
+  if (/^[la]\d+$/i.test(normalizedKey)) return `${normalizedKey.toUpperCase()} =`;
   return normalizedKey.replace(/_/g, " ");
 }
 
@@ -910,27 +911,18 @@ function OrderLinePropertyChips({ item }: { item: JobItemView }) {
       <strong>Details:</strong> {calcParseError}
     </p>
   ) : null;
+  const showRawCalculatorInputs =
+    item.properties.some((p) => p.name === "__ooCalcPayload") ||
+    map.has("shape_type") ||
+    (map.has("l1") && map.has("l2")) ||
+    map.has("a1");
+  let structuredGridToRender: ReturnType<typeof buildStructuredOrderLineSpecGrid> = null;
 
-  const structuredGrid = buildStructuredOrderLineSpecGrid(map);
-  const consumed = structuredGrid?.consumed ?? new Set<string>();
-
-  if (structuredGrid) {
-    for (const [key, value] of map) {
-      if (consumed.has(key) || ORDER_SPEC_GRID_SKIP_KEYS.has(key)) continue;
-      if (isReferenceImagePropertyName(key.replace(/_/g, " "))) continue;
-      pushOrderLinePropertyDisplay(
-        `extra-${key}`,
-        humanizeOrderSpecKey(key),
-        value,
-        item,
-        chips,
-        blocks,
-      );
-    }
-  } else {
+  if (showRawCalculatorInputs) {
     let extraIndex = 0;
     for (const [key, value] of map) {
       if (ORDER_SPEC_GRID_SKIP_KEYS.has(key)) continue;
+      if (isReferenceImagePropertyName(key.replace(/_/g, " "))) continue;
       pushOrderLinePropertyDisplay(
         `all-${key}-${extraIndex++}`,
         humanizeOrderSpecKey(key),
@@ -940,15 +932,47 @@ function OrderLinePropertyChips({ item }: { item: JobItemView }) {
         blocks,
       );
     }
+  } else {
+    const structuredGrid = buildStructuredOrderLineSpecGrid(map);
+    const consumed = structuredGrid?.consumed ?? new Set<string>();
+    structuredGridToRender = structuredGrid;
+
+    if (structuredGrid) {
+      for (const [key, value] of map) {
+        if (consumed.has(key) || ORDER_SPEC_GRID_SKIP_KEYS.has(key)) continue;
+        if (isReferenceImagePropertyName(key.replace(/_/g, " "))) continue;
+        pushOrderLinePropertyDisplay(
+          `extra-${key}`,
+          humanizeOrderSpecKey(key),
+          value,
+          item,
+          chips,
+          blocks,
+        );
+      }
+    } else {
+      let extraIndex = 0;
+      for (const [key, value] of map) {
+        if (ORDER_SPEC_GRID_SKIP_KEYS.has(key)) continue;
+        pushOrderLinePropertyDisplay(
+          `all-${key}-${extraIndex++}`,
+          humanizeOrderSpecKey(key),
+          value,
+          item,
+          chips,
+          blocks,
+        );
+      }
+    }
   }
 
-  if (!structuredGrid && !chips.length && !blocks.length && !calcParseNote) return null;
+  if (!chips.length && !blocks.length && !calcParseNote) return null;
 
   return (
     <>
       {calcParseNote}
-      {structuredGrid ? (
-        <OrderLineSpecGrid left={structuredGrid.left} right={structuredGrid.right} />
+      {structuredGridToRender ? (
+        <OrderLineSpecGrid left={structuredGridToRender.left} right={structuredGridToRender.right} />
       ) : null}
       {chips.length > 0 ? <div className="project-clad-order-card-specs">{chips}</div> : null}
       {blocks.length > 0 ? <div className="project-clad-order-card-prop-blocks">{blocks}</div> : null}
@@ -5831,6 +5855,79 @@ export default function ProjectDetailPage() {
   }, [location.pathname, location.search]);
 
   const inlineStyles = themeStyles?.styles || [];
+  const utilityAddMemberControl = canAdminMembers ? (
+    <span className="project-clad-utility-add-member">
+      <button
+        type="button"
+        className="cc-app-header__topbar-button project-clad-storefront-nav__icon-btn--add-member"
+        data-projectclad-add-member-popover-toggle
+        aria-expanded="false"
+        aria-controls="projectclad-add-member-utility-popover"
+      >
+        Add member
+      </button>
+      <div
+        id="projectclad-add-member-utility-popover"
+        className="project-clad-add-member-popover project-clad-add-member-popover--utility"
+        data-projectclad-add-member-popover
+        aria-hidden="true"
+      >
+        <Form
+          id="projectclad-add-member-utility-form"
+          method="post"
+          action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+          className="project-clad-inline-form"
+          data-projectclad-member-form
+          data-projectclad-member-intent="add-member"
+          data-projectclad-project-id={project.id}
+          data-projectclad-ajax
+          data-projectclad-intent="add-member"
+        >
+          <input type="hidden" name="intent" value="add-member" />
+          <input type="hidden" name="memberCustomerId" defaultValue="" />
+          <label htmlFor="member-email-utility">Add member</label>
+          <div
+            className="project-clad-member-typeahead"
+            data-projectclad-member-typeahead
+          >
+            <input
+              id="member-email-utility"
+              name="email"
+              type="email"
+              placeholder="Name or email"
+              required
+              autoComplete="off"
+              data-projectclad-member-typeahead-input
+            />
+            <ul
+              className="project-clad-member-typeahead__list"
+              role="listbox"
+              hidden
+              data-projectclad-member-typeahead-list
+            />
+          </div>
+          <label htmlFor="member-role-utility-role-edit">Role</label>
+          <MemberRoleSelect
+            idPrefix="member-role-utility"
+            defaultValue="edit"
+            rolePrompt="Select role"
+          />
+          <button
+            type="submit"
+            className="project-clad-button project-clad-reject-modal-btn"
+          >
+            Add member
+          </button>
+          <span
+            className="project-clad-muted"
+            data-projectclad-form-message
+            role="status"
+            aria-live="polite"
+          />
+        </Form>
+      </div>
+    </span>
+  ) : null;
 
   return (
     <>
@@ -6785,6 +6882,7 @@ export default function ProjectDetailPage() {
               htmlTemplateHeader
               htmlTemplateNavActive="projects"
               hideTrailingIcons={true}
+              utilityBarExtra={utilityAddMemberControl}
             />
           </header>
         <div className="page-width project-clad-container project-clad-container--full-width" data-projectclad-project-id={project.id}>

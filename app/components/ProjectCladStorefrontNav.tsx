@@ -196,6 +196,7 @@ export function ProjectCladStorefrontNav({
   accountUrl = "/account",
   accountInitial = null,
   cartItemCount = 0,
+  utilityBarExtra = null,
   /** Renders inside the raised nav capsule between the logo cluster and search/account/cart. */
   shellExtra = null,
   /**
@@ -236,6 +237,7 @@ export function ProjectCladStorefrontNav({
   accountInitial?: string | null;
   /** When greater than 0, shows a red count badge on the cart icon. */
   cartItemCount?: number;
+  utilityBarExtra?: ReactNode;
   shellExtra?: ReactNode;
   inAppSearch?: InAppSearchMode | null;
   inAppSearchQuery?: string;
@@ -486,17 +488,14 @@ export function ProjectCladStorefrontNav({
           <a href={CANADIAN_CLADDING_TOPBAR_LINKS.colours} className="cc-app-header__hide-mobile">
             Colours
           </a>
+          {utilityBarExtra ? (
+            <span className="cc-app-header__topbar-extra">{utilityBarExtra}</span>
+          ) : null}
           <a href={accountUrl}>Account</a>
-          <a href={cartUrl} className="cc-app-header__topbar-cart">
-            <span className="cc-app-header__cart-icon-wrap" aria-hidden="true">
-              <IconCart className="cc-app-header__cart-icon" strokeWidth={1.5} />
-            </span>
-            <span>Cart{showCartBadge ? ` [${liveCartCount}]` : ""}</span>
-          </a>
         </nav>
       </div>
       <div className="cc-app-header__inner">
-        <div className="cc-app-header__mainbar">
+        <div className="cc-app-header__mainbar cc-app-header__mainbar--with-nav-cart">
           <div className="cc-app-header__leading">
             <a href={logoHref} className="cc-app-header__logo-link" aria-label={logoAlt}>
               <img
@@ -511,6 +510,16 @@ export function ProjectCladStorefrontNav({
             </a>
           </div>
           {ccAppHeaderMainNav}
+          <a
+            href={cartUrl}
+            className="cc-app-header__nav-cart"
+            aria-label={showCartBadge ? `Cart, ${liveCartCount} items` : "Cart"}
+          >
+            <span className="cc-app-header__nav-cart-icon-wrap" aria-hidden="true">
+              <IconCart className="cc-app-header__nav-cart-icon" strokeWidth={1.5} />
+            </span>
+            <span>Cart{showCartBadge ? ` [${liveCartCount}]` : ""}</span>
+          </a>
           {!hideTrailingIcons ? (
             <div className="project-clad-storefront-nav__html-trailing">
               {shellExtraSlot}
