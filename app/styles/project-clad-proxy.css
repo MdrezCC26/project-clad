@@ -10835,6 +10835,51 @@ button.project-clad-order-line-thumb-preview .project-clad-order-card-thumb-badg
   flex-shrink: 0;
 }
 
+.project-clad-order-custom-specs {
+  display: grid;
+  gap: 0.14rem;
+  margin-top: 0.18rem;
+  font-family: "Inter", system-ui, sans-serif !important;
+  font-size: 0.75rem !important;
+  line-height: 1.28;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.project-clad-order-custom-spec {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.45rem;
+  align-items: baseline;
+  color: #344256 !important;
+}
+
+.project-clad-order-custom-spec__label {
+  font-weight: 700;
+  color: #344256 !important;
+}
+
+.project-clad-order-custom-spec__label::after {
+  content: " =";
+}
+
+.project-clad-order-custom-spec__value {
+  min-width: 0;
+  font-weight: 600;
+  color: #344256 !important;
+  overflow-wrap: anywhere;
+}
+
+.project-clad-order-custom-spec--extra {
+  margin-top: 0.12rem;
+  grid-template-columns: max-content minmax(0, 1fr);
+  color: #536076 !important;
+}
+
+.project-clad-order-custom-spec--extra .project-clad-order-custom-spec__label::after {
+  content: ":";
+}
+
 @media (max-width: 520px) {
   .project-clad-order-spec-grid {
     grid-template-columns: 1fr;

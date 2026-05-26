@@ -120,6 +120,44 @@
   color: #64748b;
 }
 
+[data-projectclad-cart-line-enhanced] {
+  align-items: flex-start !important;
+}
+
+[data-projectclad-cart-line-enhanced] :is(td, .cart-item__details, [class*="details"], [class*="info"], [class*="content"]) {
+  vertical-align: top !important;
+  align-self: flex-start !important;
+}
+
+[data-projectclad-cart-title-enhanced] {
+  display: inline-block;
+  margin-top: 0 !important;
+  line-height: 1.2;
+}
+
+.projectclad-cart-line-specs {
+  display: grid;
+  gap: 0.18rem;
+  margin-top: 0.35rem;
+  color: #344256;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.projectclad-cart-line-spec {
+  display: block;
+}
+
+.projectclad-cart-line-spec--extra {
+  margin-top: 0.1rem;
+  color: #536076;
+  font-weight: 500;
+}
+
 /* Flat toolbar + modal buttons (View Projects, Save order, Clear cart, modal footer) */
 .projectclad-cart-actions .projectclad-button,
 .projectclad-modal .projectclad-flat-btn,

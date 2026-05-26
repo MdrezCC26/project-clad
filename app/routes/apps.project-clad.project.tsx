@@ -672,6 +672,88 @@ function collectOrderLineSpecMap(properties: { name: string; value: string }[]):
   return { map, calcParseError };
 }
 
+function getOrderLineSpecValue(item: JobItemView, key: string): string {
+  if (!item.properties?.length) return "";
+  const normalized = normalizeOrderSpecKey(key);
+  for (const prop of item.properties) {
+    if (normalizeOrderSpecKey(prop.name) === normalized) {
+      return (prop.value || "").trim();
+    }
+  }
+  return "";
+}
+
+function formatGaugeLabel(value: string): string {
+  const t = value.trim();
+  if (!t) return "";
+  return /\bgauge\b/i.test(t) ? t : `${t} Gauge`;
+}
+
+function orderLineDisplayNameWithGauge(item: JobItemView): string {
+  const base = item.displayName.trim();
+  const gaugeLabel = formatGaugeLabel(getOrderLineSpecValue(item, "gauge"));
+  if (!gaugeLabel) return base;
+  if (base.toLowerCase().includes(gaugeLabel.toLowerCase())) return base;
+  return `${base} - ${gaugeLabel}`;
+}
+
+function isCustomDimensionLineSpec(map: Map<string, string>): boolean {
+  return (
+    map.has("shape_type") ||
+    (map.has("l1") && map.has("l2")) ||
+    map.has("a1") ||
+    map.has("a2")
+  );
+}
+
+function CustomDimensionLineSpecs({ map }: { map: Map<string, string> }) {
+  const rows: Array<{ label: string; value: string; extra?: boolean }> = [];
+
+  for (let i = 1; i <= 12; i += 1) {
+    const value = map.get(`l${i}`);
+    if (!value) continue;
+    rows.push({ label: `L${i}`, value });
+  }
+  for (let i = 1; i <= 12; i += 1) {
+    const value = map.get(`a${i}`);
+    if (!value) continue;
+    rows.push({ label: `A${i}`, value });
+  }
+
+  const additionalDetails = map.get("additional_details");
+  if (additionalDetails) {
+    rows.push({
+      label: "Additional Details",
+      value: additionalDetails,
+      extra: true,
+    });
+  }
+
+  if (!rows.length) return null;
+
+  return (
+    <div className="project-clad-order-custom-specs">
+      {rows.map((row) => (
+        <div
+          key={row.label}
+          className={
+            row.extra
+              ? "project-clad-order-custom-spec project-clad-order-custom-spec--extra"
+              : "project-clad-order-custom-spec"
+          }
+        >
+          <span className="project-clad-order-custom-spec__label">
+            {row.label}
+          </span>
+          <span className="project-clad-order-custom-spec__value">
+            {row.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function resolveFinishSpecRow(
   map: Map<string, string>,
   consumed: Set<string>,
@@ -906,6 +988,9 @@ function OrderLinePropertyChips({ item }: { item: JobItemView }) {
   const chips: ReactNode[] = [];
   const blocks: ReactNode[] = [];
   const { map, calcParseError } = collectOrderLineSpecMap(item.properties);
+  const customDimensionSpecs = isCustomDimensionLineSpec(map) ? (
+    <CustomDimensionLineSpecs map={map} />
+  ) : null;
   const calcParseNote = calcParseError ? (
     <p className="project-clad-order-card-sub project-clad-muted" style={{ margin: "0.2rem 0 0" }}>
       <strong>Details:</strong> {calcParseError}
@@ -918,7 +1003,29 @@ function OrderLinePropertyChips({ item }: { item: JobItemView }) {
     map.has("a1");
   let structuredGridToRender: ReturnType<typeof buildStructuredOrderLineSpecGrid> = null;
 
-  if (showRawCalculatorInputs) {
+  if (customDimensionSpecs) {
+    let extraIndex = 0;
+    for (const [key, value] of map) {
+      if (
+        ORDER_SPEC_GRID_SKIP_KEYS.has(key) ||
+        key === "shape_type" ||
+        key === "gauge" ||
+        key === "additional_details" ||
+        /^[la]\d+$/i.test(key)
+      ) {
+        continue;
+      }
+      if (isReferenceImagePropertyName(key.replace(/_/g, " "))) continue;
+      pushOrderLinePropertyDisplay(
+        `custom-extra-${key}-${extraIndex++}`,
+        humanizeOrderSpecKey(key),
+        value,
+        item,
+        chips,
+        blocks,
+      );
+    }
+  } else if (showRawCalculatorInputs) {
     let extraIndex = 0;
     for (const [key, value] of map) {
       if (ORDER_SPEC_GRID_SKIP_KEYS.has(key)) continue;
@@ -966,11 +1073,12 @@ function OrderLinePropertyChips({ item }: { item: JobItemView }) {
     }
   }
 
-  if (!chips.length && !blocks.length && !calcParseNote) return null;
+  if (!customDimensionSpecs && !chips.length && !blocks.length && !calcParseNote) return null;
 
   return (
     <>
       {calcParseNote}
+      {customDimensionSpecs}
       {structuredGridToRender ? (
         <OrderLineSpecGrid left={structuredGridToRender.left} right={structuredGridToRender.right} />
       ) : null}
@@ -995,8 +1103,9 @@ function OrderLineDetailsColumn({
   const showPdfThumb =
     isUploadPart &&
     Boolean(item.uploadPartFileUrl && isLikelyPdfUrl(item.uploadPartFileUrl));
+  const displayName = orderLineDisplayNameWithGauge(item);
   const nameText =
-    item.quantity === 0 ? `${item.displayName} (Removed)` : item.displayName;
+    item.quantity === 0 ? `${displayName} (Removed)` : displayName;
 
   /* When the line has a product image, the title is a button picked up by the
      inline-script lightbox via `data-projectclad-line-thumb-preview` +
@@ -1009,9 +1118,9 @@ function OrderLineDetailsColumn({
       className="project-clad-order-line-titlelink project-clad-order-line-titlebtn"
       data-projectclad-line-thumb-preview=""
       data-pc-image-src={item.imageUrl}
-      data-pc-image-alt={item.imageAlt || item.displayName}
+      data-pc-image-alt={item.imageAlt || displayName}
     >
-      <span data-projectclad-item-name data-display-name={item.displayName}>
+      <span data-projectclad-item-name data-display-name={displayName}>
         {nameText}
       </span>
     </button>
@@ -1023,7 +1132,7 @@ function OrderLineDetailsColumn({
       className="project-clad-order-line-titlelink"
       onClick={(event) => event.stopPropagation()}
     >
-      <span data-projectclad-item-name data-display-name={item.displayName}>
+      <span data-projectclad-item-name data-display-name={displayName}>
         {nameText}
       </span>
     </a>
@@ -1031,7 +1140,7 @@ function OrderLineDetailsColumn({
     <span
       className="project-clad-order-line-title"
       data-projectclad-item-name
-      data-display-name={item.displayName}
+      data-display-name={displayName}
     >
       {nameText}
     </span>
