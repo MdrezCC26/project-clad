@@ -40,6 +40,17 @@ const safeEqual = (a: string, b: string) => {
 
 const VALID_SHOP_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/;
 
+/**
+ * Login URL that returns to a storefront path after auth.
+ * New customer accounts use `/customer_authentication/login?return_to=` (not
+ * legacy `/account/login?return_url=`, which often lands on account/orders).
+ */
+export const buildStorefrontCustomerLoginUrl = (returnPath: string): string => {
+  const pathOnly = returnPath.split("?")[0] || returnPath;
+  const normalized = pathOnly.startsWith("/") ? pathOnly : `/${pathOnly}`;
+  return `/customer_authentication/login?return_to=${encodeURIComponent(normalized)}`;
+};
+
 export const getAppProxyContext = (request: Request): AppProxyContext => {
   const url = new URL(request.url);
   const params = new URLSearchParams(url.search);
@@ -121,9 +132,7 @@ export const requireAppProxyCustomer = (
   }
 
   if (!context.customerId) {
-    const loginUrl = `/account/login?return_url=${encodeURIComponent(
-      context.returnPath,
-    )}`;
+    const loginUrl = buildStorefrontCustomerLoginUrl(context.returnPath);
 
     if (options.jsonOnFail) {
       throw Response.json({ redirectTo: loginUrl }, { status: 401 });

@@ -1,4 +1,9 @@
-{% assign view_projects_url = "https://" | append: request.host | append: "/apps/project-clad/projects" %}
+{% liquid
+  assign project_clad_projects_path = '/apps/project-clad/projects'
+  assign view_projects_url = project_clad_projects_path
+  assign projects_return_to = project_clad_projects_path | url_encode
+  assign login_url = '/customer_authentication/login?return_to=' | append: projects_return_to
+%}
 {% assign has_custom_parts = false %}
 {% for item in cart.items %}
   {% if item.properties.shape_type == "L" or item.properties.shape_type == "Z" or item.properties.shape_type == "U" %}
@@ -6,8 +11,6 @@
     {% break %}
   {% endif %}
 {% endfor %}
-{% assign return_url_param = view_projects_url | url_encode %}
-{% assign login_url = "/account/login?return_url=" | append: return_url_param %}
 {{ 'project-clad-save-modal.js' | asset_url | script_tag }}
 <div
   class="projectclad-cart-actions"
@@ -68,13 +71,6 @@
     </div>
 
   <div class="projectclad-cart-actions__buttons">
-    <a
-      class="projectclad-button"
-      href="{% if customer %}{{ view_projects_url }}{% else %}{{ login_url }}{% endif %}"
-      data-projectclad-view-projects
-    >
-      View Projects
-    </a>
     {% if has_custom_parts %}
       <p class="projectclad-cart-notice">Your cart contains custom parts. Checkout is blocked until parts are created.</p>
     {% endif %}
@@ -84,11 +80,18 @@
       </button>
       <form method="post" action="/cart/clear" class="projectclad-cart-actions__clear-form">
         <input type="hidden" name="return_to" value="/cart" />
-        <button class="projectclad-button" type="submit">
+        <button class="projectclad-button projectclad-button--danger" type="submit">
           Clear cart
         </button>
       </form>
     {% endif %}
+    <a
+      class="projectclad-button"
+      href="{% if customer %}{{ view_projects_url }}{% else %}{{ login_url }}{% endif %}"
+      data-projectclad-view-projects
+    >
+      View Projects
+    </a>
   </div>
 
   {% render 'projectclad-save-modal', intent: 'cart' %}

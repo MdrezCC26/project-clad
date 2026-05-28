@@ -4,7 +4,8 @@
 .projectclad-cart-actions {
   margin-top: 1rem;
   --pc-card-radius: 12px;
-  --pc-btn-radius: 8px;
+  /* Match Horizon `canadian-clad-neumorphic.css` --cc-button-radius-rect */
+  --pc-btn-radius: 6px;
   --pc-btn-neu-bg: #e8eaed;
   --pc-pill-text-glow-hover: #c40000;
   --pc-accent-heading-shadow:
@@ -219,6 +220,31 @@
 .projectclad-modal .projectclad-flat-btn:focus-visible {
   outline: 2px solid rgba(15, 23, 42, 0.28);
   outline-offset: 2px;
+}
+
+/* Cart toolbar: Clear cart — flat red primary (matches Continue shopping) */
+.projectclad-cart-actions .projectclad-button--danger {
+  background: #c41e1e;
+  color: #fff;
+  border-color: #c41e1e;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+.projectclad-cart-actions .projectclad-button--danger:hover {
+  background: color-mix(in srgb, #c41e1e 88%, #000);
+  border-color: color-mix(in srgb, #c41e1e 88%, #000);
+  color: #fff;
+  text-shadow: none;
+}
+
+.projectclad-cart-actions .projectclad-button--danger:active {
+  background: color-mix(in srgb, #c41e1e 78%, #000);
+  border-color: color-mix(in srgb, #c41e1e 78%, #000);
+  color: #fff;
+  text-shadow: none;
+  filter: none;
+  transform: none;
 }
 
 /* Red primary only in modals — cart toolbar stays white */
@@ -845,7 +871,7 @@
 /*
  * Match the height/font of theme cart toolbar buttons so the trigger sits at
  * the same baseline as the merchant's "Add to cart" CTA. The base
- * .projectclad-button styling (pill shape, neumorphic shadow) comes from the
+ * .projectclad-button styling (flat toolbar buttons) comes from the
  * .projectclad-cart-actions .projectclad-button rules above.
  */
 .projectclad-product-actions .projectclad-button {

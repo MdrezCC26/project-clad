@@ -4657,8 +4657,28 @@ html:has(.project-clad-page--projects) body {
     .project-clad-cc-v2-totals-grand
     .project-clad-summary-action
     .project-clad-hidden-link {
-    font-size: 24px !important;
+    font-size: clamp(1rem, 0.5rem + 4.5vw, 24px) !important;
     font-weight: 500 !important;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    min-width: 0;
+    max-width: 58%;
+    text-align: right;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
+    .project-clad-cc-v2-tile--totals
+    .project-clad-cc-v2-totals-grand {
+    min-width: 0;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
+    .project-clad-cc-v2-tile--totals
+    .project-clad-cc-v2-totals-grand
+    h2.project-clad-project-footer-metric-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 42%;
   }
 
   .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
@@ -8910,6 +8930,12 @@ details.project-clad-edit-mode
   align-items: flex-start;
   padding-top: 1.5rem;
   padding-bottom: 1.5rem;
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
+  overflow-x: clip;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: rgba(0, 0, 0, 0);
   transition: background-color 0.3s cubic-bezier(0.23, 1, 0.32, 1);
 }
@@ -8934,12 +8960,15 @@ details.project-clad-edit-mode
 
 /* Edit project modal — reference layout: flat shell, two-column body, footer save */
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__card.project-clad-modal {
-  max-width: 620px;
+  max-width: min(620px, calc(100vw - 2rem));
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 1.25rem 1.5rem;
   background: var(--pc-bg, #fff);
   border: 0.5px solid rgba(0, 0, 0, 0.12);
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.12);
+  overflow-x: clip;
 }
 
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal].project-clad-edit-project-modal--open
@@ -8981,6 +9010,7 @@ details.project-clad-edit-mode
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px 14px;
   align-items: stretch;
+  min-width: 0;
   grid-template-areas:
     "details delivery"
     "neworder neworder"
@@ -9086,6 +9116,9 @@ details.project-clad-edit-mode
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__cell-members.project-clad-edit-modal__section {
@@ -9371,7 +9404,27 @@ details.project-clad-edit-mode
   justify-content: flex-end;
 }
 
-@media (max-width: 640px) {
+/*
+ * Phones / narrow tablets: single-column modal body + no horizontal scroll.
+ * (Two-column layout + 180px input min-width overflows ~320–400px columns.)
+ */
+@media (max-width: 899px) {
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] {
+    padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  }
+
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__card.project-clad-modal {
+    max-width: 100%;
+    padding: 1rem 1rem;
+  }
+
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-reject-modal {
+    max-height: min(85vh, calc(100dvh - 1.5rem));
+  }
+
   .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__layout {
     grid-template-columns: 1fr;
     grid-template-areas:
@@ -9392,6 +9445,83 @@ details.project-clad-edit-mode
   .project-clad-modal-backdrop[data-projectclad-edit-project-modal]
     .project-clad-edit-project-modal__cell-delivery.project-clad-edit-modal__section {
     height: auto;
+    min-width: 0;
+  }
+
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-inline-form input,
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-inline-form select,
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-inline-form textarea {
+    min-width: 0 !important;
+    max-width: 100%;
+  }
+
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__danger-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__danger-copy {
+    min-width: 0;
+  }
+
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__danger-delete {
+    align-self: stretch;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+  }
+
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__member-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__member-actions__buttons {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__footer-bar {
+    justify-content: stretch;
+    align-items: stretch;
+  }
+
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__new-order-actions {
+    align-items: stretch;
+  }
+
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__footer-actions,
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal]
+    .project-clad-edit-project-modal__new-order-actions
+    .project-clad-edit-project-modal__footer-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+    max-width: 100%;
+    flex-shrink: 1;
+    justify-content: stretch;
+  }
+
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__footer-actions .project-clad-button,
+  .project-clad-modal-backdrop[data-projectclad-edit-project-modal]
+    .project-clad-edit-project-modal__new-order-actions
+    .project-clad-edit-project-modal__footer-actions
+    .project-clad-button {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
+    padding-left: 0.65rem !important;
+    padding-right: 0.65rem !important;
   }
 }
 
@@ -9661,6 +9791,10 @@ button.project-clad-order-line-thumb-preview .project-clad-order-card-thumb-badg
 
 /* Edit project modal: scroll area — keep overflow, hide scrollbar (Firefox / WebKit / legacy Edge) */
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-reject-modal {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: clip;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -12069,6 +12203,11 @@ input[data-projectclad-unit-price-input] {
 }
 
 .project-clad-order-finance__card {
+  container-type: inline-size;
+  container-name: project-clad-order-finance-card;
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow: hidden;
   padding: 1.2rem 1.35rem 1rem;
   border-radius: var(--pc-neu-radius, 14px);
   background: var(--pc-caesura-bg);
@@ -12083,9 +12222,14 @@ input[data-projectclad-unit-price-input] {
   justify-content: space-between;
   padding: 0.35rem 0;
   gap: 0.75rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .project-clad-order-finance__fin-k {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 48%;
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
   font-size: calc(0.78rem * var(--pc-text-scale)) !important;
   letter-spacing: 0.14em;
@@ -12101,6 +12245,10 @@ input[data-projectclad-unit-price-input] {
 }
 
 .project-clad-order-finance__fin-v {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 52%;
+  text-align: right;
   font-family: "Bakbak One", Helvetica, "Helvetica Neue", Arial, sans-serif !important;
   font-size: calc(1rem * var(--pc-text-scale)) !important;
   font-weight: 400;
@@ -12113,7 +12261,6 @@ input[data-projectclad-unit-price-input] {
   white-space: nowrap;
   word-break: keep-all;
   overflow-wrap: normal;
-  flex: 0 0 auto;
 }
 
 .project-clad-order-finance__fin--muted .project-clad-order-finance__fin-v {
@@ -12143,12 +12290,19 @@ input[data-projectclad-unit-price-input] {
   opacity: 1;
 }
 
-  .project-clad-order-finance__fin--total .project-clad-order-finance__fin-v {
-    font-size: calc(1.9rem * var(--pc-text-scale)) !important;
-    letter-spacing: 0.01em;
-    color: var(--color-1, #c40000) !important;
-    text-shadow: var(--pc-caesura-hover-red-text-glow);
-  }
+.project-clad-order-finance__fin--total .project-clad-order-finance__fin-v {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 62%;
+  font-size: clamp(
+    1rem,
+    0.72rem + 5.5cqi,
+    calc(1.9rem * var(--pc-text-scale))
+  ) !important;
+  letter-spacing: -0.02em;
+  color: var(--color-1, #c40000) !important;
+  text-shadow: var(--pc-caesura-hover-red-text-glow);
+}
 
   /*
    * Payment summary only (`.project-clad-order-finance__right`): body black for
@@ -12224,19 +12378,34 @@ input[data-projectclad-unit-price-input] {
 
   .project-clad-order-finance__fin {
     gap: 0.5rem;
-    align-items: center;
+    align-items: baseline;
   }
 
-  /* The grand total number stays massive but shrinks ~15% on narrow
-     screens so a six-figure total (e.g. "$119.72") still fits the
-     sunken card without blowing out the card's right edge. */
+  .project-clad-order-finance__fin-k {
+    max-width: 42%;
+    letter-spacing: 0.1em;
+  }
+
+  .project-clad-order-finance__fin-v {
+    max-width: 58%;
+    font-size: calc(0.9rem * var(--pc-text-scale)) !important;
+  }
+
+  /* Fluid total: scales down in narrow cards so $10,000+ stays inside the box */
   .project-clad-order-finance__fin--total .project-clad-order-finance__fin-v {
-    font-size: calc(1.55rem * var(--pc-text-scale)) !important;
+    max-width: 65%;
+    font-size: clamp(
+      0.95rem,
+      0.45rem + 9cqi,
+      calc(1.35rem * var(--pc-text-scale))
+    ) !important;
+    letter-spacing: -0.03em;
   }
 
   .project-clad-order-finance__fin--total .project-clad-order-finance__fin-k {
-    font-size: calc(0.82rem * var(--pc-text-scale)) !important;
-    letter-spacing: 0.14em;
+    max-width: 35%;
+    font-size: calc(0.78rem * var(--pc-text-scale)) !important;
+    letter-spacing: 0.12em;
   }
 }
 
@@ -16215,7 +16384,7 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
   --cc-header-topbar-height: 28px;
   --cc-header-topbar-below-gap: 12px;
   --cc-header-nav-gap: 32px;
-  --cc-header-active: var(--color-1, #c40000);
+  --cc-header-active: #c41e1e;
   --cc-header-ink: var(--pc-caesura-dark, #484f60);
   --cc-header-topbar-ink: #2f3d4c;
   --cc-header-live-dot: #16a34a;
@@ -16277,6 +16446,45 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
+/* Mobile: full-width nav row so "Projects" is not clipped beside cart / tool icons */
+@media screen and (max-width: 989px) {
+  .project-clad-page .cc-app-header__mainbar.cc-app-header__mainbar--with-nav-cart,
+  .project-clad-page .cc-app-header__mainbar:has(.project-clad-storefront-nav__html-trailing) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem 0.75rem;
+  }
+
+  .project-clad-page .cc-app-header__nav {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.55rem 0.75rem;
+    padding-inline: 0.15rem;
+    box-sizing: border-box;
+    overflow: visible;
+  }
+
+  .project-clad-page .cc-app-header__nav > a {
+    flex-shrink: 0;
+  }
+
+  .project-clad-page .project-clad-storefront-nav__html-trailing {
+    flex: 1 1 100%;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}
+
 .project-clad-page .cc-app-header__nav-cart {
   position: relative;
   display: inline-flex;
@@ -16309,7 +16517,7 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
   width: 100%;
   height: 2px;
   border-radius: 0;
-  background: var(--cc-header-active, #c40000);
+  background-color: currentColor;
   transform: scaleX(0);
   transform-origin: left bottom;
   pointer-events: none;
@@ -16320,7 +16528,7 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 
 .project-clad-page .cc-app-header__nav-cart:hover,
 .project-clad-page .cc-app-header__nav-cart:focus-visible {
-  color: var(--cc-header-active, #c40000);
+  color: var(--cc-header-active, #c41e1e);
 }
 
 .project-clad-page .cc-app-header__nav-cart:hover::after,
@@ -16336,6 +16544,20 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
   width: 1em;
   height: 1em;
   flex-shrink: 0;
+}
+
+/* Match storefront nav hover (no text glow; underline uses currentColor) */
+.project-clad-page .cc-app-header__nav > a::after {
+  background-color: currentColor;
+}
+
+.project-clad-page .cc-app-header__nav > a:hover,
+.project-clad-page .cc-app-header__nav > a:focus-visible,
+.project-clad-page .cc-app-header__nav > a.is-active,
+.project-clad-page .cc-app-header__nav > a.is-active:hover,
+.project-clad-page .cc-app-header__nav > a.is-active:focus-visible {
+  color: var(--cc-header-active, #c41e1e);
+  text-shadow: none;
 }
 
 .project-clad-page .cc-app-header__topbar-extra,
@@ -16363,7 +16585,7 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 
 .project-clad-page .cc-app-header__topbar-button:hover,
 .project-clad-page .cc-app-header__topbar-button:focus-visible {
-  color: var(--cc-header-active, #c40000);
+  color: var(--cc-header-active, #c41e1e);
 }
 
 .project-clad-page .project-clad-add-member-popover--utility {
@@ -16391,7 +16613,7 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 
 .project-clad-storefront-nav__html-back-to-top:hover,
 .project-clad-storefront-nav__html-back-to-top:focus-visible {
-  color: var(--cc-header-active, #c40000);
+  color: var(--cc-header-active, #c41e1e);
 }
 
 /* cc-app-header logo: match theme cc-storefront-header.css (beat base theme img { max-width: 100% }). */

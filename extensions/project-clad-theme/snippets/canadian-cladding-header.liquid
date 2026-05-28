@@ -4,9 +4,10 @@
 {% endcomment %}
 
 {% liquid
-  assign account_href = routes.account_login_url
   if customer
     assign account_href = routes.account_url
+  else
+    assign account_href = routes.storefront_login_url
   endif
   assign path = request.path
   assign nav_siding_url = '/collections/main-products'
