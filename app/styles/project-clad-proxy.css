@@ -16446,42 +16446,69 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
-/* Mobile: full-width nav row so "Projects" is not clipped beside cart / tool icons */
+/* Mobile only: match theme cc-storefront-header (logo row, nav row, cart/tools below) */
 @media screen and (max-width: 989px) {
+  .project-clad-page .cc-app-header__mainbar,
   .project-clad-page .cc-app-header__mainbar.cc-app-header__mainbar--with-nav-cart,
   .project-clad-page .cc-app-header__mainbar:has(.project-clad-storefront-nav__html-trailing) {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: 0.45rem 0.75rem;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: center !important;
+    grid-template-columns: unset !important;
+    gap: 0.45rem 0.85rem !important;
+    min-height: 0 !important;
+    padding-bottom: 0.65rem !important;
+  }
+
+  .project-clad-page .project-clad-storefront-nav .cc-app-header__leading {
+    flex: 0 0 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+    min-width: 0 !important;
+    padding-bottom: 0.1rem !important;
+  }
+
+  .project-clad-page .project-clad-storefront-nav .cc-app-header__logo-link {
+    justify-content: center !important;
+  }
+
+  .project-clad-page .project-clad-storefront-nav .cc-app-header__logo-img {
+    max-width: min(420px, 88vw) !important;
+    margin-inline: auto !important;
   }
 
   .project-clad-page .cc-app-header__nav {
-    flex: 1 1 100%;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 0.55rem 0.75rem;
-    padding-inline: 0.15rem;
-    box-sizing: border-box;
-    overflow: visible;
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+    gap: 0.55rem 0.75rem !important;
+    padding-inline: 0.15rem !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
   }
 
   .project-clad-page .cc-app-header__nav > a {
-    flex-shrink: 0;
+    flex-shrink: 0 !important;
+    font-size: clamp(0.9rem, 0.82rem + 0.35vw, 1.05rem) !important;
+  }
+
+  .project-clad-page .cc-app-header__nav-cart {
+    flex: 0 0 auto !important;
+    font-size: clamp(0.9rem, 0.82rem + 0.35vw, 1.05rem) !important;
   }
 
   .project-clad-page .project-clad-storefront-nav__html-trailing {
-    flex: 1 1 100%;
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
+    flex: 1 1 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
   }
 }
 
@@ -16616,27 +16643,29 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
   color: var(--cc-header-active, #c41e1e);
 }
 
-/* cc-app-header logo: match theme cc-storefront-header.css (beat base theme img { max-width: 100% }). */
-.project-clad-page .project-clad-storefront-nav .cc-app-header__leading {
-  flex: 0 0 auto;
-  min-width: 0;
-  overflow: visible;
-}
+/* cc-app-header logo (desktop): beat theme img { max-width: 100% } — do not apply on mobile (breaks stacked layout). */
+@media screen and (min-width: 990px) {
+  .project-clad-page .project-clad-storefront-nav .cc-app-header__leading {
+    flex: 0 0 auto;
+    min-width: 0;
+    overflow: visible;
+  }
 
-.project-clad-page .project-clad-storefront-nav .cc-app-header__logo-link {
-  display: inline-flex !important;
-  align-items: center !important;
-  flex: 0 0 auto !important;
-  max-width: none !important;
-  width: auto !important;
-  overflow: visible !important;
-}
+  .project-clad-page .project-clad-storefront-nav .cc-app-header__logo-link {
+    display: inline-flex !important;
+    align-items: center !important;
+    flex: 0 0 auto !important;
+    max-width: none !important;
+    width: auto !important;
+    overflow: visible !important;
+  }
 
-.project-clad-page .project-clad-storefront-nav .cc-app-header__logo-img {
-  display: block !important;
-  width: auto !important;
-  height: auto !important;
-  max-height: clamp(44px, 5.5vw, 68px) !important;
-  max-width: min(560px, 52vw) !important;
-  object-fit: contain !important;
+  .project-clad-page .project-clad-storefront-nav .cc-app-header__logo-img {
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: clamp(44px, 5.5vw, 68px) !important;
+    max-width: min(560px, 52vw) !important;
+    object-fit: contain !important;
+  }
 }
