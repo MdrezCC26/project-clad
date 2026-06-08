@@ -35,9 +35,8 @@ import {
 } from "../utils/jobOrderNumber.server";
 import {
   DEFAULT_SHOP_DELIVERY_FEE,
-  deliveryFeeToDecimal,
   parseDeliveryFeeFromForm,
-} from "../utils/shopDeliveryFee.server";
+} from "../utils/shopDeliveryFee";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -650,6 +649,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (intent === "save-delivery-fee") {
+    const { deliveryFeeToDecimal } = await import("../utils/shopDeliveryFee.server");
     const parsed = parseDeliveryFeeFromForm(
       String(formData.get("deliveryFeeAmount") || ""),
     );
