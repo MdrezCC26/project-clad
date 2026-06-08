@@ -274,15 +274,8 @@ export async function recordPhaseDeliveredQuantities(args: {
   const percent = computeDeliveredPercent(refreshed.items, phaseViews);
   const fullyDelivered = isJobFullyDelivered(refreshed.items, phaseViews);
 
-  if (fullyDelivered && refreshed.orderLifecycleStatus === "ordered") {
-    await prisma.job.update({
-      where: { id: args.jobId },
-      data: {
-        orderLifecycleStatus: "delivered",
-        completedAt: refreshed.completedAt ?? new Date(),
-      },
-    });
-  }
+  /* Do not flip orderLifecycleStatus to delivered here — phased fulfillment
+     requires a photo confirm (`upload-phase-fulfillment-photo`) first. */
 
   return { percent, fullyDelivered };
 }

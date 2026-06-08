@@ -70,6 +70,7 @@ import {
 import { notifyOrderNowStaff } from "../utils/orderNowStaffPush.server";
 import { notifyMissionControl } from "../utils/missionControl.server";
 import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";
+import { readFormUploadedImage } from "../utils/uploadedImageFile.server";
 import { createBackupDraftOrderForJob } from "../utils/shopifyDraftOrder.server";
 import {
   addDaysToCalendarYmd,
@@ -2274,8 +2275,8 @@ function StaffPhaseDeliveryPanel({
 
   const canSubmitFulfillment = Boolean(openPhase && !openPhase.hasPhoto);
 
-  const confirmDeliveryWithPhoto =
-    job.orderLifecycleStatus === "ordered" && canSubmitFulfillment;
+  /** Any open phase without a photo must be confirmed with photo + qty (not qty-only). */
+  const confirmDeliveryWithPhoto = canSubmitFulfillment;
 
   const saveDeliveredQty = (form: HTMLFormElement) => {
     const lines = job.items.map((item) => {
@@ -2309,6 +2310,41 @@ function StaffPhaseDeliveryPanel({
       })
       .catch(() => {
         window.alert("Could not save delivered quantities.");
+      });
+  };
+
+  const confirmDeliveryWithPhotoSubmit = (form: HTMLFormElement) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("pcFulfillment", "1");
+    const fd = new FormData(form);
+    fetch(url.pathname + url.search, {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    })
+      .then(async (r) => {
+        let ack: { ok?: boolean; error?: string } | null = null;
+        try {
+          ack = (await r.json()) as { ok?: boolean; error?: string };
+        } catch {
+          const text = (await r.text()).trim();
+          if (text) {
+            window.alert(text);
+            return;
+          }
+        }
+        if (!r.ok || ack?.error) {
+          window.alert(
+            ack?.error ||
+              "Could not confirm delivery. Reload the page and try again.",
+          );
+          return;
+        }
+        url.searchParams.delete("pcFulfillment");
+        window.location.replace(url.pathname + url.search);
+      })
+      .catch(() => {
+        window.alert("Could not confirm delivery.");
       });
   };
 
@@ -2383,7 +2419,7 @@ function StaffPhaseDeliveryPanel({
                               phaseLine?.quantityDelivered &&
                               phaseLine.quantityDelivered > 0
                                 ? phaseLine.quantityDelivered
-                                : 0
+                                : remaining
                             }
                             className="project-clad-preferred-delivery-input"
                             style={{ width: "4.5rem" }}
@@ -2416,15 +2452,16 @@ function StaffPhaseDeliveryPanel({
             <button
               type="submit"
               className="project-clad-button"
-              onClick={
-                confirmDeliveryWithPhoto
-                  ? undefined
-                  : (e) => {
-                      e.preventDefault();
-                      const form = e.currentTarget.closest("form");
-                      if (form instanceof HTMLFormElement) saveDeliveredQty(form);
-                    }
-              }
+              onClick={(e) => {
+                e.preventDefault();
+                const form = e.currentTarget.closest("form");
+                if (!(form instanceof HTMLFormElement)) return;
+                if (confirmDeliveryWithPhoto) {
+                  confirmDeliveryWithPhotoSubmit(form);
+                } else {
+                  saveDeliveredQty(form);
+                }
+              }}
             >
               {confirmDeliveryWithPhoto
                 ? "Confirm delivery"
@@ -3039,6 +3076,35 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     await ensureJobDeliveryPhases(job, shopDeliveryFee, resolved);
     if (resolved.method === "delivery") {
       await ensureOpenFulfillmentPhase(job.id);
+    }
+    /* Repair orders marked delivered without a confirmed phase photo (legacy qty-only saves). */
+    const hasConfirmedPhase = job.deliveryPhases.some((p) =>
+      Boolean(p.fulfillmentPhotoStorageKey),
+    );
+    const awaitingPhoto = job.deliveryPhases.some(
+      (p) => !p.fulfillmentPhotoStorageKey && !p.deliveredAt,
+    );
+    if (
+      awaitingPhoto &&
+      !hasConfirmedPhase &&
+      !job.fulfillmentPhotoStorageKey &&
+      (job.orderLifecycleStatus === "delivered" ||
+        job.orderLifecycleStatus === "paid")
+    ) {
+      const wasPaid = job.orderLifecycleStatus === "paid";
+      await prisma.job.update({
+        where: { id: job.id },
+        data: {
+          orderLifecycleStatus: "ordered",
+          completedAt: null,
+          ...(wasPaid ? { paidAt: null } : {}),
+        },
+      });
+      job.orderLifecycleStatus = "ordered";
+      job.completedAt = null;
+      if (wasPaid) {
+        job.paidAt = null;
+      }
     }
   }
   const phaseRows = await prisma.jobDeliveryPhase.findMany({
@@ -4706,6 +4772,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (!viewerIsAppAdmin) {
       throw new Response("Forbidden", { status: 403 });
     }
+    const recordAckFromQuery =
+      new URL(request.url).searchParams.get("pcJson") === "1";
+    const recordJsonAck = declaresJson || recordAckFromQuery;
     const jobId = String(formData.get("jobId") || "");
     const phaseId = String(formData.get("phaseId") || "");
     const linesJson = String(formData.get("deliveredLinesJson") || "").trim();
@@ -4737,7 +4806,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         jobId,
         lines,
       });
-      if (declaresJson) {
+      if (recordJsonAck) {
         return Response.json({ ok: true as const, ...result });
       }
     } catch (e) {
@@ -4753,9 +4822,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (!viewerCanFulfill) {
       throw new Response("Forbidden", { status: 403 });
     }
+    const fulfillmentAckFromQuery =
+      new URL(request.url).searchParams.get("pcFulfillment") === "1";
+    const failFulfillment = (message: string, status = 400) => {
+      if (fulfillmentAckFromQuery) {
+        return Response.json({ error: message }, { status });
+      }
+      return redirectToProject(request, projectId, shop, {
+        fulfillmentError: message,
+      });
+    };
+
     const jobId = String(formData.get("jobId") || "");
     const phaseId = String(formData.get("phaseId") || "");
-    const file = formData.get("photo");
     const job = await prisma.job.findFirst({
       where: { id: jobId, projectId },
       include: {
@@ -4764,31 +4843,38 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
     if (!job) {
-      throw new Response("Order not found", { status: 404 });
-    }
-    if (job.orderLifecycleStatus !== "ordered") {
-      throw new Response(
-        "Photo upload is only allowed while the order is in Ordered status.",
-        { status: 400 },
-      );
+      return failFulfillment("Order not found.", 404);
     }
     const phase = job.deliveryPhases.find((p) => p.id === phaseId);
     if (!phase) {
-      throw new Response("Delivery phase not found", { status: 404 });
+      return failFulfillment("Delivery phase not found.", 404);
     }
     if (phase.fulfillmentPhotoStorageKey || phase.deliveredAt) {
-      throw new Response(
+      return failFulfillment(
         "This delivery was already confirmed. Refresh the page to record the next delivery.",
-        { status: 400 },
+      );
+    }
+    const phaseAwaitingPhoto =
+      !phase.fulfillmentPhotoStorageKey && !phase.deliveredAt;
+    const blockedPreOrderStatuses = [
+      "draft",
+      "pending_review",
+      "ready_to_order",
+    ] as const;
+    if (
+      !phaseAwaitingPhoto ||
+      (blockedPreOrderStatuses as readonly string[]).includes(
+        job.orderLifecycleStatus,
+      )
+    ) {
+      return failFulfillment(
+        "This delivery cannot be confirmed yet. Reload the page and try again.",
       );
     }
     const hasQtyFields = job.items.some((item) =>
       formData.has(`qty_${item.id}`),
     );
     if (hasQtyFields) {
-      if (!viewerIsAppAdmin) {
-        throw new Response("Forbidden", { status: 403 });
-      }
       const lines = job.items.map((item) => ({
         jobItemId: item.id,
         quantityDelivered: Math.floor(
@@ -4800,27 +4886,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         0,
       );
       if (totalDelivered <= 0) {
-        throw new Response(
-          "Enter at least one quantity for this delivery.",
-          { status: 400 },
-        );
+        return failFulfillment("Enter at least one quantity for this delivery.");
       }
       try {
         await recordPhaseDeliveredQuantities({ phaseId, jobId, lines });
       } catch (e) {
-        throw new Response(
+        return failFulfillment(
           e instanceof Error ? e.message : "Invalid delivered quantities.",
-          { status: 400 },
         );
       }
     }
-    if (!(file instanceof File) || file.size === 0) {
-      throw new Response("Photo file is required.", { status: 400 });
+    const uploaded = await readFormUploadedImage(formData, "photo");
+    if (!uploaded) {
+      return failFulfillment("Photo file is required.");
     }
-    if (file.size > 8 * 1024 * 1024) {
-      throw new Response("Photo must be 8MB or smaller.", { status: 400 });
+    if (uploaded.size > 8 * 1024 * 1024) {
+      return failFulfillment("Photo must be 8MB or smaller.");
     }
-    const orig = (file.name || "photo.jpg").toLowerCase();
+    const orig = uploaded.name.toLowerCase();
     const ext = orig.endsWith(".png")
       ? ".png"
       : orig.endsWith(".webp")
@@ -4831,11 +4914,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const root = path.resolve(process.cwd(), "storage", "fulfillment-photos");
     const abs = path.resolve(root, storageKey);
     if (!abs.startsWith(root + path.sep)) {
-      throw new Response("Invalid path", { status: 400 });
+      return failFulfillment("Invalid path");
     }
     await fs.mkdir(path.dirname(abs), { recursive: true });
-    const buf = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(abs, buf);
+    await fs.writeFile(abs, uploaded.buffer);
 
     await prisma.jobDeliveryPhase.update({
       where: { id: phaseId },
@@ -4889,6 +4971,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     notifyMissionControl(jobId);
+    if (fulfillmentAckFromQuery) {
+      return Response.json({ ok: true as const });
+    }
     return redirectToProject(request, projectId, shop);
   }
 
@@ -4960,26 +5045,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       throw new Response("Forbidden", { status: 403 });
     }
     const jobId = String(formData.get("jobId") || "");
-    const file = formData.get("photo");
     const job = await prisma.job.findFirst({
       where: { id: jobId, projectId },
     });
     if (!job) {
       throw new Response("Order not found", { status: 404 });
     }
-    if (job.orderLifecycleStatus !== "ordered") {
+    if (
+      job.orderLifecycleStatus !== "ordered" &&
+      job.orderLifecycleStatus !== "delivered"
+    ) {
       throw new Response(
         "Photo upload is only allowed while the order is in Ordered status.",
         { status: 400 },
       );
     }
-    if (!(file instanceof File) || file.size === 0) {
+    const uploaded = await readFormUploadedImage(formData, "photo");
+    if (!uploaded) {
       throw new Response("Photo file is required.", { status: 400 });
     }
-    if (file.size > 8 * 1024 * 1024) {
+    if (uploaded.size > 8 * 1024 * 1024) {
       throw new Response("Photo must be 8MB or smaller.", { status: 400 });
     }
-    const orig = (file.name || "photo.jpg").toLowerCase();
+    const orig = uploaded.name.toLowerCase();
     const ext = orig.endsWith(".png")
       ? ".png"
       : orig.endsWith(".webp")
@@ -4993,8 +5081,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       throw new Response("Invalid path", { status: 400 });
     }
     await fs.mkdir(path.dirname(abs), { recursive: true });
-    const buf = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(abs, buf);
+    await fs.writeFile(abs, uploaded.buffer);
 
     await prisma.job.update({
       where: { id: jobId },
@@ -8423,6 +8510,34 @@ export default function ProjectDetailPage() {
                 onClick={() => {
                   const next = new URLSearchParams(searchParams);
                   next.delete("statusPhotoRequired");
+                  setSearchParams(next, { replace: true });
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+          {searchParams.get("fulfillmentError") ? (
+            <div
+              role="alert"
+              className="project-clad-card"
+              style={{
+                marginBottom: "1rem",
+                padding: "0.85rem 1rem",
+                borderColor: "#b71c1c",
+                background: "rgba(183, 28, 28, 0.06)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.45 }}>
+                {searchParams.get("fulfillmentError")}
+              </p>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                style={{ marginTop: "0.65rem" }}
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete("fulfillmentError");
                   setSearchParams(next, { replace: true });
                 }}
               >
