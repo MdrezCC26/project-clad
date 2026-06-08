@@ -1,0 +1,218 @@
+{% comment %}
+  Delivery fields for projectclad-save-modal.liquid.
+
+  Params:
+    block — "project" (default delivery for new project) or "order" (per-order on create).
+    id_prefix — unique prefix for input ids (e.g. save-proj, save-order-new).
+    job_delivery_mode_name — radio group name for order block (must be unique per fieldset).
+{% endcomment %}
+{% assign pc_block = block | default: 'project' %}
+{% assign pc_prefix = id_prefix | default: 'save-delivery' %}
+{% assign pc_job_delivery_mode_name = job_delivery_mode_name | default: 'projectclad-job-delivery-mode' %}
+
+{% if pc_block == 'project' %}
+  <fieldset class="project-clad-delivery-mode-radios" data-projectclad-save-project-receive-fieldset>
+    <legend class="projectclad-sr-only">Project default delivery</legend>
+    <p class="projectclad-delivery-panel-label">Default delivery for this project</p>
+    <label class="project-clad-delivery-mode__option">
+      <input
+        type="radio"
+        name="projectclad-project-receive-mode"
+        value="pickup"
+        checked
+        data-projectclad-save-project-receive-radio
+      />
+      <span class="project-clad-delivery-mode__label">Store pickup</span>
+    </label>
+    <label class="project-clad-delivery-mode__option">
+      <input
+        type="radio"
+        name="projectclad-project-receive-mode"
+        value="delivery"
+        data-projectclad-save-project-receive-radio
+      />
+      <span class="project-clad-delivery-mode__label">Delivery</span>
+    </label>
+  </fieldset>
+  <div
+    class="projectclad-save-delivery-address"
+    data-projectclad-save-project-delivery-address
+    hidden
+  >
+    <label for="{{ pc_prefix }}-project-ship-address1">Delivery address</label>
+    <input
+      id="{{ pc_prefix }}-project-ship-address1"
+      class="projectclad-pricing-password-input"
+      type="text"
+      name="projectShipAddress1"
+      autocomplete="street-address"
+      placeholder="Street address"
+      data-projectclad-save-ship-input
+    />
+    <div class="projectclad-field-row">
+      <div class="projectclad-field">
+        <label for="{{ pc_prefix }}-project-ship-city">City</label>
+        <input
+          id="{{ pc_prefix }}-project-ship-city"
+          class="projectclad-pricing-password-input"
+          type="text"
+          name="projectShipCity"
+          autocomplete="address-level2"
+          data-projectclad-save-ship-input
+        />
+      </div>
+      <div class="projectclad-field">
+        <label for="{{ pc_prefix }}-project-ship-postal">Postal</label>
+        <input
+          id="{{ pc_prefix }}-project-ship-postal"
+          class="projectclad-pricing-password-input"
+          type="text"
+          name="projectShipPostal"
+          autocomplete="postal-code"
+          data-projectclad-save-ship-input
+        />
+      </div>
+    </div>
+    <div class="projectclad-field-row">
+      <div class="projectclad-field">
+        <label for="{{ pc_prefix }}-project-ship-province">Province</label>
+        <select
+          id="{{ pc_prefix }}-project-ship-province"
+          class="projectclad-pricing-password-input"
+          name="projectShipProvince"
+          data-projectclad-save-ship-input
+        >
+          <option value="">—</option>
+          <option value="ON" selected>Ontario</option>
+          <option value="QC">Quebec</option>
+          <option value="BC">British Columbia</option>
+          <option value="AB">Alberta</option>
+          <option value="MB">Manitoba</option>
+          <option value="SK">Saskatchewan</option>
+          <option value="NS">Nova Scotia</option>
+          <option value="NB">New Brunswick</option>
+          <option value="NL">Newfoundland and Labrador</option>
+          <option value="PE">Prince Edward Island</option>
+        </select>
+      </div>
+      <div class="projectclad-field">
+        <label for="{{ pc_prefix }}-project-ship-country">Country</label>
+        <select
+          id="{{ pc_prefix }}-project-ship-country"
+          class="projectclad-pricing-password-input"
+          name="projectShipCountry"
+          data-projectclad-save-ship-input
+        >
+          <option value="Canada" selected>Canada</option>
+        </select>
+      </div>
+    </div>
+  </div>
+{% else %}
+  <fieldset class="project-clad-delivery-mode-radios" data-projectclad-save-job-delivery-fieldset>
+    <legend class="projectclad-sr-only">Order delivery</legend>
+    <p class="projectclad-delivery-panel-label">Delivery for this order</p>
+    <label class="project-clad-delivery-mode__option">
+      <input
+        type="radio"
+        name="{{ pc_job_delivery_mode_name }}"
+        value="inherit"
+        checked
+        data-projectclad-save-job-delivery-radio
+      />
+      <span class="project-clad-delivery-mode__label">Use project delivery settings</span>
+    </label>
+    <label class="project-clad-delivery-mode__option">
+      <input
+        type="radio"
+        name="{{ pc_job_delivery_mode_name }}"
+        value="pickup"
+        data-projectclad-save-job-delivery-radio
+      />
+      <span class="project-clad-delivery-mode__label">Store pickup (this order)</span>
+    </label>
+    <label class="project-clad-delivery-mode__option">
+      <input
+        type="radio"
+        name="{{ pc_job_delivery_mode_name }}"
+        value="delivery"
+        data-projectclad-save-job-delivery-radio
+      />
+      <span class="project-clad-delivery-mode__label">Delivery (this order)</span>
+    </label>
+  </fieldset>
+  <div
+    class="projectclad-save-delivery-address"
+    data-projectclad-save-order-delivery-address
+    hidden
+  >
+    <label for="{{ pc_prefix }}-job-ship-address1">Order delivery address</label>
+    <input
+      id="{{ pc_prefix }}-job-ship-address1"
+      class="projectclad-pricing-password-input"
+      type="text"
+      name="jobShipAddress1"
+      autocomplete="street-address"
+      placeholder="Street address"
+      data-projectclad-save-ship-input
+    />
+    <div class="projectclad-field-row">
+      <div class="projectclad-field">
+        <label for="{{ pc_prefix }}-job-ship-city">City</label>
+        <input
+          id="{{ pc_prefix }}-job-ship-city"
+          class="projectclad-pricing-password-input"
+          type="text"
+          name="jobShipCity"
+          autocomplete="address-level2"
+          data-projectclad-save-ship-input
+        />
+      </div>
+      <div class="projectclad-field">
+        <label for="{{ pc_prefix }}-job-ship-postal">Postal</label>
+        <input
+          id="{{ pc_prefix }}-job-ship-postal"
+          class="projectclad-pricing-password-input"
+          type="text"
+          name="jobShipPostal"
+          autocomplete="postal-code"
+          data-projectclad-save-ship-input
+        />
+      </div>
+    </div>
+    <div class="projectclad-field-row">
+      <div class="projectclad-field">
+        <label for="{{ pc_prefix }}-job-ship-province">Province</label>
+        <select
+          id="{{ pc_prefix }}-job-ship-province"
+          class="projectclad-pricing-password-input"
+          name="jobShipProvince"
+          data-projectclad-save-ship-input
+        >
+          <option value="">—</option>
+          <option value="ON" selected>Ontario</option>
+          <option value="QC">Quebec</option>
+          <option value="BC">British Columbia</option>
+          <option value="AB">Alberta</option>
+          <option value="MB">Manitoba</option>
+          <option value="SK">Saskatchewan</option>
+          <option value="NS">Nova Scotia</option>
+          <option value="NB">New Brunswick</option>
+          <option value="NL">Newfoundland and Labrador</option>
+          <option value="PE">Prince Edward Island</option>
+        </select>
+      </div>
+      <div class="projectclad-field">
+        <label for="{{ pc_prefix }}-job-ship-country">Country</label>
+        <select
+          id="{{ pc_prefix }}-job-ship-country"
+          class="projectclad-pricing-password-input"
+          name="jobShipCountry"
+          data-projectclad-save-ship-input
+        >
+          <option value="Canada" selected>Canada</option>
+        </select>
+      </div>
+    </div>
+  </div>
+{% endif %}

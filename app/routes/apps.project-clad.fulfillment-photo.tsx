@@ -16,6 +16,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop, customerId, customerEmail } = requireAppProxyCustomer(request);
   const url = new URL(request.url);
   const jobId = url.searchParams.get("jobId") || "";
+  const phaseId = url.searchParams.get("phaseId") || "";
   if (!jobId) {
     return new Response("Missing job", { status: 400 });
   }
@@ -25,7 +26,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     include: { project: { include: { members: true } } },
   });
 
-  if (!job?.fulfillmentPhotoStorageKey) {
+  let storageKey: string | null = job?.fulfillmentPhotoStorageKey ?? null;
+  if (phaseId) {
+    const phase = await prisma.jobDeliveryPhase.findFirst({
+      where: { id: phaseId, jobId },
+      select: { fulfillmentPhotoStorageKey: true },
+    });
+    storageKey = phase?.fulfillmentPhotoStorageKey ?? null;
+  }
+
+  if (!job || !storageKey) {
     return new Response("Not found", { status: 404 });
   }
 
@@ -55,7 +65,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return new Response("Forbidden", { status: 403 });
   }
 
-  const key = job.fulfillmentPhotoStorageKey;
+  const key = storageKey;
   if (!key || key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
     return new Response("Bad key", { status: 400 });
   }

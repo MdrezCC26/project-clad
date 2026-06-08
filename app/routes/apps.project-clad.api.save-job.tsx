@@ -24,6 +24,13 @@ import {
   duplicateUploadPartMirrorsForCopiedJobItem,
   mirrorShopifyStagedUploadsForJobItem,
 } from "../utils/uploadPartMirror.server";
+import {
+  hasCompleteShipToDetails,
+  isJobDeliverySchemaError,
+  jobDeliveryPrismaData,
+  normalizeJobDeliveryMode,
+  type ShipToFields,
+} from "../utils/jobDelivery";
 
 type SaveJobPayload = {
   mode: "newProject" | "existingProject" | "existingJob";
@@ -36,6 +43,18 @@ type SaveJobPayload = {
   projectId?: string;
   jobId?: string;
   quantityMode?: "add" | "replace";
+  projectReceiveMode?: string;
+  projectShipAddress1?: string;
+  projectShipCity?: string;
+  projectShipProvince?: string;
+  projectShipPostal?: string;
+  projectShipCountry?: string;
+  jobDeliveryMode?: string;
+  jobShipAddress1?: string;
+  jobShipCity?: string;
+  jobShipProvince?: string;
+  jobShipPostal?: string;
+  jobShipCountry?: string;
   items?: {
     variantId: string;
     quantity: number;
@@ -221,6 +240,177 @@ async function mirrorLineFilesOrResponse(
   return null;
 }
 
+function trimPayloadField(v: string | undefined): string | null {
+  const t = String(v || "").trim();
+  return t || null;
+}
+
+function parseProjectShipFromPayload(payload: SaveJobPayload): ShipToFields & {
+  shipCountry: string | null;
+} {
+  return {
+    shipAddress1: trimPayloadField(payload.projectShipAddress1),
+    shipCity: trimPayloadField(payload.projectShipCity),
+    shipProvince: trimPayloadField(payload.projectShipProvince),
+    shipPostal: trimPayloadField(payload.projectShipPostal),
+    shipCountry: trimPayloadField(payload.projectShipCountry) || "Canada",
+  };
+}
+
+function parseJobShipFromPayload(payload: SaveJobPayload): ShipToFields & {
+  shipCountry: string | null;
+} {
+  return {
+    shipAddress1: trimPayloadField(payload.jobShipAddress1),
+    shipCity: trimPayloadField(payload.jobShipCity),
+    shipProvince: trimPayloadField(payload.jobShipProvince),
+    shipPostal: trimPayloadField(payload.jobShipPostal),
+    shipCountry: trimPayloadField(payload.jobShipCountry) || "Canada",
+  };
+}
+
+function projectReceiveModeFromPayload(
+  payload: SaveJobPayload,
+): "pickup" | "delivery" {
+  return String(payload.projectReceiveMode || "").trim().toLowerCase() ===
+    "delivery"
+    ? "delivery"
+    : "pickup";
+}
+
+/** Validates delivery fields for cart save flows; returns user-facing error or null. */
+function validateSaveJobDelivery(
+  mode: SaveJobPayload["mode"],
+  payload: SaveJobPayload,
+  project?: ShipToFields & { receiveMode?: string | null },
+): string | null {
+  if (mode === "newProject") {
+    const receiveMode = projectReceiveModeFromPayload(payload);
+    const projectShip = parseProjectShipFromPayload(payload);
+    if (receiveMode === "delivery" && !hasCompleteShipToDetails(projectShip)) {
+      return "Enter a complete delivery address for this project, or choose store pickup.";
+    }
+  }
+  if (mode === "newProject" || mode === "existingProject") {
+    const jobMode = normalizeJobDeliveryMode(payload.jobDeliveryMode);
+    if (jobMode === "delivery") {
+      const jobShip = parseJobShipFromPayload(payload);
+      const projectShip = project
+        ? {
+            shipAddress1: project.shipAddress1,
+            shipCity: project.shipCity,
+            shipProvince: project.shipProvince,
+            shipPostal: project.shipPostal,
+          }
+        : parseProjectShipFromPayload(payload);
+      const projectIsDelivery =
+        project?.receiveMode === "delivery" ||
+        projectReceiveModeFromPayload(payload) === "delivery";
+      if (
+        !hasCompleteShipToDetails(jobShip) &&
+        !(projectIsDelivery && hasCompleteShipToDetails(projectShip))
+      ) {
+        return "Enter a complete delivery address for this order, or choose store pickup.";
+      }
+    }
+  }
+  return null;
+}
+
+function isDeliverySchemaError(e: unknown): boolean {
+  return (
+    isJobDeliverySchemaError(e) ||
+    (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2022") ||
+    (e instanceof Prisma.PrismaClientValidationError &&
+      /deliveryMode|Unknown argument/i.test(e.message))
+  );
+}
+
+function prismaErrorMessage(e: unknown): string | null {
+  if (isDeliverySchemaError(e)) {
+    return "The app database needs a delivery update (migration). Please try again shortly or contact support.";
+  }
+  if (e instanceof Prisma.PrismaClientKnownRequestError) {
+    return `Save failed (${e.code}). Please try again.`;
+  }
+  if (e instanceof Error && e.message.trim()) {
+    return e.message.trim();
+  }
+  return null;
+}
+
+async function createProjectWithFirstJob(args: {
+  shop: string;
+  customerId: string;
+  projectName: string;
+  poNumber: string;
+  companyNameForRecord: string;
+  ownerCompanyKey: string | null;
+  receiveMode: "pickup" | "delivery";
+  projectShip: ReturnType<typeof parseProjectShipFromPayload>;
+  saveJobName: string;
+  saveJobPurchaseOrderNumber: string | undefined;
+  items: NormalizedCartItem[];
+  includeJobDeliveryFields: boolean;
+  jobDeliveryData: ReturnType<typeof jobDeliveryPrismaData>;
+}) {
+  const jobCreateBase = {
+    name: args.saveJobName,
+    ...(args.saveJobPurchaseOrderNumber
+      ? { purchaseOrderNumber: args.saveJobPurchaseOrderNumber }
+      : {}),
+    sortOrder: 1,
+    items: {
+      create: args.items.map((item, index) => ({
+        variantId: item.variantId,
+        quantity: item.quantity,
+        priceSnapshot: item.priceSnapshot,
+        sortOrder: index + 1,
+        variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
+        orderLineCapture: orderLineCaptureJson(item),
+        ...catalogFromLineMeta(item.lineMeta),
+        customData:
+          item.properties && item.properties.length
+            ? (item.properties as Prisma.InputJsonValue)
+            : undefined,
+      })),
+    },
+  };
+
+  return prisma.project.create({
+    data: {
+      shop: args.shop,
+      name: args.projectName,
+      ownerCustomerId: args.customerId,
+      poNumber: args.poNumber,
+      companyName: args.companyNameForRecord,
+      ownerCompanyKey: args.ownerCompanyKey,
+      receiveMode: args.receiveMode,
+      shipAddress1:
+        args.receiveMode === "delivery" ? args.projectShip.shipAddress1 : null,
+      shipAddress2: null,
+      shipCity: args.receiveMode === "delivery" ? args.projectShip.shipCity : null,
+      shipProvince:
+        args.receiveMode === "delivery" ? args.projectShip.shipProvince : null,
+      shipPostal:
+        args.receiveMode === "delivery" ? args.projectShip.shipPostal : null,
+      shipCountry:
+        args.receiveMode === "delivery" ? args.projectShip.shipCountry : null,
+      visibleToCompany: Boolean(args.ownerCompanyKey),
+      members: {
+        create: { customerId: args.customerId, role: "edit" },
+      },
+      jobs: {
+        create: {
+          ...jobCreateBase,
+          ...(args.includeJobDeliveryFields ? args.jobDeliveryData : {}),
+        },
+      },
+    },
+    include: { jobs: { include: { items: true } } },
+  });
+}
+
 async function enqueueDrawingJob(
   jobItemId: string,
   shop: string,
@@ -244,10 +434,27 @@ async function enqueueDrawingJob(
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  try {
+    return await saveJobAction(request);
+  } catch (e) {
+    console.error("[save-job] unhandled:", e);
+    const message =
+      prismaErrorMessage(e) ||
+      "Unable to save order. Please try again or contact support.";
+    return Response.json({ error: message }, { status: 500 });
+  }
+};
+
+async function saveJobAction(request: Request) {
   const { shop, customerId, customerEmail } = requireAppProxyCustomer(request, {
     jsonOnFail: true,
   });
-  const payload = (await request.json()) as SaveJobPayload;
+  let payload: SaveJobPayload;
+  try {
+    payload = (await request.json()) as SaveJobPayload;
+  } catch {
+    return Response.json({ error: "Invalid save request." }, { status: 400 });
+  }
   const items = normalizeItems(payload.items);
   const { name: saveJobName, purchaseOrderNumber: saveJobPurchaseOrderNumber } =
     normalizeJobNameAndPo(payload.jobName, payload.purchaseOrderNumber);
@@ -310,46 +517,73 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const companyNameForRecord =
       companyName || viewerCompanyCtx.displayNames[0] || "";
 
-    const project = await prisma.project.create({
-      data: {
+    const deliveryValidationError = validateSaveJobDelivery("newProject", payload);
+    if (deliveryValidationError) {
+      return Response.json({ error: deliveryValidationError }, { status: 400 });
+    }
+
+    const receiveMode = projectReceiveModeFromPayload(payload);
+    const projectShip = parseProjectShipFromPayload(payload);
+    const jobDeliveryMode = normalizeJobDeliveryMode(payload.jobDeliveryMode);
+    const jobShip = parseJobShipFromPayload(payload);
+    const jobDeliveryData = jobDeliveryPrismaData(jobDeliveryMode, jobShip);
+
+    let project;
+    try {
+      project = await createProjectWithFirstJob({
         shop,
-        name: projectName,
-        ownerCustomerId: customerId,
+        customerId,
+        projectName,
         poNumber,
-        companyName: companyNameForRecord,
+        companyNameForRecord,
         ownerCompanyKey,
-        /* Coworkers see Company-scope rows only when this is true; match opt-in to having a company key. */
-        visibleToCompany: Boolean(ownerCompanyKey),
-        members: {
-          create: { customerId, role: "edit" },
-        },
-        jobs: {
-          create: {
-            name: saveJobName,
-            ...(saveJobPurchaseOrderNumber
-              ? { purchaseOrderNumber: saveJobPurchaseOrderNumber }
-              : {}),
-            sortOrder: 1,
-            items: {
-              create: items.map((item, index) => ({
-                variantId: item.variantId,
-                quantity: item.quantity,
-                priceSnapshot: item.priceSnapshot,
-                sortOrder: index + 1,
-                variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
-                orderLineCapture: orderLineCaptureJson(item),
-                ...catalogFromLineMeta(item.lineMeta),
-                customData:
-                  item.properties && item.properties.length
-                    ? (item.properties as Prisma.InputJsonValue)
-                    : undefined,
-              })),
-            },
-          },
-        },
-      },
-      include: { jobs: { include: { items: true } } },
-    });
+        receiveMode,
+        projectShip,
+        saveJobName,
+        saveJobPurchaseOrderNumber,
+        items,
+        includeJobDeliveryFields: true,
+        jobDeliveryData,
+      });
+    } catch (e) {
+      if (isDeliverySchemaError(e)) {
+        console.warn(
+          "[save-job] newProject retrying without per-order delivery columns:",
+          e,
+        );
+        try {
+          project = await createProjectWithFirstJob({
+            shop,
+            customerId,
+            projectName,
+            poNumber,
+            companyNameForRecord,
+            ownerCompanyKey,
+            receiveMode,
+            projectShip,
+            saveJobName,
+            saveJobPurchaseOrderNumber,
+            items,
+            includeJobDeliveryFields: false,
+            jobDeliveryData,
+          });
+        } catch (retryErr) {
+          const msg = prismaErrorMessage(retryErr);
+          console.error("[save-job] newProject prisma retry:", retryErr);
+          return Response.json(
+            { error: msg || "Unable to save project." },
+            { status: 500 },
+          );
+        }
+      } else {
+        const msg = prismaErrorMessage(e);
+        console.error("[save-job] newProject prisma:", e);
+        return Response.json(
+          { error: msg || "Unable to save project." },
+          { status: 500 },
+        );
+      }
+    }
 
     const jobItems = project.jobs[0]?.items ?? [];
     for (let i = 0; i < jobItems.length; i++) {
@@ -425,35 +659,79 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return Response.json({ error: "Forbidden." }, { status: 403 });
     }
 
+    const deliveryValidationError = validateSaveJobDelivery(
+      "existingProject",
+      payload,
+      project,
+    );
+    if (deliveryValidationError) {
+      return Response.json({ error: deliveryValidationError }, { status: 400 });
+    }
+
+    const jobDeliveryMode = normalizeJobDeliveryMode(payload.jobDeliveryMode);
+    const jobShip = parseJobShipFromPayload(payload);
+    const jobDeliveryData = jobDeliveryPrismaData(jobDeliveryMode, jobShip);
+
     const nextJobSortOrder = await getNextJobSortOrder(project.id);
-    const job = await prisma.job.create({
-      data: {
-        projectId: project.id,
-        name: saveJobName,
-        siteContactName: project.defaultSiteContactName ?? null,
-        siteContactPhone: project.defaultSiteContactPhone ?? null,
-        ...(saveJobPurchaseOrderNumber
-          ? { purchaseOrderNumber: saveJobPurchaseOrderNumber }
-          : {}),
-        sortOrder: nextJobSortOrder,
-        items: {
-          create: items.map((item, index) => ({
-            variantId: item.variantId,
-            quantity: item.quantity,
-            priceSnapshot: item.priceSnapshot,
-            sortOrder: index + 1,
-            variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
-            orderLineCapture: orderLineCaptureJson(item),
-            ...catalogFromLineMeta(item.lineMeta),
-            customData:
-              item.properties && item.properties.length
-                ? (item.properties as Prisma.InputJsonValue)
-                : undefined,
-          })),
-        },
+    const jobCreatePayload = {
+      projectId: project.id,
+      name: saveJobName,
+      siteContactName: project.defaultSiteContactName ?? null,
+      siteContactPhone: project.defaultSiteContactPhone ?? null,
+      ...(saveJobPurchaseOrderNumber
+        ? { purchaseOrderNumber: saveJobPurchaseOrderNumber }
+        : {}),
+      sortOrder: nextJobSortOrder,
+      items: {
+        create: items.map((item, index) => ({
+          variantId: item.variantId,
+          quantity: item.quantity,
+          priceSnapshot: item.priceSnapshot,
+          sortOrder: index + 1,
+          variantSnapshot: variantSnapshotFromCartItem(item) ?? undefined,
+          orderLineCapture: orderLineCaptureJson(item),
+          ...catalogFromLineMeta(item.lineMeta),
+          customData:
+            item.properties && item.properties.length
+              ? (item.properties as Prisma.InputJsonValue)
+              : undefined,
+        })),
       },
-      include: { items: true },
-    });
+    };
+    let job;
+    try {
+      job = await prisma.job.create({
+        data: { ...jobCreatePayload, ...jobDeliveryData },
+        include: { items: true },
+      });
+    } catch (e) {
+      if (isDeliverySchemaError(e)) {
+        console.warn(
+          "[save-job] existingProject retrying without delivery columns:",
+          e,
+        );
+        try {
+          job = await prisma.job.create({
+            data: jobCreatePayload,
+            include: { items: true },
+          });
+        } catch (retryErr) {
+          const msg = prismaErrorMessage(retryErr);
+          console.error("[save-job] existingProject prisma retry:", retryErr);
+          return Response.json(
+            { error: msg || "Unable to save order." },
+            { status: 500 },
+          );
+        }
+      } else {
+        const msg = prismaErrorMessage(e);
+        console.error("[save-job] existingProject prisma:", e);
+        return Response.json(
+          { error: msg || "Unable to save order." },
+          { status: 500 },
+        );
+      }
+    }
 
     for (let i = 0; i < job.items.length; i++) {
       const mirrorErr = await mirrorLineFilesOrResponse(
@@ -544,36 +822,56 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (isLocked) {
       const nextJobSortOrder = await getNextJobSortOrder(project.id);
-      const copy = await prisma.job.create({
-        data: {
-          projectId: project.id,
-          name: `${job.name} (Copy)`,
-          purchaseOrderNumber: job.purchaseOrderNumber ?? undefined,
-          siteContactName:
-            job.siteContactName?.trim() ||
-            project.defaultSiteContactName ||
-            null,
-          siteContactPhone:
-            job.siteContactPhone?.trim() ||
-            project.defaultSiteContactPhone ||
-            null,
-          isLocked: false,
-          sortOrder: nextJobSortOrder,
-          items: {
-            create: job.items.map((item) => ({
-              variantId: item.variantId,
-              quantity: item.quantity,
-              priceSnapshot: item.priceSnapshot,
-              sortOrder: item.sortOrder,
-              variantSnapshot: item.variantSnapshot ?? undefined,
-              customData: item.customData ?? undefined,
-              orderLineCapture: item.orderLineCapture ?? undefined,
-              catalogProductId: item.catalogProductId ?? undefined,
-              catalogSku: item.catalogSku ?? undefined,
-            })),
-          },
+      const copyBase = {
+        projectId: project.id,
+        name: `${job.name} (Copy)`,
+        purchaseOrderNumber: job.purchaseOrderNumber ?? undefined,
+        siteContactName:
+          job.siteContactName?.trim() ||
+          project.defaultSiteContactName ||
+          null,
+        siteContactPhone:
+          job.siteContactPhone?.trim() ||
+          project.defaultSiteContactPhone ||
+          null,
+        isLocked: false,
+        sortOrder: nextJobSortOrder,
+        items: {
+          create: job.items.map((item) => ({
+            variantId: item.variantId,
+            quantity: item.quantity,
+            priceSnapshot: item.priceSnapshot,
+            sortOrder: item.sortOrder,
+            variantSnapshot: item.variantSnapshot ?? undefined,
+            customData: item.customData ?? undefined,
+            orderLineCapture: item.orderLineCapture ?? undefined,
+            catalogProductId: item.catalogProductId ?? undefined,
+            catalogSku: item.catalogSku ?? undefined,
+          })),
         },
-      });
+      };
+      let copy;
+      try {
+        copy = await prisma.job.create({
+          data: {
+            ...copyBase,
+            deliveryMode: job.deliveryMode,
+            fulfillmentMethod: job.fulfillmentMethod ?? undefined,
+            shipAddress1: job.shipAddress1,
+            shipCity: job.shipCity,
+            shipProvince: job.shipProvince,
+            shipPostal: job.shipPostal,
+            shipCountry: job.shipCountry,
+          },
+        });
+      } catch (e) {
+        if (!isDeliverySchemaError(e)) throw e;
+        console.warn(
+          "[save-job] locked-order copy retrying without delivery columns:",
+          e,
+        );
+        copy = await prisma.job.create({ data: copyBase });
+      }
 
       targetJobId = copy.id;
       copied = true;

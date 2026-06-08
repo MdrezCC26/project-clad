@@ -405,6 +405,8 @@ body.project-clad-leaving .project-clad-page {
 .project-clad-page
   input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="image"]):not(
     .project-clad-neu-finder-input__field
+  ):not([data-projectclad-member-typeahead-input]):not(.project-clad-flat-input):not(
+    .project-clad-order-finance__input
   ),
 .project-clad-page textarea:not(.project-clad-neu-finder-input__field),
 .project-clad-page select {
@@ -419,6 +421,8 @@ body.project-clad-leaving .project-clad-page {
 .project-clad-page
   input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="image"]):not(
     .project-clad-neu-finder-input__field
+  ):not([data-projectclad-member-typeahead-input]):not(.project-clad-flat-input):not(
+    .project-clad-order-finance__input
   ),
 .project-clad-page select {
   border-radius: 9999px !important;
@@ -872,6 +876,10 @@ html:has(.project-clad-page--projects) body {
   .project-clad-projects-control-tile--status {
     grid-column: 1;
     grid-row: 1;
+  }
+
+  .project-clad-projects-control-tile--status-hidden {
+    display: none;
   }
 
   .project-clad-projects-control-tile--sort {
@@ -4661,8 +4669,8 @@ html:has(.project-clad-page--projects) body {
     font-weight: 500 !important;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    flex: 1 1 auto;
     min-width: 0;
-    max-width: 58%;
     text-align: right;
   }
 
@@ -4675,10 +4683,16 @@ html:has(.project-clad-page--projects) body {
   .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
     .project-clad-cc-v2-tile--totals
     .project-clad-cc-v2-totals-grand
-    h2.project-clad-project-footer-metric-label {
-    flex: 1 1 auto;
+    > div:first-child {
+    flex: 0 0 auto;
     min-width: 0;
-    max-width: 42%;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
+    .project-clad-cc-v2-tile--totals
+    .project-clad-cc-v2-totals-grand
+    h2.project-clad-project-footer-metric-label {
+    white-space: nowrap;
   }
 
   .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
@@ -7524,15 +7538,9 @@ html:has(.project-clad-page--projects) body {
   box-sizing: border-box;
   padding: 1rem 1.1rem;
   border-radius: var(--pc-card-radius);
-  background: linear-gradient(168deg, #eef0f2 0%, var(--pc-btn-neu-bg) 38%, #dcdee3 100%);
-  box-shadow:
-    0 2px 0 rgba(255, 255, 255, 0.95) inset,
-    0 -4px 10px rgba(0, 0, 0, 0.08) inset,
-    1px 0 0 rgba(255, 255, 255, 0.28),
-    -1px 0 1px rgba(0, 0, 0, 0.05),
-    0 24px 50px rgba(0, 0, 0, 0.14),
-    0 10px 24px rgba(0, 0, 0, 0.1);
-  border: none;
+  background: var(--pc-bg, #fff);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.12);
+  border: 0.5px solid rgba(0, 0, 0, 0.12);
   text-align: left;
   opacity: 0;
   visibility: hidden;
@@ -7893,6 +7901,155 @@ html:has(.project-clad-page--projects) body {
   margin-top: 0.25rem;
 }
 
+/* Add-member popover + order edit: flat fields (override page caesura inset) */
+#projectclad-add-member-utility-popover input[data-projectclad-member-typeahead-input],
+.project-clad-add-member-popover input[data-projectclad-member-typeahead-input],
+.project-clad-flat-input,
+.project-clad-page .project-clad-add-member-popover .project-clad-member-typeahead input[type="email"],
+.project-clad-page .project-clad-add-member-popover .project-clad-member-typeahead input[type="text"],
+.project-clad-page .project-clad-add-member-popover .project-clad-neu-finder-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 38px;
+  padding: 0.45rem 0.65rem !important;
+  font-family: "Inter", system-ui, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  text-shadow: none !important;
+  color: #1a1f2c !important;
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  background-color: #fff !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.project-clad-page .project-clad-add-member-popover .project-clad-neu-finder-input {
+  padding: 0;
+}
+
+#projectclad-add-member-utility-popover input[data-projectclad-member-typeahead-input]:focus,
+#projectclad-add-member-utility-popover input[data-projectclad-member-typeahead-input]:focus-visible,
+.project-clad-add-member-popover input[data-projectclad-member-typeahead-input]:focus,
+.project-clad-add-member-popover input[data-projectclad-member-typeahead-input]:focus-visible,
+.project-clad-flat-input:focus,
+.project-clad-flat-input:focus-visible,
+.project-clad-page .project-clad-add-member-popover .project-clad-member-typeahead input:focus,
+.project-clad-page .project-clad-add-member-popover .project-clad-member-typeahead input:focus-visible,
+.project-clad-page .project-clad-add-member-popover .project-clad-neu-finder-input:focus-within {
+  outline: none !important;
+  border-color: rgba(180, 35, 35, 0.45) !important;
+  box-shadow: 0 0 0 2px rgba(180, 35, 35, 0.12) !important;
+}
+
+#projectclad-add-member-utility-popover input[data-projectclad-member-typeahead-input]::placeholder,
+.project-clad-add-member-popover input[data-projectclad-member-typeahead-input]::placeholder,
+.project-clad-flat-input::placeholder,
+.project-clad-page .project-clad-add-member-popover .project-clad-member-typeahead input::placeholder,
+.project-clad-page--projects.project-clad-page--detail
+  .project-clad-add-member-popover
+  .project-clad-neu-finder-input__field::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+.project-clad-page .project-clad-add-member-popover .project-clad-member-typeahead__list {
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+}
+
+.project-clad-page .project-clad-add-member-popover .project-clad-member-role-select:not([open]) {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.project-clad-page
+  .project-clad-add-member-popover
+  .project-clad-member-role-select:not([open])
+  > .project-clad-member-role-select__trigger {
+  min-height: 38px !important;
+  padding: 0 0.65rem !important;
+  font-family: "Inter", system-ui, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  background-color: #fff !important;
+  box-shadow: none !important;
+  color: #1a1f2c !important;
+  text-shadow: none !important;
+}
+
+.project-clad-page
+  .project-clad-add-member-popover
+  .project-clad-member-role-select:not([open]):hover
+  > .project-clad-member-role-select__trigger {
+  box-shadow: none !important;
+  border-color: rgba(15, 23, 42, 0.22) !important;
+  background: #f8fafc !important;
+}
+
+.project-clad-page .project-clad-add-member-popover .project-clad-member-role-select[open] {
+  border: 1px solid rgba(180, 35, 35, 0.45) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  box-shadow: 0 0 0 2px rgba(180, 35, 35, 0.12) !important;
+}
+
+.project-clad-page
+  .project-clad-add-member-popover
+  .project-clad-member-role-select__trigger:focus-visible {
+  outline: none !important;
+  border-color: rgba(180, 35, 35, 0.45) !important;
+  box-shadow: 0 0 0 2px rgba(180, 35, 35, 0.12) !important;
+}
+
+.project-clad-page .project-clad-add-member-popover .project-clad-member-role-select__panel {
+  background: #fff;
+}
+
+.project-clad-modal-backdrop[data-projectclad-order-delivery-modal]
+  input.project-clad-preferred-delivery-input,
+.project-clad-modal-backdrop[data-projectclad-order-delivery-modal]
+  select.project-clad-preferred-delivery-input {
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  background-color: #fff !important;
+  box-shadow: none !important;
+  font-family: "Inter", system-ui, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  text-shadow: none !important;
+  color: #1a1f2c !important;
+}
+
+.project-clad-modal-backdrop[data-projectclad-order-delivery-modal]
+  input.project-clad-preferred-delivery-input:focus,
+.project-clad-modal-backdrop[data-projectclad-order-delivery-modal]
+  input.project-clad-preferred-delivery-input:focus-visible,
+.project-clad-modal-backdrop[data-projectclad-order-delivery-modal]
+  select.project-clad-preferred-delivery-input:focus,
+.project-clad-modal-backdrop[data-projectclad-order-delivery-modal]
+  select.project-clad-preferred-delivery-input:focus-visible {
+  outline: none !important;
+  border-color: rgba(180, 35, 35, 0.45) !important;
+  box-shadow: 0 0 0 2px rgba(180, 35, 35, 0.12) !important;
+}
+
 .project-clad-nav .link {
   font-weight: 700;
   font-size: calc(0.95rem * var(--pc-text-scale));
@@ -8071,11 +8228,53 @@ details.project-clad-edit-mode .project-clad-job-name-field {
   line-height: 1.35 !important;
   letter-spacing: 0.03em !important;
   color: var(--pc-btn-neu-fg) !important;
-  border-radius: var(--pc-neu-radius) !important;
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  background-color: #fff !important;
+  box-shadow: none !important;
   -webkit-appearance: none;
   appearance: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-edit-mode
+  .project-clad-order-summary-padded
+  input[type="text"].project-clad-job-edit-input:focus,
+.project-clad-page--projects.project-clad-page--detail
+  details.project-clad-edit-mode
+  .project-clad-order-summary-padded
+  input[type="text"].project-clad-job-edit-input:focus-visible {
+  outline: none !important;
+  border-color: rgba(180, 35, 35, 0.45) !important;
+  box-shadow: 0 0 0 2px rgba(180, 35, 35, 0.12) !important;
+}
+
+#project-clad-orders-font-scope
+  input[type="text"].project-clad-job-edit-input,
+#project-clad-orders-font-scope input[data-projectclad-qty-input],
+#project-clad-orders-font-scope input[data-projectclad-unit-price-input] {
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  background-color: #fff !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+#project-clad-orders-font-scope
+  input[type="text"].project-clad-job-edit-input:focus,
+#project-clad-orders-font-scope
+  input[type="text"].project-clad-job-edit-input:focus-visible,
+#project-clad-orders-font-scope input[data-projectclad-qty-input]:focus,
+#project-clad-orders-font-scope input[data-projectclad-qty-input]:focus-visible,
+#project-clad-orders-font-scope input[data-projectclad-unit-price-input]:focus,
+#project-clad-orders-font-scope input[data-projectclad-unit-price-input]:focus-visible {
+  outline: none !important;
+  border-color: rgba(180, 35, 35, 0.45) !important;
+  box-shadow: 0 0 0 2px rgba(180, 35, 35, 0.12) !important;
 }
 
 .project-clad-page--projects.project-clad-page--detail
@@ -9025,13 +9224,11 @@ details.project-clad-edit-mode
 
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__cell-details {
   grid-area: details;
-  height: 100%;
   min-height: 0;
 }
 
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__cell-delivery {
   grid-area: delivery;
-  height: 100%;
   min-height: 0;
 }
 
@@ -9039,7 +9236,8 @@ details.project-clad-edit-mode
   .project-clad-edit-project-modal__cell-details.project-clad-edit-modal__section,
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal]
   .project-clad-edit-project-modal__cell-delivery.project-clad-edit-modal__section {
-  height: 100%;
+  height: auto;
+  align-self: start;
   box-sizing: border-box;
 }
 
@@ -9180,15 +9378,54 @@ details.project-clad-edit-mode
   border-color: rgba(15, 23, 42, 0.22) !important;
 }
 
-.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__cell-details label,
-.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__cell-delivery label,
-.project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__cell-new-order label {
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal]
+  .project-clad-edit-project-modal__cell-details
+  label:not(.project-clad-delivery-mode__option),
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal]
+  .project-clad-edit-project-modal__cell-delivery
+  label:not(.project-clad-delivery-mode__option),
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal]
+  .project-clad-edit-project-modal__cell-new-order
+  label:not(.project-clad-delivery-mode__option) {
   font-family: "Inter", system-ui, sans-serif;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #64748b;
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal]
+  .project-clad-delivery-mode-radios {
+  margin: 0;
+  gap: 0.45rem;
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal]
+  .project-clad-delivery-mode__label {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  color: #1a1f2c;
+}
+
+.project-clad-modal-backdrop[data-projectclad-edit-project-modal]
+  .project-clad-inline-form
+  .project-clad-delivery-mode__option
+  input[type="radio"] {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 0 !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  opacity: 0 !important;
 }
 
 .project-clad-modal-backdrop[data-projectclad-edit-project-modal] .project-clad-edit-project-modal__cell-details .project-clad-pricing-password-input,
@@ -12022,7 +12259,11 @@ input[data-projectclad-unit-price-input] {
   box-shadow: none;
 }
 
-.project-clad-order-action:disabled,
+.project-clad-order-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .project-clad-order-action[aria-busy="true"] {
   opacity: 0.55;
   cursor: progress;
@@ -12066,10 +12307,262 @@ input[data-projectclad-unit-price-input] {
   }
 }
 
+.project-clad-order-actions-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.project-clad-action-row-secondary {
+  width: 100%;
+}
+
+.project-clad-action-row-secondary .project-clad-order-action {
+  width: 100%;
+  justify-content: center;
+}
+
+.project-clad-delivery-mode-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0;
+  border: 0;
+}
+
+.project-clad-delivery-address-panel[hidden],
+[data-projectclad-edit-project-delivery-address][hidden],
+[data-projectclad-new-order-delivery-address][hidden],
+[data-projectclad-order-delivery-address-wrap][hidden],
+[data-projectclad-order-delivery-preferred-schedule][hidden],
+[data-projectclad-delivery-recurring-panel][hidden],
+[data-projectclad-delivery-recurring-schedule][hidden],
+.project-clad-delivery-plan__panel[hidden] {
+  display: none !important;
+}
+
+.project-clad-order-delivery-modal__fee {
+  margin: 0.35rem 0 0.75rem;
+  font-size: calc(0.85rem * var(--pc-text-scale, 1));
+}
+
+.project-clad-delivery-fee-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  text-align: right;
+}
+
+[data-projectclad-delivery-fee-anchor-recurring],
+[data-projectclad-delivery-fee-anchor-single] {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.35rem;
+}
+
+[data-projectclad-delivery-fee-anchor-single] {
+  justify-content: flex-start;
+  margin-top: 0.65rem;
+}
+
+.project-clad-delivery-fee-preview__rate,
+.project-clad-delivery-fee-preview__total {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.project-clad-delivery-fee-preview__total {
+  display: block;
+  font-size: calc(0.95rem * var(--pc-text-scale, 1));
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+}
+
+.project-clad-delivery-fee-preview__total[hidden] {
+  display: none !important;
+}
+
+.project-clad-order-delivery-modal__schedule {
+  margin-top: 0.5rem;
+}
+
+.project-clad-modal-backdrop[data-projectclad-order-delivery-modal]
+  .project-clad-order-delivery-modal.project-clad-modal {
+  display: flex;
+  flex-direction: column;
+  max-width: min(42rem, 96vw);
+  max-height: min(90vh, 52rem);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.project-clad-modal-backdrop[data-projectclad-order-delivery-modal]
+  .project-clad-order-delivery-modal.project-clad-reject-modal {
+  overflow: hidden;
+}
+
+.project-clad-order-delivery-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.42) transparent;
+}
+
+.project-clad-order-delivery-modal__body::-webkit-scrollbar {
+  width: 7px;
+}
+
+.project-clad-order-delivery-modal__body::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 0.45rem 0;
+}
+
+.project-clad-order-delivery-modal__body::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.38);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.project-clad-order-delivery-modal__body::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.55);
+}
+
+.project-clad-delivery-modal-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.project-clad-delivery-modal-tabs__btn {
+  font-family: inherit;
+  font-size: calc(0.82rem * var(--pc-text-scale, 1));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+}
+
+.project-clad-delivery-modal-tabs__btn.is-active {
+  background: rgba(196, 0, 0, 0.1);
+  border-color: rgba(196, 0, 0, 0.35);
+  color: var(--color-1, #c40000);
+}
+
+.project-clad-delivery-modal-tab-panel[hidden] {
+  display: none !important;
+}
+
+.project-clad-delivery-fulfillment-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 100%;
+}
+
+.project-clad-delivery-fulfillment-progress {
+  margin: 0;
+  font-size: calc(0.9rem * var(--pc-text-scale, 1));
+  font-weight: 600;
+}
+
+.project-clad-delivery-drop-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.project-clad-delivery-drop-chip {
+  font-family: inherit;
+  font-size: calc(0.78rem * var(--pc-text-scale, 1));
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  color: inherit;
+}
+
+.project-clad-delivery-drop-chip.is-active {
+  border-color: var(--color-1, #c40000);
+  box-shadow: 0 0 0 1px rgba(196, 0, 0, 0.25);
+}
+
+.project-clad-delivery-drop-chip.is-complete {
+  opacity: 0.72;
+}
+
+.project-clad-delivery-drop-chip.is-upcoming:not(.is-active) {
+  opacity: 0.55;
+}
+
+.project-clad-delivery-drop-card {
+  padding: 0.75rem 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.project-clad-delivery-drop-collapsible {
+  margin-top: 0.5rem;
+  font-size: calc(0.85rem * var(--pc-text-scale, 1));
+}
+
+.project-clad-delivery-drop-collapsible summary {
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.8;
+}
+
+.project-clad-delivery-drop-collapsible__list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.project-clad-delivery-docs-table {
+  font-size: calc(0.88rem * var(--pc-text-scale, 1));
+  width: 100%;
+}
+
+.project-clad-delivery-docs-table__links a {
+  white-space: nowrap;
+}
+
+.project-clad-delivery-drop-status {
+  font-size: calc(0.75rem * var(--pc-text-scale, 1));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.project-clad-delivery-drop-status--complete {
+  opacity: 0.75;
+}
+
+.project-clad-delivery-drop-status--active {
+  color: var(--color-1, #c40000);
+  font-weight: 600;
+}
+
+.project-clad-delivery-plan-locked-note {
+  margin: 0.5rem 0 0;
+}
+
 /* Print: hide the entire action row — orders exported as PDF shouldn't
    carry interactive CTAs. */
 @media print {
-  .project-clad-action-row {
+  .project-clad-action-row,
+  .project-clad-action-row-secondary {
     display: none !important;
   }
 }
@@ -12190,10 +12683,254 @@ input[data-projectclad-unit-price-input] {
   white-space: nowrap;
 }
 
+.project-clad-delivery-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.project-clad-order-delivery-modal .project-clad-delivery-plan__heading {
+  margin: 0;
+  font-family: "Inter", system-ui, sans-serif !important;
+  font-size: 1.125rem !important;
+  font-weight: 700 !important;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: #141922;
+  text-transform: none;
+}
+
+.project-clad-delivery-plan-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.project-clad-delivery-plan-mode__option,
+.project-clad-delivery-mode__option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.45);
+  font-size: calc(0.9rem * var(--pc-text-scale, 1));
+  line-height: 1.3;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.project-clad-delivery-plan-mode__option::before,
+.project-clad-delivery-mode__option::before {
+  content: "";
+  flex-shrink: 0;
+  width: 1.125rem;
+  height: 1.125rem;
+  box-sizing: border-box;
+  border: 2px solid rgba(0, 0, 0, 0.22);
+  border-radius: 50%;
+  background: #fff;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.project-clad-delivery-plan-mode__option:has(input:checked),
+.project-clad-delivery-mode__option:has(input:checked) {
+  border-color: rgba(196, 0, 0, 0.45);
+  background: rgba(196, 0, 0, 0.06);
+  box-shadow: 0 0 0 1px rgba(196, 0, 0, 0.12);
+}
+
+.project-clad-delivery-plan-mode__option:has(input:checked)::before,
+.project-clad-delivery-mode__option:has(input:checked)::before {
+  border-color: var(--color-1, #c40000);
+  background: radial-gradient(
+    circle,
+    var(--color-1, #c40000) 42%,
+    #fff 44%
+  );
+}
+
+.project-clad-delivery-plan-mode__option:has(input:focus-visible)::before,
+.project-clad-delivery-mode__option:has(input:focus-visible)::before {
+  outline: 2px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 2px;
+}
+
+/* Beat .project-clad-inline-form input { min-width: 180px } on native radios */
+.project-clad-inline-form
+  .project-clad-delivery-plan-mode__option
+  input[type="radio"],
+.project-clad-inline-form .project-clad-delivery-mode__option input[type="radio"],
+.project-clad-order-delivery-modal
+  .project-clad-delivery-plan-mode__option
+  input[type="radio"],
+.project-clad-order-delivery-modal .project-clad-delivery-mode__option input[type="radio"] {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 0 !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+  opacity: 0 !important;
+}
+
+.project-clad-delivery-plan-mode__label,
+.project-clad-delivery-mode__label {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.project-clad-delivery-plan__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.project-clad-delivery-plan__section + .project-clad-delivery-plan__section {
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.project-clad-delivery-plan__section-title {
+  margin: 0 0 0.35rem;
+  font-size: calc(0.78rem * var(--pc-text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pc-muted, #64748b);
+}
+
+.project-clad-delivery-batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.project-clad-delivery-batch-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.35rem 0;
+  cursor: pointer;
+}
+
+.project-clad-delivery-batch-row__label {
+  min-width: 0;
+  font-size: calc(0.88rem * var(--pc-text-scale, 1));
+  line-height: 1.35;
+}
+
+.project-clad-delivery-batch-row__field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  min-width: 5.5rem;
+}
+
+.project-clad-delivery-batch-row__hint {
+  font-size: calc(0.78rem * var(--pc-text-scale, 1));
+  color: var(--pc-muted, #64748b);
+  white-space: nowrap;
+}
+
+.project-clad-delivery-batch-row__qty {
+  width: 4.5rem;
+  min-width: 4.5rem;
+}
+
+.project-clad-delivery-recurring-schedule__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.project-clad-delivery-recurring-schedule__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: calc(0.85rem * var(--pc-text-scale, 1));
+  color: inherit;
+}
+
+.project-clad-delivery-recurring-schedule__field
+  .project-clad-preferred-delivery-input {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.project-clad-delivery-plan__preview {
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  font-size: calc(0.84rem * var(--pc-text-scale, 1));
+  line-height: 1.45;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.project-clad-order-delivery-modal .project-clad-preferred-delivery-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.55rem;
+}
+
+@media (max-width: 32rem) {
+  .project-clad-delivery-recurring-schedule__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-clad-delivery-batch-row {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+
+  .project-clad-delivery-batch-row__field {
+    align-items: flex-start;
+  }
+}
+
 .project-clad-page--projects.project-clad-page--detail
   details.project-clad-order-row
   .project-clad-order-summary-lifecycle-cluster
   .project-clad-order-lifecycle-chip--complete,
+.project-clad-order-lifecycle-chip--partial {
+  color: rgba(180, 120, 20, 0.95) !important;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 6px rgba(220, 160, 40, 0.22);
+}
+
+.project-clad-order-lifecycle-chip--partial {
+  color: rgba(180, 120, 20, 0.95) !important;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 6px rgba(220, 160, 40, 0.22);
+}
+
 .project-clad-order-lifecycle-chip--complete {
   color: rgba(28, 140, 52, 0.95) !important;
   text-shadow:

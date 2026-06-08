@@ -68,9 +68,11 @@ import {
   sendProjectStatusNotificationEmail,
 } from "../utils/orderCreatedEmail.server";
 import { notifyOrderNowStaff } from "../utils/orderNowStaffPush.server";
+import { notifyMissionControl } from "../utils/missionControl.server";
 import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";
 import { createBackupDraftOrderForJob } from "../utils/shopifyDraftOrder.server";
 import {
+  addDaysToCalendarYmd,
   formatOrderDeliveryFootline,
   isKnownOttawaHourWindow,
   isOttawaDeliveryWindowValidForDate,
@@ -92,6 +94,44 @@ import {
 import { resolveColourCatalogueLine } from "../utils/colourCatalogue";
 import { duplicateUploadPartMirrorsForCopiedJobItem } from "../utils/uploadPartMirror.server";
 import { upsertProjectShareInvite } from "../utils/projectShareInvite.server";
+import {
+  JobDeliveryAddressFields,
+  JobDeliveryModeRadios,
+  ProjectReceiveModeRadios,
+} from "../components/JobDeliveryFields";
+import {
+  deliveryFeeForJob,
+  hasCompleteShipToDetails,
+  jobDeliveryPrismaData,
+  jobIsDeliveryForDisplay,
+  normalizeJobDeliveryMode,
+  resolveJobDelivery,
+  isOrderDeliveryPlanLocked,
+  isJobDeliverySchemaError,
+  type JobDeliveryMode,
+} from "../utils/jobDelivery";
+import { getShopDeliveryFee } from "../utils/shopDeliveryFee.server";
+import {
+  computeDeliveredPercent,
+  ensureJobDeliveryPhases,
+  mapPhasesToViews,
+  parsePhasesJson,
+  recordPhaseDeliveredQuantities,
+  spawnNextFulfillmentPhaseIfNeeded,
+  ensureOpenFulfillmentPhase,
+  parseDeliveryPlanReference,
+  serializeDeliveryPlanReference,
+  validatePlannedQuantities,
+  totalDeliveryFeesFromPhases,
+  isJobFullyDelivered,
+  buildPhasesFromAtATime,
+  parseAtATimeDeliveryPayload,
+  inferBatchByItemFromPhases,
+  normalizeDeliveryPlanMode,
+  type DeliveryPhaseView,
+  type DeliveryPlanMode,
+  type PhaseSaveInput,
+} from "../utils/jobDeliveryPhases.server";
 
 declare global {
   interface Window {
@@ -315,18 +355,19 @@ const PC_SEND_ICON = (
   </svg>
 );
 
-const PC_PHOTO_ICON = (
-  <svg {...PC_ICON_SVG_PROPS}>
-    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-    <circle cx="8.5" cy="8.5" r="1.5" />
-    <polyline points="21 15 16 10 5 21" />
-  </svg>
-);
-
 const PC_LOCK_ICON = (
   <svg {...PC_ICON_SVG_PROPS}>
     <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+
+const PC_DELIVERY_OPTIONS_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <path d="M3 7h11v8H3z" />
+    <path d="M14 10h4l3 3v2h-7V10z" />
+    <circle cx="7" cy="17" r="2" />
+    <circle cx="17" cy="17" r="2" />
   </svg>
 );
 
@@ -1223,8 +1264,18 @@ type JobView = {
   scheduledDeliveryDate: string | null;
   scheduledDeliveryWindow: string | null;
   fulfillmentMethod: string | null;
+  deliveryMode: JobDeliveryMode;
+  shipAddress1: string | null;
+  shipCity: string | null;
+  shipProvince: string | null;
+  shipPostal: string | null;
+  shipCountry: string | null;
   hasFulfillmentPhoto: boolean;
   fulfillmentPhotoUrl: string | null;
+  deliveryPhases: DeliveryPhaseView[];
+  deliveredPercent: number;
+  deliveryPlanMode: string | null;
+  deliveryBatchByItemJson: string | null;
 };
 
 /**
@@ -1452,29 +1503,6 @@ type ProjectView = {
 
 const PRICING_COOKIE = "projectclad_pricing=1";
 
-const STOREFRONT_STATUS_VALUES: readonly ProjectStorefrontStatus[] = [
-  "active",
-  "complete",
-  "inactive",
-];
-
-/** Per-order delivery line in order footers (display; not taxed). */
-const PROJECT_DELIVERY_FEE = 15;
-
-function hasCompleteShipToDetails(project: {
-  shipAddress1?: string | null;
-  shipCity?: string | null;
-  shipProvince?: string | null;
-  shipPostal?: string | null;
-}) {
-  return Boolean(
-    project.shipAddress1?.trim() &&
-      project.shipCity?.trim() &&
-      project.shipProvince?.trim() &&
-      project.shipPostal?.trim(),
-  );
-}
-
 const formatPrice = (value: string | number) => {
   const num = Number(value || 0);
   if (Number.isNaN(num)) return "$0.00";
@@ -1624,7 +1652,6 @@ function OrderFinancePanel({
     ? trimmedAddress || "Address not provided yet"
     : pickupValue;
   const addressEmpty = showAddressRow && !trimmedAddress;
-  const isFreeDelivery = jobDeliveryFeeAmount <= 0;
   const poRaw = (poFooterDisplay ?? "").trim();
   const hasPo = poRaw.length > 0 && poRaw !== "—";
   const provinceLabel = shipProvince?.trim()
@@ -1663,28 +1690,6 @@ function OrderFinancePanel({
                 {deliveryValue}
               </span>
             </span>
-            {/*
-             * Fee badge (Free / $X.XX) only renders on the DELIVERY row.
-             * For in-store pickup the cost is always $0 and rendering a
-             * "FREE" chip next to "In Store Pickup" reads as redundant
-             * noise — pickup is obviously free, so we drop the badge
-             * and let the delivery method text stand on its own.
-             */}
-            {showAddressRow ? (
-              <span
-                className={
-                  isFreeDelivery
-                    ? "project-clad-order-finance__badge"
-                    : "project-clad-order-finance__badge project-clad-order-finance__badge--neutral"
-                }
-              >
-                {isFreeDelivery
-                  ? "Free"
-                  : pricingUnlocked
-                    ? formatPrice(jobDeliveryFeeAmount.toFixed(2))
-                    : "Fee"}
-              </span>
-            ) : null}
           </div>
 
           <div className="project-clad-order-finance__row">
@@ -2097,6 +2102,381 @@ function PreferredDeliveryScheduleFields({
         </select>
         </div>
       </div>
+    </div>
+  );
+}
+
+function findActiveDeliveryPhaseId(phases: DeliveryPhaseView[]): string {
+  return phases.find((p) => !p.hasPhoto)?.id ?? "";
+}
+
+function deliveredQtyForItem(
+  phases: DeliveryPhaseView[],
+  itemId: string,
+  excludePhaseId?: string,
+): number {
+  let sum = 0;
+  for (const phase of phases) {
+    if (excludePhaseId && phase.id === excludePhaseId) continue;
+    for (const line of phase.lines) {
+      if (line.jobItemId === itemId) {
+        sum += Math.max(0, line.quantityDelivered);
+      }
+    }
+  }
+  return sum;
+}
+
+function StaffOrderLifecycleForm({
+  job,
+  projectId,
+  idPrefix,
+}: {
+  job: JobView;
+  projectId: string;
+  idPrefix: string;
+}) {
+  return (
+    <Form
+      method="post"
+      action={`/apps/project-clad/project?id=${encodeURIComponent(projectId)}`}
+      className="project-clad-staff-fulfillment-status-form"
+    >
+      <input type="hidden" name="intent" value="staff-set-order-lifecycle" />
+      <input type="hidden" name="jobId" value={job.id} />
+      <div className="project-clad-staff-fulfillment-status-row">
+        <label
+          className="project-clad-staff-fulfillment__label--tile"
+          htmlFor={`project-clad-staff-status-${idPrefix}`}
+        >
+          Order status
+        </label>
+        <select
+          id={`project-clad-staff-status-${idPrefix}`}
+          name="lifecycleStatus"
+          defaultValue={job.orderLifecycleStatus}
+          className="project-clad-staff-fulfillment__status"
+        >
+          <option value="draft">New</option>
+          <option value="pending_review">Review</option>
+          <option value="ready_to_order">Order now</option>
+          <option value="ordered">Ordered</option>
+          <option value="delivered" disabled={!job.hasFulfillmentPhoto}>
+            {job.hasFulfillmentPhoto
+              ? "Delivered"
+              : "Delivered (photo required)"}
+          </option>
+          <option value="paid">Order complete</option>
+        </select>
+        <button type="submit" className="project-clad-button">
+          Apply
+        </button>
+      </div>
+    </Form>
+  );
+}
+
+function OrderDeliveryDocumentsPanel({
+  job,
+  projectId,
+}: {
+  job: JobView;
+  projectId: string;
+}) {
+  const confirmedPhases = job.deliveryPhases.filter((p) => p.hasPhoto);
+  if (confirmedPhases.length === 0) {
+    return (
+      <p className="project-clad-muted" style={{ margin: 0 }}>
+        No confirmed deliveries yet.
+      </p>
+    );
+  }
+  return (
+    <table className="project-clad-table project-clad-delivery-docs-table">
+      <thead>
+        <tr>
+          <th>Delivery</th>
+          <th>Confirmed</th>
+          <th>Photo</th>
+          <th>Documents</th>
+        </tr>
+      </thead>
+      <tbody>
+        {confirmedPhases.map((p) => {
+          const confirmedDate = p.deliveredAt
+            ? p.deliveredAt.slice(0, 10)
+            : "—";
+          return (
+            <tr key={p.id}>
+              <td>Delivery {p.sequence}</td>
+              <td>{confirmedDate}</td>
+              <td className="project-clad-delivery-docs-table__links">
+                {p.photoUrl ? (
+                  <a
+                    href={p.photoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-projectclad-view-delivery-photo=""
+                    data-job-id={job.id}
+                    data-phase-id={p.id}
+                  >
+                    View photo
+                  </a>
+                ) : (
+                  <span className="project-clad-muted">—</span>
+                )}
+              </td>
+              <td className="project-clad-delivery-docs-table__links">
+                <a
+                  href={`/apps/project-clad/phase-document?id=${encodeURIComponent(projectId)}&jobId=${encodeURIComponent(job.id)}&phaseId=${encodeURIComponent(p.id)}&mode=packing`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Packing slip
+                </a>
+                <span aria-hidden="true"> · </span>
+                <a
+                  href={`/apps/project-clad/phase-document?id=${encodeURIComponent(projectId)}&jobId=${encodeURIComponent(job.id)}&phaseId=${encodeURIComponent(p.id)}&mode=invoice`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Invoice
+                </a>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+function StaffPhaseDeliveryPanel({
+  job,
+  projectId,
+}: {
+  job: JobView;
+  projectId: string;
+}) {
+  const phases = job.deliveryPhases;
+  const openPhase =
+    phases.find((p) => p.id === findActiveDeliveryPhaseId(phases)) ?? null;
+  const actionUrl = `/apps/project-clad/project?id=${encodeURIComponent(projectId)}`;
+
+  if (phases.length === 0) return null;
+
+  const lineByItem = new Map(
+    (openPhase?.lines ?? []).map((l) => [l.jobItemId, l]),
+  );
+  const confirmedCount = phases.filter((p) => p.hasPhoto).length;
+
+  const canSubmitFulfillment = Boolean(openPhase && !openPhase.hasPhoto);
+
+  const confirmDeliveryWithPhoto =
+    job.orderLifecycleStatus === "ordered" && canSubmitFulfillment;
+
+  const saveDeliveredQty = (form: HTMLFormElement) => {
+    const lines = job.items.map((item) => {
+      const inp = form.querySelector(`input[name="qty_${item.id}"]`);
+      const qty =
+        inp instanceof HTMLInputElement
+          ? Math.floor(Number(inp.value) || 0)
+          : 0;
+      return { jobItemId: item.id, quantityDelivered: qty };
+    });
+    const fd = new FormData();
+    fd.set("intent", "record-phase-delivery");
+    fd.set("jobId", job.id);
+    fd.set("phaseId", openPhase?.id ?? "");
+    fd.set("deliveredLinesJson", JSON.stringify(lines));
+    const url = new URL(window.location.href);
+    url.searchParams.set("pcJson", "1");
+    fetch(url.pathname + url.search, {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    })
+      .then((r) => r.json())
+      .then((ack) => {
+        if (ack?.error) {
+          window.alert(String(ack.error));
+          return;
+        }
+        url.searchParams.delete("pcJson");
+        window.location.replace(url.pathname + url.search);
+      })
+      .catch(() => {
+        window.alert("Could not save delivered quantities.");
+      });
+  };
+
+  return (
+    <div className="project-clad-staff-phase-delivery">
+      <p className="project-clad-delivery-fulfillment-progress" role="status">
+        {job.deliveredPercent}% delivered
+        {confirmedCount > 0
+          ? ` · ${confirmedCount} deliver${confirmedCount === 1 ? "y" : "ies"} confirmed`
+          : null}
+      </p>
+      <div className="project-clad-delivery-drop-card">
+        <p className="project-clad-staff-fulfillment__label--tile">
+          Mark what arrived
+        </p>
+        {canSubmitFulfillment ? (
+          <form
+            method="post"
+            action={actionUrl}
+            encType={confirmDeliveryWithPhoto ? "multipart/form-data" : undefined}
+            className={[
+              "project-clad-stack",
+              confirmDeliveryWithPhoto
+                ? "project-clad-staff-fulfillment-photo-form"
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            <input
+              type="hidden"
+              name="intent"
+              value={
+                confirmDeliveryWithPhoto
+                  ? "upload-phase-fulfillment-photo"
+                  : "record-phase-delivery"
+              }
+            />
+            <input type="hidden" name="jobId" value={job.id} />
+            <input type="hidden" name="phaseId" value={openPhase?.id ?? ""} />
+            <table className="project-clad-table" style={{ fontSize: "0.9rem" }}>
+              <thead>
+                <tr>
+                  <th>Line</th>
+                  <th>Remaining</th>
+                  <th>Qty this delivery</th>
+                </tr>
+              </thead>
+              <tbody>
+                {job.items.map((item) => {
+                  const phaseLine = lineByItem.get(item.id);
+                  const alreadyElsewhere = deliveredQtyForItem(
+                    phases,
+                    item.id,
+                    openPhase?.id,
+                  );
+                  const remaining = Math.max(0, item.quantity - alreadyElsewhere);
+                  const maxQty = remaining;
+                  return (
+                    <tr key={item.id}>
+                      <td>{item.displayName}</td>
+                      <td>{remaining}</td>
+                      <td>
+                        {maxQty > 0 ? (
+                          <input
+                            type="number"
+                            name={`qty_${item.id}`}
+                            min={0}
+                            max={maxQty}
+                            step={1}
+                            defaultValue={
+                              phaseLine?.quantityDelivered &&
+                              phaseLine.quantityDelivered > 0
+                                ? phaseLine.quantityDelivered
+                                : 0
+                            }
+                            className="project-clad-preferred-delivery-input"
+                            style={{ width: "4.5rem" }}
+                            aria-label={`Qty delivered this trip for ${item.displayName}`}
+                          />
+                        ) : (
+                          <span className="project-clad-muted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {confirmDeliveryWithPhoto ? (
+              <>
+                <p className="project-clad-muted" style={{ marginBottom: 6 }}>
+                  Upload a delivery photo to confirm this delivery (sends
+                  invoice email).
+                </p>
+                <input
+                  type="file"
+                  name="photo"
+                  accept="image/*"
+                  required
+                  className="project-clad-staff-fulfillment__file-input"
+                />
+              </>
+            ) : null}
+            <button
+              type="submit"
+              className="project-clad-button"
+              onClick={
+                confirmDeliveryWithPhoto
+                  ? undefined
+                  : (e) => {
+                      e.preventDefault();
+                      const form = e.currentTarget.closest("form");
+                      if (form instanceof HTMLFormElement) saveDeliveredQty(form);
+                    }
+              }
+            >
+              {confirmDeliveryWithPhoto
+                ? "Confirm delivery"
+                : "Save delivered qty"}
+            </button>
+          </form>
+        ) : (
+          <p className="project-clad-muted" style={{ margin: 0 }}>
+            {job.deliveredPercent >= 100
+              ? "All items have been delivered."
+              : "No open delivery to record. Reload the page and try again."}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OrderDeliveryFulfillmentSection({
+  job,
+  projectId,
+  viewerIsAdmin,
+}: {
+  job: JobView;
+  projectId: string;
+  viewerIsAdmin: boolean;
+}) {
+  return (
+    <div className="project-clad-delivery-fulfillment-section">
+      <StaffOrderLifecycleForm
+        job={job}
+        projectId={projectId}
+        idPrefix={`delivery-modal-${job.id}`}
+      />
+      {viewerIsAdmin && job.deliveryPhases.length > 0 ? (
+        <StaffPhaseDeliveryPanel job={job} projectId={projectId} />
+      ) : null}
+      {job.orderLifecycleStatus === "ordered" &&
+      !viewerIsAdmin &&
+      job.deliveryPhases.length <= 1 ? (
+        <StaffFulfillmentPhotoUpload job={job} projectId={projectId} />
+      ) : null}
+      {job.orderLifecycleStatus === "delivered" ? (
+        <Form
+          method="post"
+          action={`/apps/project-clad/project?id=${projectId}`}
+        >
+          <input type="hidden" name="intent" value="staff-mark-order-paid" />
+          <input type="hidden" name="jobId" value={job.id} />
+          <button type="submit" className="project-clad-button">
+            Mark paid
+          </button>
+        </Form>
+      ) : null}
     </div>
   );
 }
@@ -2626,7 +3006,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     include: {
       jobs: {
         orderBy: { sortOrder: "asc" },
-        include: { items: { orderBy: { sortOrder: "asc" } }, orderLink: true },
+        include: {
+          items: { orderBy: { sortOrder: "asc" } },
+          orderLink: true,
+          deliveryPhases: {
+            orderBy: { sequence: "asc" },
+            include: { lines: true },
+          },
+        },
       },
       members: true,
     },
@@ -2634,6 +3021,34 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (!project) {
     throw projectMissingHtmlResponse(request, shop, projectId);
+  }
+
+  const shopDeliveryFee = await getShopDeliveryFee(shop);
+  const projectDeliveryCtxForEnsure = {
+    receiveMode: project.receiveMode,
+    shipAddress1: project.shipAddress1,
+    shipCity: project.shipCity,
+    shipProvince: project.shipProvince,
+    shipPostal: project.shipPostal,
+    shipCountry: project.shipCountry,
+  };
+  for (const job of project.jobs) {
+    const resolved = resolveJobDelivery(job, projectDeliveryCtxForEnsure, shopDeliveryFee);
+    await ensureJobDeliveryPhases(job, shopDeliveryFee, resolved);
+    if (resolved.method === "delivery") {
+      await ensureOpenFulfillmentPhase(job.id);
+    }
+  }
+  const phaseRows = await prisma.jobDeliveryPhase.findMany({
+    where: { jobId: { in: project.jobs.map((j) => j.id) } },
+    include: { lines: true },
+    orderBy: [{ jobId: "asc" }, { sequence: "asc" }],
+  });
+  const phasesByJobId = new Map<string, typeof phaseRows>();
+  for (const p of phaseRows) {
+    const list = phasesByJobId.get(p.jobId) ?? [];
+    list.push(p);
+    phasesByJobId.set(p.jobId, list);
   }
 
   const viewerNumericId = normalizeStorefrontCustomerId(customerId);
@@ -2830,6 +3245,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         const price = Number(item.priceSnapshot || 0);
         return sum + price * item.quantity;
       }, 0);
+      const phaseEntities = phasesByJobId.get(job.id) ?? [];
+      const deliveryPhases = mapPhasesToViews(phaseEntities).map((p) => {
+        const entity = phaseEntities.find((e) => e.id === p.id);
+        const hasPhasePhoto = Boolean(entity?.fulfillmentPhotoStorageKey);
+        const mayViewPhasePhoto =
+          hasPhasePhoto &&
+          (canEdit ||
+            viewerCanFulfill ||
+            !hasNATag ||
+            viewerIsAppAdmin ||
+            job.orderLifecycleStatus === "delivered" ||
+            job.orderLifecycleStatus === "paid");
+        return {
+          ...p,
+          photoUrl: mayViewPhasePhoto
+            ? `/apps/project-clad/fulfillment-photo?jobId=${encodeURIComponent(job.id)}&phaseId=${encodeURIComponent(p.id)}`
+            : null,
+        };
+      });
+      const deliveredPercent = computeDeliveredPercent(job.items, deliveryPhases);
       return {
         id: job.id,
         name: job.name,
@@ -2849,6 +3284,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         scheduledDeliveryDate: job.scheduledDeliveryDate ?? null,
         scheduledDeliveryWindow: job.scheduledDeliveryWindow ?? null,
         fulfillmentMethod: job.fulfillmentMethod ?? null,
+        deliveryMode: normalizeJobDeliveryMode(job.deliveryMode),
+        shipAddress1: job.shipAddress1 ?? null,
+        shipCity: job.shipCity ?? null,
+        shipProvince: job.shipProvince ?? null,
+        shipPostal: job.shipPostal ?? null,
+        shipCountry: job.shipCountry ?? null,
         hasFulfillmentPhoto: Boolean(job.fulfillmentPhotoStorageKey),
         fulfillmentPhotoUrl: job.fulfillmentPhotoStorageKey
           ? !hasNATag ||
@@ -2859,6 +3300,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               `/apps/project-clad/fulfillment-photo?jobId=${encodeURIComponent(job.id)}`)
             : null
           : null,
+        deliveryPhases,
+        deliveredPercent,
+        deliveryPlanMode: job.deliveryPlanMode ?? null,
+        deliveryBatchByItemJson: job.deliveryBatchByItemJson ?? null,
         items: job.items.map((item) => {
           const snap = parseVariantSnapshot(item.variantSnapshot);
           const orderLineCapture = parseOrderLineCapture(item.orderLineCapture);
@@ -3040,6 +3485,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
     viewerCanFulfill,
     viewerHasNATag: hasNATag,
+    shopDeliveryFee,
     storefrontAppNav: getStorefrontAppNav(settings),
     navAccountInitial,
     /** Owner's `company:` tags — for org-visibility toggle when `ownerCompanyKey` is not yet on the project. */
@@ -3087,6 +3533,17 @@ async function emailProjectStatusSnapshot(args: {
   }
 }
 
+function parseShipToFromFormData(formData: FormData) {
+  const trim = (k: string) => String(formData.get(k) || "").trim();
+  return {
+    shipAddress1: trim("shipAddress1") || null,
+    shipCity: trim("shipCity") || null,
+    shipProvince: trim("shipProvince") || null,
+    shipPostal: trim("shipPostal") || null,
+    shipCountry: trim("shipCountry") || "Canada",
+  };
+}
+
 /** Create an empty job (shared by `create-job` and Edit project save). */
 async function createEmptyJobOnProject(args: {
   shop: string;
@@ -3094,8 +3551,13 @@ async function createEmptyJobOnProject(args: {
   customerId: string;
   name: string;
   purchaseOrderNumber: string;
+  deliveryMode?: JobDeliveryMode;
+  ship?: ReturnType<typeof parseShipToFromFormData>;
 }): Promise<"duplicate" | "created"> {
   const { shop, projectId, customerId, name, purchaseOrderNumber } = args;
+  const deliveryMode = args.deliveryMode ?? "inherit";
+  const ship = args.ship ?? parseShipToFromFormData(new FormData());
+  const deliveryPayload = jobDeliveryPrismaData(deliveryMode, ship);
   const existingNames = await prisma.job.findMany({
     where: { projectId },
     select: { name: true },
@@ -3129,6 +3591,7 @@ async function createEmptyJobOnProject(args: {
       purchaseOrderNumber: purchaseOrderNumber.trim() || null,
       siteContactName: projectDefaults?.defaultSiteContactName ?? null,
       siteContactPhone: projectDefaults?.defaultSiteContactPhone ?? null,
+      ...deliveryPayload,
     },
   });
 
@@ -3730,34 +4193,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         );
       }
 
-      const methodRaw = String(payload.fulfillmentMethod || "")
-        .trim()
-        .toLowerCase();
-      if (methodRaw !== "delivery" && methodRaw !== "pickup") {
+      const jobForDelivery = await prisma.job.findFirst({
+        where: { id: jobId, projectId },
+      });
+      if (!jobForDelivery) {
+        return Response.json({ error: "Order not found." }, { status: 404 });
+      }
+      const resolvedDelivery = resolveJobDelivery(jobForDelivery, project);
+      const fulfillmentMethod = resolvedDelivery.method;
+
+      if (
+        fulfillmentMethod === "delivery" &&
+        !resolvedDelivery.addressLine
+      ) {
         return Response.json(
-          { error: 'Choose "Delivery" or "Store pickup" before placing the order.' },
+          {
+            error:
+              "Set delivery options for this order (address required) before placing.",
+          },
           { status: 400 },
         );
-      }
-      const fulfillmentMethod =
-        methodRaw === "pickup" ? "pickup" : "delivery";
-
-      if (fulfillmentMethod === "delivery") {
-        const shipOk = Boolean(
-          project.shipAddress1?.trim() &&
-            project.shipCity?.trim() &&
-            project.shipProvince?.trim() &&
-            project.shipPostal?.trim(),
-        );
-        if (!shipOk) {
-          return Response.json(
-            {
-              error:
-                "Add a complete delivery address on the project before ordering for delivery.",
-            },
-            { status: 400 },
-          );
-        }
       }
 
       /* Per-order site contact is required for ALL fulfillment methods so
@@ -3841,8 +4296,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const backup = await createBackupDraftOrderForJob({
           shop,
           jobId,
-          deliveryFeeAmount:
-            fulfillmentMethod === "delivery" ? PROJECT_DELIVERY_FEE : 0,
+          deliveryFeeAmount: resolvedDelivery.fee,
         });
         if (backup.ok) {
           console.log(
@@ -3897,6 +4351,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           } catch (err) {
             console.error(
               "[project] order now staff push failed:",
+              err instanceof Error ? err.message : err,
+            );
+          }
+        })(),
+        (async () => {
+          try {
+            notifyMissionControl(jobId);
+          } catch (err) {
+            console.error(
+              "[project] mission control push failed:",
               err instanceof Error ? err.message : err,
             );
           }
@@ -3975,6 +4439,457 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     viewerHasNATag,
   );
 
+  if (intent === "save-order-delivery") {
+    const saveDeliveryAckFromQuery =
+      new URL(request.url).searchParams.get("pcJson") === "1";
+    const jsonDeliverySave = declaresJson || saveDeliveryAckFromQuery;
+
+    if (!canEdit && !viewerCanFulfill) {
+      if (jsonDeliverySave) {
+        return Response.json({ error: "You cannot edit delivery for this project." }, { status: 403 });
+      }
+      throw new Response("Forbidden", { status: 403 });
+    }
+    const jobId = String(formData.get("jobId") || "");
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, projectId },
+    });
+    if (!job) {
+      return Response.json({ error: "Order not found." }, { status: 404 });
+    }
+    if (isOrderDeliveryPlanLocked(job.orderLifecycleStatus)) {
+      return Response.json(
+        {
+          error:
+            "Delivery options cannot be changed after the order has been fully delivered.",
+        },
+        { status: 400 },
+      );
+    }
+    try {
+    const deliveryMode = normalizeJobDeliveryMode(
+      String(formData.get("deliveryMode") || ""),
+    );
+    const ship = parseShipToFromFormData(formData);
+    if (deliveryMode === "delivery" && !hasCompleteShipToDetails(ship)) {
+      const projectShip = {
+        shipAddress1: project.shipAddress1,
+        shipCity: project.shipCity,
+        shipProvince: project.shipProvince,
+        shipPostal: project.shipPostal,
+      };
+      if (!hasCompleteShipToDetails(projectShip)) {
+        return Response.json(
+          {
+            error:
+              "Enter a complete delivery address for this order, or choose store pickup.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+    const deliveryPayload = jobDeliveryPrismaData(deliveryMode, ship);
+    const planMode = normalizeDeliveryPlanMode(
+      formData.get("deliveryPlanMode"),
+    );
+    let dateRaw = "";
+    let windowRaw = "";
+    if (planMode === "single") {
+      dateRaw = String(formData.get("scheduledDeliveryDate") || "").trim();
+      windowRaw = String(formData.get("scheduledDeliveryWindow") || "").trim();
+    } else if (planMode === "recurring") {
+      dateRaw = String(formData.get("deliveryRecurringStartDate") || "").trim();
+      windowRaw = String(
+        formData.get("deliveryRecurringStartWindow") || "",
+      ).trim();
+    }
+    await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        ...deliveryPayload,
+        scheduledDeliveryDate: dateRaw || null,
+        scheduledDeliveryWindow: windowRaw || null,
+      },
+    });
+
+    const shopFee = await getShopDeliveryFee(shop);
+    const jobAfter = await prisma.job.findUnique({
+      where: { id: jobId },
+      include: { items: true, deliveryPhases: { include: { lines: true } } },
+    });
+    if (jobAfter) {
+      const resolvedAfter = resolveJobDelivery(
+        jobAfter,
+        project,
+        shopFee,
+      );
+      await ensureJobDeliveryPhases(jobAfter, shopFee, resolvedAfter);
+      const itemIds = new Set(jobAfter.items.map((i) => i.id));
+
+      let phasesInput: PhaseSaveInput[] | null = null;
+      if (planMode === "recurring" && resolvedAfter.method === "delivery") {
+        const batchRaw = String(formData.get("deliveryBatchJson") || "").trim();
+        const atATimePayload = batchRaw
+          ? parseAtATimeDeliveryPayload(batchRaw, itemIds)
+          : null;
+        if (!atATimePayload) {
+          return Response.json(
+            {
+              error:
+                jobAfter.items.length === 0
+                  ? "Add line items to this order before setting a delivery plan."
+                  : "Enter a valid quantity per delivery for each line.",
+            },
+            { status: 400 },
+          );
+        }
+        const { batchByItem: batch, repeatIntervalDays, repeatEndDate } =
+          atATimePayload;
+        for (const item of jobAfter.items) {
+          if (batch[item.id] > item.quantity) {
+            return Response.json(
+              {
+                error: `Quantity per delivery cannot exceed ordered qty (${item.quantity}) on a line.`,
+              },
+              { status: 400 },
+            );
+          }
+        }
+        if (!repeatIntervalDays || repeatIntervalDays < 1) {
+          return Response.json(
+            {
+              error: "Choose how often deliveries repeat.",
+            },
+            { status: 400 },
+          );
+        }
+        if (!dateRaw.trim()) {
+          return Response.json(
+            {
+              error:
+                "Choose a date for the first recurring delivery.",
+            },
+            { status: 400 },
+          );
+        }
+        const schedule = {
+          scheduledDeliveryDate: dateRaw,
+          scheduledDeliveryWindow: windowRaw,
+          repeatIntervalDays,
+          repeatEndDate,
+        };
+        if (
+          dateRaw &&
+          windowRaw &&
+          repeatIntervalDays &&
+          repeatIntervalDays >= 1
+        ) {
+          const phaseCount = buildPhasesFromAtATime(
+            jobAfter.items,
+            batch,
+            schedule,
+          ).length;
+          for (let seq = 1; seq <= phaseCount; seq += 1) {
+            const dropDate = addDaysToCalendarYmd(
+              dateRaw,
+              repeatIntervalDays * (seq - 1),
+            );
+            if (!dropDate) continue;
+            if (repeatEndDate && dropDate > repeatEndDate) break;
+            if (
+              !isOttawaDeliveryWindowValidForDate(
+                windowRaw,
+                dropDate,
+                new Date(),
+              )
+            ) {
+              return Response.json(
+                {
+                  error: `Delivery ${seq}: time window is not valid for ${dropDate}.`,
+                },
+                { status: 400 },
+              );
+            }
+          }
+        }
+        phasesInput = buildPhasesFromAtATime(jobAfter.items, batch, schedule);
+      } else {
+        phasesInput = buildPhasesFromAtATime(
+          jobAfter.items,
+          Object.fromEntries(
+            jobAfter.items.map((i) => [i.id, i.quantity]),
+          ),
+          {
+            scheduledDeliveryDate: dateRaw,
+            scheduledDeliveryWindow: windowRaw,
+          },
+        );
+      }
+
+      if (phasesInput && resolvedAfter.method === "delivery") {
+        const planErr = validatePlannedQuantities(jobAfter.items, phasesInput);
+        if (planErr) {
+          return Response.json({ error: planErr }, { status: 400 });
+        }
+      }
+
+      const batchPersistRaw =
+        planMode === "recurring" && resolvedAfter.method === "delivery"
+          ? String(formData.get("deliveryBatchJson") || "").trim() || null
+          : null;
+      const batchPayload =
+        batchPersistRaw && phasesInput
+          ? parseAtATimeDeliveryPayload(
+              batchPersistRaw,
+              new Set(jobAfter.items.map((i) => i.id)),
+            )
+          : null;
+
+      if (phasesInput && resolvedAfter.method === "delivery") {
+        const referenceJson = serializeDeliveryPlanReference({
+          planMode,
+          referencePhases: phasesInput,
+          batchPayload,
+        });
+        try {
+          await prisma.job.update({
+            where: { id: jobId },
+            data: {
+              deliveryPlanMode: planMode,
+              deliveryBatchByItemJson: referenceJson,
+            },
+          });
+        } catch (planMetaErr) {
+          if (!isJobDeliverySchemaError(planMetaErr)) {
+            throw planMetaErr;
+          }
+        }
+      } else if (resolvedAfter.method === "delivery") {
+        try {
+          await prisma.job.update({
+            where: { id: jobId },
+            data: { deliveryPlanMode: planMode },
+          });
+        } catch (planMetaErr) {
+          if (!isJobDeliverySchemaError(planMetaErr)) {
+            throw planMetaErr;
+          }
+        }
+      }
+
+      if (resolvedAfter.method === "delivery") {
+        await ensureOpenFulfillmentPhase(jobId);
+      }
+    }
+
+    if (jsonDeliverySave) {
+      return Response.json({ ok: true as const });
+    }
+    return redirectToProject(request, projectId, shop);
+    } catch (e) {
+      console.error(
+        "[save-order-delivery]",
+        e instanceof Error ? e.message : e,
+      );
+      const msg =
+        e instanceof Error ? e.message : "Could not save delivery options.";
+      if (jsonDeliverySave) {
+        return Response.json({ error: msg }, { status: 500 });
+      }
+      throw e;
+    }
+  }
+
+  if (intent === "record-phase-delivery") {
+    if (!viewerIsAppAdmin) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+    const jobId = String(formData.get("jobId") || "");
+    const phaseId = String(formData.get("phaseId") || "");
+    const linesJson = String(formData.get("deliveredLinesJson") || "").trim();
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, projectId },
+      include: { items: true },
+    });
+    if (!job) {
+      return Response.json({ error: "Order not found." }, { status: 404 });
+    }
+    let lines: { jobItemId: string; quantityDelivered: number }[] = [];
+    try {
+      const parsed = JSON.parse(linesJson) as unknown;
+      if (!Array.isArray(parsed)) throw new Error("bad");
+      for (const row of parsed) {
+        if (!row || typeof row !== "object") throw new Error("bad");
+        const r = row as Record<string, unknown>;
+        lines.push({
+          jobItemId: String(r.jobItemId || "").trim(),
+          quantityDelivered: Math.floor(Number(r.quantityDelivered)),
+        });
+      }
+    } catch {
+      return Response.json({ error: "Invalid delivered quantities." }, { status: 400 });
+    }
+    try {
+      const result = await recordPhaseDeliveredQuantities({
+        phaseId,
+        jobId,
+        lines,
+      });
+      if (declaresJson) {
+        return Response.json({ ok: true as const, ...result });
+      }
+    } catch (e) {
+      return Response.json(
+        { error: e instanceof Error ? e.message : "Save failed." },
+        { status: 400 },
+      );
+    }
+    return redirectToProject(request, projectId, shop);
+  }
+
+  if (intent === "upload-phase-fulfillment-photo") {
+    if (!viewerCanFulfill) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+    const jobId = String(formData.get("jobId") || "");
+    const phaseId = String(formData.get("phaseId") || "");
+    const file = formData.get("photo");
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, projectId },
+      include: {
+        items: true,
+        deliveryPhases: { include: { lines: true }, orderBy: { sequence: "asc" } },
+      },
+    });
+    if (!job) {
+      throw new Response("Order not found", { status: 404 });
+    }
+    if (job.orderLifecycleStatus !== "ordered") {
+      throw new Response(
+        "Photo upload is only allowed while the order is in Ordered status.",
+        { status: 400 },
+      );
+    }
+    const phase = job.deliveryPhases.find((p) => p.id === phaseId);
+    if (!phase) {
+      throw new Response("Delivery phase not found", { status: 404 });
+    }
+    if (phase.fulfillmentPhotoStorageKey || phase.deliveredAt) {
+      throw new Response(
+        "This delivery was already confirmed. Refresh the page to record the next delivery.",
+        { status: 400 },
+      );
+    }
+    const hasQtyFields = job.items.some((item) =>
+      formData.has(`qty_${item.id}`),
+    );
+    if (hasQtyFields) {
+      if (!viewerIsAppAdmin) {
+        throw new Response("Forbidden", { status: 403 });
+      }
+      const lines = job.items.map((item) => ({
+        jobItemId: item.id,
+        quantityDelivered: Math.floor(
+          Number(formData.get(`qty_${item.id}`)) || 0,
+        ),
+      }));
+      const totalDelivered = lines.reduce(
+        (sum, line) => sum + Math.max(0, line.quantityDelivered),
+        0,
+      );
+      if (totalDelivered <= 0) {
+        throw new Response(
+          "Enter at least one quantity for this delivery.",
+          { status: 400 },
+        );
+      }
+      try {
+        await recordPhaseDeliveredQuantities({ phaseId, jobId, lines });
+      } catch (e) {
+        throw new Response(
+          e instanceof Error ? e.message : "Invalid delivered quantities.",
+          { status: 400 },
+        );
+      }
+    }
+    if (!(file instanceof File) || file.size === 0) {
+      throw new Response("Photo file is required.", { status: 400 });
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      throw new Response("Photo must be 8MB or smaller.", { status: 400 });
+    }
+    const orig = (file.name || "photo.jpg").toLowerCase();
+    const ext = orig.endsWith(".png")
+      ? ".png"
+      : orig.endsWith(".webp")
+        ? ".webp"
+        : ".jpg";
+    const shopDir = shop.replace(/[^a-zA-Z0-9._-]+/g, "_");
+    const storageKey = `${shopDir}/${jobId}-phase-${phase.sequence}-${Date.now()}${ext}`;
+    const root = path.resolve(process.cwd(), "storage", "fulfillment-photos");
+    const abs = path.resolve(root, storageKey);
+    if (!abs.startsWith(root + path.sep)) {
+      throw new Response("Invalid path", { status: 400 });
+    }
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    const buf = Buffer.from(await file.arrayBuffer());
+    await fs.writeFile(abs, buf);
+
+    await prisma.jobDeliveryPhase.update({
+      where: { id: phaseId },
+      data: {
+        fulfillmentPhotoStorageKey: storageKey,
+        deliveredAt: new Date(),
+      },
+    });
+
+    const refreshedJob = await prisma.job.findUnique({
+      where: { id: jobId },
+      include: {
+        items: true,
+        deliveryPhases: { include: { lines: true }, orderBy: { sequence: "asc" } },
+      },
+    });
+    const phaseViews = mapPhasesToViews(refreshedJob?.deliveryPhases ?? []);
+    const fullyDelivered = refreshedJob
+      ? isJobFullyDelivered(refreshedJob.items, phaseViews)
+      : false;
+
+    if (fullyDelivered && refreshedJob) {
+      await prisma.job.update({
+        where: { id: jobId },
+        data: {
+          orderLifecycleStatus: "delivered",
+          fulfillmentPhotoStorageKey: storageKey,
+          ...(job.completedAt ? {} : { completedAt: new Date() }),
+        },
+      });
+    }
+
+    if (!phase.fulfillmentNotifiedAt) {
+      try {
+        await sendFulfillmentPackageEmails({ shop, projectId, jobId });
+        await prisma.jobDeliveryPhase.update({
+          where: { id: phaseId },
+          data: { fulfillmentNotifiedAt: new Date() },
+        });
+      } catch (err) {
+        console.error(
+          "[project] phase fulfillment notify failed:",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+
+    if (!fullyDelivered) {
+      await spawnNextFulfillmentPhaseIfNeeded(jobId);
+      await ensureOpenFulfillmentPhase(jobId);
+    }
+
+    notifyMissionControl(jobId);
+    return redirectToProject(request, projectId, shop);
+  }
+
   if (intent === "save-order-schedule") {
     const staffScheduleBypass =
       viewerCanFulfill && formData.get("staffSchedule") === "1";
@@ -3993,12 +4908,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       formData.get("scheduledDeliveryWindow") || "",
     ).trim();
     const staffOverride = staffScheduleBypass;
-    if (
-      !staffOverride &&
-      (job.orderLifecycleStatus === "ordered" ||
-        job.orderLifecycleStatus === "delivered" ||
-        job.orderLifecycleStatus === "paid")
-    ) {
+    if (!staffOverride && isOrderDeliveryPlanLocked(job.orderLifecycleStatus)) {
       const origin = getStorefrontOriginForAppProxyRedirect(request, shop);
       return redirect(
         `${origin}${storefrontProjectActionPath}?id=${encodeURIComponent(projectId)}&scheduleLocked=1`,
@@ -4112,6 +5022,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     }
 
+    notifyMissionControl(jobId);
     return redirectToProject(request, projectId, shop);
   }
 
@@ -4139,6 +5050,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         paidAt: new Date(),
       },
     });
+    notifyMissionControl(jobId);
     return redirectToProject(request, projectId, shop);
   }
 
@@ -4364,6 +5276,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     }
 
+    notifyMissionControl(jobId);
     return redirectToProject(request, projectId, shop);
   }
 
@@ -4820,6 +5733,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       payload: reorderNotifyEmail ? { notifyEmail: reorderNotifyEmail } : undefined,
     }).catch(() => undefined);
 
+    notifyMissionControl(newJobId);
+
     await emailProjectStatusSnapshot({
       shop,
       projectId: targetProjectId,
@@ -4838,7 +5753,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         shop,
         jobId: newJobId,
         deliveryFeeAmount:
-          fulfillmentMethod === "delivery" ? PROJECT_DELIVERY_FEE : 0,
+          fulfillmentMethod === "delivery"
+            ? await getShopDeliveryFee(shop)
+            : 0,
       });
     } catch (err) {
       console.error("[project-clad] reorder backup draft failed:", err);
@@ -5063,15 +5980,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       ? formData.get("visibleToCompany") === "1"
       : undefined;
 
-    const storefrontStatusRaw = String(
-      formData.get("storefrontStatus") || "",
-    ).trim();
-    const storefrontStatusNext = STOREFRONT_STATUS_VALUES.includes(
-      storefrontStatusRaw as ProjectStorefrontStatus,
-    )
-      ? (storefrontStatusRaw as ProjectStorefrontStatus)
-      : null;
-
     if (!name) {
       return redirectToProject(request, projectId, shop);
     }
@@ -5095,9 +6003,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         defaultSiteContactPhone,
         ...(visibleToCompany !== undefined ? { visibleToCompany } : {}),
         ...(ownerCompanyKeyToSet ? { ownerCompanyKey: ownerCompanyKeyToSet } : {}),
-        ...(storefrontStatusNext !== null
-          ? { storefrontStatus: storefrontStatusNext }
-          : {}),
       },
     });
 
@@ -5142,50 +6047,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     const trim = (k: string) => String(formData.get(k) || "").trim();
-    const shipAddress1 = trim("shipAddress1") || null;
-    const shipCity = trim("shipCity") || null;
-    const shipProvince = trim("shipProvince") || null;
-    const shipPostal = trim("shipPostal") || null;
-    const shipCountry = trim("shipCountry") || "Canada";
+    const ship = parseShipToFromFormData(formData);
+    const receiveModeRaw = String(formData.get("projectReceiveMode") || "")
+      .trim()
+      .toLowerCase();
+    let receiveMode: "pickup" | "delivery" =
+      receiveModeRaw === "delivery" ? "delivery" : "pickup";
 
-    const addressComplete = Boolean(
-      shipAddress1?.trim() &&
-        shipCity?.trim() &&
-        shipProvince?.trim() &&
-        shipPostal?.trim(),
-    );
-
-    /** Derive mode from submitted fields so a stale hidden pickup flag cannot wipe a full address. */
-    let receiveMode: "pickup" | "delivery";
-    if (addressComplete) {
-      await prisma.project.update({
-        where: { id: projectId },
-        data: {
-          receiveMode: "delivery",
-          shipAddress1,
-          shipAddress2: null,
-          shipCity,
-          shipProvince,
-          shipPostal,
-          shipCountry,
-        },
-      });
-      receiveMode = "delivery";
-    } else {
-      await prisma.project.update({
-        where: { id: projectId },
-        data: {
-          receiveMode: "pickup",
-          shipAddress1,
-          shipAddress2: null,
-          shipCity,
-          shipProvince,
-          shipPostal,
-          shipCountry: trim("shipCountry") || null,
-        },
-      });
-      receiveMode = "pickup";
+    if (receiveMode === "delivery" && !hasCompleteShipToDetails(ship)) {
+      return redirectToProject(request, projectId, shop);
     }
+
+    await prisma.project.update({
+      where: { id: projectId },
+      data: {
+        receiveMode,
+        shipAddress1: receiveMode === "delivery" ? ship.shipAddress1 : null,
+        shipAddress2: null,
+        shipCity: receiveMode === "delivery" ? ship.shipCity : null,
+        shipProvince: receiveMode === "delivery" ? ship.shipProvince : null,
+        shipPostal: receiveMode === "delivery" ? ship.shipPostal : null,
+        shipCountry: receiveMode === "delivery" ? ship.shipCountry : null,
+      },
+    });
 
     await emailProjectStatusSnapshot({
       shop,
@@ -5221,30 +6105,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       ? formData.get("visibleToCompany") === "1"
       : undefined;
 
-    const storefrontStatusRaw = String(
-      formData.get("storefrontStatus") || "",
-    ).trim();
-    const storefrontStatusNext = STOREFRONT_STATUS_VALUES.includes(
-      storefrontStatusRaw as ProjectStorefrontStatus,
-    )
-      ? (storefrontStatusRaw as ProjectStorefrontStatus)
-      : null;
-
-    const trim = (k: string) => String(formData.get(k) || "").trim();
-    const shipAddress1 = trim("shipAddress1") || null;
-    const shipCity = trim("shipCity") || null;
-    const shipProvince = trim("shipProvince") || null;
-    const shipPostal = trim("shipPostal") || null;
-    const shipCountry = trim("shipCountry") || "Canada";
-
-    const addressComplete = Boolean(
-      shipAddress1?.trim() &&
-        shipCity?.trim() &&
-        shipProvince?.trim() &&
-        shipPostal?.trim(),
-    );
+    const ship = parseShipToFromFormData(formData);
+    const receiveModeRaw = String(formData.get("projectReceiveMode") || "")
+      .trim()
+      .toLowerCase();
+    const receiveMode: "pickup" | "delivery" =
+      receiveModeRaw === "delivery" ? "delivery" : "pickup";
 
     if (!name) {
+      return redirectToProject(request, projectId, shop);
+    }
+
+    if (receiveMode === "delivery" && !hasCompleteShipToDetails(ship)) {
       return redirectToProject(request, projectId, shop);
     }
 
@@ -5257,25 +6129,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     }
 
-    const deliveryData = addressComplete
-      ? {
-          receiveMode: "delivery" as const,
-          shipAddress1,
-          shipAddress2: null,
-          shipCity,
-          shipProvince,
-          shipPostal,
-          shipCountry,
-        }
-      : {
-          receiveMode: "pickup" as const,
-          shipAddress1,
-          shipAddress2: null,
-          shipCity,
-          shipProvince,
-          shipPostal,
-          shipCountry: trim("shipCountry") || null,
-        };
+    const deliveryData =
+      receiveMode === "delivery"
+        ? {
+            receiveMode: "delivery" as const,
+            shipAddress1: ship.shipAddress1,
+            shipAddress2: null,
+            shipCity: ship.shipCity,
+            shipProvince: ship.shipProvince,
+            shipPostal: ship.shipPostal,
+            shipCountry: ship.shipCountry,
+          }
+        : {
+            receiveMode: "pickup" as const,
+            shipAddress1: ship.shipAddress1,
+            shipAddress2: null,
+            shipCity: ship.shipCity,
+            shipProvince: ship.shipProvince,
+            shipPostal: ship.shipPostal,
+            shipCountry: ship.shipCountry || null,
+          };
 
     await prisma.project.update({
       where: { id: projectId },
@@ -5287,9 +6160,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         defaultSiteContactPhone,
         ...(visibleToCompany !== undefined ? { visibleToCompany } : {}),
         ...(ownerCompanyKeyToSet ? { ownerCompanyKey: ownerCompanyKeyToSet } : {}),
-        ...(storefrontStatusNext !== null
-          ? { storefrontStatus: storefrontStatusNext }
-          : {}),
         ...deliveryData,
       },
     });
@@ -5318,12 +6188,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const newOrderPurchaseOrderNumber = String(
         formData.get("newOrderPurchaseOrderNumber") || "",
       ).trim();
+      const newOrderDeliveryMode = normalizeJobDeliveryMode(
+        String(formData.get("newOrderDeliveryMode") || "inherit"),
+      );
       const newJobResult = await createEmptyJobOnProject({
         shop,
         projectId,
         customerId,
         name: newOrderJobName,
         purchaseOrderNumber: newOrderPurchaseOrderNumber,
+        deliveryMode: newOrderDeliveryMode,
+        ship: parseShipToFromFormData(formData),
       });
       if (newJobResult === "duplicate") {
         await emailProjectStatusSnapshot({
@@ -5468,6 +6343,7 @@ export default function ProjectDetailPage() {
     themeStyles,
     viewerCanFulfill,
     viewerHasNATag,
+    shopDeliveryFee,
     navAccountInitial,
     ownerCompanyForShare,
   } = useLoaderData<typeof loader>();
@@ -5529,14 +6405,23 @@ export default function ProjectDetailPage() {
       project.shipPostal?.trim(),
   );
 
-  /** Saved project mode + address: required when ordering for delivery at checkout. */
-  const isDeliveryCompleteForOrderNow =
-    project.receiveMode === "delivery" && hasCompleteDeliveryAddress;
+  const projectDeliveryCtx = {
+    receiveMode: project.receiveMode,
+    shipAddress1: project.shipAddress1,
+    shipCity: project.shipCity,
+    shipProvince: project.shipProvince,
+    shipPostal: project.shipPostal,
+    shipCountry: project.shipCountry,
+  };
 
-  const deliveryFeeForJob = (job: JobView) => {
-    if (job.fulfillmentMethod === "delivery") return PROJECT_DELIVERY_FEE;
-    if (job.fulfillmentMethod === "pickup") return 0;
-    return isDeliveryCompleteForOrderNow ? PROJECT_DELIVERY_FEE : 0;
+  const feeForJob = (job: JobView) => {
+    const resolved = resolveJobDelivery(job, projectDeliveryCtx, shopDeliveryFee);
+    if (resolved.method !== "delivery") return 0;
+    return totalDeliveryFeesFromPhases(
+      job.deliveryPhases,
+      resolved,
+      shopDeliveryFee,
+    );
   };
 
   const [orderNowSubmittingJobId, setOrderNowSubmittingJobId] = useState<
@@ -5645,12 +6530,13 @@ export default function ProjectDetailPage() {
   }, [selectedJobId, orderListSearchQ, visibleJobs, setSearchParams]);
 
   const projectOrderDeliveryFeesTotal = project.jobs.reduce(
-    (sum, job) => sum + deliveryFeeForJob(job),
+    (sum, job) => sum + feeForJob(job),
     0,
   );
-  /** Display HST on project subtotal plus all per-order delivery fees (matches order tiles). */
-  const projectTaxableForDisplay =
+  /** Line items plus all per-order delivery fees (matches order payment summaries). */
+  const projectSubtotalForDisplay =
     project.subtotal + projectOrderDeliveryFeesTotal;
+  const projectTaxableForDisplay = projectSubtotalForDisplay;
   const projectDisplayTax = orderTaxFromSubtotal(projectTaxableForDisplay, {
     pricesIncludeTax: false,
   });
@@ -5718,16 +6604,13 @@ export default function ProjectDetailPage() {
       const missingCopy = !hasSiteContact
         ? "Add site contact & phone first."
         : null;
-      const pickupFallbackNotice =
-        canPlaceOrder &&
-        project.receiveMode === "delivery" &&
-        !hasCompleteDeliveryAddress
-          ? "No delivery address — will ship as pickup."
-          : null;
+      const resolvedOnow = resolveJobDelivery(job, projectDeliveryCtx);
+      const deliveryHint =
+        resolvedOnow.method === "pickup"
+          ? "Store pickup · no delivery fee."
+          : `Delivery · $${shopDeliveryFee.toFixed(2)} fee per phase.`;
       const description =
-        missingCopy ??
-        pickupFallbackNotice ??
-        "Place order; invoice emailed.";
+        missingCopy ?? (canPlaceOrder ? deliveryHint : "Place order; invoice emailed.");
       return {
         key: "lifecycle",
         kind: "button",
@@ -5738,7 +6621,7 @@ export default function ProjectDetailPage() {
         buttonProps: {
           "data-projectclad-order-now-submit": "",
           "data-job-id": job.id,
-          "data-has-delivery": isDeliveryCompleteForOrderNow ? "1" : "0",
+          "data-has-delivery": resolvedOnow.method === "delivery" ? "1" : "0",
           "data-has-site-contact": hasSiteContact ? "1" : "0",
           disabled: !canPlaceOrder || isSubmitting,
           "aria-busy": isSubmitting ? "true" : undefined,
@@ -5789,6 +6672,14 @@ export default function ProjectDetailPage() {
   const renderOrderLifecycleHeaderAction = (job: JobView) => {
     const ls = job.orderLifecycleStatus;
     if (ls === "ordered") {
+      const pct = job.deliveredPercent ?? 0;
+      if (pct > 0 && pct < 100) {
+        return (
+          <span className="project-clad-order-lifecycle-chip project-clad-order-lifecycle-chip--partial">
+            {pct}% Delivered
+          </span>
+        );
+      }
       return (
         <span className="project-clad-order-lifecycle-chip project-clad-order-lifecycle-chip--complete">
           Ordered
@@ -5817,50 +6708,6 @@ export default function ProjectDetailPage() {
     if (status === "delivered") return "Delivered";
     if (status === "paid") return "Order Complete";
     return null;
-  };
-
-  /** Staff lifecycle dropdown + Apply — only inside the line-item "Edit order" panel. */
-  const staffOrderLifecycleStatusForm = (job: JobView) => {
-    if (!viewerCanFulfill) return null;
-    const sid = `${job.id}-edit-panel`;
-    return (
-      <Form
-        method="post"
-        action={`/apps/project-clad/project?id=${project.id}`}
-        className="project-clad-staff-fulfillment-status-form"
-      >
-        <input type="hidden" name="intent" value="staff-set-order-lifecycle" />
-        <input type="hidden" name="jobId" value={job.id} />
-        <div className="project-clad-staff-fulfillment-status-row">
-          <label
-            className="project-clad-staff-fulfillment__label--tile"
-            htmlFor={`project-clad-staff-status-${sid}`}
-          >
-            Order status
-          </label>
-          <select
-            id={`project-clad-staff-status-${sid}`}
-            name="lifecycleStatus"
-            defaultValue={job.orderLifecycleStatus}
-            className="project-clad-staff-fulfillment__status"
-          >
-            <option value="draft">New</option>
-            <option value="pending_review">Review</option>
-            <option value="ready_to_order">Order now</option>
-            <option value="ordered">Ordered</option>
-            <option value="delivered" disabled={!job.hasFulfillmentPhoto}>
-              {job.hasFulfillmentPhoto
-                ? "Delivered"
-                : "Delivered (photo required)"}
-            </option>
-            <option value="paid">Order complete</option>
-          </select>
-          <button type="submit" className="project-clad-button">
-            Apply
-          </button>
-        </div>
-      </Form>
-    );
   };
 
   useEffect(() => {
@@ -5903,7 +6750,7 @@ export default function ProjectDetailPage() {
       if (!jobId) return;
       if (
         !window.confirm(
-          'Please ensure all delivery details are accurate. You can update delivery information under "Edit Project Details", and modify order-specific information in "Edit Order."',
+          'Please ensure delivery details are correct. Use Delivery options on this order or Edit project for defaults before placing.',
         )
       ) {
         return;
@@ -6016,6 +6863,7 @@ export default function ProjectDetailPage() {
               placeholder="Name or email"
               required
               autoComplete="off"
+              className="project-clad-flat-input"
               data-projectclad-member-typeahead-input
             />
             <ul
@@ -6400,18 +7248,6 @@ export default function ProjectDetailPage() {
                 className="project-clad-pricing-password-input"
               />
 
-              <label htmlFor="edit-project-storefront-status">Storefront status</label>
-              <select
-                id="edit-project-storefront-status"
-                name="storefrontStatus"
-                defaultValue={project.storefrontStatus}
-                className="project-clad-pricing-password-input"
-              >
-                <option value="active">Active</option>
-                <option value="complete">Complete</option>
-                <option value="inactive">Inactive</option>
-              </select>
-
               {(project.ownerCompanyKey || ownerCompanyForShare.hasCompanyTag) && (
                 <>
                   <input
@@ -6497,14 +7333,24 @@ export default function ProjectDetailPage() {
 
               <div className="project-clad-edit-modal__section project-clad-edit-project-modal__cell-delivery">
                 <p className="project-clad-edit-project-modal__panel-label">
-                  Delivery
+                  Default delivery (project)
                 </p>
-                <EditProjectDeliveryAddressFields
-                  shipAddress1={project.shipAddress1}
-                  shipCity={project.shipCity}
-                  shipProvince={project.shipProvince}
-                  shipPostal={project.shipPostal}
+                <ProjectReceiveModeRadios
+                  name="projectReceiveMode"
+                  defaultMode={project.receiveMode}
                 />
+                <div
+                  data-projectclad-edit-project-delivery-address
+                  className="project-clad-delivery-address-panel"
+                  hidden
+                >
+                  <EditProjectDeliveryAddressFields
+                    shipAddress1={project.shipAddress1}
+                    shipCity={project.shipCity}
+                    shipProvince={project.shipProvince}
+                    shipPostal={project.shipPostal}
+                  />
+                </div>
               </div>
 
               {canEdit ? (
@@ -6515,6 +7361,23 @@ export default function ProjectDetailPage() {
                     (same API as other data-projectclad-ajax forms). Save changes still POSTs newOrderJobName on the
                     main form to batch-create with update-project-details-and-delivery — both paths are intentional.
                   */}
+                  <JobDeliveryModeRadios
+                    name="newOrderDeliveryMode"
+                    defaultMode="inherit"
+                  />
+                  <div
+                    className="project-clad-edit-project-modal__new-order-address"
+                    data-projectclad-new-order-delivery-address
+                    hidden
+                  >
+                    <JobDeliveryAddressFields
+                      idPrefix="edit-new-order"
+                      shipAddress1={null}
+                      shipCity={null}
+                      shipProvince={null}
+                      shipPostal={null}
+                    />
+                  </div>
                   <div className="project-clad-edit-project-modal__new-order-fields">
                     <div className="project-clad-edit-project-modal__new-order-field">
                       <label htmlFor="edit-project-new-order-name">Order name</label>
@@ -6707,6 +7570,7 @@ export default function ProjectDetailPage() {
                         placeholder="Name or email"
                         required
                         autoComplete="off"
+                        className="project-clad-flat-input"
                         data-projectclad-member-typeahead-input
                       />
                       <ul
@@ -6903,6 +7767,394 @@ export default function ProjectDetailPage() {
             <button type="button" className="project-clad-button project-clad-reject-modal-btn" data-projectclad-edit-save-close>
               Close
             </button>
+          </div>
+        </div>
+      </div>
+      <div
+        className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
+        data-projectclad-order-delivery-modal
+        data-project-receive-mode={project.receiveMode}
+        data-project-ship-address1={project.shipAddress1 ?? ""}
+        data-project-ship-city={project.shipCity ?? ""}
+        data-project-ship-province={project.shipProvince ?? ""}
+        data-project-ship-postal={project.shipPostal ?? ""}
+        data-project-ship-country={project.shipCountry ?? "Canada"}
+        data-delivery-fee={String(shopDeliveryFee)}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="order-delivery-modal-title"
+        style={{ display: "none" }}
+      >
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+        <div
+          className="project-clad-card project-clad-modal project-clad-reject-modal project-clad-order-delivery-modal"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="project-clad-modal__header-row">
+            <h2 id="order-delivery-modal-title">Delivery &amp; status</h2>
+            <button
+              type="button"
+              className="project-clad-modal-close"
+              data-projectclad-order-delivery-close
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+          <nav
+            className="project-clad-delivery-modal-tabs"
+            data-projectclad-delivery-modal-tabs
+            aria-label="Delivery sections"
+          >
+            <button
+              type="button"
+              className="project-clad-delivery-modal-tabs__btn is-active"
+              data-projectclad-delivery-tab="plan"
+            >
+              Plan
+            </button>
+            {viewerCanFulfill ? (
+              <button
+                type="button"
+                className="project-clad-delivery-modal-tabs__btn"
+                data-projectclad-delivery-tab="fulfillment"
+              >
+                Fulfillment
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="project-clad-delivery-modal-tabs__btn"
+              data-projectclad-delivery-tab="documents"
+            >
+              Documents
+            </button>
+          </nav>
+          <div className="project-clad-order-delivery-modal__body">
+          <div
+            className="project-clad-delivery-modal-tab-panel"
+            data-projectclad-delivery-tab-panel="plan"
+          >
+          <form
+            data-projectclad-order-delivery-form
+            data-pc-delivery-date-min={preferredDeliveryDateMinYmd}
+            data-pc-ottawa-windows={JSON.stringify(OTTAWA_DELIVERY_HOUR_WINDOWS)}
+            className="project-clad-inline-form project-clad-pricing-form"
+          >
+            <input type="hidden" name="intent" value="save-order-delivery" />
+            <input type="hidden" name="id" value={project.id} />
+            <input
+              type="hidden"
+              name="jobId"
+              data-projectclad-order-delivery-job-id
+              value=""
+            />
+            <JobDeliveryModeRadios name="deliveryMode" defaultMode="inherit" />
+            <div
+              className="project-clad-order-delivery-modal__address"
+              data-projectclad-order-delivery-address-wrap
+              hidden
+            >
+              <JobDeliveryAddressFields
+                idPrefix="order-delivery"
+                shipAddress1={null}
+                shipCity={null}
+                shipProvince={null}
+                shipPostal={null}
+              />
+            </div>
+            <div
+              className="project-clad-order-delivery-modal__phases project-clad-delivery-plan"
+              data-projectclad-delivery-phases-wrap
+              hidden
+            >
+              <p className="project-clad-delivery-plan__heading">Delivery plan</p>
+              <fieldset className="project-clad-delivery-plan-mode">
+                <legend className="project-clad-sr-only">Delivery plan mode</legend>
+                <label className="project-clad-delivery-plan-mode__option">
+                  <input
+                    type="radio"
+                    name="deliveryPlanMode"
+                    value="single"
+                    defaultChecked
+                    data-projectclad-delivery-plan-mode
+                  />
+                  <span className="project-clad-delivery-plan-mode__label">
+                    Full Delivery
+                  </span>
+                </label>
+                <label className="project-clad-delivery-plan-mode__option">
+                  <input
+                    type="radio"
+                    name="deliveryPlanMode"
+                    value="recurring"
+                    data-projectclad-delivery-plan-mode
+                  />
+                  <span className="project-clad-delivery-plan-mode__label">
+                    Recurring Partial Delivery
+                  </span>
+                </label>
+              </fieldset>
+              <div
+                className="project-clad-delivery-plan__panel project-clad-order-delivery-modal__schedule"
+                data-projectclad-order-delivery-preferred-schedule
+              >
+                <p className="project-clad-delivery-plan__section-title">
+                  Preferred delivery (Ottawa)
+                </p>
+                <div
+                  className="project-clad-preferred-delivery-row"
+                  role="group"
+                  aria-label="Preferred delivery day and time"
+                >
+                  <div className="project-clad-preferred-delivery-field project-clad-preferred-delivery-field--date">
+                    <input
+                      type="date"
+                      name="scheduledDeliveryDate"
+                      data-projectclad-order-delivery-date
+                      min={preferredDeliveryDateMinYmd}
+                      className="project-clad-preferred-delivery-input"
+                      aria-label="Delivery day"
+                    />
+                  </div>
+                  <span className="project-clad-preferred-delivery-between">
+                    between
+                  </span>
+                  <div className="project-clad-preferred-delivery-field project-clad-preferred-delivery-field--time">
+                    <select
+                      name="scheduledDeliveryWindow"
+                      data-projectclad-order-delivery-window
+                      className="project-clad-preferred-delivery-input"
+                      aria-label="Delivery time"
+                      disabled
+                    >
+                      <option value="">Select a day first…</option>
+                      {OTTAWA_DELIVERY_HOUR_WINDOWS.map((w) => (
+                        <option key={w} value={w}>
+                          {w}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div data-projectclad-delivery-fee-anchor-single />
+              </div>
+              <div
+                className="project-clad-delivery-plan__panel project-clad-delivery-plan__panel--recurring"
+                data-projectclad-delivery-recurring-panel
+                hidden
+              >
+                <div className="project-clad-delivery-plan__section">
+                  <p className="project-clad-delivery-plan__section-title">
+                    Quantities per delivery
+                  </p>
+                  <div
+                    data-projectclad-delivery-batch-list
+                    className="project-clad-delivery-batch-list"
+                  />
+                  <div data-projectclad-delivery-fee-anchor-recurring>
+                    <div
+                      className="project-clad-muted project-clad-order-delivery-modal__fee project-clad-delivery-fee-preview"
+                      data-projectclad-delivery-fee-preview
+                    >
+                      <p
+                        className="project-clad-delivery-fee-preview__rate"
+                        data-projectclad-delivery-fee-rate
+                      />
+                      <p
+                        className="project-clad-delivery-fee-preview__total"
+                        data-projectclad-delivery-fee-total
+                        hidden
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="project-clad-delivery-plan__section">
+                  <p className="project-clad-delivery-plan__section-title">
+                    First delivery (Ottawa)
+                  </p>
+                  <div
+                    className="project-clad-preferred-delivery-row"
+                    role="group"
+                    aria-label="First recurring delivery day and time"
+                  >
+                    <div className="project-clad-preferred-delivery-field project-clad-preferred-delivery-field--date">
+                      <input
+                        type="date"
+                        name="deliveryRecurringStartDate"
+                        data-projectclad-delivery-recurring-start-date
+                        min={preferredDeliveryDateMinYmd}
+                        className="project-clad-preferred-delivery-input"
+                        aria-label="First delivery day"
+                      />
+                    </div>
+                    <span className="project-clad-preferred-delivery-between">
+                      between
+                    </span>
+                    <div className="project-clad-preferred-delivery-field project-clad-preferred-delivery-field--time">
+                      <select
+                        name="deliveryRecurringStartWindow"
+                        data-projectclad-delivery-recurring-start-window
+                        className="project-clad-preferred-delivery-input"
+                        aria-label="First delivery time"
+                        disabled
+                      >
+                        <option value="">Select a day first…</option>
+                        {OTTAWA_DELIVERY_HOUR_WINDOWS.map((w) => (
+                          <option key={w} value={w}>
+                            {w}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  className="project-clad-delivery-plan__section"
+                  data-projectclad-delivery-recurring-schedule
+                >
+                  <p className="project-clad-delivery-plan__section-title">
+                    Repeat schedule
+                  </p>
+                  <div className="project-clad-delivery-recurring-schedule__grid">
+                    <label className="project-clad-delivery-recurring-schedule__field">
+                      <span>Repeat every</span>
+                      <select
+                        name="deliveryRepeatIntervalDays"
+                        data-projectclad-delivery-repeat-interval
+                        className="project-clad-preferred-delivery-input"
+                        defaultValue="7"
+                      >
+                        <option value="1">Every day</option>
+                        <option value="2">Every 2 days</option>
+                        <option value="3">Every 3 days</option>
+                        <option value="7">Every 7 days</option>
+                        <option value="14">Every 14 days</option>
+                        <option value="21">Every 21 days</option>
+                        <option value="30">Every 30 days</option>
+                      </select>
+                    </label>
+                    <label className="project-clad-delivery-recurring-schedule__field">
+                      <span>End by (optional)</span>
+                      <input
+                        type="date"
+                        name="deliveryRepeatEndDate"
+                        data-projectclad-delivery-repeat-end
+                        min={preferredDeliveryDateMinYmd}
+                        className="project-clad-preferred-delivery-input"
+                        aria-label="Last scheduled delivery date"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <p
+                className="project-clad-delivery-plan__preview project-clad-muted"
+                data-projectclad-delivery-phase-preview
+                role="status"
+              />
+              <input
+                type="hidden"
+                name="deliveryPhasesJson"
+                data-projectclad-delivery-phases-json
+                value=""
+              />
+              <input
+                type="hidden"
+                name="deliveryBatchJson"
+                data-projectclad-delivery-batch-json
+                value=""
+              />
+            </div>
+            <p
+              className="project-clad-muted project-clad-approval-msg"
+              data-projectclad-order-delivery-message
+              role="status"
+            />
+            <p
+              className="project-clad-muted project-clad-delivery-plan-locked-note"
+              data-projectclad-delivery-plan-locked-note
+              hidden
+              role="status"
+            >
+              Delivery plan is locked after the order has been fully delivered.
+              Use Fulfillment or Documents for delivery progress and paperwork.
+            </p>
+            <div className="project-clad-actions project-clad-reject-modal-actions">
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                data-projectclad-order-delivery-save
+              >
+                Save plan
+              </button>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                data-projectclad-order-delivery-cancel
+              >
+                Close
+              </button>
+            </div>
+          </form>
+          </div>
+          {viewerCanFulfill ? (
+            <div
+              className="project-clad-delivery-modal-tab-panel"
+              data-projectclad-delivery-tab-panel="fulfillment"
+              hidden
+            >
+              {project.jobs.map((job) => (
+                <div
+                  key={job.id}
+                  data-projectclad-delivery-fulfillment-job={job.id}
+                  hidden
+                >
+                  <OrderDeliveryFulfillmentSection
+                    job={job}
+                    projectId={project.id}
+                    viewerIsAdmin={viewerIsAdmin}
+                  />
+                </div>
+              ))}
+              <div className="project-clad-actions project-clad-reject-modal-actions">
+                <button
+                  type="button"
+                  className="project-clad-button project-clad-reject-modal-btn"
+                  data-projectclad-order-delivery-cancel
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : null}
+          <div
+            className="project-clad-delivery-modal-tab-panel"
+            data-projectclad-delivery-tab-panel="documents"
+            hidden
+          >
+            {project.jobs.map((job) => (
+              <div
+                key={job.id}
+                data-projectclad-delivery-documents-job={job.id}
+                hidden
+              >
+                <OrderDeliveryDocumentsPanel
+                  job={job}
+                  projectId={project.id}
+                />
+              </div>
+            ))}
+            <div className="project-clad-actions project-clad-reject-modal-actions">
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                data-projectclad-order-delivery-cancel
+              >
+                Close
+              </button>
+            </div>
+          </div>
           </div>
         </div>
       </div>
@@ -7288,42 +8540,17 @@ export default function ProjectDetailPage() {
                         #{project.poNumber || "—"}
                       </div>
                     </div>
-                    <div className="project-clad-orders-page-status-stack">
-                      {canEdit ? (
-                        <div className="project-clad-orders-page-status-stack-actions">
-                          <button
-                            type="button"
-                            className="project-clad-orders-page-edit-project"
-                            data-projectclad-edit-project-details
-                          >
-                            Edit project
-                          </button>
-                          <span
-                            className={`project-clad-orders-page-pill project-clad-orders-page-pill--${project.storefrontStatus}`}
-                            role="status"
-                          >
-                            <span className="project-clad-orders-page-pill__dot" aria-hidden="true" />
-                            {project.storefrontStatus === "complete"
-                              ? "Complete"
-                              : project.storefrontStatus === "inactive"
-                                ? "Inactive"
-                                : "Active"}
-                          </span>
-                        </div>
-                      ) : (
-                        <span
-                          className={`project-clad-orders-page-pill project-clad-orders-page-pill--${project.storefrontStatus}`}
-                          role="status"
+                    {canEdit ? (
+                      <div className="project-clad-orders-page-status-stack">
+                        <button
+                          type="button"
+                          className="project-clad-orders-page-edit-project"
+                          data-projectclad-edit-project-details
                         >
-                          <span className="project-clad-orders-page-pill__dot" aria-hidden="true" />
-                          {project.storefrontStatus === "complete"
-                            ? "Complete"
-                            : project.storefrontStatus === "inactive"
-                              ? "Inactive"
-                              : "Active"}
-                        </span>
-                      )}
-                    </div>
+                          Edit project
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="project-clad-orders-page-facts">
@@ -7380,7 +8607,7 @@ export default function ProjectDetailPage() {
                       </span>
                       <span className="project-clad-orders-page-fact-value">
                         {pricingUnlocked
-                          ? formatPrice(project.subtotal)
+                          ? formatPrice(projectSubtotalForDisplay)
                           : "—"}
                       </span>
                     </div>
@@ -7463,7 +8690,11 @@ export default function ProjectDetailPage() {
                           : "project-clad-work-order--unread"
                         : "";
                     const totalQty = job.items.reduce((sum, item) => sum + item.quantity, 0);
-                    const jobDeliveryFeeAmount = deliveryFeeForJob(job);
+                    const resolvedJobDelivery = resolveJobDelivery(
+                      job,
+                      projectDeliveryCtx,
+                    );
+                    const jobDeliveryFeeAmount = feeForJob(job);
                     const jobTaxableForDisplay =
                       job.subtotal + jobDeliveryFeeAmount;
                     const jobDisplayTax = orderTaxFromSubtotal(
@@ -7478,31 +8709,8 @@ export default function ProjectDetailPage() {
                         pricesIncludeTax: false,
                       },
                     );
-                    /**
-                     * Delivery-vs-pickup for THIS job. Pickup wins explicitly;
-                     * delivery wins if the job was saved with delivery OR the
-                     * project's default is delivery and no per-job override.
-                     * Mirrors the logic in `deliveryFeeForJob`.
-                     */
-                    const jobIsDelivery =
-                      job.fulfillmentMethod === "delivery" ||
-                      (job.fulfillmentMethod !== "pickup" &&
-                        project.receiveMode === "delivery");
-                    /** One-line address assembled live from the project so that
-                     *  edits to the address show up on existing orders immediately. */
-                    const jobDeliveryAddress = (() => {
-                      const parts = [
-                        project.shipAddress1,
-                        project.shipCity,
-                        project.shipProvince,
-                        project.shipPostal,
-                      ]
-                        .map((part) => part?.trim())
-                        .filter((part): part is string => Boolean(part));
-                      if (parts.length === 0) return null;
-                      const country = project.shipCountry?.trim() || "Canada";
-                      return [...parts, country].join(", ");
-                    })();
+                    const jobIsDelivery = resolvedJobDelivery.method === "delivery";
+                    const jobDeliveryAddress = resolvedJobDelivery.addressLine;
                     const orderFootShopify = OrderFootShopifyCell(job);
                     const jobSummaryDisplayName = jobNameForOrderSummary(
                       job.name,
@@ -7585,59 +8793,77 @@ export default function ProjectDetailPage() {
                         },
                       });
                     }
-                    /* Delivery photo (last). Locked = non-interactive status until staff upload. */
+                    const deliveryOptionsLocked = isOrderDeliveryPlanLocked(
+                      job.orderLifecycleStatus,
+                    );
+                    const deliveryOptionsDescription = deliveryOptionsLocked
+                      ? "Delivery plan is locked after the order has been fully delivered."
+                      : job.orderLifecycleStatus === "ordered" &&
+                          (job.deliveredPercent ?? 0) > 0 &&
+                          (job.deliveredPercent ?? 0) < 100
+                        ? "Update plan · completed deliveries stay as recorded"
+                        : resolvedJobDelivery.method === "pickup"
+                        ? "Store pickup · no delivery fee"
+                        : resolvedJobDelivery.fee > 0
+                          ? `Delivery · $${shopDeliveryFee.toFixed(2)} per phase`
+                          : "Delivery · add address";
                     if (canEdit || viewerCanFulfill) {
-                      const photoUnlocked =
-                        Boolean(job.hasFulfillmentPhoto) &&
-                        Boolean(job.fulfillmentPhotoUrl);
-                      if (
-                        photoUnlocked &&
-                        job.fulfillmentPhotoUrl
-                      ) {
-                        orderFinanceActions.push({
-                          key: "delivery-photo",
-                          kind: "link",
-                          icon: PC_PHOTO_ICON,
-                          label: "Delivery photo",
-                          description: "View fulfillment photo.",
-                          tone: "edit",
-                          anchorProps: {
-                            href: job.fulfillmentPhotoUrl,
-                            target: "_blank",
-                            rel: "noopener noreferrer",
-                            "data-projectclad-view-delivery-photo": "",
-                            "data-job-id": job.id,
-                            title: "Open photo in new tab",
-                            "aria-label": "Open delivery photo in new tab",
-                          },
-                        });
-                      } else {
-                        orderFinanceActions.push({
-                          key: "delivery-photo",
-                          kind: "status",
-                          icon: PC_LOCK_ICON,
-                          label: "Locked",
-                          description: "Unlocks after staff upload.",
-                          tone: "edit",
-                        });
-                      }
+                      const deliveryBtnLockedForCustomer =
+                        deliveryOptionsLocked && !viewerCanFulfill;
+                      orderFinanceActions.push({
+                        key: "delivery-options",
+                        kind: "button",
+                        icon: PC_DELIVERY_OPTIONS_ICON,
+                        label: "Delivery & status",
+                        description: deliveryOptionsDescription,
+                        tone: "edit",
+                        buttonProps: {
+                          "data-projectclad-delivery-options": "",
+                          "data-job-id": job.id,
+                          "data-delivery-mode": job.deliveryMode,
+                          "data-ship-address1": job.shipAddress1 ?? "",
+                          "data-ship-city": job.shipCity ?? "",
+                          "data-ship-province": job.shipProvince ?? "",
+                          "data-ship-postal": job.shipPostal ?? "",
+                          "data-ship-country": job.shipCountry ?? "",
+                          "data-scheduled-date": job.scheduledDeliveryDate ?? "",
+                          "data-scheduled-window":
+                            job.scheduledDeliveryWindow ?? "",
+                          "data-order-lifecycle": job.orderLifecycleStatus,
+                          "data-delivered-percent": String(
+                            job.deliveredPercent ?? 0,
+                          ),
+                          "data-plan-locked": deliveryOptionsLocked ? "1" : "0",
+                          "data-staff-fulfillment": viewerCanFulfill ? "1" : "0",
+                          disabled: deliveryBtnLockedForCustomer,
+                          title: deliveryBtnLockedForCustomer
+                            ? "Delivery options cannot be changed after delivery"
+                            : "Delivery plan, fulfillment, and documents",
+                          "aria-label": deliveryBtnLockedForCustomer
+                            ? "Delivery & status (locked — order delivered)"
+                            : "Delivery & status for this order",
+                        },
+                      });
                     }
                     const orderFinanceActionsSlot =
                       orderFinanceActions.length > 0 ? (
-                        <div
-                          className="project-clad-action-row"
-                          style={
-                            {
-                              "--pc-action-row-cols": orderFinanceActions.length,
-                            } as CSSProperties
-                          }
-                        >
-                          {orderFinanceActions.map((spec) =>
-                            renderOrderAction(spec, {
-                              jobId: job.id,
-                              projectId: project.id,
-                            }),
-                          )}
+                        <div className="project-clad-order-actions-stack">
+                          <div
+                            className="project-clad-action-row"
+                            style={
+                              {
+                                "--pc-action-row-cols":
+                                  orderFinanceActions.length,
+                              } as CSSProperties
+                            }
+                          >
+                            {orderFinanceActions.map((spec) =>
+                              renderOrderAction(spec, {
+                                jobId: job.id,
+                                projectId: project.id,
+                              }),
+                            )}
+                          </div>
                         </div>
                       ) : null;
                     const paymentSummaryPdfActionsSlot = (
@@ -7715,6 +8941,62 @@ export default function ProjectDetailPage() {
                   >
                   <details
                     id={`job-${job.id}`}
+                    data-pc-phase-plan={encodeURIComponent(
+                      JSON.stringify({
+                        ...(() => {
+                          const itemRows = job.items.map((item) => ({
+                            id: item.id,
+                            quantity: item.quantity,
+                          }));
+                          const planRef = parseDeliveryPlanReference(
+                            job.deliveryBatchByItemJson,
+                            job.deliveryPlanMode,
+                            itemRows,
+                            job.deliveryPhases,
+                            {
+                              scheduledDeliveryDate: job.scheduledDeliveryDate,
+                              scheduledDeliveryWindow:
+                                job.scheduledDeliveryWindow,
+                            },
+                          );
+                          const batchFallback = inferBatchByItemFromPhases(
+                            itemRows,
+                            planRef.referencePhases.map((ph, idx) => ({
+                              id: `ref-${idx}`,
+                              sequence: ph.sequence,
+                              scheduledDeliveryDate:
+                                ph.scheduledDeliveryDate || null,
+                              scheduledDeliveryWindow:
+                                ph.scheduledDeliveryWindow || null,
+                              deliveryFeeAmount: 0,
+                              hasPhoto: false,
+                              deliveredAt: null,
+                              photoUrl: null,
+                              lines: ph.lines.map((l) => ({
+                                jobItemId: l.jobItemId,
+                                quantityPlanned: l.quantityPlanned,
+                                quantityDelivered: 0,
+                              })),
+                            })),
+                          );
+                          return {
+                            planMode: planRef.planMode,
+                            batchByItem:
+                              planRef.batchPayload?.batchByItem ?? batchFallback,
+                            repeatIntervalDays:
+                              planRef.batchPayload?.repeatIntervalDays ?? null,
+                            repeatEndDate:
+                              planRef.batchPayload?.repeatEndDate ?? null,
+                            phases: planRef.referencePhases,
+                          };
+                        })(),
+                        items: job.items.map((item) => ({
+                          id: item.id,
+                          quantity: item.quantity,
+                          label: item.displayName,
+                        })),
+                      }),
+                    )}
                     data-job-id={job.id}
                     open={selectedJobId === job.id}
                     className={
@@ -8343,39 +9625,6 @@ export default function ProjectDetailPage() {
                     {(() => {
                       const awaiting = isOrderAwaitingApproval(job.id);
                       const showLineItemEditPanel = !awaiting || viewerCanFulfill;
-                      const showPreferredDeliveryOptions =
-                        project.receiveMode === "delivery" &&
-                        job.orderLifecycleStatus !== "delivered" &&
-                        job.orderLifecycleStatus !== "paid";
-                      const deliveryScheduleForm =
-                        (canEdit || viewerCanFulfill) && showPreferredDeliveryOptions ? (
-                          <Form
-                            method="post"
-                            action={`/apps/project-clad/project?id=${project.id}`}
-                            className="project-clad-stack project-clad-preferred-delivery-form"
-                            data-projectclad-preferred-delivery
-                            style={{
-                              width: "100%",
-                              boxSizing: "border-box",
-                            }}
-                          >
-                            <input type="hidden" name="intent" value="save-order-schedule" />
-                            <input type="hidden" name="jobId" value={job.id} />
-                            {viewerCanFulfill ? (
-                              <input type="hidden" name="staffSchedule" value="1" />
-                            ) : null}
-                            <PreferredDeliveryScheduleFields
-                              job={job}
-                              minYmd={preferredDeliveryDateMinYmd}
-                            />
-                            <button
-                              type="submit"
-                              className="project-clad-button project-clad-preferred-delivery-submit"
-                            >
-                              Save
-                            </button>
-                          </Form>
-                        ) : null;
                       return (
                     <div
                       className="project-clad-actions project-clad-order-actions"
@@ -8387,13 +9636,6 @@ export default function ProjectDetailPage() {
                         gap: "0.75rem",
                       }}
                     >
-                      {/*
-                       * Order now / Edit order buttons used to live here in their own
-                       * standalone row. They've moved INSIDE OrderFinancePanel via the
-                       * `actionsSlot` prop so they sit under the Payment Summary card
-                       * as part of the same finance section.
-                       */}
-                      {!showLineItemEditPanel ? deliveryScheduleForm : null}
                       {showLineItemEditPanel ? (
                       <div
                         className="project-clad-edit-view project-clad-order-edit-panel"
@@ -8405,35 +9647,6 @@ export default function ProjectDetailPage() {
                           width: "100%",
                         }}
                       >
-                        {deliveryScheduleForm}
-                        {viewerCanFulfill ? (
-                          <div
-                            className="project-clad-staff-fulfillment"
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "0.75rem",
-                              maxWidth: "32rem",
-                            }}
-                          >
-                            {staffOrderLifecycleStatusForm(job)}
-                            {job.orderLifecycleStatus === "ordered" ? (
-                              <StaffFulfillmentPhotoUpload job={job} projectId={project.id} />
-                            ) : null}
-                            {job.orderLifecycleStatus === "delivered" ? (
-                              <Form
-                                method="post"
-                                action={`/apps/project-clad/project?id=${project.id}`}
-                              >
-                                <input type="hidden" name="intent" value="staff-mark-order-paid" />
-                                <input type="hidden" name="jobId" value={job.id} />
-                                <button type="submit" className="project-clad-button">
-                                  Mark paid
-                                </button>
-                              </Form>
-                            ) : null}
-                          </div>
-                        ) : null}
                         {canEdit || viewerCanFulfill ? (
                           <div
                             className="project-clad-actions"
@@ -8465,9 +9678,7 @@ export default function ProjectDetailPage() {
                     </div>
                     );
                     })()}
-                    {/* View delivery photo now lives as the 4th action
-                        card in the Payment Summary action row — locked
-                        until staff upload the fulfillment photo. */}
+                    {/* Delivery photos: Documents tab → Photo column per confirmed delivery. */}
                     </div>
                   </details>
                   </div>
@@ -8587,10 +9798,10 @@ export default function ProjectDetailPage() {
                     <div
                       className="project-clad-summary-action"
                       data-projectclad-price
-                      data-price={project.subtotal.toFixed(2)}
+                      data-price={projectSubtotalForDisplay.toFixed(2)}
                     >
                       {pricingUnlocked ? (
-                        formatPrice(project.subtotal.toFixed(2))
+                        formatPrice(projectSubtotalForDisplay.toFixed(2))
                       ) : (
                         <button
                           type="button"
@@ -8727,6 +9938,7 @@ export default function ProjectDetailPage() {
       requestAnimationFrame(function () {
         modal.classList.add('project-clad-edit-project-modal--open');
         window.setTimeout(function () {
+          pcSyncEditProjectDeliveryPanels();
           captureEditProjectBaseline();
         }, 0);
       });
@@ -9621,6 +10833,837 @@ export default function ProjectDetailPage() {
     }
   };
 
+  var orderDeliveryModal = document.querySelector('[data-projectclad-order-delivery-modal]');
+  var orderDeliveryForm = document.querySelector('[data-projectclad-order-delivery-form]');
+
+  function pcShipComplete(ship) {
+    return Boolean(
+      ship.shipAddress1 && ship.shipCity && ship.shipProvince && ship.shipPostal,
+    );
+  }
+
+  function pcProjectCtxFromDeliveryModal() {
+    if (!(orderDeliveryModal instanceof HTMLElement)) {
+      return { receiveMode: 'pickup', ship: {} };
+    }
+    return {
+      receiveMode: orderDeliveryModal.getAttribute('data-project-receive-mode') || 'pickup',
+      ship: {
+        shipAddress1: orderDeliveryModal.getAttribute('data-project-ship-address1') || '',
+        shipCity: orderDeliveryModal.getAttribute('data-project-ship-city') || '',
+        shipProvince: orderDeliveryModal.getAttribute('data-project-ship-province') || '',
+        shipPostal: orderDeliveryModal.getAttribute('data-project-ship-postal') || '',
+        shipCountry: orderDeliveryModal.getAttribute('data-project-ship-country') || 'Canada',
+      },
+    };
+  }
+
+  function pcReadOrderDeliveryMode() {
+    if (!(orderDeliveryForm instanceof HTMLFormElement)) return 'inherit';
+    var checked = orderDeliveryForm.querySelector('input[name="deliveryMode"]:checked');
+    return checked instanceof HTMLInputElement ? checked.value : 'inherit';
+  }
+
+  function pcReadOrderDeliveryShipFromForm() {
+    if (!(orderDeliveryForm instanceof HTMLFormElement)) return {};
+    function val(name) {
+      var el = orderDeliveryForm.querySelector('[name="' + name + '"]');
+      return el instanceof HTMLInputElement || el instanceof HTMLSelectElement
+        ? String(el.value || '').trim()
+        : '';
+    }
+    return {
+      shipAddress1: val('shipAddress1'),
+      shipCity: val('shipCity'),
+      shipProvince: val('shipProvince'),
+      shipPostal: val('shipPostal'),
+      shipCountry: val('shipCountry') || 'Canada',
+    };
+  }
+
+  function pcPreviewDeliveryFee() {
+    var feeAttr = orderDeliveryModal instanceof HTMLElement
+      ? parseFloat(orderDeliveryModal.getAttribute('data-delivery-fee') || '15')
+      : 15;
+    var fee = isFinite(feeAttr) ? feeAttr : 15;
+    var mode = pcReadOrderDeliveryMode();
+    var projectCtx = pcProjectCtxFromDeliveryModal();
+    if (mode === 'pickup') return { method: 'pickup', fee: 0, line: 'Store pickup · no delivery fee.' };
+    if (mode === 'delivery') {
+      var ship = pcReadOrderDeliveryShipFromForm();
+      var jobOk = pcShipComplete(ship);
+      var projectOk = pcShipComplete(projectCtx.ship);
+      var canCharge = jobOk || projectOk;
+      return {
+        method: 'delivery',
+        fee: canCharge ? fee : 0,
+        line: canCharge
+          ? 'Delivery · $' + fee.toFixed(2) + ' fee on this order.'
+          : 'Delivery · enter a complete address (or use project address).',
+      };
+    }
+    if (projectCtx.receiveMode === 'pickup' || !pcShipComplete(projectCtx.ship)) {
+      return { method: 'pickup', fee: 0, line: 'Uses project settings · store pickup.' };
+    }
+    return {
+      method: 'delivery',
+      fee: fee,
+      line: 'Uses project settings · delivery · $' + fee.toFixed(2) + ' fee.',
+    };
+  }
+
+  var deliveryPhasesState = {
+    items: [],
+    phases: [],
+    planMode: 'single',
+    batchByItem: {},
+    repeatIntervalDays: null,
+    repeatEndDate: null,
+  };
+
+  function pcParsePhasePlanFromJob(jobId) {
+    var det = document.querySelector('details.project-clad-order-row[data-job-id="' + jobId.replace(/"/g, '') + '"]');
+    if (!(det instanceof HTMLElement)) {
+      return {
+        items: [],
+        phases: [],
+        planMode: 'single',
+        batchByItem: {},
+        repeatIntervalDays: null,
+        repeatEndDate: null,
+      };
+    }
+    var raw = det.getAttribute('data-pc-phase-plan') || '';
+    try {
+      var plan = JSON.parse(decodeURIComponent(raw)) || {};
+      var rawMode = String(plan.planMode || 'single').toLowerCase();
+      var planMode =
+        rawMode === 'recurring' || rawMode === 'at_a_time'
+          ? 'recurring'
+          : 'single';
+      return {
+        items: plan.items || [],
+        phases: plan.phases || [],
+        planMode: planMode,
+        batchByItem: plan.batchByItem || {},
+        repeatIntervalDays: plan.repeatIntervalDays != null ? plan.repeatIntervalDays : null,
+        repeatEndDate: plan.repeatEndDate || null,
+      };
+    } catch (e) {
+      return {
+        items: [],
+        phases: [],
+        planMode: 'single',
+        batchByItem: {},
+        repeatIntervalDays: null,
+        repeatEndDate: null,
+      };
+    }
+  }
+
+  function pcAddDaysYmd(ymd, days) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((ymd || '').trim());
+    if (!m) return null;
+    var u = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + days);
+    var dt = new Date(u);
+    return (
+      dt.getUTCFullYear() +
+      '-' +
+      String(dt.getUTCMonth() + 1).padStart(2, '0') +
+      '-' +
+      String(dt.getUTCDate()).padStart(2, '0')
+    );
+  }
+
+  function pcReadDeliveryRepeatIntervalDays() {
+    if (!(orderDeliveryForm instanceof HTMLFormElement)) return null;
+    var sel = orderDeliveryForm.querySelector('[data-projectclad-delivery-repeat-interval]');
+    if (!(sel instanceof HTMLSelectElement)) return null;
+    var n = Math.floor(Number(sel.value));
+    return Number.isFinite(n) && n >= 1 ? n : null;
+  }
+
+  function pcReadDeliveryRepeatEndDate() {
+    if (!(orderDeliveryForm instanceof HTMLFormElement)) return null;
+    var inp = orderDeliveryForm.querySelector('[data-projectclad-delivery-repeat-end]');
+    return inp instanceof HTMLInputElement ? inp.value.trim() || null : null;
+  }
+
+  function pcDeliveryDateMin() {
+    if (!(orderDeliveryForm instanceof HTMLFormElement)) return '';
+    return orderDeliveryForm.getAttribute('data-pc-delivery-date-min') || '';
+  }
+
+  function pcOttawaWindows() {
+    if (!(orderDeliveryForm instanceof HTMLFormElement)) return [];
+    try {
+      return JSON.parse(
+        orderDeliveryForm.getAttribute('data-pc-ottawa-windows') || '[]',
+      );
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function pcSyncScheduleWindowSelect(dateInp, winSel) {
+    if (!(winSel instanceof HTMLSelectElement)) return;
+    var hasDate =
+      dateInp instanceof HTMLInputElement && Boolean(dateInp.value.trim());
+    winSel.disabled = !hasDate;
+    if (!hasDate) {
+      winSel.value = '';
+    }
+    var placeholder = winSel.querySelector('option[value=""]');
+    if (placeholder) {
+      placeholder.textContent = hasDate ? 'Select…' : 'Select a day first…';
+    }
+  }
+
+  function pcReadRecurringStartScheduleFromForm() {
+    var dateEl = orderDeliveryForm.querySelector(
+      '[data-projectclad-delivery-recurring-start-date]',
+    );
+    var winEl = orderDeliveryForm.querySelector(
+      '[data-projectclad-delivery-recurring-start-window]',
+    );
+    return {
+      scheduledDeliveryDate:
+        dateEl instanceof HTMLInputElement ? dateEl.value.trim() : '',
+      scheduledDeliveryWindow:
+        winEl instanceof HTMLSelectElement ? winEl.value.trim() : '',
+    };
+  }
+
+  function pcReadAtATimeScheduleFromForm() {
+    var recurring = pcReadDeliveryPlanMode() === 'recurring';
+    var sched = recurring
+      ? pcReadRecurringStartScheduleFromForm()
+      : pcReadDeliveryScheduleFromForm();
+    return {
+      scheduledDeliveryDate: sched.scheduledDeliveryDate,
+      scheduledDeliveryWindow: sched.scheduledDeliveryWindow,
+      repeatIntervalDays: recurring ? pcReadDeliveryRepeatIntervalDays() : null,
+      repeatEndDate: recurring ? pcReadDeliveryRepeatEndDate() : null,
+    };
+  }
+
+  function pcApplyRecurringPhaseDates(phases, schedule) {
+    var interval = schedule.repeatIntervalDays;
+    var start = (schedule.scheduledDeliveryDate || '').trim();
+    if (!interval || interval < 1 || !start) return phases;
+    var endCap = (schedule.repeatEndDate || '').trim();
+    return phases.map(function (ph) {
+      if (ph.sequence === 1) {
+        return {
+          sequence: ph.sequence,
+          scheduledDeliveryDate: start,
+          scheduledDeliveryWindow: schedule.scheduledDeliveryWindow,
+          lines: ph.lines,
+        };
+      }
+      var date = pcAddDaysYmd(start, interval * (ph.sequence - 1));
+      if (!date || (endCap && date > endCap)) {
+        return {
+          sequence: ph.sequence,
+          scheduledDeliveryDate: '',
+          scheduledDeliveryWindow: '',
+          lines: ph.lines,
+        };
+      }
+      return {
+        sequence: ph.sequence,
+        scheduledDeliveryDate: date,
+        scheduledDeliveryWindow: schedule.scheduledDeliveryWindow,
+        lines: ph.lines,
+      };
+    });
+  }
+
+  function pcReadDeliveryPlanMode() {
+    if (!(orderDeliveryForm instanceof HTMLFormElement)) return 'single';
+    var checked = orderDeliveryForm.querySelector(
+      'input[name="deliveryPlanMode"]:checked',
+    );
+    var v = checked instanceof HTMLInputElement ? checked.value : 'single';
+    return v === 'recurring' ? v : 'single';
+  }
+
+  function pcReadDeliveryScheduleFromForm() {
+    var dateEl = orderDeliveryForm.querySelector('[data-projectclad-order-delivery-date]');
+    var winEl = orderDeliveryForm.querySelector('[data-projectclad-order-delivery-window]');
+    return {
+      scheduledDeliveryDate:
+        dateEl instanceof HTMLInputElement ? dateEl.value.trim() : '',
+      scheduledDeliveryWindow:
+        winEl instanceof HTMLSelectElement ? winEl.value.trim() : '',
+    };
+  }
+
+  function pcBuildPhasesFromAtATime(batchByItem) {
+    var items = deliveryPhasesState.items || [];
+    var schedule = pcReadAtATimeScheduleFromForm();
+    var remaining = {};
+    items.forEach(function (it) {
+      remaining[it.id] = it.quantity;
+    });
+    var phases = [];
+    var seq = 0;
+    var anyLeft = true;
+    while (anyLeft) {
+      anyLeft = false;
+      var lines = [];
+      items.forEach(function (it) {
+        var rem = remaining[it.id] || 0;
+        if (rem <= 0) return;
+        anyLeft = true;
+        var batch = Math.max(1, Math.floor(Number(batchByItem[it.id]) || rem));
+        var planned = Math.min(rem, batch);
+        remaining[it.id] = rem - planned;
+        if (planned > 0) lines.push({ jobItemId: it.id, quantityPlanned: planned });
+      });
+      if (!lines.length) break;
+      seq += 1;
+      phases.push({
+        sequence: seq,
+        scheduledDeliveryDate: seq === 1 ? schedule.scheduledDeliveryDate : '',
+        scheduledDeliveryWindow: seq === 1 ? schedule.scheduledDeliveryWindow : '',
+        lines: lines,
+      });
+    }
+    var built = phases.length
+      ? phases
+      : [
+          {
+            sequence: 1,
+            scheduledDeliveryDate: schedule.scheduledDeliveryDate,
+            scheduledDeliveryWindow: schedule.scheduledDeliveryWindow,
+            lines: items.map(function (it) {
+              return { jobItemId: it.id, quantityPlanned: it.quantity };
+            }),
+          },
+        ];
+    return pcApplyRecurringPhaseDates(built, schedule);
+  }
+
+  function pcReadBatchByItemFromForm() {
+    var batch = {};
+    var list = orderDeliveryForm.querySelector('[data-projectclad-delivery-batch-list]');
+    if (!(list instanceof HTMLElement)) return batch;
+    deliveryPhasesState.items.forEach(function (it) {
+      var inp = list.querySelector('[data-batch-qty-item="' + it.id + '"]');
+      var q =
+        inp instanceof HTMLInputElement
+          ? Math.max(1, Math.floor(Number(inp.value) || 0))
+          : it.quantity;
+      batch[it.id] = Math.min(q, it.quantity);
+    });
+    return batch;
+  }
+
+  function pcRenderDeliveryBatchList() {
+    var list = orderDeliveryForm.querySelector('[data-projectclad-delivery-batch-list]');
+    if (!(list instanceof HTMLElement)) return;
+    list.innerHTML = '';
+    deliveryPhasesState.items.forEach(function (it) {
+      var row = document.createElement('label');
+      row.className = 'project-clad-delivery-batch-row';
+      var batchVal =
+        deliveryPhasesState.batchByItem[it.id] != null
+          ? deliveryPhasesState.batchByItem[it.id]
+          : it.quantity;
+      row.innerHTML =
+        '<span class="project-clad-delivery-batch-row__label">' +
+        (it.label || 'Line') +
+        ' <span class="project-clad-muted">(ordered ' +
+        it.quantity +
+        ')</span></span><span class="project-clad-delivery-batch-row__field"><span class="project-clad-delivery-batch-row__hint">Per delivery</span><input type="number" min="1" max="' +
+        it.quantity +
+        '" step="1" data-batch-qty-item="' +
+        it.id +
+        '" value="' +
+        batchVal +
+        '" class="project-clad-preferred-delivery-input project-clad-delivery-batch-row__qty" aria-label="Quantity per delivery" /></span>';
+      list.appendChild(row);
+    });
+  }
+
+  function pcPlaceDeliveryFeePreview(planMode) {
+    if (!(orderDeliveryForm instanceof HTMLFormElement)) return;
+    var fee = orderDeliveryForm.querySelector('[data-projectclad-delivery-fee-preview]');
+    if (!(fee instanceof HTMLElement)) return;
+    var recurringAnchor = orderDeliveryForm.querySelector(
+      '[data-projectclad-delivery-fee-anchor-recurring]',
+    );
+    var singleAnchor = orderDeliveryForm.querySelector(
+      '[data-projectclad-delivery-fee-anchor-single]',
+    );
+    var target =
+      planMode === 'recurring' ? recurringAnchor : singleAnchor;
+    if (target instanceof HTMLElement) target.appendChild(fee);
+  }
+
+  function pcUpdateDeliveryPlanPreviewTexts(phaseCount) {
+    var preview = orderDeliveryForm.querySelector('[data-projectclad-delivery-fee-preview]');
+    var info = pcPreviewDeliveryFee();
+    var n = phaseCount != null ? phaseCount : deliveryPhasesState.phases.length || 1;
+    if (preview instanceof HTMLElement) {
+      var rateEl = preview.querySelector('[data-projectclad-delivery-fee-rate]');
+      var totalEl = preview.querySelector('[data-projectclad-delivery-fee-total]');
+      if (info.method === 'delivery' && info.fee > 0) {
+        if (rateEl instanceof HTMLElement) {
+          rateEl.textContent =
+            'Delivery · $' +
+            info.fee.toFixed(2) +
+            ' per delivery × ' +
+            n;
+        }
+        if (totalEl instanceof HTMLElement) {
+          totalEl.textContent = '$' + (info.fee * n).toFixed(2);
+          totalEl.hidden = false;
+        }
+      } else {
+        if (rateEl instanceof HTMLElement) rateEl.textContent = info.line;
+        if (totalEl instanceof HTMLElement) totalEl.hidden = true;
+      }
+    }
+    var previewEl = orderDeliveryForm.querySelector('[data-projectclad-delivery-phase-preview]');
+    var planMode = pcReadDeliveryPlanMode();
+    if (previewEl instanceof HTMLElement) {
+      if (planMode === 'recurring') {
+        var schedRecur = pcReadAtATimeScheduleFromForm();
+        var recurLine =
+          schedRecur.repeatIntervalDays && schedRecur.scheduledDeliveryDate
+            ? ' Dates repeat every ' + schedRecur.repeatIntervalDays + ' days from the first delivery.'
+            : ' Choose a first delivery date and repeat interval.';
+        previewEl.textContent =
+          n +
+          ' deliver' +
+          (n === 1 ? 'y' : 'ies') +
+          ' from your per-delivery quantities.' +
+          recurLine;
+      } else {
+        previewEl.textContent = 'One delivery with all line quantities.';
+      }
+    }
+  }
+
+  function pcUpdateDeliveryPlanPanels(options) {
+    options = options || {};
+    var rerenderBatch = options.rerenderBatch !== false;
+    var wrap = orderDeliveryForm && orderDeliveryForm.querySelector('[data-projectclad-delivery-phases-wrap]');
+    if (!(wrap instanceof HTMLElement)) return;
+    var deliveryMode = pcReadOrderDeliveryMode();
+    var preview = pcPreviewDeliveryFee();
+    wrap.hidden = deliveryMode !== 'delivery' && preview.method !== 'delivery';
+
+    var planMode = pcReadDeliveryPlanMode();
+    deliveryPhasesState.planMode = planMode;
+
+    var preferredSched = orderDeliveryForm.querySelector(
+      '[data-projectclad-order-delivery-preferred-schedule]',
+    );
+    if (preferredSched instanceof HTMLElement) {
+      preferredSched.hidden = planMode !== 'single';
+    }
+    var preferredDate = orderDeliveryForm.querySelector(
+      '[data-projectclad-order-delivery-date]',
+    );
+    var preferredWindow = orderDeliveryForm.querySelector(
+      '[data-projectclad-order-delivery-window]',
+    );
+    if (preferredDate instanceof HTMLInputElement) {
+      preferredDate.disabled = planMode !== 'single';
+    }
+    if (preferredWindow instanceof HTMLSelectElement) {
+      preferredWindow.disabled =
+        planMode !== 'single' ||
+        !(preferredDate instanceof HTMLInputElement && preferredDate.value.trim());
+    }
+    var recurStartDate = orderDeliveryForm.querySelector(
+      '[data-projectclad-delivery-recurring-start-date]',
+    );
+    var recurStartWindow = orderDeliveryForm.querySelector(
+      '[data-projectclad-delivery-recurring-start-window]',
+    );
+    if (recurStartDate instanceof HTMLInputElement) {
+      recurStartDate.disabled = planMode !== 'recurring';
+    }
+    if (recurStartWindow instanceof HTMLSelectElement) {
+      recurStartWindow.disabled =
+        planMode !== 'recurring' ||
+        !(recurStartDate instanceof HTMLInputElement && recurStartDate.value.trim());
+    }
+
+    var recurringPanel = orderDeliveryForm.querySelector('[data-projectclad-delivery-recurring-panel]');
+    if (recurringPanel instanceof HTMLElement) {
+      recurringPanel.hidden = planMode !== 'recurring';
+    }
+
+    pcPlaceDeliveryFeePreview(planMode);
+
+    if (planMode === 'recurring') {
+      if (rerenderBatch) {
+        var existingBatch = pcReadBatchByItemFromForm();
+        if (Object.keys(existingBatch).length > 0) {
+          deliveryPhasesState.batchByItem = existingBatch;
+        }
+        pcRenderDeliveryBatchList();
+      }
+      deliveryPhasesState.batchByItem = pcReadBatchByItemFromForm();
+      deliveryPhasesState.phases = pcBuildPhasesFromAtATime(deliveryPhasesState.batchByItem);
+    } else if (planMode === 'single') {
+      var sched = pcReadDeliveryScheduleFromForm();
+      deliveryPhasesState.phases = [
+        {
+          sequence: 1,
+          scheduledDeliveryDate: sched.scheduledDeliveryDate,
+          scheduledDeliveryWindow: sched.scheduledDeliveryWindow,
+          lines: deliveryPhasesState.items.map(function (it) {
+            return { jobItemId: it.id, quantityPlanned: it.quantity };
+          }),
+        },
+      ];
+    }
+
+    pcUpdateDeliveryPlanPreviewTexts(deliveryPhasesState.phases.length || 1);
+  }
+
+  function pcCollectDeliveryPhasesJson() {
+    var planMode = pcReadDeliveryPlanMode();
+    if (planMode === 'recurring') {
+      var batch = pcReadBatchByItemFromForm();
+      return JSON.stringify(pcBuildPhasesFromAtATime(batch));
+    }
+    if (planMode === 'single') {
+      var sched = pcReadDeliveryScheduleFromForm();
+      return JSON.stringify([
+        {
+          sequence: 1,
+          scheduledDeliveryDate: sched.scheduledDeliveryDate,
+          scheduledDeliveryWindow: sched.scheduledDeliveryWindow,
+          lines: deliveryPhasesState.items.map(function (it) {
+            return { jobItemId: it.id, quantityPlanned: it.quantity };
+          }),
+        },
+      ]);
+    }
+    return JSON.stringify([]);
+  }
+
+  function pcCollectDeliveryBatchJson() {
+    var recurring = pcReadDeliveryPlanMode() === 'recurring';
+    return JSON.stringify({
+      batchByItem: pcReadBatchByItemFromForm(),
+      repeatIntervalDays: recurring ? pcReadDeliveryRepeatIntervalDays() : null,
+      repeatEndDate: recurring ? pcReadDeliveryRepeatEndDate() : null,
+    });
+  }
+
+  function pcParseDeliverySaveError(text, status) {
+    if (text && text.trim().indexOf('{') >= 0) {
+      var start = text.indexOf('{');
+      try {
+        var parsed = JSON.parse(text.slice(start));
+        if (parsed && typeof parsed.error === 'string' && parsed.error.trim()) {
+          return parsed.error.trim();
+        }
+      } catch (e) {}
+    }
+    if (status === 403) return 'You cannot edit delivery for this project.';
+    if (status >= 500) return 'Server error while saving. Try again or contact support.';
+    return 'Could not save delivery options. Reload the page and try again.';
+  }
+
+  function pcSyncOrderDeliveryModalUi(onlyBatchQtyUpdate) {
+    if (!(orderDeliveryForm instanceof HTMLFormElement)) return;
+    var mode = pcReadOrderDeliveryMode();
+    var addrWrap = orderDeliveryForm.querySelector('[data-projectclad-order-delivery-address-wrap]');
+    if (addrWrap instanceof HTMLElement) {
+      addrWrap.hidden = mode !== 'delivery';
+    }
+    var batchPlanMode = pcReadDeliveryPlanMode();
+    if (onlyBatchQtyUpdate && batchPlanMode === 'recurring') {
+      deliveryPhasesState.batchByItem = pcReadBatchByItemFromForm();
+      deliveryPhasesState.phases = pcBuildPhasesFromAtATime(deliveryPhasesState.batchByItem);
+      pcUpdateDeliveryPlanPreviewTexts(deliveryPhasesState.phases.length);
+      return;
+    }
+    pcUpdateDeliveryPlanPreviewTexts(null);
+    pcUpdateDeliveryPlanPanels({ rerenderBatch: true });
+    var planModeSync = pcReadDeliveryPlanMode();
+    var dateInput = orderDeliveryForm.querySelector('[data-projectclad-order-delivery-date]');
+    var windowSelect = orderDeliveryForm.querySelector('[data-projectclad-order-delivery-window]');
+    if (dateInput instanceof HTMLInputElement) {
+      dateInput.disabled = planModeSync !== 'single';
+    }
+    pcSyncScheduleWindowSelect(dateInput, windowSelect);
+    var recurDateInput = orderDeliveryForm.querySelector(
+      '[data-projectclad-delivery-recurring-start-date]',
+    );
+    var recurWindowSelect = orderDeliveryForm.querySelector(
+      '[data-projectclad-delivery-recurring-start-window]',
+    );
+    if (recurDateInput instanceof HTMLInputElement) {
+      recurDateInput.disabled = planModeSync !== 'recurring';
+    }
+    pcSyncScheduleWindowSelect(recurDateInput, recurWindowSelect);
+  }
+
+  function pcOpenOrderDeliveryModal(btn) {
+    if (!(orderDeliveryModal instanceof HTMLElement)) return;
+    if (!(orderDeliveryForm instanceof HTMLFormElement)) return;
+    var jobIdInput = orderDeliveryForm.querySelector('[data-projectclad-order-delivery-job-id]');
+    if (jobIdInput instanceof HTMLInputElement) {
+      jobIdInput.value = btn.getAttribute('data-job-id') || '';
+    }
+    var mode = btn.getAttribute('data-delivery-mode') || 'inherit';
+    orderDeliveryForm.querySelectorAll('input[name="deliveryMode"]').forEach(function (inp) {
+      if (!(inp instanceof HTMLInputElement)) return;
+      inp.checked = inp.value === mode;
+    });
+    function setField(name, val) {
+      var el = orderDeliveryForm.querySelector('[name="' + name + '"]');
+      if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) {
+        el.value = val || '';
+      }
+    }
+    setField('shipAddress1', btn.getAttribute('data-ship-address1'));
+    setField('shipCity', btn.getAttribute('data-ship-city'));
+    setField('shipProvince', btn.getAttribute('data-ship-province'));
+    setField('shipPostal', btn.getAttribute('data-ship-postal'));
+    setField('shipCountry', btn.getAttribute('data-ship-country') || 'Canada');
+    var jobIdOpen = btn.getAttribute('data-job-id') || '';
+    var parsedPlan = pcParsePhasePlanFromJob(jobIdOpen);
+    deliveryPhasesState.items = parsedPlan.items || [];
+    deliveryPhasesState.phases = parsedPlan.phases || [];
+    deliveryPhasesState.planMode = parsedPlan.planMode || 'single';
+    deliveryPhasesState.batchByItem = parsedPlan.batchByItem || {};
+    deliveryPhasesState.repeatIntervalDays = parsedPlan.repeatIntervalDays;
+    deliveryPhasesState.repeatEndDate = parsedPlan.repeatEndDate;
+    var repeatSel = orderDeliveryForm.querySelector('[data-projectclad-delivery-repeat-interval]');
+    if (repeatSel instanceof HTMLSelectElement) {
+      repeatSel.value =
+        parsedPlan.repeatIntervalDays != null
+          ? String(parsedPlan.repeatIntervalDays)
+          : '7';
+    }
+    var repeatEnd = orderDeliveryForm.querySelector('[data-projectclad-delivery-repeat-end]');
+    if (repeatEnd instanceof HTMLInputElement) {
+      repeatEnd.value = parsedPlan.repeatEndDate || '';
+    }
+    if (!deliveryPhasesState.phases.length) {
+      deliveryPhasesState.phases = [
+        {
+          sequence: 1,
+          scheduledDeliveryDate: '',
+          scheduledDeliveryWindow: '',
+          lines: (deliveryPhasesState.items || []).map(function (it) {
+            return { jobItemId: it.id, quantityPlanned: it.quantity };
+          }),
+        },
+      ];
+    }
+    var phase1Open = deliveryPhasesState.phases[0] || null;
+    var jobDate = btn.getAttribute('data-scheduled-date') || '';
+    var jobWindow = btn.getAttribute('data-scheduled-window') || '';
+    setField(
+      'scheduledDeliveryDate',
+      deliveryPhasesState.planMode === 'single'
+        ? phase1Open?.scheduledDeliveryDate || jobDate
+        : jobDate,
+    );
+    setField(
+      'scheduledDeliveryWindow',
+      deliveryPhasesState.planMode === 'single'
+        ? phase1Open?.scheduledDeliveryWindow || jobWindow
+        : jobWindow,
+    );
+    setField(
+      'deliveryRecurringStartDate',
+      phase1Open?.scheduledDeliveryDate || jobDate,
+    );
+    setField(
+      'deliveryRecurringStartWindow',
+      phase1Open?.scheduledDeliveryWindow || jobWindow,
+    );
+    orderDeliveryForm.querySelectorAll('input[name="deliveryPlanMode"]').forEach(function (inp) {
+      if (!(inp instanceof HTMLInputElement)) return;
+      inp.checked = inp.value === deliveryPhasesState.planMode;
+    });
+    var msg = orderDeliveryForm.querySelector('[data-projectclad-order-delivery-message]');
+    if (msg instanceof HTMLElement) msg.textContent = '';
+    var planLocked = btn.getAttribute('data-plan-locked') === '1';
+    if (orderDeliveryModal instanceof HTMLElement) {
+      orderDeliveryModal.setAttribute(
+        'data-current-plan-locked',
+        planLocked ? '1' : '0',
+      );
+    }
+    pcSetDeliveryModalPlanLocked(planLocked);
+    pcShowDeliveryModalJobPanels(jobIdOpen);
+    pcSetDeliveryModalTab(pcDefaultDeliveryModalTab(btn));
+    pcSyncOrderDeliveryModalUi();
+    orderDeliveryModal.style.display = 'flex';
+  }
+
+  function pcCloseOrderDeliveryModal() {
+    if (orderDeliveryModal instanceof HTMLElement) {
+      orderDeliveryModal.style.display = 'none';
+    }
+  }
+
+  function pcSetDeliveryModalPlanLocked(locked) {
+    if (!(orderDeliveryForm instanceof HTMLFormElement)) return;
+    var lockedNote = orderDeliveryForm.querySelector(
+      '[data-projectclad-delivery-plan-locked-note]',
+    );
+    if (lockedNote instanceof HTMLElement) {
+      lockedNote.hidden = !locked;
+    }
+    orderDeliveryForm.querySelectorAll('input, select, textarea, button').forEach(function (el) {
+      if (!(el instanceof HTMLElement)) return;
+      if (el.matches('[data-projectclad-order-delivery-cancel]')) return;
+      if (el.matches('[data-projectclad-order-delivery-save]')) {
+        el.hidden = locked;
+        return;
+      }
+      if (
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLSelectElement ||
+        el instanceof HTMLTextAreaElement
+      ) {
+        el.disabled = locked;
+      }
+    });
+  }
+
+  function pcShowDeliveryModalJobPanels(jobId) {
+    if (!(orderDeliveryModal instanceof HTMLElement)) return;
+    orderDeliveryModal
+      .querySelectorAll('[data-projectclad-delivery-fulfillment-job]')
+      .forEach(function (panel) {
+        if (!(panel instanceof HTMLElement)) return;
+        panel.hidden = panel.getAttribute('data-projectclad-delivery-fulfillment-job') !== jobId;
+      });
+    orderDeliveryModal
+      .querySelectorAll('[data-projectclad-delivery-documents-job]')
+      .forEach(function (panel) {
+        if (!(panel instanceof HTMLElement)) return;
+        panel.hidden = panel.getAttribute('data-projectclad-delivery-documents-job') !== jobId;
+      });
+  }
+
+  function pcSetDeliveryModalTab(tab) {
+    if (!(orderDeliveryModal instanceof HTMLElement)) return;
+    var tabsNav = orderDeliveryModal.querySelector('[data-projectclad-delivery-modal-tabs]');
+    if (tabsNav instanceof HTMLElement) {
+      tabsNav.querySelectorAll('[data-projectclad-delivery-tab]').forEach(function (btn) {
+        if (!(btn instanceof HTMLElement)) return;
+        var isActive = btn.getAttribute('data-projectclad-delivery-tab') === tab;
+        btn.classList.toggle('is-active', isActive);
+      });
+    }
+    orderDeliveryModal
+      .querySelectorAll('[data-projectclad-delivery-tab-panel]')
+      .forEach(function (panel) {
+        if (!(panel instanceof HTMLElement)) return;
+        panel.hidden = panel.getAttribute('data-projectclad-delivery-tab-panel') !== tab;
+      });
+    var saveBtn = orderDeliveryModal.querySelector('[data-projectclad-order-delivery-save]');
+    if (saveBtn instanceof HTMLElement) {
+      var planLocked =
+        orderDeliveryModal.getAttribute('data-current-plan-locked') === '1';
+      saveBtn.hidden = tab !== 'plan' || planLocked;
+    }
+  }
+
+  function pcDefaultDeliveryModalTab(btn) {
+    var staff = btn.getAttribute('data-staff-fulfillment') === '1';
+    var lifecycle = (btn.getAttribute('data-order-lifecycle') || '').toLowerCase();
+    if (staff && (lifecycle === 'ordered' || lifecycle === 'delivered')) {
+      return 'fulfillment';
+    }
+    return 'plan';
+  }
+
+  if (orderDeliveryForm instanceof HTMLFormElement) {
+    orderDeliveryForm.addEventListener('change', function (ev) {
+      var t = ev.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (t.matches('input[name="deliveryPlanMode"]')) {
+        var prevPlanMode = deliveryPhasesState.planMode;
+        var nextPlanMode =
+          t instanceof HTMLInputElement ? t.value : prevPlanMode;
+        if (nextPlanMode === 'recurring' && prevPlanMode === 'single') {
+          var schedSingle = pcReadDeliveryScheduleFromForm();
+          var recurDateInp = orderDeliveryForm.querySelector(
+            '[data-projectclad-delivery-recurring-start-date]',
+          );
+          var recurWinSel = orderDeliveryForm.querySelector(
+            '[data-projectclad-delivery-recurring-start-window]',
+          );
+          if (recurDateInp instanceof HTMLInputElement) {
+            recurDateInp.value = schedSingle.scheduledDeliveryDate;
+          }
+          if (recurWinSel instanceof HTMLSelectElement) {
+            recurWinSel.value = schedSingle.scheduledDeliveryWindow;
+          }
+        }
+      }
+      if (
+        t.matches('input[name="deliveryMode"]') ||
+        t.matches('input[name="deliveryPlanMode"]') ||
+        t.matches('[data-projectclad-delivery-address-input]') ||
+        t.matches('[data-projectclad-order-delivery-date]') ||
+        t.matches('[data-projectclad-delivery-recurring-start-date]') ||
+        t.matches('[data-projectclad-delivery-recurring-start-window]') ||
+        t.matches('[data-projectclad-delivery-repeat-interval]') ||
+        t.matches('[data-projectclad-delivery-repeat-end]')
+      ) {
+        pcSyncOrderDeliveryModalUi(false);
+      }
+      if (t.matches('[data-batch-qty-item]')) {
+        pcSyncOrderDeliveryModalUi(true);
+      }
+    });
+    orderDeliveryForm.addEventListener('input', function (ev) {
+      var t = ev.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (t.matches('[data-batch-qty-item]')) {
+        pcSyncOrderDeliveryModalUi(true);
+        return;
+      }
+      if (t.matches('[data-projectclad-delivery-address-input]')) {
+        pcSyncOrderDeliveryModalUi(false);
+      }
+    });
+  }
+
+  function pcSyncEditProjectDeliveryPanels() {
+    var main = getEditProjectMainForm();
+    if (!(main instanceof HTMLFormElement)) return;
+    var receive = main.querySelector('input[name="projectReceiveMode"]:checked');
+    var receiveVal = receive instanceof HTMLInputElement ? receive.value : 'pickup';
+    var projAddr = main.querySelector('[data-projectclad-edit-project-delivery-address]');
+    if (projAddr instanceof HTMLElement) {
+      projAddr.hidden = receiveVal !== 'delivery';
+    }
+    var newMode = main.querySelector('input[name="newOrderDeliveryMode"]:checked');
+    var newVal = newMode instanceof HTMLInputElement ? newMode.value : 'inherit';
+    var newAddr = main.querySelector('[data-projectclad-new-order-delivery-address]');
+    if (newAddr instanceof HTMLElement) {
+      newAddr.hidden = newVal !== 'delivery';
+    }
+  }
+
+  document.querySelectorAll('input[name="projectReceiveMode"]').forEach(function (inp) {
+    inp.addEventListener('change', pcSyncEditProjectDeliveryPanels);
+  });
+  document.querySelectorAll('input[name="newOrderDeliveryMode"]').forEach(function (inp) {
+    inp.addEventListener('change', pcSyncEditProjectDeliveryPanels);
+  });
+  pcSyncEditProjectDeliveryPanels();
+
   document.addEventListener('click', (event) => {
     var tOnow = event.target;
     if (tOnow && tOnow.nodeType === 3 && tOnow.parentElement) {
@@ -9634,7 +11677,7 @@ export default function ProjectDetailPage() {
       event.stopImmediatePropagation();
       if (
         !window.confirm(
-          'Please ensure all delivery details are accurate. You can update delivery information under "Edit Project Details", and modify order-specific information in "Edit Order."',
+          'Please ensure delivery details are correct. Use Delivery options on this order or Edit project for defaults before placing.',
         )
       ) {
         return;
@@ -9754,6 +11797,148 @@ export default function ProjectDetailPage() {
       }
     }
 
+    const deliveryTabBtn = event.target?.closest?.('[data-projectclad-delivery-tab]');
+    if (deliveryTabBtn instanceof HTMLElement) {
+      event.preventDefault();
+      var tabName = deliveryTabBtn.getAttribute('data-projectclad-delivery-tab');
+      if (tabName) pcSetDeliveryModalTab(tabName);
+      return;
+    }
+    const deliveryOptionsBtn = event.target?.closest?.('[data-projectclad-delivery-options]');
+    if (deliveryOptionsBtn instanceof HTMLElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (
+        deliveryOptionsBtn.disabled ||
+        deliveryOptionsBtn.getAttribute('aria-disabled') === 'true'
+      ) {
+        return;
+      }
+      pcOpenOrderDeliveryModal(deliveryOptionsBtn);
+      return;
+    }
+    const deliverySaveBtn = event.target?.closest?.('[data-projectclad-order-delivery-save]');
+    if (deliverySaveBtn instanceof HTMLElement) {
+      event.preventDefault();
+      if (!(orderDeliveryForm instanceof HTMLFormElement)) return;
+      var deliveryMsg = orderDeliveryForm.querySelector('[data-projectclad-order-delivery-message]');
+      if (deliveryMsg instanceof HTMLElement) deliveryMsg.textContent = '';
+      var previewInfo = pcPreviewDeliveryFee();
+      var modeSave = pcReadOrderDeliveryMode();
+      if (modeSave === 'delivery' && previewInfo.fee <= 0 && previewInfo.method === 'delivery') {
+        if (deliveryMsg instanceof HTMLElement) {
+          deliveryMsg.textContent =
+            'Enter a complete delivery address, or choose store pickup.';
+        }
+        return;
+      }
+      var planModeSave = pcReadDeliveryPlanMode();
+      if (planModeSave === 'recurring' && modeSave === 'delivery') {
+        var jobIdInputSave = orderDeliveryForm.querySelector('[data-projectclad-order-delivery-job-id]');
+        if (
+          jobIdInputSave instanceof HTMLInputElement &&
+          !deliveryPhasesState.items.length
+        ) {
+          var reparsed = pcParsePhasePlanFromJob(jobIdInputSave.value || '');
+          deliveryPhasesState.items = reparsed.items || [];
+        }
+        if (!deliveryPhasesState.items.length) {
+          if (deliveryMsg instanceof HTMLElement) {
+            deliveryMsg.textContent =
+              'Add line items to this order before saving a delivery plan.';
+          }
+          return;
+        }
+        var batchCheck = pcReadBatchByItemFromForm();
+        var batchMissing = deliveryPhasesState.items.some(function (it) {
+          return !batchCheck[it.id] || batchCheck[it.id] < 1;
+        });
+        if (batchMissing) {
+          if (deliveryMsg instanceof HTMLElement) {
+            deliveryMsg.textContent =
+              'Enter a quantity per delivery for each line.';
+          }
+          return;
+        }
+        var repeatDays = pcReadDeliveryRepeatIntervalDays();
+        var startSched = pcReadRecurringStartScheduleFromForm();
+        if (!repeatDays) {
+          if (deliveryMsg instanceof HTMLElement) {
+            deliveryMsg.textContent =
+              'Choose how often deliveries repeat.';
+          }
+          return;
+        }
+        if (!startSched.scheduledDeliveryDate) {
+          if (deliveryMsg instanceof HTMLElement) {
+            deliveryMsg.textContent =
+              'Choose a date for the first recurring delivery.';
+          }
+          return;
+        }
+      }
+      deliverySaveBtn.disabled = true;
+      var saveUrlDel = new URL(window.location.href);
+      saveUrlDel.searchParams.set('pcJson', '1');
+      var phasesHidden = orderDeliveryForm.querySelector('[data-projectclad-delivery-phases-json]');
+      if (phasesHidden instanceof HTMLInputElement) {
+        phasesHidden.value = pcCollectDeliveryPhasesJson();
+      }
+      var batchHidden = orderDeliveryForm.querySelector('[data-projectclad-delivery-batch-json]');
+      if (batchHidden instanceof HTMLInputElement) {
+        batchHidden.value = pcCollectDeliveryBatchJson();
+      }
+      var fdDel = new FormData(orderDeliveryForm);
+      fetch(saveUrlDel.pathname + saveUrlDel.search, {
+        method: 'POST',
+        credentials: 'include',
+        body: fdDel,
+      })
+        .then(function (res) {
+          return res.text().then(function (text) {
+            return { res: res, text: text };
+          });
+        })
+        .then(function (o) {
+          var ack = null;
+          try {
+            ack = o.text.trim().indexOf('{') === 0 ? JSON.parse(o.text) : null;
+          } catch (e) {}
+          if (!o.res.ok || (ack && ack.error)) {
+            var err =
+              (ack && typeof ack.error === 'string' && ack.error) ||
+              pcParseDeliverySaveError(o.text, o.res.status);
+            if (deliveryMsg instanceof HTMLElement) deliveryMsg.textContent = err;
+            return;
+          }
+          pcCloseOrderDeliveryModal();
+          var u = new URL(window.location.href);
+          u.searchParams.delete('pcJson');
+          window.location.replace(u.pathname + u.search);
+        })
+        .catch(function () {
+          if (deliveryMsg instanceof HTMLElement) {
+            deliveryMsg.textContent = "Couldn't save — check your connection.";
+          }
+        })
+        .finally(function () {
+          deliverySaveBtn.disabled = false;
+        });
+      return;
+    }
+    const deliveryCancelBtn =
+      event.target?.closest?.('[data-projectclad-order-delivery-cancel]') ||
+      event.target?.closest?.('[data-projectclad-order-delivery-close]');
+    if (deliveryCancelBtn) {
+      event.preventDefault();
+      pcCloseOrderDeliveryModal();
+      return;
+    }
+    if (event.target === orderDeliveryModal) {
+      pcCloseOrderDeliveryModal();
+      return;
+    }
+
     const editNewOrderCreate = event.target?.closest?.('[data-projectclad-edit-project-create-order]');
     if (editNewOrderCreate instanceof HTMLElement) {
       event.preventDefault();
@@ -9782,6 +11967,20 @@ export default function ProjectDetailPage() {
         jobName: jobNameCreate,
         purchaseOrderNumber: poCreate,
       });
+      var newDelModeInp = mainFormCreate.querySelector('input[name="newOrderDeliveryMode"]:checked');
+      var newDelMode =
+        newDelModeInp instanceof HTMLInputElement ? newDelModeInp.value : 'inherit';
+      qpCreate.set('deliveryMode', newDelMode);
+      if (newDelMode === 'delivery') {
+        ['shipAddress1', 'shipCity', 'shipProvince', 'shipPostal', 'shipCountry'].forEach(
+          function (field) {
+            var el = mainFormCreate.querySelector('[name="' + field + '"]');
+            if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) {
+              qpCreate.set(field, el.value.trim());
+            }
+          },
+        );
+      }
       fetch(actionsEndpoint + '?' + qpCreate.toString(), { credentials: 'include' })
         .then(function (res) {
           return res.json().then(function (payload) {

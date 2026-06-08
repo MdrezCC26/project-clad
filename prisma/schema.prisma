@@ -52,6 +52,13 @@ enum JobFulfillmentMethod {
   pickup
 }
 
+/// Per-order delivery choice relative to project defaults.
+enum JobDeliveryMode {
+  inherit
+  pickup
+  delivery
+}
+
 /// Default for how the customer receives project orders (drives address requirement + delivery fee display).
 enum ProjectReceiveMode {
   delivery
@@ -127,6 +134,17 @@ model Job {
   scheduledDeliveryWindow String?
   /// Set when the customer confirms Order now (delivery vs store pickup).
   fulfillmentMethod     JobFulfillmentMethod?
+  /// Per-order delivery: inherit project settings, force pickup, or delivery (optional job ship-to).
+  deliveryMode          JobDeliveryMode @default(inherit)
+  /// Last saved delivery plan: single | recurring (legacy: custom, at_a_time)
+  deliveryPlanMode        String?
+  /// JSON map of jobItemId → qty per delivery (recurring mode)
+  deliveryBatchByItemJson String? @db.Text
+  shipAddress1            String?
+  shipCity                String?
+  shipProvince            String?
+  shipPostal              String?
+  shipCountry             String?
   /// Relative storage key under app storage dir (not a public URL).
   fulfillmentPhotoStorageKey String?
   /// Set when fulfillment emails + invoice hook ran (idempotency).
@@ -140,9 +158,56 @@ model Job {
   items             JobItem[]
   orderLink         JobOrderLink?
   draftOrderLink    JobDraftOrderLink?
+  deliveryPhases    JobDeliveryPhase[]
 
   @@index([projectId])
   @@index([projectId, sortOrder])
+}
+
+/// One scheduled drop for a job (default: single phase with full qty). Pickup phases use deliveryFeeAmount 0.
+model JobDeliveryPhase {
+  id                        String   @id @default(cuid())
+  jobId                     String
+  /// 1-based sequence within the job.
+  sequence                  Int
+  scheduledDeliveryDate     String?
+  scheduledDeliveryWindow   String?
+  /// Snapshot of flat delivery fee charged on this phase (CAD).
+  deliveryFeeAmount         Decimal? @db.Decimal(10, 2)
+  fulfillmentPhotoStorageKey String?
+  fulfillmentNotifiedAt     DateTime?
+  deliveredAt               DateTime?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  job                       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  lines                     JobDeliveryPhaseLine[]
+  draftOrderLink            JobDeliveryPhaseDraftOrderLink?
+
+  @@unique([jobId, sequence])
+  @@index([jobId])
+}
+
+model JobDeliveryPhaseLine {
+  id                 String           @id @default(cuid())
+  phaseId            String
+  jobItemId          String
+  quantityPlanned    Int              @default(0)
+  quantityDelivered  Int              @default(0)
+  phase              JobDeliveryPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  jobItem            JobItem          @relation(fields: [jobItemId], references: [id], onDelete: Cascade)
+
+  @@unique([phaseId, jobItemId])
+  @@index([phaseId])
+  @@index([jobItemId])
+}
+
+/// Per-phase Shopify draft for partial invoicing after fulfillment photo.
+model JobDeliveryPhaseDraftOrderLink {
+  id                  String           @id @default(cuid())
+  phaseId             String           @unique
+  shopifyDraftOrderId String           @unique
+  createdAt           DateTime         @default(now())
+  phase               JobDeliveryPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
 }
 
 model JobItem {
@@ -165,6 +230,7 @@ model JobItem {
   uploadPartMirrorKeysJson String? @db.Text
   job             Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
   drawingJob    DrawingJob?
+  deliveryPhaseLines JobDeliveryPhaseLine[]
 
   @@index([jobId])
   @@index([jobId, sortOrder])
@@ -310,6 +376,8 @@ model ShopSettings {
   storefrontNavLinksJson String? @db.Text
   /// JSON map of notification kinds → boolean; null means all enabled (see DEFAULT_EMAIL_NOTIFICATION_PREFS).
   emailNotificationPrefsJson String? @db.Text
+  /// Flat delivery fee per delivery phase (CAD). Null = app default ($15).
+  deliveryFeeAmount        Decimal? @db.Decimal(10, 2)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }

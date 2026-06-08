@@ -11,6 +11,7 @@ import { fetchVariantPriceUsd } from "../utils/shopifyVariantPrice.server";
 import { getAdminVariantInfo } from "../utils/adminVariants.server";
 import { shopStringFilter } from "../utils/projectAccess.server";
 import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";
+import { notifyMissionControl } from "../utils/missionControl.server";
 
 function parseNumericPrice(input: unknown): number | null {
   if (typeof input === "number") return Number.isFinite(input) ? input : null;
@@ -239,6 +240,8 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
       },
     });
 
+    notifyMissionControl(job.id);
+
     return {
       ok: true,
       message: `Status updated to "${LIFECYCLE_LABELS[next]}".`,
@@ -326,6 +329,8 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
         viaPhotoUpload: true,
       },
     });
+
+    notifyMissionControl(job.id);
 
     return {
       ok: true,

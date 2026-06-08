@@ -465,7 +465,7 @@ export function ProjectCladStorefrontNav({
     <header className="cc-app-header" id="ccAppHeader" data-cc-app-header>
       <div className="cc-app-header__topbar">
         <div className="cc-app-header__topbar-left">
-          <span>48 Hour lead time</span>
+          <span>72 Hour lead time</span>
           <span className="cc-app-header__sep" aria-hidden="true">
             ·
           </span>

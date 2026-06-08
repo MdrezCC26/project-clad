@@ -1,0 +1,17 @@
+{% doc %}
+  Builds a storefront login URL that returns to a path after sign-in.
+  Use for new customer accounts (`return_to`); legacy `account/login?return_url=` often sends users to account/orders.
+
+  @param {string} return_path - Storefront-relative path, e.g. /apps/project-clad/projects
+{% enddoc %}
+{% liquid
+  assign return_path_only = return_path | split: '?' | first
+  if return_path_only == blank
+    assign return_path_only = '/'
+  endif
+  unless return_path_only contains '/'
+    assign return_path_only = '/' | append: return_path_only
+  endunless
+  assign return_to_encoded = return_path_only | url_encode
+%}
+/customer_authentication/login?return_to={{ return_to_encoded }}

@@ -282,6 +282,25 @@
 
     const getMode = () => modeHidden.value || "newProject";
 
+    const getJobDeliveryModeRadioName = (mode) =>
+      mode === "existingProject"
+        ? "projectclad-job-delivery-mode-existing"
+        : "projectclad-job-delivery-mode-new";
+
+    const isJobDeliveryModeRadioName = (name) =>
+      name === "projectclad-job-delivery-mode-new" ||
+      name === "projectclad-job-delivery-mode-existing";
+
+    const ensureDefaultJobDelivery = (mode) => {
+      if (mode !== "newProject" && mode !== "existingProject") return;
+      const inherit = root.querySelector(
+        `[data-projectclad-section="${mode}"] input[name="${getJobDeliveryModeRadioName(mode)}"][value="inherit"]`,
+      );
+      if (inherit instanceof HTMLInputElement) {
+        inherit.checked = true;
+      }
+    };
+
     const getVisibleProjectHidden = () => {
       const wraps = root.querySelectorAll("[data-projectclad-project-wrap]");
       for (const wrap of wraps) {
@@ -371,12 +390,170 @@
       });
     };
 
+    const shipFieldsComplete = (ship) =>
+      Boolean(
+        ship.shipAddress1 &&
+          ship.shipCity &&
+          ship.shipProvince &&
+          ship.shipPostal,
+      );
+
+    const readShipFromContainer = (container) => {
+      if (!(container instanceof HTMLElement)) {
+        return {
+          shipAddress1: "",
+          shipCity: "",
+          shipProvince: "",
+          shipPostal: "",
+          shipCountry: "Canada",
+        };
+      }
+      const get = (name) => {
+        const el = container.querySelector(`[name="${name}"]`);
+        return el instanceof HTMLInputElement || el instanceof HTMLSelectElement
+          ? String(el.value || "").trim()
+          : "";
+      };
+      return {
+        shipAddress1: get("projectShipAddress1") || get("jobShipAddress1"),
+        shipCity: get("projectShipCity") || get("jobShipCity"),
+        shipProvince: get("projectShipProvince") || get("jobShipProvince"),
+        shipPostal: get("projectShipPostal") || get("jobShipPostal"),
+        shipCountry: get("projectShipCountry") || get("jobShipCountry") || "Canada",
+      };
+    };
+
+    const syncSaveDeliveryPanels = () => {
+      const mode = getMode();
+      const projectReceive = root.querySelector(
+        'input[name="projectclad-project-receive-mode"]:checked',
+      );
+      const receiveVal =
+        projectReceive instanceof HTMLInputElement
+          ? projectReceive.value
+          : "pickup";
+      root
+        .querySelectorAll("[data-projectclad-save-project-delivery-address]")
+        .forEach((el) => {
+          if (!(el instanceof HTMLElement)) return;
+          const inNew =
+            el.closest('[data-projectclad-section="newProject"]') &&
+            mode === "newProject";
+          el.hidden = !inNew || receiveVal !== "delivery";
+        });
+
+      let jobMode = "inherit";
+      if (mode === "newProject" || mode === "existingProject") {
+        const radioName = getJobDeliveryModeRadioName(mode);
+        const jobDelivery = root.querySelector(
+          `[data-projectclad-section="${mode}"] input[name="${radioName}"]:checked`,
+        );
+        jobMode =
+          jobDelivery instanceof HTMLInputElement ? jobDelivery.value : "inherit";
+      }
+      root
+        .querySelectorAll("[data-projectclad-save-order-delivery-address]")
+        .forEach((el) => {
+          if (!(el instanceof HTMLElement)) return;
+          const section = el.closest("[data-projectclad-section]");
+          if (!(section instanceof HTMLElement) || section.hidden) return;
+          const sectionMode = section.getAttribute("data-projectclad-section");
+          const showOrderBlock =
+            (sectionMode === "newProject" || sectionMode === "existingProject") &&
+            (mode === "newProject" || mode === "existingProject");
+          el.hidden = !showOrderBlock || jobMode !== "delivery";
+        });
+    };
+
+    const appendDeliveryToPayload = (payload, mode) => {
+      if (mode === "newProject") {
+        const receive = root.querySelector(
+          'input[name="projectclad-project-receive-mode"]:checked',
+        );
+        payload.projectReceiveMode =
+          receive instanceof HTMLInputElement && receive.value === "delivery"
+            ? "delivery"
+            : "pickup";
+        const projAddr = root.querySelector(
+          '[data-projectclad-section="newProject"] [data-projectclad-save-project-delivery-address]',
+        );
+        if (projAddr instanceof HTMLElement) {
+          const ship = readShipFromContainer(projAddr);
+          payload.projectShipAddress1 = ship.shipAddress1 || undefined;
+          payload.projectShipCity = ship.shipCity || undefined;
+          payload.projectShipProvince = ship.shipProvince || undefined;
+          payload.projectShipPostal = ship.shipPostal || undefined;
+          payload.projectShipCountry = ship.shipCountry || undefined;
+        }
+      }
+      if (mode === "newProject" || mode === "existingProject") {
+        const radioName = getJobDeliveryModeRadioName(mode);
+        const jobModeInp = root.querySelector(
+          `[data-projectclad-section="${mode}"] input[name="${radioName}"]:checked`,
+        );
+        payload.jobDeliveryMode =
+          jobModeInp instanceof HTMLInputElement ? jobModeInp.value : "inherit";
+        const orderAddr = root.querySelector(
+          `[data-projectclad-section="${mode}"] [data-projectclad-save-order-delivery-address]`,
+        );
+        if (orderAddr instanceof HTMLElement) {
+          const ship = readShipFromContainer(orderAddr);
+          payload.jobShipAddress1 = ship.shipAddress1 || undefined;
+          payload.jobShipCity = ship.shipCity || undefined;
+          payload.jobShipProvince = ship.shipProvince || undefined;
+          payload.jobShipPostal = ship.shipPostal || undefined;
+          payload.jobShipCountry = ship.shipCountry || undefined;
+        }
+      }
+    };
+
+    const validateSaveDeliveryClient = (payload, mode) => {
+      if (mode === "newProject") {
+        if (payload.projectReceiveMode === "delivery") {
+          const ship = {
+            shipAddress1: payload.projectShipAddress1,
+            shipCity: payload.projectShipCity,
+            shipProvince: payload.projectShipProvince,
+            shipPostal: payload.projectShipPostal,
+          };
+          if (!shipFieldsComplete(ship)) {
+            return "Enter a complete delivery address for this project, or choose store pickup.";
+          }
+        }
+      }
+      if (mode === "newProject" || mode === "existingProject") {
+        if (payload.jobDeliveryMode === "delivery") {
+          const jobShip = {
+            shipAddress1: payload.jobShipAddress1,
+            shipCity: payload.jobShipCity,
+            shipProvince: payload.jobShipProvince,
+            shipPostal: payload.jobShipPostal,
+          };
+          if (!shipFieldsComplete(jobShip)) {
+            if (mode === "newProject" && payload.projectReceiveMode === "delivery") {
+              const projShip = {
+                shipAddress1: payload.projectShipAddress1,
+                shipCity: payload.projectShipCity,
+                shipProvince: payload.projectShipProvince,
+                shipPostal: payload.projectShipPostal,
+              };
+              if (shipFieldsComplete(projShip)) return null;
+            }
+            return "Enter a complete delivery address for this order, or choose store pickup.";
+          }
+        }
+      }
+      return null;
+    };
+
     const toggleSection = (mode) => {
       sections.forEach((section) => {
         section.hidden =
           section.getAttribute("data-projectclad-section") !== mode;
       });
       updateFieldRequirements(mode);
+      ensureDefaultJobDelivery(mode);
+      syncSaveDeliveryPanels();
     };
 
     const buildProjectRadioList = (wrap) => {
@@ -566,6 +743,39 @@
           input.value = "";
         }
       });
+      const pickupReceive = root.querySelector(
+        'input[name="projectclad-project-receive-mode"][value="pickup"]',
+      );
+      if (pickupReceive instanceof HTMLInputElement) {
+        pickupReceive.checked = true;
+      }
+      ensureDefaultJobDelivery("newProject");
+      ensureDefaultJobDelivery("existingProject");
+      root
+        .querySelectorAll(
+          '[data-projectclad-save-ship-input], [name^="projectShip"], [name^="jobShip"]',
+        )
+        .forEach((el) => {
+          if (
+            el instanceof HTMLInputElement ||
+            el instanceof HTMLSelectElement
+          ) {
+            el.value = "";
+          }
+        });
+      const provinceDefaults = root.querySelectorAll(
+        'select[name="projectShipProvince"], select[name="jobShipProvince"]',
+      );
+      provinceDefaults.forEach((sel) => {
+        if (sel instanceof HTMLSelectElement) sel.value = "ON";
+      });
+      const countryDefaults = root.querySelectorAll(
+        'select[name="projectShipCountry"], select[name="jobShipCountry"]',
+      );
+      countryDefaults.forEach((sel) => {
+        if (sel instanceof HTMLSelectElement) sel.value = "Canada";
+      });
+      syncSaveDeliveryPanels();
       root.querySelectorAll("input[data-projectclad-project]").forEach((h) => {
         if (h instanceof HTMLInputElement) h.value = "";
       });
@@ -937,7 +1147,10 @@
       markRequiredFields();
       lockBodyScroll();
       openProjectcladModal(modal);
-      toggleSection(getMode());
+      const openMode = getMode();
+      ensureDefaultJobDelivery(openMode);
+      toggleSection(openMode);
+      syncSaveDeliveryPanels();
       if (opts.prefillState) {
         applyState(opts.prefillState);
       }
@@ -947,6 +1160,7 @@
       if (opts.prefillState) {
         applyState(opts.prefillState);
       }
+      syncSaveDeliveryPanels();
     };
 
     trigger.addEventListener("click", async (event) => {
@@ -978,6 +1192,14 @@
     root.addEventListener("change", (event) => {
       const t = event.target;
       if (!(t instanceof HTMLInputElement)) return;
+      if (
+        t.name === "projectclad-project-receive-mode" ||
+        isJobDeliveryModeRadioName(t.name)
+      ) {
+        syncSaveDeliveryPanels();
+        fireStateChange();
+        return;
+      }
       if (t.name === "projectclad-save-mode") {
         modeHidden.value = t.value;
         toggleSection(t.value);
@@ -1175,6 +1397,13 @@
         return;
       }
 
+      appendDeliveryToPayload(payload, mode);
+      const deliveryErr = validateSaveDeliveryClient(payload, mode);
+      if (deliveryErr) {
+        alert(deliveryErr);
+        return;
+      }
+
       if (mode === "newProject" && projectName) {
         const normStr = (s) => (s || "").trim();
         const matchingProject = cachedProjects.find((p) => {
@@ -1199,6 +1428,7 @@
     });
 
     bindAnimatedMemberRoleSelectsIn(root);
+    syncSaveDeliveryPanels();
 
     return {
       openModal: openModalFlow,

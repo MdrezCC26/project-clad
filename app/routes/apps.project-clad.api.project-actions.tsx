@@ -26,6 +26,12 @@ import {
 import { sendTransactionalEmailToRecipients } from "../utils/transactionalEmail.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
+import { notifyMissionControl } from "../utils/missionControl.server";
+import {
+  hasCompleteShipToDetails,
+  jobDeliveryPrismaData,
+  normalizeJobDeliveryMode,
+} from "../utils/jobDelivery";
 import {
   buildVariantPresentation,
   parseVariantSnapshot,
@@ -145,6 +151,38 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ? purchaseOrderNumberRaw
       : null;
 
+    const deliveryMode = normalizeJobDeliveryMode(
+      url.searchParams.get("deliveryMode"),
+    );
+    const ship = {
+      shipAddress1: (url.searchParams.get("shipAddress1") || "").trim() || null,
+      shipCity: (url.searchParams.get("shipCity") || "").trim() || null,
+      shipProvince: (url.searchParams.get("shipProvince") || "").trim() || null,
+      shipPostal: (url.searchParams.get("shipPostal") || "").trim() || null,
+      shipCountry: (url.searchParams.get("shipCountry") || "").trim() || "Canada",
+    };
+    if (deliveryMode === "delivery" && !hasCompleteShipToDetails(ship)) {
+      const projectShip = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: {
+          shipAddress1: true,
+          shipCity: true,
+          shipProvince: true,
+          shipPostal: true,
+        },
+      });
+      if (!projectShip || !hasCompleteShipToDetails(projectShip)) {
+        return Response.json(
+          {
+            error:
+              "Enter a complete delivery address for this order, or choose store pickup.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+    const deliveryPayload = jobDeliveryPrismaData(deliveryMode, ship);
+
     const newJob = await prisma.job.create({
       data: {
         projectId,
@@ -153,6 +191,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         purchaseOrderNumber,
         siteContactName: projectDefaults?.defaultSiteContactName ?? null,
         siteContactPhone: projectDefaults?.defaultSiteContactPhone ?? null,
+        ...deliveryPayload,
       },
     });
     await logProjectActivity({
@@ -463,6 +502,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         where: { id: jobId, projectId },
         data: { orderLifecycleStatus: "pending_review" },
       });
+      notifyMissionControl(jobId);
     }
 
     const approvalLogPayload: Record<string, unknown> = {};
@@ -568,6 +608,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         where: { id: jobId, projectId },
         data: { orderLifecycleStatus: "draft" },
       });
+      notifyMissionControl(jobId);
     }
 
     return Response.json({ ok: true });
@@ -721,6 +762,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     };
 
     await initWorkOrdersAfterApproval();
+
+    if (jobId && !itemId) {
+      notifyMissionControl(jobId);
+    } else if (!jobId && !itemId) {
+      const syncedJobs = await prisma.job.findMany({
+        where: { projectId },
+        select: { id: true },
+      });
+      for (const j of syncedJobs) {
+        notifyMissionControl(j.id);
+      }
+    }
 
     const notifyPrefsApproved = await getEmailNotificationPrefs(shop);
     if (

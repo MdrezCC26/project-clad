@@ -33,6 +33,11 @@ import {
   assignNextJobOrderNumberForShop,
   setManualJobOrderNumberForShop,
 } from "../utils/jobOrderNumber.server";
+import {
+  DEFAULT_SHOP_DELIVERY_FEE,
+  deliveryFeeToDecimal,
+  parseDeliveryFeeFromForm,
+} from "../utils/shopDeliveryFee.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -188,6 +193,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     grantedScopes: offlineSession?.scope || "",
     appAdminCustomerIds: settings?.appAdminCustomerIds ?? "",
     globalStaffEmails: settings?.globalStaffEmails ?? "",
+    deliveryFeeAmount:
+      settings?.deliveryFeeAmount != null
+        ? Number(settings.deliveryFeeAmount)
+        : DEFAULT_SHOP_DELIVERY_FEE,
     memberLookupError,
     variantLookupError,
     customers,
@@ -640,6 +649,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { ok: true, emailNotificationPrefsSaved: true };
   }
 
+  if (intent === "save-delivery-fee") {
+    const parsed = parseDeliveryFeeFromForm(
+      String(formData.get("deliveryFeeAmount") || ""),
+    );
+    if (parsed == null) {
+      return { deliveryFeeError: "Enter a valid delivery fee (0 or greater)." };
+    }
+    await prisma.shopSettings.upsert({
+      where: { shop: session.shop },
+      update: { deliveryFeeAmount: deliveryFeeToDecimal(parsed) },
+      create: {
+        shop: session.shop,
+        deliveryFeeAmount: deliveryFeeToDecimal(parsed),
+      },
+    });
+    return { ok: true, deliveryFeeSaved: true };
+  }
+
   if (intent === "save-app-admin-ids") {
     const raw = String(formData.get("appAdminCustomerIds") || "").trim();
     const emailsRaw = String(formData.get("globalStaffEmails") || "").trim();
@@ -785,6 +812,7 @@ export default function Settings() {
     grantedScopes,
     appAdminCustomerIds,
     globalStaffEmails,
+    deliveryFeeAmount,
     memberLookupError,
     variantLookupError,
     customers,
@@ -811,6 +839,14 @@ export default function Settings() {
     actionData && typeof actionData === "object" && "appAdminIdsSaved" in actionData
       ? Boolean(actionData.appAdminIdsSaved)
       : false;
+  const deliveryFeeSaved =
+    actionData && typeof actionData === "object" && "deliveryFeeSaved" in actionData
+      ? Boolean(actionData.deliveryFeeSaved)
+      : false;
+  const deliveryFeeError =
+    actionData && typeof actionData === "object" && "deliveryFeeError" in actionData
+      ? String(actionData.deliveryFeeError)
+      : null;
   const projectError =
     actionData && typeof actionData === "object" && "projectError" in actionData
       ? (actionData.projectError as string)
@@ -982,6 +1018,36 @@ export default function Settings() {
         </Form>
         {appAdminIdsSaved && (
           <s-paragraph>Storefront staff settings saved.</s-paragraph>
+        )}
+      </s-section>
+      <s-section heading="Delivery fee">
+        <s-paragraph>
+          Flat fee charged for each <strong>delivery phase</strong> on the storefront
+          (CAD). Pickup phases are $0. Default is ${DEFAULT_SHOP_DELIVERY_FEE.toFixed(2)}{" "}
+          when unset.
+        </s-paragraph>
+        <Form method="post">
+          <input type="hidden" name="intent" value="save-delivery-fee" />
+          <label>
+            Delivery fee per phase ($)
+            <input
+              type="number"
+              name="deliveryFeeAmount"
+              min={0}
+              step={0.01}
+              defaultValue={deliveryFeeAmount.toFixed(2)}
+              style={{ display: "block", marginTop: 6, maxWidth: 160 }}
+            />
+          </label>
+          <div style={{ marginTop: 8 }}>
+            <button type="submit">Save delivery fee</button>
+          </div>
+        </Form>
+        {deliveryFeeSaved && (
+          <s-paragraph>Delivery fee saved.</s-paragraph>
+        )}
+        {deliveryFeeError && (
+          <s-paragraph>{deliveryFeeError}</s-paragraph>
         )}
       </s-section>
       <s-section heading="Automated email notifications">

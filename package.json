@@ -18,7 +18,8 @@
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit",
-    "init-part-registry": "node part-registry/init-db.mjs"
+    "init-part-registry": "node part-registry/init-db.mjs",
+    "mc:backfill": "npx tsx scripts/backfill-mission-control.ts"
   },
   "type": "module",
   "engines": {
@@ -39,6 +40,7 @@
     "dotenv": "^17.2.4",
     "isbot": "^5.1.31",
     "nodemailer": "^8.0.1",
+    "pdfkit": "^0.17.2",
     "prisma": "^6.16.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -51,6 +53,7 @@
     "@types/eslint": "^9.6.1",
     "@types/node": "^22.18.8",
     "@types/nodemailer": "^8.0.0",
+    "@types/pdfkit": "^0.17.3",
     "@types/react": "^18.3.25",
     "@types/react-dom": "^18.3.7",
     "@typescript-eslint/eslint-plugin": "^6.21.0",

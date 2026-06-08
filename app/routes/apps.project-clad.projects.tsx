@@ -64,8 +64,6 @@ type ProjectListItem = {
   jobCount: number;
   /** Pending approval rows tied to orders/lines (jobId non-empty), not project-level. */
   pendingOrderApprovalCount: number;
-  /** Sum of (unit price × qty) for all line items; tax-inclusive snapshot lines. */
-  lineItemsSubtotal: number;
   approvedBy: string[];
   approvalStatus: { requested: boolean; approved: boolean };
   storefrontStatus: ProjectStorefrontStatus;
@@ -96,17 +94,6 @@ function formatProjectTileDate(iso: string): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}.${m}.${day}`;
-}
-
-function formatProjectTileMoney(amount: number): string {
-  if (!Number.isFinite(amount)) return "—";
-  const rounded = Math.round(amount * 100) / 100;
-  return new Intl.NumberFormat("en-CA", {
-    style: "currency",
-    currency: "CAD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(rounded);
 }
 
 function getProjectTileMetrics(project: ProjectListItem): {
@@ -141,27 +128,19 @@ function pathnameHasProjectsListDetailSegment(pathname: string): boolean {
   return rest.length > 0;
 }
 
-/** Header pill (matches prototype layout; not the old PHASE metric line). */
+/** Header pill when project-level approval is pending (not storefront status). */
 function getProjectTileStatusPill(project: ProjectListItem): {
   label: string;
-  tone: "approval" | "active" | "complete" | "inactive";
-} {
+  tone: "approval";
+} | null {
   const ar = project.approvalStatus;
   if (ar?.requested && !ar?.approved) {
     return { label: "APPROVAL", tone: "approval" };
   }
-  switch (project.storefrontStatus) {
-    case "complete":
-      return { label: "COMPLETE", tone: "complete" };
-    case "inactive":
-      return { label: "INACTIVE", tone: "inactive" };
-    case "active":
-    default:
-      return { label: "ACTIVE", tone: "active" };
-  }
+  return null;
 }
 
-type ProjectsStatusFilter = "all" | "active" | "complete" | "inactive" | "approval";
+type ProjectsStatusFilter = "all" | "approval";
 type ProjectsViewFilter = "all" | "mine" | "company";
 type ProjectsSortKey = "recent" | "newest" | "oldest" | "name" | "orders";
 type ProjectsListUiState = {
@@ -173,14 +152,7 @@ type ProjectsListUiState = {
 
 function parseStatusFilter(raw: string | null): ProjectsStatusFilter {
   const s = (raw || "").trim().toLowerCase();
-  if (
-    s === "active" ||
-    s === "complete" ||
-    s === "inactive" ||
-    s === "approval"
-  ) {
-    return s;
-  }
+  if (s === "approval") return "approval";
   return "all";
 }
 
@@ -208,7 +180,7 @@ function projectMatchesStatusFilter(
     const projectPending = Boolean(ar?.requested && !ar?.approved);
     return projectPending || (project.pendingOrderApprovalCount ?? 0) > 0;
   }
-  return project.storefrontStatus === status;
+  return true;
 }
 
 function projectMatchesViewFilter(
@@ -291,8 +263,7 @@ function projectListItemMatchesQuery(project: ProjectListItem, qRaw: string): bo
     project.poNumber || "",
     project.companyName || "",
     String(project.jobCount),
-    project.storefrontStatus,
-    pill.label,
+    pill?.label || "",
     ...project.jobs.flatMap((job) => [
       job.name,
       ...job.items.map((item) => item.displayName ?? ""),
@@ -484,18 +455,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       project.ownerCompanyKey != null &&
       viewerCompanyCtx.keys.includes(project.ownerCompanyKey);
 
-    const lineItemsSubtotal = Math.round(
-      project.jobs.reduce(
-        (sum, job) =>
-          sum +
-          job.items.reduce((js, item) => {
-            const unit = Number(item.priceSnapshot.toString());
-            return js + (Number.isFinite(unit) ? unit * item.quantity : 0);
-          }, 0),
-        0,
-      ) * 100,
-    ) / 100;
-
     return {
     id: project.id,
     isOwner: isOwnerRow,
@@ -509,7 +468,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     jobCount: project.jobs.length,
     pendingOrderApprovalCount:
       pendingApprovalCountByProjectId.get(project.id) ?? 0,
-    lineItemsSubtotal,
     approvedBy: approvedByNames,
     jobs: project.jobs.map((job) => ({
       id: job.id,
@@ -790,43 +748,21 @@ export default function ProjectsPage() {
                 aria-label="Filter, sort, and search projects"
               >
                 <div className="project-clad-projects-controls-grid__col project-clad-projects-controls-grid__col--left">
-                  <div className="project-clad-projects-control-tile project-clad-projects-control-tile--status">
-                    <div className="project-clad-projects-toolbar__cluster project-clad-projects-toolbar__cluster--status">
-                      <span className="project-clad-projects-toolbar__label">Status</span>
-                      <nav className="project-clad-projects-toolbar__chips" aria-label="Filter by status">
-                        <button
-                          type="button"
-                          data-pc-status="all"
-                          className={`project-clad-projects-toolbar__chip${statusFilter === "all" ? " is-active" : ""}`}
-                          data-projectclad-no-transition
-                        >
-                          All
-                        </button>
-                        <button
-                          type="button"
-                          data-pc-status="active"
-                          className={`project-clad-projects-toolbar__chip${statusFilter === "active" ? " is-active" : ""}`}
-                          data-projectclad-no-transition
-                        >
-                          Active
-                        </button>
-                        <button
-                          type="button"
-                          data-pc-status="complete"
-                          className={`project-clad-projects-toolbar__chip${statusFilter === "complete" ? " is-active" : ""}`}
-                          data-projectclad-no-transition
-                        >
-                          Complete
-                        </button>
-                        <button
-                          type="button"
-                          data-pc-status="inactive"
-                          className={`project-clad-projects-toolbar__chip${statusFilter === "inactive" ? " is-active" : ""}`}
-                          data-projectclad-no-transition
-                        >
-                          Inactive
-                        </button>
-                        {hasApprovalRows ? (
+                  <div
+                    className={`project-clad-projects-control-tile project-clad-projects-control-tile--status${hasApprovalRows ? "" : " project-clad-projects-control-tile--status-hidden"}`}
+                  >
+                    {hasApprovalRows ? (
+                      <div className="project-clad-projects-toolbar__cluster project-clad-projects-toolbar__cluster--status">
+                        <span className="project-clad-projects-toolbar__label">Filter</span>
+                        <nav className="project-clad-projects-toolbar__chips" aria-label="Filter projects">
+                          <button
+                            type="button"
+                            data-pc-status="all"
+                            className={`project-clad-projects-toolbar__chip${statusFilter === "all" ? " is-active" : ""}`}
+                            data-projectclad-no-transition
+                          >
+                            All
+                          </button>
                           <button
                             type="button"
                             data-pc-status="approval"
@@ -835,9 +771,9 @@ export default function ProjectsPage() {
                           >
                             Approval
                           </button>
-                        ) : null}
-                      </nav>
-                    </div>
+                        </nav>
+                      </div>
+                    ) : null}
                     {hasCompanyRows ? (
                       <div className="project-clad-projects-toolbar__row project-clad-projects-toolbar__row--view">
                         <span className="project-clad-projects-toolbar__label">View</span>
@@ -1061,14 +997,13 @@ export default function ProjectsPage() {
                 return (
                 <div
                   key={project.id}
-                  className={`project-clad-card project-clad-card--project-list-dash project-clad-card--tile-status-${project.storefrontStatus}${ownershipCls}${
+                  className={`project-clad-card project-clad-card--project-list-dash${ownershipCls}${
                     project.approvalStatus?.requested &&
                     !project.approvalStatus?.approved
                       ? " project-clad-card--confirming"
                       : ""
                   }`}
                   data-pc-project-card="1"
-                  data-pc-status={project.storefrontStatus}
                   data-pc-owner={ownsTile ? "1" : "0"}
                   data-pc-via-company={project.viaCompany ? "1" : "0"}
                   data-pc-pending-approvals={String(project.pendingOrderApprovalCount ?? 0)}
@@ -1100,15 +1035,17 @@ export default function ProjectsPage() {
                               : "—"}
                           </div>
                         </div>
-                        <span
-                          className={`project-clad-tile-dash__status-pill project-clad-tile-dash__status-pill--${pill.tone}`}
-                        >
+                        {pill ? (
                           <span
-                            className="project-clad-tile-dash__status-dot"
-                            aria-hidden="true"
-                          />
-                          {pill.label}
-                        </span>
+                            className={`project-clad-tile-dash__status-pill project-clad-tile-dash__status-pill--${pill.tone}`}
+                          >
+                            <span
+                              className="project-clad-tile-dash__status-dot"
+                              aria-hidden="true"
+                            />
+                            {pill.label}
+                          </span>
+                        ) : null}
                       </div>
                       <div
                         className="project-clad-tile-dash__stat-row"
@@ -1172,25 +1109,6 @@ export default function ProjectsPage() {
                             {project.companyName || "—"}
                           </span>
                         </div>
-                        {project.storefrontStatus === "complete" ? (
-                          <>
-                            <span
-                              className="project-clad-tile-dash__meta-sep"
-                              aria-hidden="true"
-                            />
-                            <div className="project-clad-tile-dash__meta-pair">
-                              <span className="project-clad-tile-dash__meta-k">
-                                TOTAL
-                              </span>
-                              <span
-                                className="project-clad-tile-dash__meta-v project-clad-tile-dash__meta-v--mono"
-                                title="Sum of all saved line items (store unit prices × quantity; storefront tax-inclusive pricing)"
-                              >
-                                {formatProjectTileMoney(project.lineItemsSubtotal)}
-                              </span>
-                            </div>
-                          </>
-                        ) : null}
                       </div>
                       {!project.isOwner && project.ownerLabel ? (
                         <p className="project-clad-tile-dash__owner">
@@ -1353,15 +1271,11 @@ export default function ProjectsPage() {
       });
     }
     function matches(card) {
-      var status = card.getAttribute('data-pc-status') || 'active';
       var viaCompany = card.getAttribute('data-pc-via-company') === '1';
       var isOwner = card.getAttribute('data-pc-owner') === '1';
       var pending = Number(card.getAttribute('data-pc-pending-approvals') || '0');
       var projApproval = card.getAttribute('data-pc-project-approval-pending') === '1';
       var searchHay = (card.getAttribute('data-pc-search') || '').toLowerCase();
-      if (ui.status === 'active' && status !== 'active') return false;
-      if (ui.status === 'complete' && status !== 'complete') return false;
-      if (ui.status === 'inactive' && status !== 'inactive') return false;
       if (ui.status === 'approval' && !projApproval && pending <= 0) return false;
       if (ui.view === 'mine' && !isOwner) return false;
       if (ui.view === 'company' && !viaCompany) return false;

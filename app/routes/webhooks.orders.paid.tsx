@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
+import { notifyMissionControl } from "../utils/missionControl.server";
 
 type LineItem = {
   name?: string;
@@ -104,6 +105,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       total: receiptSnapshot.total,
     },
   });
+
+  notifyMissionControl(link.jobId);
 
   return new Response();
 };
