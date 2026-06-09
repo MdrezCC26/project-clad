@@ -81,7 +81,7 @@ import {
   isPrePlacedOrderLifecycle,
   jobCountsTowardProjectSubtotal,
   prePlacedOrderHeaderChipLabel,
-} from "../utils/orderLifecycle.server";
+} from "../utils/orderLifecycle.shared";
 import {
   addDaysToCalendarYmd,
   formatOrderDeliveryFootline,
