@@ -147,6 +147,10 @@ model Job {
   shipCountry             String?
   /// Relative storage key under app storage dir (not a public URL).
   fulfillmentPhotoStorageKey String?
+  /// Relative storage key for customer-uploaded purchase order PDF.
+  purchaseOrderPdfStorageKey String?
+  /// Original filename of the uploaded purchase order PDF (display/download).
+  purchaseOrderPdfFileName String?
   /// Set when fulfillment emails + invoice hook ran (idempotency).
   fulfillmentNotifiedAt   DateTime?
   /// unread | in_progress | complete — only meaningful after job-level approval
@@ -384,6 +388,14 @@ model ShopSettings {
 
 /// Durable fulfillment photo bytes keyed by Job/JobDeliveryPhase `fulfillmentPhotoStorageKey`.
 model FulfillmentPhoto {
+  storageKey  String   @id
+  contentType String
+  data        Bytes
+  createdAt   DateTime @default(now())
+}
+
+/// Durable purchase order PDF bytes keyed by Job `purchaseOrderPdfStorageKey`.
+model PurchaseOrderPdf {
   storageKey  String   @id
   contentType String
   data        Bytes

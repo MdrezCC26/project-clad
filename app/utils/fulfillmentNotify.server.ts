@@ -4,6 +4,10 @@ import {
   readFulfillmentPhoto,
 } from "./fulfillmentPhotoStorage.server";
 import {
+  isSafePurchaseOrderPdfStorageKey,
+  readPurchaseOrderPdf,
+} from "./purchaseOrderPdfStorage.server";
+import {
   getCustomerRowFromFetchedMap,
   getCustomersByIds,
   type CustomerInfo,
@@ -230,6 +234,37 @@ async function buildFinanceFulfillmentPhotoAttachment(
     filename,
     content: photo.buffer,
     contentType: photo.contentType,
+  };
+}
+
+async function buildFinancePurchaseOrderPdfAttachment(
+  storageKey: string | null | undefined,
+  fileName: string | null | undefined,
+): Promise<
+  | {
+      filename: string;
+      content: Buffer;
+      contentType: string;
+    }
+  | null
+> {
+  const key = (storageKey ?? "").trim();
+  if (!key) return null;
+  if (!isSafePurchaseOrderPdfStorageKey(key)) {
+    return null;
+  }
+
+  const pdf = await readPurchaseOrderPdf(key);
+  if (!pdf) return null;
+
+  const storedName = (fileName ?? "").trim();
+  const filename =
+    storedName ||
+    `purchase-order-${key.split(/[\\/]/).pop() || "document.pdf"}`;
+  return {
+    filename,
+    content: pdf.buffer,
+    contentType: pdf.contentType,
   };
 }
 
@@ -498,6 +533,10 @@ export async function sendFulfillmentPackageEmails(args: {
   const financePhotoAttachment = await buildFinanceFulfillmentPhotoAttachment(
     photoStorageKey,
   );
+  const financePoPdfAttachment = await buildFinancePurchaseOrderPdfAttachment(
+    job.purchaseOrderPdfStorageKey,
+    job.purchaseOrderPdfFileName,
+  );
 
   const extraAttachments: {
     filename: string;
@@ -506,6 +545,9 @@ export async function sendFulfillmentPackageEmails(args: {
   }[] = [];
   if (financePhotoAttachment) {
     extraAttachments.push(financePhotoAttachment);
+  }
+  if (financePoPdfAttachment) {
+    extraAttachments.push(financePoPdfAttachment);
   }
   if (phase) {
     try {

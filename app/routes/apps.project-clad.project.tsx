@@ -69,6 +69,13 @@ import { notifyOrderNowStaff } from "../utils/orderNowStaffPush.server";
 import { notifyMissionControl, notifyMissionControlRemove } from "../utils/missionControl.server";
 import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";
 import { readFormUploadedImage } from "../utils/uploadedImageFile.server";
+import {
+  deletePurchaseOrderPdf,
+  isSafePurchaseOrderPdfStorageKey,
+  readFormUploadedPdf,
+  savePurchaseOrderPdf,
+  validateUploadedPurchaseOrderPdf,
+} from "../utils/purchaseOrderPdfStorage.server";
 import { createBackupDraftOrderForJob } from "../utils/shopifyDraftOrder.server";
 import {
   addDaysToCalendarYmd,
@@ -339,6 +346,14 @@ const PC_EDIT_ICON = (
 const PC_CHECK_ICON = (
   <svg {...PC_ICON_SVG_PROPS}>
     <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const PC_PO_PDF_UPLOAD_ICON = (
+  <svg {...PC_ICON_SVG_PROPS} strokeWidth={2}>
+    <path d="M12 19V5" />
+    <path d="m5 12 7-7 7 7" />
+    <path d="M5 21h14" />
   </svg>
 );
 
@@ -1283,6 +1298,9 @@ type JobView = {
   shipCountry: string | null;
   hasFulfillmentPhoto: boolean;
   fulfillmentPhotoUrl: string | null;
+  hasPurchaseOrderPdf: boolean;
+  purchaseOrderPdfFileName: string | null;
+  purchaseOrderPdfUrl: string | null;
   deliveryPhases: DeliveryPhaseView[];
   deliveredPercent: number;
   deliveryPlanMode: string | null;
@@ -1587,6 +1605,11 @@ function OrderFinancePanel({
   jobId,
   canEditSiteContact,
   canEditPurchaseOrder,
+  projectId,
+  projectFormActionUrl,
+  hasPurchaseOrderPdf,
+  purchaseOrderPdfFileName,
+  purchaseOrderPdfUrl,
   actionsSlot,
   paymentSummaryPdfActions,
 }: {
@@ -1629,6 +1652,13 @@ function OrderFinancePanel({
    * same pattern as Site Contact; Save posts `data-projectclad-purchase-order-input`.
    */
   canEditPurchaseOrder: boolean;
+  /** Project id for native multipart PO PDF upload/remove forms. */
+  projectId: string;
+  /** Signed app-proxy form action (shop + customer params). */
+  projectFormActionUrl: string;
+  hasPurchaseOrderPdf: boolean;
+  purchaseOrderPdfFileName: string | null;
+  purchaseOrderPdfUrl: string | null;
   /**
    * Optional buttons (Order Now / Edit Order / etc) rendered INSIDE the right column
    * below the Payment Summary card so they read as part of the same finance section
@@ -1743,6 +1773,14 @@ function OrderFinancePanel({
                   {hasPo ? poRaw : "Not set"}
                 </span>
               )}
+              <OrderPoPdfControls
+                jobId={jobId}
+                actionUrl={projectFormActionUrl}
+                canEdit={canEditPurchaseOrder}
+                hasPurchaseOrderPdf={hasPurchaseOrderPdf}
+                purchaseOrderPdfFileName={purchaseOrderPdfFileName}
+                purchaseOrderPdfUrl={purchaseOrderPdfUrl}
+              />
             </span>
             {hasPo ? (
               <span
@@ -2588,6 +2626,145 @@ function OrderDeliveryFulfillmentSection({
             Mark paid
           </button>
         </Form>
+      ) : null}
+    </div>
+  );
+}
+
+function OrderPoPdfUploadTrigger({
+  inputId,
+  title,
+}: {
+  inputId: string;
+  title: string;
+}) {
+  return (
+    <label
+      htmlFor={inputId}
+      className="project-clad-order-po-pdf__upload"
+      title={title}
+      aria-label={title}
+    >
+      {PC_PO_PDF_UPLOAD_ICON}
+    </label>
+  );
+}
+
+function truncatePoPdfDisplayName(name: string, max = 32): string {
+  const trimmed = name.trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max - 1)}…`;
+}
+
+function OrderPoPdfViewCheck({
+  url,
+  fileName,
+}: {
+  url: string;
+  fileName?: string | null;
+}) {
+  const displayName = (fileName ?? "").trim() || "PO PDF";
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="project-clad-order-po-pdf__view-check"
+      data-projectclad-no-transition
+      aria-label={`View ${displayName}`}
+      title={`View ${displayName}`}
+    >
+      {PC_CHECK_ICON}
+    </a>
+  );
+}
+
+function OrderPoPdfControls({
+  jobId,
+  actionUrl,
+  canEdit,
+  hasPurchaseOrderPdf,
+  purchaseOrderPdfFileName,
+  purchaseOrderPdfUrl,
+}: {
+  jobId: string;
+  actionUrl: string;
+  canEdit: boolean;
+  hasPurchaseOrderPdf: boolean;
+  purchaseOrderPdfFileName: string | null;
+  purchaseOrderPdfUrl: string | null;
+}) {
+  const inputId = `project-clad-po-pdf-${jobId}`;
+  const displayName = truncatePoPdfDisplayName(
+    (purchaseOrderPdfFileName ?? "").trim() || "purchase-order.pdf",
+  );
+
+  if (!canEdit) {
+    if (hasPurchaseOrderPdf && purchaseOrderPdfUrl) {
+      return (
+        <div className="project-clad-order-po-pdf">
+          <OrderPoPdfViewCheck
+            url={purchaseOrderPdfUrl}
+            fileName={purchaseOrderPdfFileName}
+          />
+          <span className="project-clad-order-po-pdf__filename" title={displayName}>
+            {displayName}
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div className="project-clad-order-po-pdf">
+        <span className="project-clad-order-po-pdf__empty">No PO document</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="project-clad-order-po-pdf">
+      {hasPurchaseOrderPdf && purchaseOrderPdfUrl ? (
+        <>
+          <OrderPoPdfViewCheck
+            url={purchaseOrderPdfUrl}
+            fileName={purchaseOrderPdfFileName}
+          />
+          <span className="project-clad-order-po-pdf__filename" title={displayName}>
+            {displayName}
+          </span>
+        </>
+      ) : (
+        <span className="project-clad-order-po-pdf__empty">Upload PO Here</span>
+      )}
+      <form
+        method="post"
+        action={actionUrl}
+        encType="multipart/form-data"
+        className="project-clad-order-po-pdf__upload-form"
+        data-projectclad-po-pdf-upload-form
+      >
+        <input type="hidden" name="intent" value="upload-order-po-pdf" />
+        <input type="hidden" name="jobId" value={jobId} />
+        <input
+          type="file"
+          id={inputId}
+          name="file"
+          accept="application/pdf,.pdf"
+          className="project-clad-order-po-pdf__file-input"
+          data-projectclad-po-pdf-file
+        />
+        <OrderPoPdfUploadTrigger
+          inputId={inputId}
+          title={hasPurchaseOrderPdf ? "Replace PO PDF" : "Upload PO PDF"}
+        />
+      </form>
+      {hasPurchaseOrderPdf ? (
+        <form method="post" action={actionUrl} className="project-clad-order-po-pdf__remove-form">
+          <input type="hidden" name="intent" value="remove-order-po-pdf" />
+          <input type="hidden" name="jobId" value={jobId} />
+          <button type="submit" className="project-clad-order-po-pdf__remove">
+            Remove
+          </button>
+        </form>
       ) : null}
     </div>
   );
@@ -3463,6 +3640,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               `/apps/project-clad/fulfillment-photo?jobId=${encodeURIComponent(job.id)}`)
             : null
           : null,
+        hasPurchaseOrderPdf: Boolean(job.purchaseOrderPdfStorageKey),
+        purchaseOrderPdfFileName: job.purchaseOrderPdfFileName ?? null,
+        purchaseOrderPdfUrl: job.purchaseOrderPdfStorageKey
+          ? mergeAppProxyParamsFromRequest(
+              `/apps/project-clad/po-pdf?jobId=${encodeURIComponent(job.id)}`,
+              request,
+            )
+          : null,
         deliveryPhases,
         deliveredPercent,
         deliveryPlanMode: job.deliveryPlanMode ?? null,
@@ -3657,6 +3842,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       displayName: ownerCompanyForShare.displayNames[0] ?? null,
       firstKey: ownerCompanyForShare.keys[0] ?? null,
     },
+    projectFormActionUrl: mergeAppProxyParamsFromRequest(
+      `${storefrontProjectActionPath}?id=${encodeURIComponent(project.id)}`,
+      request,
+    ),
   };
 };
 
@@ -5225,6 +5414,90 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return redirectToProject(request, projectId, shop);
   }
 
+  if (intent === "upload-order-po-pdf") {
+    const jobId = String(formData.get("jobId") || "");
+    const poPdfRedirect = () =>
+      redirectToProject(request, projectId, shop, { job: jobId });
+    if (!canEdit) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, projectId },
+    });
+    if (!job) {
+      throw new Response("Order not found", { status: 404 });
+    }
+    const uploaded = await readFormUploadedPdf(formData, "file");
+    if (!uploaded) {
+      throw new Response("PDF file is required.", { status: 400 });
+    }
+    const validationError = validateUploadedPurchaseOrderPdf(uploaded);
+    if (validationError) {
+      throw new Response(validationError, { status: 400 });
+    }
+    const shopDir = shop.replace(/[^a-zA-Z0-9._-]+/g, "_");
+    const storageKey = `${shopDir}/${jobId}-po-${Date.now()}.pdf`;
+    if (!isSafePurchaseOrderPdfStorageKey(storageKey)) {
+      throw new Response("Invalid path", { status: 400 });
+    }
+    const previousKey = job.purchaseOrderPdfStorageKey;
+    await savePurchaseOrderPdf(storageKey, uploaded.buffer);
+    await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        purchaseOrderPdfStorageKey: storageKey,
+        purchaseOrderPdfFileName: uploaded.name.trim() || "purchase-order.pdf",
+      },
+    });
+    if (previousKey && previousKey !== storageKey) {
+      await deletePurchaseOrderPdf(previousKey);
+    }
+    const { logProjectActivity } = await import("../utils/projectActivity.server");
+    await logProjectActivity({
+      projectId,
+      jobId,
+      type: "order_po_pdf_uploaded",
+      visibility: "member",
+      actorCustomerId: customerId,
+      payload: { fileName: uploaded.name.trim() || "purchase-order.pdf" },
+    });
+    return poPdfRedirect();
+  }
+
+  if (intent === "remove-order-po-pdf") {
+    if (!canEdit) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+    const jobId = String(formData.get("jobId") || "");
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, projectId },
+    });
+    if (!job) {
+      throw new Response("Order not found", { status: 404 });
+    }
+    const previousKey = job.purchaseOrderPdfStorageKey;
+    if (previousKey) {
+      await deletePurchaseOrderPdf(previousKey);
+    }
+    await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        purchaseOrderPdfStorageKey: null,
+        purchaseOrderPdfFileName: null,
+      },
+    });
+    const { logProjectActivity } = await import("../utils/projectActivity.server");
+    await logProjectActivity({
+      projectId,
+      jobId,
+      type: "order_po_pdf_removed",
+      visibility: "member",
+      actorCustomerId: customerId,
+      payload: {},
+    });
+    return redirectToProject(request, projectId, shop, { job: jobId });
+  }
+
   if (intent === "staff-mark-order-paid") {
     if (!viewerCanFulfill) {
       throw new Response("Forbidden", { status: 403 });
@@ -5916,6 +6189,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           siteContactName: sourceItem.job.siteContactName ?? null,
           siteContactPhone: sourceItem.job.siteContactPhone ?? null,
           purchaseOrderNumber: sourceItem.job.purchaseOrderNumber ?? undefined,
+          // PO PDF is not copied to reorders in v1 (only the PO # text is carried over).
           isLocked: false,
         },
       });
@@ -6633,6 +6907,7 @@ export default function ProjectDetailPage() {
     shopDeliveryFee,
     navAccountInitial,
     ownerCompanyForShare,
+    projectFormActionUrl,
   } = useLoaderData<typeof loader>();
 
   const orderLifecycleLabel = (status: string) => {
@@ -9606,6 +9881,11 @@ export default function ProjectDetailPage() {
                             jobId={job.id}
                             canEditSiteContact={Boolean(canEdit)}
                             canEditPurchaseOrder={Boolean(canEdit)}
+                            projectId={project.id}
+                            projectFormActionUrl={projectFormActionUrl}
+                            hasPurchaseOrderPdf={job.hasPurchaseOrderPdf}
+                            purchaseOrderPdfFileName={job.purchaseOrderPdfFileName}
+                            purchaseOrderPdfUrl={job.purchaseOrderPdfUrl}
                             actionsSlot={orderFinanceActionsSlot}
                             paymentSummaryPdfActions={paymentSummaryPdfActionsSlot}
                           />
@@ -9873,6 +10153,11 @@ export default function ProjectDetailPage() {
                                 jobId={job.id}
                                 canEditSiteContact={Boolean(canEdit)}
                                 canEditPurchaseOrder={Boolean(canEdit)}
+                                projectId={project.id}
+                                projectFormActionUrl={projectFormActionUrl}
+                                hasPurchaseOrderPdf={job.hasPurchaseOrderPdf}
+                                purchaseOrderPdfFileName={job.purchaseOrderPdfFileName}
+                                purchaseOrderPdfUrl={job.purchaseOrderPdfUrl}
                                 actionsSlot={orderFinanceActionsSlot}
                                 paymentSummaryPdfActions={paymentSummaryPdfActionsSlot}
                               />
@@ -13130,6 +13415,30 @@ export default function ProjectDetailPage() {
     var key = btn.getAttribute('data-pc-orders-sort') || 'recent';
     applySort(key);
   });
+})();
+          `,
+        }}
+      />
+      {/*
+        PO PDF auto-upload (vanilla JS).
+
+        React does not hydrate on the app-proxy project page, so file inputs
+        cannot use onChange handlers. Submit the native multipart form as soon
+        as the user picks a PDF.
+      */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+(function() {
+  document.addEventListener('change', function(ev) {
+    var input = ev.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    if (input.name !== 'file' || !input.hasAttribute('data-projectclad-po-pdf-file')) return;
+    var form = input.closest('form[data-projectclad-po-pdf-upload-form]');
+    if (!(form instanceof HTMLFormElement)) return;
+    if (!input.files || !input.files.length) return;
+    form.requestSubmit();
+  }, true);
 })();
           `,
         }}
