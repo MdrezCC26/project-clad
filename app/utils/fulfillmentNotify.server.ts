@@ -451,9 +451,8 @@ export async function sendFulfillmentPackageEmails(args: {
   const ownerCustEmail = ownerCustomerRow?.email?.trim() || "—";
   const ownerPhone = (ownerCustomerRow?.phone ?? "").trim() || "—";
 
-  const financeIntro = phase
-    ? `Delivery ${phase.sequence} has been confirmed. Please invoice for the quantities delivered on this drop only (partial delivery).`
-    : `This order has been delivered. Please proceed with the invoice for this order.`;
+  const financeIntro =
+    "Delivery has been confirmed. Please invoice for the quantities delivered on this shipment.";
 
   const financeBody = [
     financeIntro,
