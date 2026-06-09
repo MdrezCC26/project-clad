@@ -66,7 +66,7 @@ import {
   sendProjectStatusNotificationEmail,
 } from "../utils/orderCreatedEmail.server";
 import { notifyOrderNowStaff } from "../utils/orderNowStaffPush.server";
-import { notifyMissionControl } from "../utils/missionControl.server";
+import { notifyMissionControl, notifyMissionControlRemove } from "../utils/missionControl.server";
 import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";
 import { readFormUploadedImage } from "../utils/uploadedImageFile.server";
 import { createBackupDraftOrderForJob } from "../utils/shopifyDraftOrder.server";
@@ -4107,6 +4107,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             if (deleteJob) {
               await prisma.job.delete({ where: { id: jobId } });
               didChange = true;
+              notifyMissionControlRemove(jobId, shop);
               await emailProjectStatusSnapshot({
                 shop,
                 projectId,
@@ -4231,6 +4232,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 const metadataOnly =
                   isLocked ||
                   (!removeItemIds.length && !itemUpdates.length);
+                notifyMissionControl(jobId);
                 await emailProjectStatusSnapshot({
                   shop,
                   projectId,
@@ -4845,6 +4847,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     }
 
+    notifyMissionControl(jobId);
     if (jsonDeliverySave) {
       return Response.json({ ok: true as const });
     }
@@ -4901,6 +4904,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         jobId,
         lines,
       });
+      notifyMissionControl(jobId);
       if (recordJsonAck) {
         return Response.json({ ok: true as const, ...result });
       }
@@ -5579,6 +5583,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     await prisma.job.delete({ where: { id: jobId } });
+
+    notifyMissionControlRemove(jobId, shop);
 
     await emailProjectStatusSnapshot({
       shop,

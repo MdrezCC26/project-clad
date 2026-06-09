@@ -108,7 +108,7 @@ The app uses **PostgreSQL** (`DATABASE_URL`). Core entities include:
 
 - **Shopify CLI** — `shopify.app.toml` defines **scopes** (e.g. customers, orders, products, draft orders, **app proxy**), **webhooks**, and **app proxy** prefix `apps`, subpath `project-clad`.
 - **`.env`** — Copy from `.env.example`. Set **`DATABASE_URL`**, Shopify vars from CLI or hosting, **`SMTP_*`** for mail, optional **`DRAWING_WORKER_API_KEY`**, optional **`PROJECTCLAD_*_EMAIL`** overrides.
-- **Mission Control** (optional LAN ops dashboard) — set **`MISSION_CONTROL_URL`** (e.g. `http://192.168.x.x:4000` or `http://localhost:4000` when MC runs on the same machine) and **`MISSION_CONTROL_INGEST_KEY`** (must match Mission Control’s **`INGEST_API_KEY`**). When unset, pushes are skipped. Order lifecycle changes, fulfillment photos, and the **`orders/paid`** webhook call `notifyMissionControl(jobId)` automatically. Backfill existing jobs with **`npm run mc:backfill`** (Mission Control API must be running).
+- **Mission Control** (optional LAN ops dashboard) — set **`MISSION_CONTROL_INGEST_KEY`** on the Project Clad host (must match Mission Control’s **`INGEST_API_KEY`**). **Production (Render):** this key is required so MC can **pull** order snapshots from **`GET /api/mission-control-sync`** (LAN autosync; Render cannot push to `localhost`). Optional **`MISSION_CONTROL_URL`** still enables instant push when the PC host can reach the MC API on your LAN. Order lifecycle changes, fulfillment photos, and the **`orders/paid`** webhook call `notifyMissionControl(jobId)` when push is configured. Backfill with **`npm run mc:backfill`** when needed.
 
 ---
 

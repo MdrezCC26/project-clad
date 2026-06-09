@@ -4,7 +4,7 @@
  * Usage (PowerShell):
  *   npx tsx scripts/backfill-mission-control.ts
  *   $env:LIMIT="20"; npx tsx scripts/backfill-mission-control.ts
- *   $env:SHOP="canadiancladding.myshopify.com"; npx tsx scripts/backfill-mission-control.ts
+ *   $env:SHOP="rnc2a0-d3.myshopify.com"; npx tsx scripts/backfill-mission-control.ts
  *
  * Requires on the Project Clad host:
  *   MISSION_CONTROL_URL=http://<mc-api-host>:4000
@@ -29,11 +29,11 @@ const ORDER_LIFECYCLE_STATUSES = new Set<OrderLifecycleStatus>([
   "delivered",
   "paid",
 ]);
-const { pushOrderToMissionControl } = await import("../app/utils/missionControl.server");
+const { pushOrderToMissionControl, syncShopOrdersInMissionControl } = await import("../app/utils/missionControl.server");
 
 const prisma = new PrismaClient();
 
-const shopFilter = process.env.SHOP?.trim() || null;
+const shopFilter = process.env.SHOP?.trim() || "rnc2a0-d3.myshopify.com";
 const limit = Math.max(0, Number.parseInt(process.env.LIMIT ?? "0", 10) || 0);
 const statuses = (
   process.env.STATUSES ??
@@ -58,8 +58,7 @@ async function main() {
     ORDER_LIFECYCLE_STATUSES.has(s as OrderLifecycleStatus),
   );
 
-  const where: Prisma.JobWhereInput = {};
-  if (shopFilter) where.project = { shop: shopFilter };
+  const where: Prisma.JobWhereInput = { project: { shop: shopFilter } };
   if (statusFilter.length) where.orderLifecycleStatus = { in: statusFilter };
 
   const jobs = await prisma.job.findMany({
@@ -75,8 +74,7 @@ async function main() {
   });
 
   console.log(
-    `[mc-backfill] pushing ${jobs.length} job(s) to ${base}` +
-      (shopFilter ? ` shop=${shopFilter}` : "") +
+    `[mc-backfill] pushing ${jobs.length} job(s) from shop=${shopFilter} to ${base}` +
       (limit > 0 ? ` limit=${limit}` : ""),
   );
 
@@ -100,6 +98,21 @@ async function main() {
         err instanceof Error ? err.message : String(err),
       );
     }
+  }
+
+  try {
+    const synced = await syncShopOrdersInMissionControl(
+      shopFilter,
+      jobs.map((j) => j.id),
+    );
+    if (synced) {
+      console.log(`[mc-backfill] pruned stale orders for ${shopFilter}`);
+    }
+  } catch (err) {
+    console.error(
+      "[mc-backfill] prune failed:",
+      err instanceof Error ? err.message : String(err),
+    );
   }
 
   console.log(`[mc-backfill] done — ${ok} pushed, ${failed} failed`);

@@ -26,7 +26,7 @@ import {
 import { sendTransactionalEmailToRecipients } from "../utils/transactionalEmail.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
-import { notifyMissionControl } from "../utils/missionControl.server";
+import { notifyMissionControl, notifyMissionControlRemove } from "../utils/missionControl.server";
 import {
   hasCompleteShipToDetails,
   jobDeliveryPrismaData,
@@ -226,6 +226,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return Response.json({ error: "Order is locked." }, { status: 403 });
     }
     await prisma.job.delete({ where: { id: jobId } });
+    notifyMissionControlRemove(jobId, shop);
     return Response.json({ ok: true });
   }
 

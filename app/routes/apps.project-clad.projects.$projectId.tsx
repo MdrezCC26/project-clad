@@ -32,6 +32,7 @@ import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav
 import { getStorefrontAppNav } from "../utils/storefrontAppNav";
 import type { ProjectStorefrontStatus } from "@prisma/client";
 import { upsertProjectShareInvite } from "../utils/projectShareInvite.server";
+import { notifyMissionControlRemove } from "../utils/missionControl.server";
 
 type JobItemView = {
   id: string;
@@ -381,6 +382,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     }
 
     await prisma.job.delete({ where: { id: jobId } });
+
+    notifyMissionControlRemove(jobId, shop);
 
     return redirect(request.url);
   }

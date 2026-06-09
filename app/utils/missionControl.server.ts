@@ -11,14 +11,21 @@ import {
   parseVariantSnapshot,
   resolveVariantDisplayInfo,
 } from "./variantInfo.server";
+import {
+  computeDeliveredPercent,
+  mapPhasesToViews,
+} from "./jobDeliveryPhases";
 
 /**
  * Push order/project snapshots to Mission Control (LAN ops dashboard).
  *
  * Env (Project Clad host):
- *   MISSION_CONTROL_URL=http://<lan-server>:4000
- *   MISSION_CONTROL_INGEST_KEY=<same as MC API INGEST_API_KEY>
+ *   MISSION_CONTROL_INGEST_KEY=<same as MC INGEST_API_KEY>  (required for MC pull sync)
+ *   MISSION_CONTROL_URL=http://<lan-server>:4000            (optional instant push)
+ *   MISSION_CONTROL_SHOPS=rnc2a0-d3.myshopify.com           (comma-separated; default live store)
+ *   MISSION_CONTROL_ALLOW_DEV=1                             (optional — allow dev shop pushes)
  *
+ * LAN autosync: Mission Control polls GET /api/mission-control-sync on this host.
  * Never throws — MC outages must not block storefront/admin flows.
  */
 
@@ -133,6 +140,22 @@ function geometryFromCustomData(customData: { name: string; value: string }[]) {
   };
 }
 
+function parseShopList(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** Live production shop only — dev store pushes are skipped unless explicitly allowed. */
+function shouldPushShop(shop: string): boolean {
+  if (process.env.MISSION_CONTROL_ALLOW_DEV === "1") return true;
+  const allowed = parseShopList(
+    process.env.MISSION_CONTROL_SHOPS ?? "rnc2a0-d3.myshopify.com",
+  );
+  return allowed.includes(shop.trim().toLowerCase());
+}
+
 async function loadJobForMissionControl(jobId: string) {
   return prisma.job.findUnique({
     where: { id: jobId },
@@ -140,6 +163,10 @@ async function loadJobForMissionControl(jobId: string) {
       project: { include: { members: true } },
       items: { orderBy: { sortOrder: "asc" } },
       orderLink: true,
+      deliveryPhases: {
+        include: { lines: true },
+        orderBy: { sequence: "asc" },
+      },
     },
   });
 }
@@ -195,9 +222,37 @@ async function buildIngestPayload(job: NonNullable<Awaited<ReturnType<typeof loa
     select: { createdAt: true },
   });
 
-  const deliveryPhotoUrl = job.fulfillmentPhotoStorageKey
-    ? buildSignedFulfillmentPhotoUrl({ jobId: job.id, shop })
-    : null;
+  const phaseViews = mapPhasesToViews(job.deliveryPhases);
+  const deliveredPercent = computeDeliveredPercent(job.items, phaseViews);
+  const confirmedDeliveryCount = phaseViews.filter((p) => p.hasPhoto).length;
+  const openPhase = phaseViews.find((p) => !p.hasPhoto) ?? null;
+
+  const deliveredByItem = new Map<string, number>();
+  for (const item of job.items) {
+    deliveredByItem.set(item.id, 0);
+  }
+  for (const phase of job.deliveryPhases) {
+    for (const line of phase.lines) {
+      const prev = deliveredByItem.get(line.jobItemId) ?? 0;
+      deliveredByItem.set(
+        line.jobItemId,
+        prev + Math.max(0, line.quantityDelivered),
+      );
+    }
+  }
+
+  const latestPhaseWithPhoto = [...job.deliveryPhases]
+    .reverse()
+    .find((p) => p.fulfillmentPhotoStorageKey);
+  const deliveryPhotoUrl = latestPhaseWithPhoto
+    ? buildSignedFulfillmentPhotoUrl({
+        jobId: job.id,
+        shop,
+        phaseId: latestPhaseWithPhoto.id,
+      })
+    : job.fulfillmentPhotoStorageKey
+      ? buildSignedFulfillmentPhotoUrl({ jobId: job.id, shop })
+      : null;
 
   const shipAddress = formatShipAddress(job.project);
   const status = mapStatus(job.orderLifecycleStatus);
@@ -218,12 +273,17 @@ async function buildIngestPayload(job: NonNullable<Awaited<ReturnType<typeof loa
         ? orderLineCapture.displayLabel
         : pres.displayName;
     const unitPriceCents = Math.round(Number(item.priceSnapshot) * 100);
+    const qtyDelivered = Math.min(
+      item.quantity,
+      deliveredByItem.get(item.id) ?? 0,
+    );
 
     return {
       id: item.id,
       title,
       sku: snap?.sku ?? item.catalogSku ?? null,
       quantity: item.quantity,
+      quantityDelivered: qtyDelivered,
       unitPriceCents,
       customData,
       displaySummary: fieldSummary(title, customData),
@@ -239,6 +299,7 @@ async function buildIngestPayload(job: NonNullable<Awaited<ReturnType<typeof loa
     sentAt: new Date().toISOString(),
     project: {
       id: job.project.id,
+      shop: job.project.shop,
       name: job.project.name,
       companyName: job.project.companyName ?? null,
       storefrontStatus: job.project.storefrontStatus,
@@ -256,13 +317,39 @@ async function buildIngestPayload(job: NonNullable<Awaited<ReturnType<typeof loa
       company: job.project.companyName ?? null,
       status,
       currency: "CAD",
-      scheduledDeliveryDate: job.scheduledDeliveryDate ?? null,
+      scheduledDeliveryDate:
+        openPhase?.scheduledDeliveryDate ?? job.scheduledDeliveryDate ?? null,
+      scheduledDeliveryWindow:
+        openPhase?.scheduledDeliveryWindow ?? job.scheduledDeliveryWindow ?? null,
       shipAddress,
       createdAt: iso(job.createdAt) ?? new Date().toISOString(),
       orderedAt: iso(confirmed?.createdAt),
       deliveredAt: iso(job.completedAt),
       paidAt: iso(job.paidAt),
       deliveryPhotoUrl,
+      deliveredPercent,
+      deliveryPhaseCount: phaseViews.length,
+      confirmedDeliveryCount,
+      deliveryPhases: job.deliveryPhases.map((phase) => ({
+        id: phase.id,
+        sequence: phase.sequence,
+        scheduledDeliveryDate: phase.scheduledDeliveryDate ?? null,
+        scheduledDeliveryWindow: phase.scheduledDeliveryWindow ?? null,
+        hasPhoto: Boolean(phase.fulfillmentPhotoStorageKey),
+        deliveredAt: iso(phase.deliveredAt),
+        deliveryPhotoUrl: phase.fulfillmentPhotoStorageKey
+          ? buildSignedFulfillmentPhotoUrl({
+              jobId: job.id,
+              shop,
+              phaseId: phase.id,
+            })
+          : null,
+        lines: phase.lines.map((line) => ({
+          jobItemId: line.jobItemId,
+          quantityPlanned: line.quantityPlanned,
+          quantityDelivered: line.quantityDelivered,
+        })),
+      })),
     },
     lines,
   };
@@ -285,6 +372,13 @@ export async function pushOrderToMissionControl(jobId: string): Promise<boolean>
     return false;
   }
 
+  if (!shouldPushShop(job.project.shop)) {
+    console.log(
+      `[mission-control] skip — shop ${job.project.shop} is not in MISSION_CONTROL_SHOPS (set MISSION_CONTROL_ALLOW_DEV=1 to push dev data).`,
+    );
+    return false;
+  }
+
   const payload = await buildIngestPayload(job);
 
   const res = await fetch(`${base.replace(/\/+$/, "")}/ingest/project-clad`, {
@@ -295,11 +389,95 @@ export async function pushOrderToMissionControl(jobId: string): Promise<boolean>
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    console.error(`[mission-control] push failed ${res.status}: ${body.slice(0, 600)}`);
+    console.error(
+      `[mission-control] push failed ${res.status} job=${job.id} #${job.orderNumber ?? "?"}: ${body.slice(0, 600)}`,
+    );
+    return false;
+  }
+
+  console.log(
+    `[mission-control] pushed job=${job.id} #${job.orderNumber ?? "?"} ${job.name} (${job.orderLifecycleStatus})`,
+  );
+  return true;
+}
+
+function mcApiConfig(): { base: string; key: string } | null {
+  const base = process.env.MISSION_CONTROL_URL?.trim();
+  const key = process.env.MISSION_CONTROL_INGEST_KEY?.trim();
+  if (!base || !key) return null;
+  return { base: base.replace(/\/+$/, ""), key };
+}
+
+/** Tell Mission Control to drop a deleted job. */
+export async function removeOrderFromMissionControl(args: {
+  jobId: string;
+  shop: string;
+}): Promise<boolean> {
+  const cfg = mcApiConfig();
+  if (!cfg) return false;
+
+  if (!shouldPushShop(args.shop)) return false;
+
+  const res = await fetch(`${cfg.base}/ingest/project-clad/delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-mc-ingest-key": cfg.key },
+    body: JSON.stringify({
+      shop: args.shop,
+      jobId: args.jobId,
+      sentAt: new Date().toISOString(),
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[mission-control] delete failed ${res.status}: ${body.slice(0, 600)}`);
     return false;
   }
 
   return true;
+}
+
+/** After backfill: remove MC orders for this shop that no longer exist in Project Clad. */
+export async function syncShopOrdersInMissionControl(
+  shop: string,
+  jobIds: string[],
+): Promise<boolean> {
+  const cfg = mcApiConfig();
+  if (!cfg) return false;
+
+  if (!shouldPushShop(shop)) return false;
+
+  const res = await fetch(`${cfg.base}/ingest/project-clad/sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-mc-ingest-key": cfg.key },
+    body: JSON.stringify({
+      shop,
+      jobIds,
+      sentAt: new Date().toISOString(),
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[mission-control] sync failed ${res.status}: ${body.slice(0, 600)}`);
+    return false;
+  }
+
+  const data = (await res.json().catch(() => null)) as { pruned?: number } | null;
+  if (data?.pruned) {
+    console.log(`[mission-control] pruned ${data.pruned} stale order(s) for ${shop}`);
+  }
+  return true;
+}
+
+/** Fire-and-forget wrapper for action handlers. */
+export function notifyMissionControlRemove(jobId: string, shop: string): void {
+  void removeOrderFromMissionControl({ jobId, shop }).catch((err) => {
+    console.error(
+      "[mission-control] delete error:",
+      err instanceof Error ? err.message : String(err),
+    );
+  });
 }
 
 /** Fire-and-forget wrapper for action handlers. */
@@ -310,4 +488,115 @@ export function notifyMissionControl(jobId: string): void {
       err instanceof Error ? err.message : String(err),
     );
   });
+}
+
+const MC_EXPORT_STATUSES = [
+  "draft",
+  "pending_review",
+  "ready_to_order",
+  "ordered",
+  "delivered",
+  "paid",
+] as const;
+
+/** Verify the shared ingest key Mission Control sends when pulling sync data. */
+export function verifyMissionControlIngestKey(request: Request): boolean {
+  const key = request.headers.get("x-mc-ingest-key")?.trim();
+  const expected = process.env.MISSION_CONTROL_INGEST_KEY?.trim();
+  return Boolean(key && expected && key === expected);
+}
+
+async function listChangedMissionControlJobIds(
+  shop: string,
+  since: Date,
+): Promise<string[]> {
+  const ids = new Set<string>();
+
+  const [datedJobs, activityJobs] = await Promise.all([
+    prisma.job.findMany({
+      where: {
+        project: { shop },
+        OR: [
+          { completedAt: { gte: since } },
+          { paidAt: { gte: since } },
+          { createdAt: { gte: since } },
+          { deliveryPhases: { some: { updatedAt: { gte: since } } } },
+        ],
+      },
+      select: { id: true },
+    }),
+    prisma.projectActivityEvent.findMany({
+      where: {
+        createdAt: { gte: since },
+        jobId: { not: null },
+        project: { shop },
+      },
+      select: { jobId: true },
+      distinct: ["jobId"],
+    }),
+  ]);
+
+  for (const job of datedJobs) ids.add(job.id);
+  for (const row of activityJobs) {
+    if (row.jobId) ids.add(row.jobId);
+  }
+
+  return [...ids];
+}
+
+async function listAllMissionControlJobIds(shop: string): Promise<string[]> {
+  const jobs = await prisma.job.findMany({
+    where: {
+      project: { shop },
+      orderLifecycleStatus: { in: [...MC_EXPORT_STATUSES] },
+    },
+    select: { id: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return jobs.map((job) => job.id);
+}
+
+/** Build ingest payloads for Mission Control pull sync (LAN dashboard polls this host). */
+export async function exportMissionControlSync(args: {
+  shop: string;
+  since?: Date | null;
+  full?: boolean;
+}): Promise<{
+  shop: string;
+  jobIds: string[];
+  orders: Awaited<ReturnType<typeof buildIngestPayload>>[];
+  exportedAt: string;
+  mode: "full" | "incremental";
+}> {
+  const shop = args.shop.trim();
+  if (!shouldPushShop(shop)) {
+    return {
+      shop,
+      jobIds: [],
+      orders: [],
+      exportedAt: new Date().toISOString(),
+      mode: args.full ? "full" : "incremental",
+    };
+  }
+
+  const full = Boolean(args.full || !args.since);
+  const jobIds = full
+    ? await listAllMissionControlJobIds(shop)
+    : await listChangedMissionControlJobIds(shop, args.since!);
+
+  const orders: Awaited<ReturnType<typeof buildIngestPayload>>[] = [];
+  for (const jobId of jobIds) {
+    const job = await loadJobForMissionControl(jobId);
+    if (!job) continue;
+    if (!MC_EXPORT_STATUSES.includes(job.orderLifecycleStatus)) continue;
+    orders.push(await buildIngestPayload(job));
+  }
+
+  return {
+    shop,
+    jobIds: orders.map((order) => order.order.jobId),
+    orders,
+    exportedAt: new Date().toISOString(),
+    mode: full ? "full" : "incremental",
+  };
 }

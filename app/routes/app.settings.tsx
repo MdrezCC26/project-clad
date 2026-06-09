@@ -33,6 +33,7 @@ import {
   assignNextJobOrderNumberForShop,
   setManualJobOrderNumberForShop,
 } from "../utils/jobOrderNumber.server";
+import { notifyMissionControlRemove } from "../utils/missionControl.server";
 import {
   DEFAULT_SHOP_DELIVERY_FEE,
   parseDeliveryFeeFromForm,
@@ -494,6 +495,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return Response.json({ projectError: "Order is locked." }, { status: 403 });
     }
     await prisma.job.delete({ where: { id: jobId } });
+    notifyMissionControlRemove(jobId, session.shop);
     return { ok: true, projectUpdated: true };
   }
 
