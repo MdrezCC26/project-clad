@@ -3762,6 +3762,26 @@ html:has(.project-clad-page--projects) body {
     color: #15803d !important;
   }
 
+  .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
+    .project-clad-orders-shell
+    details.project-clad-order-row.project-clad-details
+    summary
+    .project-clad-order-summary-lifecycle-cluster
+    .project-clad-order-lifecycle-chip--quote {
+    color: #6b4fa8 !important;
+    text-shadow: none !important;
+  }
+
+  .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
+    .project-clad-orders-shell
+    details.project-clad-order-row.project-clad-details
+    summary
+    .project-clad-order-summary-lifecycle-cluster
+    .project-clad-order-lifecycle-chip--ready {
+    color: #a05f0a !important;
+    text-shadow: none !important;
+  }
+
   /* Expanded — finance: flat rows + hairline dividers (match line items) */
   .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
     details.project-clad-order-row
@@ -13095,6 +13115,16 @@ input[data-projectclad-unit-price-input] {
     0 1px 0 rgba(255, 255, 255, 0.28),
     0 0 6px rgba(28, 186, 28, 0.28),
     0 0 14px rgba(28, 186, 28, 0.16);
+}
+
+.project-clad-order-lifecycle-chip--quote {
+  color: #6b4fa8 !important;
+  text-shadow: none;
+}
+
+.project-clad-order-lifecycle-chip--ready {
+  color: rgba(160, 95, 10, 0.95) !important;
+  text-shadow: none;
 }
 
 .project-clad-order-finance__card {

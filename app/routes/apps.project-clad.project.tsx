@@ -78,6 +78,11 @@ import {
 } from "../utils/purchaseOrderPdfStorage.server";
 import { createBackupDraftOrderForJob } from "../utils/shopifyDraftOrder.server";
 import {
+  isPrePlacedOrderLifecycle,
+  jobCountsTowardProjectSubtotal,
+  prePlacedOrderHeaderChipLabel,
+} from "../utils/orderLifecycle.server";
+import {
   addDaysToCalendarYmd,
   formatOrderDeliveryFootline,
   isKnownOttawaHourWindow,
@@ -3737,6 +3742,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         })),
     ],
     subtotal: project.jobs.reduce((sum, job) => {
+      if (!jobCountsTowardProjectSubtotal(job.orderLifecycleStatus)) {
+        return sum;
+      }
       return (
         sum +
         job.items.reduce((jobSum, item) => {
@@ -7091,10 +7099,12 @@ export default function ProjectDetailPage() {
     }
   }, [selectedJobId, orderListSearchQ, visibleJobs, setSearchParams]);
 
-  const projectOrderDeliveryFeesTotal = project.jobs.reduce(
-    (sum, job) => sum + feeForJob(job),
-    0,
-  );
+  const projectOrderDeliveryFeesTotal = project.jobs.reduce((sum, job) => {
+    if (!jobCountsTowardProjectSubtotal(job.orderLifecycleStatus)) {
+      return sum;
+    }
+    return sum + feeForJob(job);
+  }, 0);
   /** Line items plus all per-order delivery fees (matches order payment summaries). */
   const projectSubtotalForDisplay =
     project.subtotal + projectOrderDeliveryFeesTotal;
@@ -7262,13 +7272,15 @@ export default function ProjectDetailPage() {
         </span>
       );
     }
-    return null;
-  };
-
-  const subtotalStatusLabel = (status: string): string | null => {
-    if (status === "ordered") return "Ordered";
-    if (status === "delivered") return "Delivered";
-    if (status === "paid") return "Order Complete";
+    if (isPrePlacedOrderLifecycle(ls)) {
+      const label = prePlacedOrderHeaderChipLabel(ls);
+      if (!label) return null;
+      const chipClass =
+        ls === "ready_to_order"
+          ? "project-clad-order-lifecycle-chip project-clad-order-lifecycle-chip--ready"
+          : "project-clad-order-lifecycle-chip project-clad-order-lifecycle-chip--quote";
+      return <span className={chipClass}>{label}</span>;
+    }
     return null;
   };
 
