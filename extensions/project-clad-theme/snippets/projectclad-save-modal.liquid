@@ -132,8 +132,8 @@
             />
           </div>
         </div>
-        {% render 'projectclad-save-delivery-fields', block: 'project', id_prefix: 'save-new-proj' %}
-        {% render 'projectclad-save-delivery-fields', block: 'order', id_prefix: 'save-new-order', job_delivery_mode_name: 'projectclad-job-delivery-mode-new' %}
+        {% render 'projectclad-save-delivery-fields', delivery_section: 'project', id_prefix: 'save-new-proj' %}
+        {% render 'projectclad-save-delivery-fields', delivery_section: 'order', id_prefix: 'save-new-order', job_delivery_mode_name: 'projectclad-job-delivery-mode-new' %}
       </div>
 
       <div class="projectclad-section" data-projectclad-section="existingProject" hidden>
@@ -191,7 +191,7 @@
             />
           </div>
         </div>
-        {% render 'projectclad-save-delivery-fields', block: 'order', id_prefix: 'save-existing-order', job_delivery_mode_name: 'projectclad-job-delivery-mode-existing' %}
+        {% render 'projectclad-save-delivery-fields', delivery_section: 'order', id_prefix: 'save-existing-order', job_delivery_mode_name: 'projectclad-job-delivery-mode-existing' %}
       </div>
 
       <div class="projectclad-section" data-projectclad-section="existingJob" hidden>

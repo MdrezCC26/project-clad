@@ -38,6 +38,7 @@ import {
   resolveVariantDisplayInfo,
 } from "../utils/variantInfo.server";
 import { upsertProjectShareInvite } from "../utils/projectShareInvite.server";
+import { transferProjectOwner } from "../utils/transferProjectOwner.server";
 
 const PRICING_COOKIE = "projectclad_pricing=1";
 
@@ -338,6 +339,38 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
     await prisma.projectMember.deleteMany({
       where: { projectId, customerId: memberCustomerId },
+    });
+    return Response.json({ ok: true });
+  }
+
+  if (intent === "transfer-project-owner") {
+    if (!isProjectOwner(project, customerId) && !viewerIsAppAdmin) {
+      return Response.json(
+        { error: "Only the project owner can transfer ownership." },
+        { status: 403 },
+      );
+    }
+    const memberCustomerId = url.searchParams.get("memberCustomerId") || "";
+    if (!memberCustomerId) {
+      return Response.json({ error: "Member is required." }, { status: 400 });
+    }
+    const result = await transferProjectOwner({
+      shop,
+      projectId,
+      previousOwnerCustomerId: project.ownerCustomerId,
+      newOwnerCustomerId: memberCustomerId,
+    });
+    if (!result.ok) {
+      return Response.json({ error: result.error }, { status: 400 });
+    }
+    await logProjectActivity({
+      projectId,
+      actorCustomerId: customerId,
+      type: "project_owner_transferred",
+      payload: {
+        previousOwnerCustomerId: project.ownerCustomerId,
+        newOwnerCustomerId: memberCustomerId,
+      },
     });
     return Response.json({ ok: true });
   }

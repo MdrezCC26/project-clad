@@ -2,9 +2,11 @@ import { useMemo } from "react";
 import { useFetcher, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Prisma } from "@prisma/client";
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { authenticate } from "../shopify.server";
+import {
+  isSafeFulfillmentPhotoStorageKey,
+  saveFulfillmentPhoto,
+} from "../utils/fulfillmentPhotoStorage.server";
 import prisma from "../db.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
 import { fetchVariantPriceUsd } from "../utils/shopifyVariantPrice.server";
@@ -277,14 +279,11 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
         : ".jpg";
     const shopDir = shop.replace(/[^a-zA-Z0-9._-]+/g, "_");
     const storageKey = `${shopDir}/${job.id}-${Date.now()}${ext}`;
-    const root = path.resolve(process.cwd(), "storage", "fulfillment-photos");
-    const abs = path.resolve(root, storageKey);
-    if (!abs.startsWith(root + path.sep)) {
+    if (!isSafeFulfillmentPhotoStorageKey(storageKey)) {
       return { ok: false, error: "Invalid storage path." };
     }
-    await fs.mkdir(path.dirname(abs), { recursive: true });
     const buf = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(abs, buf);
+    await saveFulfillmentPhoto(storageKey, buf);
 
     await prisma.job.update({
       where: { id: job.id },

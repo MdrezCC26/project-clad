@@ -1,6 +1,8 @@
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import prisma from "../db.server";
+import {
+  isSafeFulfillmentPhotoStorageKey,
+  readFulfillmentPhoto,
+} from "./fulfillmentPhotoStorage.server";
 import {
   getCustomerRowFromFetchedMap,
   getCustomersByIds,
@@ -26,6 +28,12 @@ import {
 } from "./projectAccess.server";
 import { STOREFRONT_ORDER_CONFIRMED_ACTIVITY } from "./projectActivity.server";
 import { orderTaxFromSubtotal } from "./orderDisplayTax";
+import { getShopDeliveryFee } from "./shopDeliveryFee.server";
+import { buildPhasePdfBuffer } from "./phaseDocumentPdf.server";
+import {
+  computeDeliveredPercent,
+  mapPhasesToViews,
+} from "./jobDeliveryPhases";
 
 function formatMoney(amount: number): string {
   if (Number.isNaN(amount)) return "$0.00";
@@ -136,6 +144,7 @@ function shippingBlock(project: {
 function buildDeliveredLineItemsAndSubtotal(args: {
   shop: string;
   items: Array<{
+    id: string;
     variantId: string;
     quantity: number;
     priceSnapshot: { toString(): string } | number | string;
@@ -143,12 +152,19 @@ function buildDeliveredLineItemsAndSubtotal(args: {
     variantSnapshot: unknown;
   }>;
   live: Record<string, VariantDisplayInfo>;
+  /** When set, only these delivered quantities are invoiced (phased partial delivery). */
+  quantityByItemId?: Map<string, number>;
 }): { blocks: string[]; subtotal: number } {
   let subtotal = 0;
   const blocks: string[] = [];
-  args.items.forEach((row, index) => {
+  let lineIndex = 0;
+  args.items.forEach((row) => {
+    const qty =
+      args.quantityByItemId?.get(row.id) ??
+      (args.quantityByItemId ? 0 : row.quantity);
+    if (qty <= 0) return;
     const unit = Number(row.priceSnapshot?.toString?.() ?? row.priceSnapshot ?? 0);
-    const lineTotal = unit * row.quantity;
+    const lineTotal = unit * qty;
     subtotal += lineTotal;
     const props =
       row.customData && Array.isArray(row.customData)
@@ -162,10 +178,11 @@ function buildDeliveredLineItemsAndSubtotal(args: {
       snapshot: snap,
     });
     const propBlock = customerFacingPropertiesIndentedBlock(props);
+    lineIndex += 1;
     blocks.push(
       [
-        `${index + 1}. ${pres.displayName}`,
-        `   Qty ${row.quantity} × ${formatMoney(unit)} = ${formatMoney(lineTotal)}`,
+        `${lineIndex}. ${pres.displayName}`,
+        `   Qty ${qty} × ${formatMoney(unit)} = ${formatMoney(lineTotal)}`,
         propBlock || null,
       ]
         .filter(Boolean)
@@ -201,33 +218,19 @@ async function buildFinanceFulfillmentPhotoAttachment(
 > {
   const key = (storageKey ?? "").trim();
   if (!key) return null;
-  if (key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
+  if (!isSafeFulfillmentPhotoStorageKey(key)) {
     return null;
   }
 
-  const root = path.resolve(process.cwd(), "storage", "fulfillment-photos");
-  const abs = path.resolve(root, key);
-  if (!abs.startsWith(root + path.sep) && abs !== root) {
-    return null;
-  }
-
-  let content: Buffer;
-  try {
-    content = await fs.readFile(abs);
-  } catch {
-    return null;
-  }
-
-  const ext = path.extname(key).toLowerCase();
-  const contentType =
-    ext === ".png"
-      ? "image/png"
-      : ext === ".webp"
-        ? "image/webp"
-        : "image/jpeg";
+  const photo = await readFulfillmentPhoto(key);
+  if (!photo) return null;
 
   const filename = `delivery-photo-${key.split(/[\\/]/).pop() || "image.jpg"}`;
-  return { filename, content, contentType };
+  return {
+    filename,
+    content: photo.buffer,
+    contentType: photo.contentType,
+  };
 }
 
 /**
@@ -239,6 +242,8 @@ export async function sendFulfillmentPackageEmails(args: {
   shop: string;
   projectId: string;
   jobId: string;
+  /** When set, emails and invoice totals reflect only this delivery phase. */
+  phaseId?: string;
 }): Promise<void> {
   if (!isEmailConfigured()) {
     console.warn("[fulfillmentNotify] email not configured; skip send");
@@ -260,13 +265,27 @@ export async function sendFulfillmentPackageEmails(args: {
     include: {
       jobs: {
         where: { id: args.jobId },
-        include: { items: { orderBy: { sortOrder: "asc" } } },
+        include: {
+          items: { orderBy: { sortOrder: "asc" } },
+          deliveryPhases: {
+            include: { lines: true },
+            orderBy: { sequence: "asc" },
+          },
+        },
       },
     },
   });
 
   if (!project?.jobs.length) return;
   const job = project.jobs[0];
+  const phase = args.phaseId
+    ? job.deliveryPhases.find((p) => p.id === args.phaseId)
+    : undefined;
+  const quantityByItemId = phase
+    ? new Map(
+        phase.lines.map((l) => [l.jobItemId, Math.max(0, l.quantityDelivered)]),
+      )
+    : undefined;
 
   const variantIds = job.items.map((i) => i.variantId);
   let live: Record<string, VariantDisplayInfo> = {};
@@ -283,14 +302,30 @@ export async function sendFulfillmentPackageEmails(args: {
     shop: args.shop,
     items: job.items,
     live,
+    quantityByItemId,
   });
 
   const projectUrl = `https://${args.shop}/apps/project-clad/project?id=${encodeURIComponent(args.projectId)}`;
   const projectOrderUrl = `${projectUrl}&job=${encodeURIComponent(args.jobId)}`;
+  const documentsUrl = `${projectOrderUrl}&deliveryTab=documents`;
+
+  const orderDeliveredPercent = phase
+    ? computeDeliveredPercent(job.items, mapPhasesToViews(job.deliveryPhases))
+    : null;
 
   const isDelivery =
     String(job.fulfillmentMethod || "").trim().toLowerCase() === "delivery";
-  const deliveryFee = isDelivery ? ORDER_DELIVERY_FEE : 0;
+  const shopDeliveryFee = await getShopDeliveryFee(args.shop);
+  const deliveryFee = isDelivery
+    ? phase
+      ? Number(phase.deliveryFeeAmount ?? 0) > 0
+        ? Number(phase.deliveryFeeAmount)
+        : shopDeliveryFee
+      : ORDER_DELIVERY_FEE
+    : 0;
+  const deliveryLabel = phase
+    ? `Delivery (drop ${phase.sequence})`
+    : "Delivery";
   const taxableBase = subtotal + deliveryFee;
   const tax = orderTaxFromSubtotal(taxableBase, { pricesIncludeTax: false });
   const total = Math.round((subtotal + tax + deliveryFee) * 100) / 100;
@@ -305,9 +340,27 @@ export async function sendFulfillmentPackageEmails(args: {
     ? [shippingBlock(project), ``]
     : [`Fulfillment: Store pickup`, ``];
 
+  const deliveredHeadline = phase
+    ? `Delivery ${phase.sequence} has been confirmed for your order.`
+    : `Your order has been delivered!`;
+
+  const progressLine =
+    orderDeliveredPercent != null
+      ? `Order progress: ${orderDeliveredPercent}% delivered overall.`
+      : null;
+
+  const documentsLines = phase
+    ? [
+        `View delivery photo, packing slip, and invoice for this drop:`,
+        documentsUrl,
+        ``,
+      ]
+    : [];
+
   const headerBlock = [
-    `Your order has been delivered!`,
+    deliveredHeadline,
     ``,
+    ...(progressLine ? [progressLine, ``] : []),
     `Project: ${project.name}`,
     `Order: ${job.name}`,
     formatProjectNumberLine(project.poNumber),
@@ -316,17 +369,19 @@ export async function sendFulfillmentPackageEmails(args: {
     ``,
     ...scheduleParts,
     ...locationBlock,
-    `Line items:`,
-    ``,
+    ...(phase
+      ? [`Line items (this delivery only):`, ``]
+      : [`Line items:`, ``]),
     lineBlocks.join("\n\n") || "(none)",
     ``,
     `Subtotal: ${formatMoney(subtotal)}`,
-    `Delivery: ${formatMoney(deliveryFee)}`,
+    `${deliveryLabel}: ${formatMoney(deliveryFee)}`,
     `Tax: ${formatMoney(tax)}`,
     `Total: ${formatMoney(total)}`,
     ``,
     `View in Projects: ${projectUrl}`,
     ``,
+    ...documentsLines,
   ];
 
   const ownerBody = headerBlock.join("\n");
@@ -396,8 +451,12 @@ export async function sendFulfillmentPackageEmails(args: {
   const ownerCustEmail = ownerCustomerRow?.email?.trim() || "—";
   const ownerPhone = (ownerCustomerRow?.phone ?? "").trim() || "—";
 
+  const financeIntro = phase
+    ? `Delivery ${phase.sequence} has been confirmed. Please invoice for the quantities delivered on this drop only (partial delivery).`
+    : `This order has been delivered. Please proceed with the invoice for this order.`;
+
   const financeBody = [
-    `This order has been delivered. Please proceed with the invoice for this order.`,
+    financeIntro,
     ``,
     `Customer details`,
     `Customer name: ${ownerName}`,
@@ -414,25 +473,62 @@ export async function sendFulfillmentPackageEmails(args: {
     ``,
     isDelivery ? `${shippingBlock(project)}` : `Fulfillment: Store pickup`,
     ``,
-    `Line items:`,
-    ``,
+    ...(phase ? [`Line items (this delivery only):`, ``] : [`Line items:`, ``]),
     lineBlocks.join("\n\n") || "(none)",
     ``,
+    ...(orderDeliveredPercent != null
+      ? [`Order progress: ${orderDeliveredPercent}% delivered overall.`, ``]
+      : []),
     `Subtotal: ${formatMoney(subtotal)}`,
-    `Delivery: ${formatMoney(deliveryFee)}`,
+    `${deliveryLabel}: ${formatMoney(deliveryFee)}`,
     `Tax: ${formatMoney(tax)}`,
     `Total: ${formatMoney(total)}`,
     ``,
     `Open order in app: ${projectOrderUrl}`,
+    `Delivery documents (photo, packing slip, invoice): ${documentsUrl}`,
     ``,
   ].join("\n");
 
-  const subject = `ProjectClad: Order delivered — ${project.name} · ${job.name}`;
+  const subject = phase
+    ? `ProjectClad: Delivery ${phase.sequence} confirmed — ${project.name} · ${job.name}`
+    : `ProjectClad: Order delivered — ${project.name} · ${job.name}`;
 
   const financeRecipients = financeDeliveryInvoiceRecipients();
+  const photoStorageKey =
+    phase?.fulfillmentPhotoStorageKey ?? job.fulfillmentPhotoStorageKey;
   const financePhotoAttachment = await buildFinanceFulfillmentPhotoAttachment(
-    job.fulfillmentPhotoStorageKey,
+    photoStorageKey,
   );
+
+  const extraAttachments: {
+    filename: string;
+    content: Buffer;
+    contentType: string;
+  }[] = [];
+  if (financePhotoAttachment) {
+    extraAttachments.push(financePhotoAttachment);
+  }
+  if (phase) {
+    try {
+      const invoicePdf = await buildPhasePdfBuffer({
+        mode: "invoice",
+        project,
+        job,
+        phase,
+        shopDeliveryFee,
+      });
+      extraAttachments.push({
+        filename: `invoice-delivery-${phase.sequence}-${job.name.replace(/[^a-z0-9-_]+/gi, "-")}.pdf`,
+        content: invoicePdf,
+        contentType: "application/pdf",
+      });
+    } catch (err) {
+      console.error(
+        "[fulfillmentNotify] phase invoice PDF failed:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
 
   if (sendOwner && customerDeliveryEmails.length > 0) {
     try {
@@ -468,15 +564,15 @@ export async function sendFulfillmentPackageEmails(args: {
   /** Always send finance copy when enabled (each list address gets its own message; subject/body differ from owner). */
   if (sendFinance && financeRecipients.length > 0) {
     try {
-      const financeSubject = `ProjectClad: Finance — Order delivered — ${project.name} · ${job.name}`;
+      const financeSubject = phase
+        ? `ProjectClad: Finance — Delivery ${phase.sequence} — ${project.name} · ${job.name}`
+        : `ProjectClad: Finance — Order delivered — ${project.name} · ${job.name}`;
       const ok = await sendTransactionalEmailToRecipients({
         shop: args.shop,
         recipients: financeRecipients,
         subject: financeSubject,
         text: financeBody,
-        ...(financePhotoAttachment
-          ? { extraAttachments: [financePhotoAttachment] }
-          : {}),
+        ...(extraAttachments.length > 0 ? { extraAttachments } : {}),
       });
       if (ok === 0) {
         throw new Error(

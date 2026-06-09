@@ -273,10 +273,10 @@
 }
 
 .projectclad-modal--duplicate {
-  z-index: 60;
+  z-index: 10000001;
 }
 
-/* Above Shopify cart drawer / sticky checkout (themes use very large z-index). */
+/* Above cc-header (200), mobile nav (250), and Shopify cart drawer / sticky checkout. */
 .projectclad-modal--checkout-fulfillment {
   z-index: 10000001;
 }
@@ -290,9 +290,11 @@
   inset: 0;
   display: flex;
   align-items: center;
+  align-items: safe center;
   justify-content: center;
-  padding: 1.5rem;
-  z-index: 50;
+  padding: max(1.5rem, env(safe-area-inset-top, 0px)) 1.5rem 1.5rem;
+  overflow-y: auto;
+  z-index: 10000001;
   box-sizing: border-box;
   background: rgba(0, 0, 0, 0);
   opacity: 0;

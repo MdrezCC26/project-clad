@@ -1,7 +1,11 @@
 import type { Job, JobDeliveryPhase, JobDeliveryPhaseLine, JobItem } from "@prisma/client";
 import prisma from "../db.server";
 import { getShopDeliveryFee } from "./shopDeliveryFee.server";
-import type { ResolvedJobDelivery } from "./jobDelivery";
+import {
+  deleteFulfillmentPhoto,
+  isSafeFulfillmentPhotoStorageKey,
+} from "./fulfillmentPhotoStorage.server";
+import { resolveJobDelivery, type ResolvedJobDelivery } from "./jobDelivery";
 import {
   computeDeliveredPercent,
   isJobFullyDelivered,
@@ -407,6 +411,76 @@ export async function ensureOpenFulfillmentPhase(
       }
     }
   });
+}
+
+/** Staff recovery: wipe phased delivery progress, photos, and recreate an open phase 1. */
+export async function resetJobDeliveryPhasesProgress(args: {
+  jobId: string;
+  shop: string;
+}): Promise<void> {
+  const job = await prisma.job.findUnique({
+    where: { id: args.jobId },
+    include: {
+      items: true,
+      project: {
+        select: {
+          receiveMode: true,
+          shipAddress1: true,
+          shipCity: true,
+          shipProvince: true,
+          shipPostal: true,
+          shipCountry: true,
+        },
+      },
+      deliveryPhases: { include: { lines: true }, orderBy: { sequence: "asc" } },
+    },
+  });
+  if (!job?.project) {
+    throw new Error("Order not found");
+  }
+
+  const storageKeys = new Set<string>();
+  if (job.fulfillmentPhotoStorageKey?.trim()) {
+    storageKeys.add(job.fulfillmentPhotoStorageKey.trim());
+  }
+  for (const phase of job.deliveryPhases) {
+    const key = phase.fulfillmentPhotoStorageKey?.trim();
+    if (key) storageKeys.add(key);
+  }
+  for (const key of storageKeys) {
+    if (isSafeFulfillmentPhotoStorageKey(key)) {
+      await deleteFulfillmentPhoto(key);
+    }
+  }
+
+  await prisma.$transaction([
+    prisma.jobDeliveryPhase.deleteMany({ where: { jobId: args.jobId } }),
+    prisma.job.update({
+      where: { id: args.jobId },
+      data: {
+        fulfillmentPhotoStorageKey: null,
+        fulfillmentNotifiedAt: null,
+      },
+    }),
+  ]);
+
+  const shopDeliveryFee = await getShopDeliveryFee(args.shop);
+  const resolved = resolveJobDelivery(
+    job,
+    {
+      receiveMode: job.project.receiveMode,
+      shipAddress1: job.project.shipAddress1,
+      shipCity: job.project.shipCity,
+      shipProvince: job.project.shipProvince,
+      shipPostal: job.project.shipPostal,
+      shipCountry: job.project.shipCountry,
+    },
+    shopDeliveryFee,
+  );
+  await ensureJobDeliveryPhases(job, shopDeliveryFee, resolved);
+  if (resolved.method === "delivery") {
+    await ensureOpenFulfillmentPhase(args.jobId);
+  }
 }
 
 export async function ensurePhasesForProjectJobs(

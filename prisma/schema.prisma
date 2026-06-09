@@ -381,3 +381,11 @@ model ShopSettings {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
+
+/// Durable fulfillment photo bytes keyed by Job/JobDeliveryPhase `fulfillmentPhotoStorageKey`.
+model FulfillmentPhoto {
+  storageKey  String   @id
+  contentType String
+  data        Bytes
+  createdAt   DateTime @default(now())
+}

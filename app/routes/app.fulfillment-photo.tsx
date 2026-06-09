@@ -1,9 +1,11 @@
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { shopStringFilter } from "../utils/projectAccess.server";
+import {
+  isSafeFulfillmentPhotoStorageKey,
+  readFulfillmentPhoto,
+} from "../utils/fulfillmentPhotoStorage.server";
 
 /**
  * Admin-side mirror of `apps.project-clad.fulfillment-photo`. Serves the raw
@@ -33,35 +35,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const key = job.fulfillmentPhotoStorageKey;
-  /* Defense-in-depth: reject any stored key that could escape the storage dir. */
-  if (!key || key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
+  if (!isSafeFulfillmentPhotoStorageKey(key)) {
     return new Response("Bad key", { status: 400 });
   }
 
-  const root = path.resolve(process.cwd(), "storage", "fulfillment-photos");
-  const abs = path.resolve(root, key);
-  if (!abs.startsWith(root + path.sep) && abs !== root) {
-    return new Response("Bad path", { status: 400 });
-  }
-
-  let buf: Buffer;
-  try {
-    buf = await fs.readFile(abs);
-  } catch {
+  const photo = await readFulfillmentPhoto(key);
+  if (!photo) {
     return new Response("Not found", { status: 404 });
   }
 
-  const ext = path.extname(key).toLowerCase();
-  const contentType =
-    ext === ".png"
-      ? "image/png"
-      : ext === ".webp"
-        ? "image/webp"
-        : "image/jpeg";
-
-  return new Response(new Uint8Array(buf), {
+  return new Response(new Uint8Array(photo.buffer), {
     headers: {
-      "Content-Type": contentType,
+      "Content-Type": photo.contentType,
       "Cache-Control": "private, max-age=3600",
     },
   });

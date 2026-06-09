@@ -25,6 +25,16 @@ function qtyForPhaseLine(
   return useActual ? row.quantityDelivered : row.quantityPlanned;
 }
 
+function phaseDeliveryFeeAmount(
+  phase: PhaseGraph,
+  shopDeliveryFee: number,
+  isDelivery: boolean,
+): number {
+  if (!isDelivery) return 0;
+  const stored = Number(phase.deliveryFeeAmount ?? 0);
+  return stored > 0 ? stored : shopDeliveryFee;
+}
+
 export async function buildPhasePdfBuffer(args: {
   mode: "packing" | "invoice";
   project: Project;
@@ -32,8 +42,10 @@ export async function buildPhasePdfBuffer(args: {
   phase: PhaseGraph;
   shopDeliveryFee: number;
 }): Promise<Buffer> {
-  const { mode, project, job, phase } = args;
+  const { mode, project, job, phase, shopDeliveryFee } = args;
   const useActual = phase.deliveredAt != null || phase.fulfillmentPhotoStorageKey != null;
+  const isDelivery =
+    String(job.fulfillmentMethod || "").trim().toLowerCase() === "delivery";
 
   const doc = new PDFDocument({ margin: 48, size: "LETTER" });
   const chunks: Buffer[] = [];
@@ -52,8 +64,11 @@ export async function buildPhasePdfBuffer(args: {
     doc.text(`PO: ${job.purchaseOrderNumber}`);
   }
   doc.text(
-    `Delivery ${phase.sequence}${job.items.length ? "" : ""} — ${phase.scheduledDeliveryDate || "Date TBD"} ${phase.scheduledDeliveryWindow || ""}`.trim(),
+    `Delivery ${phase.sequence} — ${phase.scheduledDeliveryDate || "Date TBD"} ${phase.scheduledDeliveryWindow || ""}`.trim(),
   );
+  if (useActual) {
+    doc.text("Quantities below reflect this delivery drop only (partial delivery).");
+  }
   doc.moveDown();
 
   let subtotal = 0;
@@ -78,7 +93,7 @@ export async function buildPhasePdfBuffer(args: {
   }
 
   if (mode === "invoice") {
-    const deliveryFee = Number(phase.deliveryFeeAmount ?? 0);
+    const deliveryFee = phaseDeliveryFeeAmount(phase, shopDeliveryFee, isDelivery);
     const taxable = subtotal + deliveryFee;
     const tax = orderTaxFromSubtotal(taxable, { pricesIncludeTax: false });
     const total = Math.round((taxable + tax) * 100) / 100;

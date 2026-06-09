@@ -1,5 +1,3 @@
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import {
   useEffect,
   useLayoutEffect,
@@ -23,7 +21,7 @@ import {
 } from "react-router";
 import prisma from "../db.server";
 import type { ProjectStorefrontStatus } from "@prisma/client";
-import { requireAppProxyCustomer } from "../utils/appProxy.server";
+import { requireAppProxyCustomer, mergeAppProxyParamsFromRequest } from "../utils/appProxy.server";
 import {
   buildVariantPresentation,
   type OrderLineCaptureV1,
@@ -84,6 +82,11 @@ import {
 } from "../utils/preferredDeliveryFormat";
 import { buildSignedFulfillmentPhotoUrl } from "../utils/fulfillmentPhotoSignedUrl.server";
 import {
+  deleteFulfillmentPhoto,
+  isSafeFulfillmentPhotoStorageKey,
+  saveFulfillmentPhoto,
+} from "../utils/fulfillmentPhotoStorage.server";
+import {
   ORDER_DISPLAY_TAX_RATE,
   orderTaxFromSubtotal,
   orderTotalWithTax,
@@ -114,6 +117,9 @@ import {
 import { getShopDeliveryFee } from "../utils/shopDeliveryFee.server";
 import {
   computeDeliveredPercent,
+  deliveryPhaseHasProgress,
+  formatPhaseDeliveredSummary,
+  phaseDeliveredUnitsTotal,
   mapPhasesToViews,
   parsePhasesJson,
   parseDeliveryPlanReference,
@@ -134,6 +140,8 @@ import {
   recordPhaseDeliveredQuantities,
   spawnNextFulfillmentPhaseIfNeeded,
   ensureOpenFulfillmentPhase,
+  jobHasFulfillmentProgress,
+  resetJobDeliveryPhasesProgress,
 } from "../utils/jobDeliveryPhases.server";
 
 declare global {
@@ -2175,44 +2183,67 @@ function StaffOrderLifecycleForm({
           Apply
         </button>
       </div>
+      <p className="project-clad-muted project-clad-staff-fulfillment-status-hint">
+        Setting status to <strong>Order now</strong> (or earlier) clears recorded
+        deliveries so you can start over. Or use <strong>Reset delivery progress</strong>{" "}
+        below.
+      </p>
     </Form>
   );
 }
 
-function OrderDeliveryDocumentsPanel({
-  job,
-  projectId,
-}: {
-  job: JobView;
-  projectId: string;
-}) {
-  const confirmedPhases = job.deliveryPhases.filter((p) => p.hasPhoto);
-  if (confirmedPhases.length === 0) {
+function OrderDeliveryDocumentsPanel({ job }: { job: JobView }) {
+  const documentPhases = job.deliveryPhases.filter((p) =>
+    deliveryPhaseHasProgress(p),
+  );
+  if (documentPhases.length === 0) {
     return (
       <p className="project-clad-muted" style={{ margin: 0 }}>
-        No confirmed deliveries yet.
+        No deliveries recorded yet.
       </p>
     );
   }
   return (
+    <div className="project-clad-delivery-docs">
+      <p className="project-clad-muted project-clad-delivery-docs__intro">
+        Each row is one confirmed delivery drop. Photo, packing slip, and invoice
+        show only the quantities delivered on that drop ({job.deliveredPercent}%
+        of order delivered so far).
+      </p>
     <table className="project-clad-table project-clad-delivery-docs-table">
       <thead>
         <tr>
           <th>Delivery</th>
           <th>Confirmed</th>
+          <th>Qty this drop</th>
           <th>Photo</th>
           <th>Documents</th>
         </tr>
       </thead>
       <tbody>
-        {confirmedPhases.map((p) => {
+        {documentPhases.map((p) => {
           const confirmedDate = p.deliveredAt
             ? p.deliveredAt.slice(0, 10)
             : "—";
+          const deliveredSummary = formatPhaseDeliveredSummary(p, job.items);
+          const unitsThisDrop = phaseDeliveredUnitsTotal(p);
+          const isConfirmed = p.hasPhoto;
           return (
             <tr key={p.id}>
-              <td>Delivery {p.sequence}</td>
+              <td>
+                Delivery {p.sequence}
+                {!isConfirmed ? (
+                  <span className="project-clad-muted"> · awaiting photo</span>
+                ) : null}
+              </td>
               <td>{confirmedDate}</td>
+              <td className="project-clad-delivery-docs-table__qty">
+                {unitsThisDrop > 0 ? (
+                  <span title={deliveredSummary}>{deliveredSummary}</span>
+                ) : (
+                  <span className="project-clad-muted">—</span>
+                )}
+              </td>
               <td className="project-clad-delivery-docs-table__links">
                 {p.photoUrl ? (
                   <a
@@ -2230,41 +2261,55 @@ function OrderDeliveryDocumentsPanel({
                 )}
               </td>
               <td className="project-clad-delivery-docs-table__links">
-                <a
-                  href={`/apps/project-clad/phase-document?id=${encodeURIComponent(projectId)}&jobId=${encodeURIComponent(job.id)}&phaseId=${encodeURIComponent(p.id)}&mode=packing`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Packing slip
-                </a>
-                <span aria-hidden="true"> · </span>
-                <a
-                  href={`/apps/project-clad/phase-document?id=${encodeURIComponent(projectId)}&jobId=${encodeURIComponent(job.id)}&phaseId=${encodeURIComponent(p.id)}&mode=invoice`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Invoice
-                </a>
+                {isConfirmed && p.packingSlipUrl ? (
+                  <a
+                    href={p.packingSlipUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Packing slip
+                  </a>
+                ) : (
+                  <span className="project-clad-muted">
+                    {isConfirmed ? "—" : "Confirm with photo"}
+                  </span>
+                )}
+                {isConfirmed && p.packingSlipUrl && p.invoiceUrl ? (
+                  <span aria-hidden="true"> · </span>
+                ) : null}
+                {isConfirmed && p.invoiceUrl ? (
+                  <a
+                    href={p.invoiceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Invoice
+                  </a>
+                ) : null}
               </td>
             </tr>
           );
         })}
       </tbody>
     </table>
+    </div>
   );
 }
 
 function StaffPhaseDeliveryPanel({
   job,
   projectId,
+  canResetDelivery,
 }: {
   job: JobView;
   projectId: string;
+  canResetDelivery: boolean;
 }) {
   const phases = job.deliveryPhases;
   const openPhase =
     phases.find((p) => p.id === findActiveDeliveryPhaseId(phases)) ?? null;
   const actionUrl = `/apps/project-clad/project?id=${encodeURIComponent(projectId)}`;
+  const hasRecordedDelivery = phases.some((p) => deliveryPhaseHasProgress(p));
 
   if (phases.length === 0) return null;
 
@@ -2350,6 +2395,28 @@ function StaffPhaseDeliveryPanel({
 
   return (
     <div className="project-clad-staff-phase-delivery">
+      {canResetDelivery && hasRecordedDelivery ? (
+        <Form
+          method="post"
+          action={actionUrl}
+          className="project-clad-staff-delivery-reset-form"
+          onSubmit={(event) => {
+            if (
+              !confirm(
+                "Reset all delivery progress for this order? Delivered quantities, photos, and documents will be cleared so you can record deliveries again.",
+              )
+            ) {
+              event.preventDefault();
+            }
+          }}
+        >
+          <input type="hidden" name="intent" value="reset-order-delivery" />
+          <input type="hidden" name="jobId" value={job.id} />
+          <button type="submit" className="project-clad-button project-clad-button--danger">
+            Reset delivery progress
+          </button>
+        </Form>
+      ) : null}
       <p className="project-clad-delivery-fulfillment-progress" role="status">
         {job.deliveredPercent}% delivered
         {confirmedCount > 0
@@ -2419,7 +2486,7 @@ function StaffPhaseDeliveryPanel({
                               phaseLine?.quantityDelivered &&
                               phaseLine.quantityDelivered > 0
                                 ? phaseLine.quantityDelivered
-                                : remaining
+                                : 0
                             }
                             className="project-clad-preferred-delivery-input"
                             style={{ width: "4.5rem" }}
@@ -2484,10 +2551,12 @@ function OrderDeliveryFulfillmentSection({
   job,
   projectId,
   viewerIsAdmin,
+  viewerCanFulfill,
 }: {
   job: JobView;
   projectId: string;
   viewerIsAdmin: boolean;
+  viewerCanFulfill: boolean;
 }) {
   return (
     <div className="project-clad-delivery-fulfillment-section">
@@ -2496,8 +2565,12 @@ function OrderDeliveryFulfillmentSection({
         projectId={projectId}
         idPrefix={`delivery-modal-${job.id}`}
       />
-      {viewerIsAdmin && job.deliveryPhases.length > 0 ? (
-        <StaffPhaseDeliveryPanel job={job} projectId={projectId} />
+      {(viewerIsAdmin || viewerCanFulfill) && job.deliveryPhases.length > 0 ? (
+        <StaffPhaseDeliveryPanel
+          job={job}
+          projectId={projectId}
+          canResetDelivery={viewerCanFulfill}
+        />
       ) : null}
       {job.orderLifecycleStatus === "ordered" &&
       !viewerIsAdmin &&
@@ -2822,6 +2895,8 @@ function formatActivitySummary(ev: ActivityFeedItem): string {
         ? `Approval request withdrawn (line) · ${jn}`
         : `Approval request withdrawn · ${jn}`;
     }
+    case "project_owner_transferred":
+      return "Project ownership transferred";
     default:
       return ev.type.replace(/_/g, " ");
   }
@@ -3328,7 +3403,27 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         return {
           ...p,
           photoUrl: mayViewPhasePhoto
-            ? `/apps/project-clad/fulfillment-photo?jobId=${encodeURIComponent(job.id)}&phaseId=${encodeURIComponent(p.id)}`
+            ? (buildSignedFulfillmentPhotoUrl({
+                jobId: job.id,
+                shop,
+                phaseId: p.id,
+              }) ??
+                mergeAppProxyParamsFromRequest(
+                  `/apps/project-clad/fulfillment-photo?jobId=${encodeURIComponent(job.id)}&phaseId=${encodeURIComponent(p.id)}`,
+                  request,
+                ))
+            : null,
+          packingSlipUrl: hasPhasePhoto
+            ? mergeAppProxyParamsFromRequest(
+                `/apps/project-clad/phase-document?id=${encodeURIComponent(project.id)}&jobId=${encodeURIComponent(job.id)}&phaseId=${encodeURIComponent(p.id)}&mode=packing`,
+                request,
+              )
+            : null,
+          invoiceUrl: hasPhasePhoto
+            ? mergeAppProxyParamsFromRequest(
+                `/apps/project-clad/phase-document?id=${encodeURIComponent(project.id)}&jobId=${encodeURIComponent(job.id)}&phaseId=${encodeURIComponent(p.id)}&mode=invoice`,
+                request,
+              )
             : null,
         };
       });
@@ -4911,13 +5006,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         : ".jpg";
     const shopDir = shop.replace(/[^a-zA-Z0-9._-]+/g, "_");
     const storageKey = `${shopDir}/${jobId}-phase-${phase.sequence}-${Date.now()}${ext}`;
-    const root = path.resolve(process.cwd(), "storage", "fulfillment-photos");
-    const abs = path.resolve(root, storageKey);
-    if (!abs.startsWith(root + path.sep)) {
+    if (!isSafeFulfillmentPhotoStorageKey(storageKey)) {
       return failFulfillment("Invalid path");
     }
-    await fs.mkdir(path.dirname(abs), { recursive: true });
-    await fs.writeFile(abs, uploaded.buffer);
+    try {
+      await saveFulfillmentPhoto(storageKey, uploaded.buffer);
+    } catch (err) {
+      console.error(
+        "[project] fulfillment photo save failed:",
+        err instanceof Error ? err.message : err,
+      );
+      return failFulfillment(
+        "Could not save the delivery photo. Reload and try again, or contact support if this continues.",
+      );
+    }
 
     await prisma.jobDeliveryPhase.update({
       where: { id: phaseId },
@@ -4939,20 +5041,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       ? isJobFullyDelivered(refreshedJob.items, phaseViews)
       : false;
 
-    if (fullyDelivered && refreshedJob) {
-      await prisma.job.update({
-        where: { id: jobId },
-        data: {
-          orderLifecycleStatus: "delivered",
-          fulfillmentPhotoStorageKey: storageKey,
-          ...(job.completedAt ? {} : { completedAt: new Date() }),
-        },
-      });
-    }
+    await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        fulfillmentPhotoStorageKey: storageKey,
+        ...(fullyDelivered && refreshedJob
+          ? {
+              orderLifecycleStatus: "delivered" as const,
+              ...(job.completedAt ? {} : { completedAt: new Date() }),
+            }
+          : {}),
+      },
+    });
 
     if (!phase.fulfillmentNotifiedAt) {
       try {
-        await sendFulfillmentPackageEmails({ shop, projectId, jobId });
+        await sendFulfillmentPackageEmails({
+          shop,
+          projectId,
+          jobId,
+          phaseId,
+        });
         await prisma.jobDeliveryPhase.update({
           where: { id: phaseId },
           data: { fulfillmentNotifiedAt: new Date() },
@@ -5075,13 +5184,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         : ".jpg";
     const shopDir = shop.replace(/[^a-zA-Z0-9._-]+/g, "_");
     const storageKey = `${shopDir}/${jobId}-${Date.now()}${ext}`;
-    const root = path.resolve(process.cwd(), "storage", "fulfillment-photos");
-    const abs = path.resolve(root, storageKey);
-    if (!abs.startsWith(root + path.sep)) {
+    if (!isSafeFulfillmentPhotoStorageKey(storageKey)) {
       throw new Response("Invalid path", { status: 400 });
     }
-    await fs.mkdir(path.dirname(abs), { recursive: true });
-    await fs.writeFile(abs, uploaded.buffer);
+    await saveFulfillmentPhoto(storageKey, uploaded.buffer);
 
     await prisma.job.update({
       where: { id: jobId },
@@ -5162,10 +5268,31 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     const job = await prisma.job.findFirst({
       where: { id: jobId, projectId },
+      include: {
+        deliveryPhases: { include: { lines: true }, orderBy: { sequence: "asc" } },
+      },
     });
     if (!job) {
       throw new Response("Order not found", { status: 404 });
     }
+
+    const hasDeliveryProgress = jobHasFulfillmentProgress(job.deliveryPhases);
+    const isLifecycleRegression =
+      next === "draft" ||
+      next === "pending_review" ||
+      next === "ready_to_order" ||
+      (next === "ordered" &&
+        (job.orderLifecycleStatus === "delivered" ||
+          job.orderLifecycleStatus === "paid" ||
+          job.orderLifecycleStatus === "ready_to_order" ||
+          job.orderLifecycleStatus === "pending_review" ||
+          job.orderLifecycleStatus === "draft"));
+    if (hasDeliveryProgress && isLifecycleRegression) {
+      await resetJobDeliveryPhasesProgress({ jobId, shop });
+      job.fulfillmentPhotoStorageKey = null;
+      job.fulfillmentNotifiedAt = null;
+    }
+
     if (next === "delivered" && !job.fulfillmentPhotoStorageKey) {
       const origin = getStorefrontOriginForAppProxyRedirect(request, shop);
       return redirect(
@@ -5255,18 +5382,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       "paid",
     ] as const;
 
-    const removeFulfillmentPhotoFromDisk = async (key: string) => {
-      const root = path.resolve(process.cwd(), "storage", "fulfillment-photos");
-      const abs = path.resolve(root, key);
-      if (!abs.startsWith(root + path.sep)) return;
-      try {
-        await fs.unlink(abs);
-      } catch (e) {
-        const code = (e as NodeJS.ErrnoException)?.code;
-        if (code !== "ENOENT") {
-          console.error("[project-clad] fulfillment photo unlink:", e);
-        }
-      }
+    const removeFulfillmentPhotoFromStorage = async (key: string) => {
+      if (!isSafeFulfillmentPhotoStorageKey(key)) return;
+      await deleteFulfillmentPhoto(key);
     };
 
     if (next === "pending_review") {
@@ -5337,7 +5455,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     if (storageKeyToRemove) {
-      await removeFulfillmentPhotoFromDisk(storageKeyToRemove);
+      await removeFulfillmentPhotoFromStorage(storageKeyToRemove);
     }
 
     if (next === "delivered") {
@@ -5365,6 +5483,41 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     }
 
+    notifyMissionControl(jobId);
+    return redirectToProject(request, projectId, shop);
+  }
+
+  if (intent === "reset-order-delivery") {
+    if (!viewerCanFulfill) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+    const jobId = String(formData.get("jobId") || "");
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, projectId },
+      include: {
+        deliveryPhases: { include: { lines: true }, orderBy: { sequence: "asc" } },
+      },
+    });
+    if (!job) {
+      throw new Response("Order not found", { status: 404 });
+    }
+    if (!jobHasFulfillmentProgress(job.deliveryPhases)) {
+      return redirectToProject(request, projectId, shop);
+    }
+    await resetJobDeliveryPhasesProgress({ jobId, shop });
+    if (
+      job.orderLifecycleStatus === "delivered" ||
+      job.orderLifecycleStatus === "paid"
+    ) {
+      await prisma.job.update({
+        where: { id: jobId },
+        data: {
+          orderLifecycleStatus: "ordered",
+          completedAt: null,
+          paidAt: null,
+        },
+      });
+    }
     notifyMissionControl(jobId);
     return redirectToProject(request, projectId, shop);
   }
@@ -6045,6 +6198,45 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
 
+    return redirectToProject(request, projectId, shop);
+  }
+
+  if (intent === "transfer-project-owner") {
+    const isOwner = isProjectOwner(project, customerId);
+    if (!isOwner && !viewerIsAppAdmin) {
+      return Response.json(
+        { memberError: "Only the project owner can transfer ownership." },
+        { status: 200 },
+      );
+    }
+    const memberCustomerId = String(formData.get("memberCustomerId") || "").trim();
+    if (!memberCustomerId) {
+      return Response.json(
+        { memberError: "Select a member to make owner." },
+        { status: 200 },
+      );
+    }
+    const { transferProjectOwner } = await import(
+      "../utils/transferProjectOwner.server"
+    );
+    const result = await transferProjectOwner({
+      shop,
+      projectId,
+      previousOwnerCustomerId: project.ownerCustomerId,
+      newOwnerCustomerId: memberCustomerId,
+    });
+    if (!result.ok) {
+      return Response.json({ memberError: result.error }, { status: 200 });
+    }
+    await logProjectActivity({
+      projectId,
+      actorCustomerId: customerId,
+      type: "project_owner_transferred",
+      payload: {
+        previousOwnerCustomerId: project.ownerCustomerId,
+        newOwnerCustomerId: memberCustomerId,
+      },
+    });
     return redirectToProject(request, projectId, shop);
   }
 
@@ -7544,6 +7736,12 @@ export default function ProjectDetailPage() {
               <p className="project-clad-edit-project-modal__panel-label">
                 Members
               </p>
+              {isOwner || viewerIsAdmin ? (
+                <p className="project-clad-muted" style={{ margin: "0 0 0.5rem" }}>
+                  Use <strong>Make owner</strong> to transfer this project to an
+                  existing member. You will remain on the project as an editor.
+                </p>
+              ) : null}
               {memberLookupError ? (
                 <p className="project-clad-muted" style={{ margin: 0 }}>
                   {memberLookupError}
@@ -7566,6 +7764,8 @@ export default function ProjectDetailPage() {
                           ? "Edit"
                           : "View only";
                     const isOwnerMember = member.role === "owner";
+                    const canTransferOwner = isOwner || viewerIsAdmin;
+                    const memberLabel = fullName || member.email || "member";
                     return (
                       <li
                         key={member.customerId}
@@ -7586,9 +7786,49 @@ export default function ProjectDetailPage() {
                         >
                           {roleLabel}
                         </span>
-                        {canAdminMembers && (
+                        {(canAdminMembers || canTransferOwner) && (
                           <div className="project-clad-member-row__actions">
-                            {isOwnerMember ? null : (
+                            {canTransferOwner && !isOwnerMember ? (
+                              <Form
+                                method="post"
+                                action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
+                                onSubmit={(event) => {
+                                  if (
+                                    !confirm(
+                                      `Make ${memberLabel} the project owner? You will stay on the project as an editor.`,
+                                    )
+                                  ) {
+                                    event.preventDefault();
+                                  }
+                                }}
+                                data-projectclad-member-form
+                                data-projectclad-member-intent="transfer-project-owner"
+                                data-projectclad-project-id={project.id}
+                                data-projectclad-member-id={member.customerId}
+                                data-projectclad-ajax
+                                data-projectclad-intent="transfer-project-owner"
+                                style={{ margin: 0 }}
+                              >
+                                <input
+                                  type="hidden"
+                                  name="intent"
+                                  value="transfer-project-owner"
+                                />
+                                <input
+                                  type="hidden"
+                                  name="memberCustomerId"
+                                  value={member.customerId}
+                                />
+                                <button
+                                  type="submit"
+                                  className="project-clad-button project-clad-reject-modal-btn"
+                                  aria-label={`Make ${memberLabel} project owner`}
+                                >
+                                  Make owner
+                                </button>
+                              </Form>
+                            ) : null}
+                            {canAdminMembers && !isOwnerMember ? (
                               <Form
                                 method="post"
                                 action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
@@ -7618,12 +7858,12 @@ export default function ProjectDetailPage() {
                                 <button
                                   type="submit"
                                   className="project-clad-button project-clad-reject-modal-btn"
-                                  aria-label={`Remove ${fullName || member.email || "member"}`}
+                                  aria-label={`Remove ${memberLabel}`}
                                 >
                                   Remove
                                 </button>
                               </Form>
-                            )}
+                            ) : null}
                           </div>
                         )}
                       </li>
@@ -8203,6 +8443,7 @@ export default function ProjectDetailPage() {
                     job={job}
                     projectId={project.id}
                     viewerIsAdmin={viewerIsAdmin}
+                    viewerCanFulfill={viewerCanFulfill}
                   />
                 </div>
               ))}
@@ -8228,10 +8469,7 @@ export default function ProjectDetailPage() {
                 data-projectclad-delivery-documents-job={job.id}
                 hidden
               >
-                <OrderDeliveryDocumentsPanel
-                  job={job}
-                  projectId={project.id}
-                />
+                <OrderDeliveryDocumentsPanel job={job} />
               </div>
             ))}
             <div className="project-clad-actions project-clad-reject-modal-actions">
@@ -8962,6 +9200,44 @@ export default function ProjectDetailPage() {
                         },
                       });
                     }
+                    const hasConfirmedDeliveries = job.deliveryPhases.some(
+                      (p) => p.hasPhoto,
+                    );
+                    if (
+                      hasConfirmedDeliveries &&
+                      !(canEdit || viewerCanFulfill)
+                    ) {
+                      orderFinanceActions.push({
+                        key: "delivery-documents",
+                        kind: "button",
+                        icon: PC_DELIVERY_OPTIONS_ICON,
+                        label: "Delivery documents",
+                        description: `${job.deliveredPercent}% delivered · photo, packing slip & invoice per drop`,
+                        tone: "edit",
+                        buttonProps: {
+                          "data-projectclad-delivery-options": "",
+                          "data-delivery-open-tab": "documents",
+                          "data-job-id": job.id,
+                          "data-delivery-mode": job.deliveryMode,
+                          "data-ship-address1": job.shipAddress1 ?? "",
+                          "data-ship-city": job.shipCity ?? "",
+                          "data-ship-province": job.shipProvince ?? "",
+                          "data-ship-postal": job.shipPostal ?? "",
+                          "data-ship-country": job.shipCountry ?? "",
+                          "data-scheduled-date": job.scheduledDeliveryDate ?? "",
+                          "data-scheduled-window":
+                            job.scheduledDeliveryWindow ?? "",
+                          "data-order-lifecycle": job.orderLifecycleStatus,
+                          "data-delivered-percent": String(
+                            job.deliveredPercent ?? 0,
+                          ),
+                          "data-plan-locked": deliveryOptionsLocked ? "1" : "0",
+                          "data-staff-fulfillment": "0",
+                          title: "View delivery photo, packing slip, and invoice for each drop",
+                          "aria-label": "Delivery documents for this order",
+                        },
+                      });
+                    }
                     const orderFinanceActionsSlot =
                       orderFinanceActions.length > 0 ? (
                         <div className="project-clad-order-actions-stack">
@@ -9089,6 +9365,8 @@ export default function ProjectDetailPage() {
                               hasPhoto: false,
                               deliveredAt: null,
                               photoUrl: null,
+                              packingSlipUrl: null,
+                              invoiceUrl: null,
                               lines: ph.lines.map((l) => ({
                                 jobItemId: l.jobItemId,
                                 quantityPlanned: l.quantityPlanned,
@@ -11618,7 +11896,8 @@ export default function ProjectDetailPage() {
     }
     pcSetDeliveryModalPlanLocked(planLocked);
     pcShowDeliveryModalJobPanels(jobIdOpen);
-    pcSetDeliveryModalTab(pcDefaultDeliveryModalTab(btn));
+    var openTab = btn.getAttribute('data-delivery-open-tab') || '';
+    pcSetDeliveryModalTab(openTab || pcDefaultDeliveryModalTab(btn));
     pcSyncOrderDeliveryModalUi();
     orderDeliveryModal.style.display = 'flex';
   }
@@ -11628,6 +11907,21 @@ export default function ProjectDetailPage() {
       orderDeliveryModal.style.display = 'none';
     }
   }
+
+  (function pcOpenDeliveryDocumentsFromUrl() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var jobId = params.get('job');
+      if (!jobId || params.get('deliveryTab') !== 'documents') return;
+      var btn = document.querySelector(
+        '[data-projectclad-delivery-options][data-job-id="' + jobId + '"]',
+      );
+      if (!(btn instanceof HTMLElement)) return;
+      pcOpenOrderDeliveryModal(btn);
+    } catch (e) {
+      /* ignore */
+    }
+  })();
 
   function pcSetDeliveryModalPlanLocked(locked) {
     if (!(orderDeliveryForm instanceof HTMLFormElement)) return;
@@ -12216,6 +12510,9 @@ export default function ProjectDetailPage() {
       return;
     }
     if (intent === 'delete-item' && !confirm('Are you sure you want to remove this item?')) {
+      return;
+    }
+    if (intent === 'transfer-project-owner' && !confirm('Make this member the project owner? You will stay on the project as an editor.')) {
       return;
     }
     const memberCustomerId =

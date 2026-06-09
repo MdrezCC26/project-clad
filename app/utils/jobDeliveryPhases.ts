@@ -15,8 +15,12 @@ export type DeliveryPhaseView = {
   deliveryFeeAmount: number;
   hasPhoto: boolean;
   deliveredAt: string | null;
-  /** App-proxy URL when the viewer may open the phase fulfillment photo. */
+  /** Signed or app-proxy URL when the viewer may open the phase fulfillment photo. */
   photoUrl: string | null;
+  /** App-proxy URL for the phase packing slip PDF. */
+  packingSlipUrl: string | null;
+  /** App-proxy URL for the phase invoice PDF. */
+  invoiceUrl: string | null;
   lines: DeliveryPhaseLineView[];
 };
 
@@ -50,6 +54,8 @@ export function mapPhasesToViews(
       hasPhoto: Boolean(p.fulfillmentPhotoStorageKey),
       deliveredAt: p.deliveredAt?.toISOString() ?? null,
       photoUrl: null,
+      packingSlipUrl: null,
+      invoiceUrl: null,
       lines: p.lines.map((l) => ({
         jobItemId: l.jobItemId,
         quantityPlanned: l.quantityPlanned,
@@ -106,6 +112,38 @@ export function isJobFullyDelivered(
     }
   }
   return items.every((item) => (deliveredByItem.get(item.id) ?? 0) === item.quantity);
+}
+
+/** True when a phase has recorded delivery qty and/or a confirmation photo. */
+export function deliveryPhaseHasProgress(phase: DeliveryPhaseView): boolean {
+  return phase.hasPhoto || phaseDeliveredUnitsTotal(phase) > 0;
+}
+
+/** Units delivered on a single confirmed drop (sum of phase line qty). */
+export function phaseDeliveredUnitsTotal(
+  phase: Pick<DeliveryPhaseView, "lines">,
+): number {
+  return phase.lines.reduce(
+    (sum, line) => sum + Math.max(0, line.quantityDelivered),
+    0,
+  );
+}
+
+/** Human-readable summary of quantities delivered on one drop. */
+export function formatPhaseDeliveredSummary(
+  phase: Pick<DeliveryPhaseView, "lines">,
+  items: { id: string; displayName: string }[],
+): string {
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const parts: string[] = [];
+  for (const line of phase.lines) {
+    const qty = Math.max(0, line.quantityDelivered);
+    if (qty <= 0) continue;
+    const item = itemById.get(line.jobItemId);
+    const name = item?.displayName?.trim() || "Line item";
+    parts.push(`${qty} × ${name}`);
+  }
+  return parts.length > 0 ? parts.join("; ") : "—";
 }
 
 /** Total delivery fees for display: one shop fee per confirmed delivery. */

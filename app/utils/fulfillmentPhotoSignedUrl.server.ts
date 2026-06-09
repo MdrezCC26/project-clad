@@ -23,9 +23,23 @@ function timingSafeEqualHex(a: string, b: string): boolean {
  * Absolute URL on the app host (not the storefront) so links work when the store is
  * password-protected or opened outside a logged-in storefront session.
  */
+function signedPhotoMessage(args: {
+  shop: string;
+  jobId: string;
+  exp: string;
+  phaseId?: string;
+}): string {
+  const shopNorm = normalizeShop(args.shop);
+  if (args.phaseId) {
+    return `${shopNorm}:${args.jobId}:${args.phaseId}:${args.exp}`;
+  }
+  return `${shopNorm}:${args.jobId}:${args.exp}`;
+}
+
 export function buildSignedFulfillmentPhotoUrl(args: {
   jobId: string;
   shop: string;
+  phaseId?: string;
 }): string | null {
   const origin = resolvePublicAppOrigin();
   const secret = process.env.SHOPIFY_API_SECRET?.trim();
@@ -34,8 +48,13 @@ export function buildSignedFulfillmentPhotoUrl(args: {
   }
 
   const exp = Math.floor(Date.now() / 1000) + DEFAULT_TTL_SEC;
-  const shopNorm = normalizeShop(args.shop);
-  const message = `${shopNorm}:${args.jobId}:${exp}`;
+  const expRaw = String(exp);
+  const message = signedPhotoMessage({
+    shop: args.shop,
+    jobId: args.jobId,
+    exp: expRaw,
+    phaseId: args.phaseId,
+  });
   const sig = crypto.createHmac("sha256", secret).update(message).digest("hex");
 
   let base: URL;
@@ -45,7 +64,10 @@ export function buildSignedFulfillmentPhotoUrl(args: {
     return null;
   }
   base.searchParams.set("jobId", args.jobId);
-  base.searchParams.set("exp", String(exp));
+  if (args.phaseId) {
+    base.searchParams.set("phaseId", args.phaseId);
+  }
+  base.searchParams.set("exp", expRaw);
   base.searchParams.set("sig", sig);
   return base.toString();
 }
@@ -55,6 +77,7 @@ export function verifySignedFulfillmentPhotoParams(args: {
   shop: string;
   expRaw: string;
   sig: string;
+  phaseId?: string;
 }): boolean {
   const secret = process.env.SHOPIFY_API_SECRET?.trim();
   if (!secret) return false;
@@ -64,8 +87,12 @@ export function verifySignedFulfillmentPhotoParams(args: {
     return false;
   }
 
-  const shopNorm = normalizeShop(args.shop);
-  const message = `${shopNorm}:${args.jobId}:${args.expRaw}`;
+  const message = signedPhotoMessage({
+    shop: args.shop,
+    jobId: args.jobId,
+    exp: args.expRaw,
+    phaseId: args.phaseId,
+  });
   const expected = crypto.createHmac("sha256", secret).update(message).digest("hex");
   return timingSafeEqualHex(expected, args.sig);
 }

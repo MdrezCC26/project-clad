@@ -16,6 +16,16 @@ export type AppProxyContextWithCustomer = AppProxyContext & {
   customerEmail?: string;
 };
 
+/** Query params Shopify adds to signed app-proxy requests. */
+export const APP_PROXY_QUERY_KEYS = [
+  "shop",
+  "signature",
+  "path_prefix",
+  "timestamp",
+  "logged_in_customer_id",
+  "logged_in_customer_email",
+] as const;
+
 const APP_PROXY_SIGNATURE_PARAM = "signature";
 
 const buildMessage = (params: URLSearchParams) => {
@@ -94,6 +104,31 @@ export const getAppProxyContext = (request: Request): AppProxyContext => {
   const formActionUrl = `https://${shop}${returnPath}`;
   return { shop, customerId, customerEmail, returnPath, formActionUrl };
 };
+
+/**
+ * Merge app-proxy query params from the incoming storefront request onto a proxy path.
+ * Used for SSR hrefs (this route does not hydrate). Skips keys already on `path`.
+ * Omits `signature` by default — reusing a signature from another proxy path breaks auth.
+ */
+export function mergeAppProxyParamsFromRequest(
+  path: string,
+  request: Request,
+  options: { includeSignature?: boolean } = {},
+): string {
+  const target = new URL(path, "https://storefront.local");
+  const current = new URL(request.url).searchParams;
+  for (const key of APP_PROXY_QUERY_KEYS) {
+    if (key === APP_PROXY_SIGNATURE_PARAM && !options.includeSignature) {
+      continue;
+    }
+    if (target.searchParams.has(key)) continue;
+    const value = current.get(key);
+    if (value !== null) {
+      target.searchParams.set(key, value);
+    }
+  }
+  return `${target.pathname}${target.search}`;
+}
 
 export const requireAppProxyCustomer = (
   request: Request,
