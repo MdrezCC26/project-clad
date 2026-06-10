@@ -1,6 +1,7 @@
 /**
- * Backfill `Project.ownerCompanyKey` for every row where it's still null, using the
- * owner's current Shopify `company:<name>` customer tag.
+ * Sync `Project.companyName` and `Project.ownerCompanyKey` from each owner's Shopify
+ * B2B company (first `companyContactProfiles` entry). Skips owners with no B2B profile.
+ * Does not touch jobs, members, addresses, or `visibleToCompany`.
  *
  * Usage (PowerShell):
  *   npx tsx scripts/backfill-project-company-key.ts                                 # dry run
@@ -11,29 +12,17 @@
  *   npx tsx scripts/backfill-project-company-key.ts
  *   APPLY=1 npx tsx scripts/backfill-project-company-key.ts
  *
- * Safe to re-run — only touches rows where ownerCompanyKey is null.
+ * Safe to re-run — only writes when companyName or ownerCompanyKey differs from B2B.
  *
  * This script deliberately does NOT import `app/shopify.server.ts` so it can run
  * outside of `shopify app dev` (no SHOPIFY_APP_URL env required). It reads the
- * offline access token straight from the `Session` table and calls the Admin REST
- * API directly.
+ * offline access token straight from the `Session` table and calls Admin GraphQL.
  */
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-const CUSTOMER_API_VERSION = "2024-10";
-
-/* Pure helpers inlined from app/utils/customerTags.server.ts so this script can run
-   without loading the Shopify SDK (which requires SHOPIFY_APP_URL). Keep in sync. */
-const COMPANY_TAG_PREFIX = "company:";
-
-function extractCompanyTags(tags: string[] | undefined): string[] {
-  if (!tags?.length) return [];
-  return tags
-    .map((t) => String(t).trim())
-    .filter((t) => t.toLowerCase().startsWith(COMPANY_TAG_PREFIX));
-}
+const ADMIN_API_VERSION = "2024-10";
 
 function normalizeCompanyKey(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -41,8 +30,9 @@ function normalizeCompanyKey(raw: string | null | undefined): string | null {
   return v || null;
 }
 
-function companyKeyFromTag(tag: string): string | null {
-  return normalizeCompanyKey(tag.slice(COMPANY_TAG_PREFIX.length).trim());
+function customerGid(customerId: string): string {
+  const numeric = customerId.replace(/\D/g, "");
+  return `gid://shopify/Customer/${numeric}`;
 }
 
 const apply = process.env.APPLY === "1";
@@ -52,8 +42,15 @@ type Update = {
   projectId: string;
   shop: string;
   ownerCustomerId: string;
+  companyName: string;
   ownerCompanyKey: string;
-  sourceTag: string;
+  previousCompanyName: string | null;
+  previousOwnerCompanyKey: string | null;
+};
+
+type B2bLookup = {
+  companyName: string;
+  ownerCompanyKey: string;
 };
 
 async function getOfflineAccessTokenForShop(
@@ -70,56 +67,68 @@ async function getOfflineAccessTokenForShop(
   return row?.accessToken ?? null;
 }
 
-function normalizeTagsField(raw: unknown): string[] {
-  if (Array.isArray(raw)) {
-    return raw.map((t) => String(t).trim()).filter(Boolean);
-  }
-  if (typeof raw === "string") {
-    return raw
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-  }
-  return [];
-}
-
-async function fetchCustomerTagsRest(
+async function fetchOwnerB2bCompany(
   shop: string,
-  numericCustomerId: string,
+  ownerCustomerId: string,
   accessToken: string,
-): Promise<string[]> {
+): Promise<B2bLookup | null> {
   const shopDomain = shop.trim().toLowerCase();
-  const digits = numericCustomerId.replace(/\D/g, "");
-  const idVariants = new Set<string>([numericCustomerId.trim()]);
-  if (digits) {
-    idVariants.add(digits);
-    const canonical = String(parseInt(digits, 10));
-    if (canonical !== "NaN") idVariants.add(canonical);
+  const endpoint = `https://${shopDomain}/admin/api/${ADMIN_API_VERSION}/graphql.json`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": accessToken,
+    },
+    body: JSON.stringify({
+      query: `
+        query BackfillOwnerB2bCompany($id: ID!) {
+          customer(id: $id) {
+            companyContactProfiles {
+              company {
+                name
+              }
+            }
+          }
+        }
+      `,
+      variables: { id: customerGid(ownerCustomerId) },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Shopify GraphQL responded ${response.status}`);
   }
 
-  for (const tryId of idVariants) {
-    if (!tryId) continue;
-    const url = `https://${shopDomain}/admin/api/${CUSTOMER_API_VERSION}/customers/${tryId}.json`;
-    const response = await fetch(url, {
-      headers: {
-        "Content-Type": "application/json",
-        "X-Shopify-Access-Token": accessToken,
-      },
-    });
-    if (!response.ok) continue;
-    const payload = (await response.json()) as {
-      customer?: { tags?: string };
+  const payload = (await response.json()) as {
+    data?: {
+      customer?: {
+        companyContactProfiles?: Array<{
+          company?: { name?: string | null } | null;
+        } | null> | null;
+      } | null;
     };
-    return normalizeTagsField(payload.customer?.tags);
+    errors?: Array<{ message?: string }>;
+  };
+
+  if (payload.errors?.length) {
+    throw new Error(
+      payload.errors.map((e) => e.message).filter(Boolean).join(", "),
+    );
   }
 
-  return [];
+  const companyName =
+    payload.data?.customer?.companyContactProfiles?.[0]?.company?.name?.trim() ||
+    null;
+  const ownerCompanyKey = normalizeCompanyKey(companyName);
+  if (!companyName || !ownerCompanyKey) return null;
+
+  return { companyName, ownerCompanyKey };
 }
 
 async function main() {
-  const whereClause: { ownerCompanyKey: null; shop?: string } = {
-    ownerCompanyKey: null,
-  };
+  const whereClause: { shop?: string } = {};
   if (shopFilter) whereClause.shop = shopFilter;
 
   const projects = await prisma.project.findMany({
@@ -128,6 +137,8 @@ async function main() {
       id: true,
       shop: true,
       ownerCustomerId: true,
+      companyName: true,
+      ownerCompanyKey: true,
     },
   });
 
@@ -137,12 +148,12 @@ async function main() {
       (apply ? " (APPLY mode)" : " (dry run)"),
   );
 
-  /* Cache tokens and fetched tags per (shop, customerId) to avoid re-fetching the same
-     owner across multiple projects. */
   const tokenByShop = new Map<string, string | null>();
-  const tagsByKey = new Map<string, string[]>();
+  const b2bByOwnerKey = new Map<string, B2bLookup | null>();
   const updates: Update[] = [];
-  const skipped: Array<{ projectId: string; reason: string }> = [];
+  const skippedNoB2b: Array<{ projectId: string; reason: string }> = [];
+  const skippedUnchanged: Array<{ projectId: string }> = [];
+  const skippedError: Array<{ projectId: string; reason: string }> = [];
 
   for (const project of projects) {
     if (!tokenByShop.has(project.shop)) {
@@ -153,48 +164,44 @@ async function main() {
     }
     const token = tokenByShop.get(project.shop) ?? null;
     if (!token) {
-      skipped.push({
+      skippedError.push({
         projectId: project.id,
         reason: `no offline token for shop ${project.shop}`,
       });
       continue;
     }
 
-    const cacheKey = `${project.shop}::${project.ownerCustomerId}`;
-    let tags = tagsByKey.get(cacheKey);
-    if (!tags) {
+    const ownerCacheKey = `${project.shop}::${project.ownerCustomerId}`;
+    let b2b = b2bByOwnerKey.get(ownerCacheKey);
+    if (b2b === undefined) {
       try {
-        tags = await fetchCustomerTagsRest(
+        b2b = await fetchOwnerB2bCompany(
           project.shop,
           project.ownerCustomerId,
           token,
         );
       } catch (err) {
-        skipped.push({
+        skippedError.push({
           projectId: project.id,
-          reason: `tag lookup failed: ${err instanceof Error ? err.message : String(err)}`,
+          reason: `B2B lookup failed: ${err instanceof Error ? err.message : String(err)}`,
         });
         continue;
       }
-      tagsByKey.set(cacheKey, tags);
+      b2bByOwnerKey.set(ownerCacheKey, b2b);
     }
 
-    const companyTags = extractCompanyTags(tags);
-    if (companyTags.length === 0) {
-      skipped.push({
+    if (!b2b) {
+      skippedNoB2b.push({
         projectId: project.id,
-        reason: "owner has no company:* tag",
+        reason: "owner has no Shopify B2B company",
       });
       continue;
     }
 
-    const firstTag = companyTags[0];
-    const key = companyKeyFromTag(firstTag);
-    if (!key) {
-      skipped.push({
-        projectId: project.id,
-        reason: `could not normalize tag "${firstTag}"`,
-      });
+    const currentName = project.companyName?.trim() || null;
+    const currentKey = project.ownerCompanyKey?.trim() || null;
+    if (currentName === b2b.companyName && currentKey === b2b.ownerCompanyKey) {
+      skippedUnchanged.push({ projectId: project.id });
       continue;
     }
 
@@ -202,21 +209,36 @@ async function main() {
       projectId: project.id,
       shop: project.shop,
       ownerCustomerId: project.ownerCustomerId,
-      ownerCompanyKey: key,
-      sourceTag: firstTag,
+      companyName: b2b.companyName,
+      ownerCompanyKey: b2b.ownerCompanyKey,
+      previousCompanyName: project.companyName,
+      previousOwnerCompanyKey: project.ownerCompanyKey,
     });
   }
 
-  console.log(`[backfill] eligible updates: ${updates.length}`);
+  console.log(`[backfill] would_update: ${updates.length}`);
   for (const u of updates) {
     console.log(
-      `  • project=${u.projectId} shop=${u.shop} owner=${u.ownerCustomerId} -> ${u.ownerCompanyKey} (from "${u.sourceTag}")`,
+      `  • project=${u.projectId} shop=${u.shop} owner=${u.ownerCustomerId}`,
+    );
+    console.log(
+      `      companyName: ${JSON.stringify(u.previousCompanyName)} -> ${JSON.stringify(u.companyName)}`,
+    );
+    console.log(
+      `      ownerCompanyKey: ${JSON.stringify(u.previousOwnerCompanyKey)} -> ${JSON.stringify(u.ownerCompanyKey)}`,
     );
   }
 
-  if (skipped.length > 0) {
-    console.log(`[backfill] skipped: ${skipped.length}`);
-    for (const s of skipped) {
+  console.log(`[backfill] skipped_no_b2b: ${skippedNoB2b.length}`);
+  for (const s of skippedNoB2b) {
+    console.log(`  • project=${s.projectId}: ${s.reason}`);
+  }
+
+  console.log(`[backfill] skipped_unchanged: ${skippedUnchanged.length}`);
+
+  if (skippedError.length > 0) {
+    console.log(`[backfill] skipped_error: ${skippedError.length}`);
+    for (const s of skippedError) {
       console.log(`  • project=${s.projectId}: ${s.reason}`);
     }
   }
@@ -231,8 +253,8 @@ async function main() {
     await prisma.project.update({
       where: { id: u.projectId },
       data: {
+        companyName: u.companyName,
         ownerCompanyKey: u.ownerCompanyKey,
-        visibleToCompany: true,
       },
     });
     written += 1;

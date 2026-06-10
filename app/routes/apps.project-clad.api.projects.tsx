@@ -1,10 +1,8 @@
 import type { LoaderFunctionArgs } from "react-router";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
-import {
-  getViewerCompanyContext,
-  viewerHasAdminTag,
-} from "../utils/customerTags.server";
+import { getViewerB2bCompanyContext } from "../utils/b2bCompany.server";
+import { viewerHasAdminTag } from "../utils/customerTags.server";
 import { projectsListWhere } from "../utils/projectAccess.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -17,15 +15,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     customerEmail,
   );
 
-  const [projects, viewerCompanyCtx] = await Promise.all([
+  const [projects, b2bAutofill] = await Promise.all([
     prisma.project.findMany({
       where: projectsListWhere(shop, customerId, viewerIsAppAdmin),
       include: { jobs: { include: { orderLink: true } } },
       orderBy: { createdAt: "desc" },
     }),
-    viewerIsAppAdmin
-      ? Promise.resolve({ tags: [], displayNames: [], keys: [] as string[] })
-      : getViewerCompanyContext(shop, customerId),
+    getViewerB2bCompanyContext(shop, customerId),
   ]);
 
   return Response.json({
@@ -42,6 +38,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         isLocked: job.isLocked || Boolean(job.orderLink),
       })),
     })),
-    viewerDefaultCompany: viewerCompanyCtx.displayNames[0] ?? null,
+    viewerDefaultCompany: b2bAutofill.companyName ?? null,
   });
 };

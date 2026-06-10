@@ -30,6 +30,7 @@ export async function transferProjectOwner(args: {
 
   const newOwnerCtx = await getViewerCompanyContext(shop, newOwnerCustomerId);
   const ownerCompanyKey = newOwnerCtx.keys[0] ?? null;
+  const b2bCompanyName = newOwnerCtx.displayNames[0] ?? null;
 
   const resolvedNewOwnerId = member.customerId;
 
@@ -56,6 +57,7 @@ export async function transferProjectOwner(args: {
       data: {
         ownerCustomerId: resolvedNewOwnerId,
         ownerCompanyKey,
+        ...(b2bCompanyName ? { companyName: b2bCompanyName } : {}),
       },
     });
   });

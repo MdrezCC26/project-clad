@@ -320,6 +320,9 @@
     };
 
     let cachedProjects = [];
+    let cachedDefaultCompany = "";
+    /** @type {Promise<void> | null} */
+    let projectsLoadPromise = null;
     let scrollY = 0;
     const handleTouchMove = (event) => {
       if (!modalContent) return;
@@ -801,6 +804,16 @@
       toggleSection(getMode());
     };
 
+    const applyDefaultCompany = (companyName) => {
+      const defaultCompany = (companyName || "").trim();
+      if (!defaultCompany) return;
+      companyNameInputs.forEach((el) => {
+        if (el instanceof HTMLInputElement && !el.value.trim()) {
+          el.value = defaultCompany;
+        }
+      });
+    };
+
     const loadProjects = async () => {
       if (!projectsUrl) return;
       const response = await fetch(projectsUrl, {
@@ -815,18 +828,26 @@
       }
       const payload = await response.json();
       cachedProjects = payload.projects || [];
-      /* Autofill the "Company name" field from the viewer's `company:<name>` Shopify
-         customer tag when the inputs are still blank. Users can overwrite to still
-         type their own company string. */
-      const defaultCompany = (payload.viewerDefaultCompany || "").trim();
-      if (defaultCompany) {
-        companyNameInputs.forEach((el) => {
-          if (el instanceof HTMLInputElement && !el.value.trim()) {
-            el.value = defaultCompany;
-          }
+      cachedDefaultCompany = (payload.viewerDefaultCompany || "").trim();
+      /* Autofill from the viewer's Shopify B2B company when inputs are still blank. */
+      applyDefaultCompany(cachedDefaultCompany);
+      fillProjectOptions();
+    };
+
+    const ensureProjectsLoaded = () => {
+      if (!projectsUrl) return Promise.resolve();
+      if (!projectsLoadPromise) {
+        projectsLoadPromise = loadProjects().finally(() => {
+          projectsLoadPromise = null;
         });
       }
-      fillProjectOptions();
+      return projectsLoadPromise;
+    };
+
+    const prefetchProjects = () => {
+      if (customerSignedIn && projectsUrl) {
+        void ensureProjectsLoaded();
+      }
     };
 
     const getUniqueProjectName = (baseName) => {
@@ -1154,7 +1175,10 @@
       if (opts.prefillState) {
         applyState(opts.prefillState);
       }
-      await loadProjects();
+      /* Use prefetched B2B company immediately; refresh project list in background. */
+      applyDefaultCompany(cachedDefaultCompany);
+      await ensureProjectsLoaded();
+      applyDefaultCompany(cachedDefaultCompany);
       // After projects load, re-apply prefill so the project + job pickers
       // can find their saved selections.
       if (opts.prefillState) {
@@ -1162,6 +1186,9 @@
       }
       syncSaveDeliveryPanels();
     };
+
+    trigger.addEventListener("pointerenter", prefetchProjects);
+    trigger.addEventListener("focus", prefetchProjects, true);
 
     trigger.addEventListener("click", async (event) => {
       event.preventDefault();
@@ -1429,6 +1456,7 @@
 
     bindAnimatedMemberRoleSelectsIn(root);
     syncSaveDeliveryPanels();
+    prefetchProjects();
 
     return {
       openModal: openModalFlow,
@@ -1439,7 +1467,7 @@
         }),
       getState: serializeState,
       setState: applyState,
-      refreshProjects: loadProjects,
+      refreshProjects: ensureProjectsLoaded,
       setTriggerVisible,
       resetModal,
     };

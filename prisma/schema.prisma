@@ -92,7 +92,7 @@ model Project {
   defaultSiteContactName  String?
   /// Default site contact phone autofilled into new orders.
   defaultSiteContactPhone String?
-  /// Normalized company key (lowercased, whitespace-collapsed) derived from the owner's first `company:<name>` Shopify customer tag at project creation. Powers "projects from coworkers at the same company" read access.
+  /// Normalized company key (lowercased, whitespace-collapsed) derived from the owner's Shopify B2B company at project creation. Powers "projects from coworkers at the same company" read access.
   ownerCompanyKey   String?
   /// Owner switch to share a specific project with company viewers (read-only). Owner + members always see it regardless. Off by default — owners must opt in.
   visibleToCompany  Boolean           @default(false)

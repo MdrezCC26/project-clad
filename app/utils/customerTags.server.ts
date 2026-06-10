@@ -248,33 +248,30 @@ export function invalidateViewerTagsCache(shop: string, customerId: string) {
 }
 
 export type ViewerCompanyContext = {
-  /** Raw `company:*` tags on the viewer, display casing preserved. */
+  /** @deprecated Legacy field; always empty — company context comes from B2B Companies. */
   tags: string[];
-  /** Display names, e.g. `["Acme Inc.", "Widgets LLC"]`. Casing preserved from the tag. */
+  /** B2B company display name(s). v1: at most one entry from the viewer's first company profile. */
   displayNames: string[];
   /** Normalized match keys for DB comparisons. */
   keys: string[];
 };
 
 /**
- * Resolve every `company:<name>` tag on the viewer. Empty arrays when the viewer has none.
- * Safe to call on every request — uses {@link getViewerTagsCached}.
+ * Resolve the viewer's Shopify B2B company. Empty arrays when the viewer has no B2B profile.
+ * Safe to call on every request — uses cached Admin GraphQL lookup.
  */
 export async function getViewerCompanyContext(
   shop: string,
   customerId: string,
 ): Promise<ViewerCompanyContext> {
-  const tags = await getViewerTagsCached(shop, customerId);
-  const companyTags = extractCompanyTags(tags);
-  const displayNames = companyTags
-    .map((t) => companyDisplayFromTag(t))
-    .filter((s): s is string => Boolean(s));
-  const keys = Array.from(
-    new Set(
-      companyTags
-        .map((t) => companyKeyFromTag(t))
-        .filter((k): k is string => Boolean(k)),
-    ),
-  );
-  return { tags: companyTags, displayNames, keys };
+  const { getViewerB2bCompanyContext } = await import("./b2bCompany.server");
+  const b2b = await getViewerB2bCompanyContext(shop, customerId);
+  if (!b2b.companyName || !b2b.companyKey) {
+    return { tags: [], displayNames: [], keys: [] };
+  }
+  return {
+    tags: [],
+    displayNames: [b2b.companyName],
+    keys: [b2b.companyKey],
+  };
 }

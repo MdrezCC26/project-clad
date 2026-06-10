@@ -508,10 +508,9 @@ async function saveJobAction(request: Request) {
       });
     }
 
-    /* Stamp company key from the owner's first `company:` tag so coworkers sharing
-       the same tag can find this project via the Company scope. Display `companyName`
-       on the project record falls back to the tag's display name when the customer
-       left the cart's Company field blank. */
+    /* Stamp company key from the owner's Shopify B2B company so coworkers at the
+       same company can find this project via the Company scope. Autofill companyName
+       from B2B when the customer left the cart Company field blank. */
     const viewerCompanyCtx = await getViewerCompanyContext(shop, customerId);
     const ownerCompanyKey = viewerCompanyCtx.keys[0] ?? null;
     const companyNameForRecord =

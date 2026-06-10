@@ -3844,9 +3844,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shopDeliveryFee,
     storefrontAppNav: getStorefrontAppNav(settings),
     navAccountInitial,
-    /** Owner's `company:` tags — for org-visibility toggle when `ownerCompanyKey` is not yet on the project. */
+    /** Owner's Shopify B2B company — for org-visibility toggle when `ownerCompanyKey` is not yet on the project. */
     ownerCompanyForShare: {
-      hasCompanyTag: ownerCompanyForShare.keys.length > 0,
+      hasB2bCompany: ownerCompanyForShare.keys.length > 0,
       displayName: ownerCompanyForShare.displayNames[0] ?? null,
       firstKey: ownerCompanyForShare.keys[0] ?? null,
     },
@@ -7822,7 +7822,7 @@ export default function ProjectDetailPage() {
                 className="project-clad-pricing-password-input"
               />
 
-              {(project.ownerCompanyKey || ownerCompanyForShare.hasCompanyTag) && (
+              {(project.ownerCompanyKey || ownerCompanyForShare.hasB2bCompany) && (
                 <>
                   <input
                     type="hidden"
@@ -12993,7 +12993,7 @@ export default function ProjectDetailPage() {
       .then(function(data) {
         if (!s.list) return;
         if (!data || !Array.isArray(data.results)) {
-          if (data && data.reason === 'no-company-tag') {
+          if (data && data.reason === 'no-b2b-company') {
             s.disabled = true;
             closeList(s.list);
           }
