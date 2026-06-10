@@ -6,21 +6,21 @@ import { loadAdminOrderQueueJobs } from "../utils/adminOrderQueue.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const jobs = await loadAdminOrderQueueJobs(session.shop, ["ordered"]);
+  const jobs = await loadAdminOrderQueueJobs(session.shop, ["delivered"]);
   return { shop: session.shop, jobs };
 };
 
-export default function ActiveOrdersPage() {
+export default function DeliveredOrdersPage() {
   const { jobs, shop } = useLoaderData<typeof loader>();
 
   return (
     <AdminOrderQueuePage
       jobs={jobs}
       shop={shop}
-      pageHeading="Ordered queue"
-      sectionHeading="Orders awaiting delivery"
-      description="Upload a fulfillment photo to move an order to Delivered. Use the status dropdown to change state manually."
-      emptyMessage="No ordered orders."
+      pageHeading="Delivered queue"
+      sectionHeading='Delivered (stays here until "Paid")'
+      description="Orders with a fulfillment photo or manual Delivered status appear here until marked Paid."
+      emptyMessage="No delivered orders."
     />
   );
 }

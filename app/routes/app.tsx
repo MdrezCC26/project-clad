@@ -18,7 +18,8 @@ export default function App() {
   return (
     <AppProvider embedded apiKey={apiKey}>
       <s-app-nav>
-        <s-link href="/app">Home</s-link>
+        <s-link href="/app">Ordered</s-link>
+        <s-link href="/app/delivered-orders">Delivered</s-link>
         <s-link href="/app/order-tabs">Started & paid</s-link>
         <s-link href="/app/addon">Z-Bars addon</s-link>
         <s-link href="/app/settings">Settings</s-link>
