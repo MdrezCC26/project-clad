@@ -39,6 +39,27 @@ export type DeliveryPhaseEntity = {
   }[];
 };
 
+export function findActiveDeliveryPhaseId(phases: DeliveryPhaseView[]): string {
+  return phases.find((p) => !p.hasPhoto)?.id ?? "";
+}
+
+export function deliveredQtyForItem(
+  phases: DeliveryPhaseView[],
+  itemId: string,
+  excludePhaseId?: string,
+): number {
+  let sum = 0;
+  for (const phase of phases) {
+    if (excludePhaseId && phase.id === excludePhaseId) continue;
+    for (const line of phase.lines) {
+      if (line.jobItemId === itemId) {
+        sum += Math.max(0, line.quantityDelivered);
+      }
+    }
+  }
+  return sum;
+}
+
 export function mapPhasesToViews(
   phases: DeliveryPhaseEntity[],
 ): DeliveryPhaseView[] {

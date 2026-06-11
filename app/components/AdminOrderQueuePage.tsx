@@ -78,6 +78,11 @@ export function AdminOrderQueuePage({
                     {job.orderLifecycleStatus === "ordered" ? "Ordered" : "Delivered"}
                   </strong>
                   {" · "}
+                  <strong>{job.deliveredPercent}% delivered</strong>
+                  {job.confirmedPhaseCount > 0
+                    ? ` · ${job.confirmedPhaseCount} deliver${job.confirmedPhaseCount === 1 ? "y" : "ies"} confirmed`
+                    : null}
+                  {" · "}
                   <a
                     href={`${storefrontProjectBase}?id=${encodeURIComponent(job.projectId)}&job=${encodeURIComponent(job.id)}`}
                     target="_blank"
@@ -96,45 +101,168 @@ export function AdminOrderQueuePage({
                   <input type="hidden" name="jobId" value={job.id} />
                   <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <span style={{ fontSize: "0.9em" }}>Order status</span>
-                    <select name="status" defaultValue={job.orderLifecycleStatus} disabled={busy}>
+                    <select
+                      name="status"
+                      defaultValue={job.orderLifecycleStatus}
+                      disabled={Boolean(job.paidAt) || busy}
+                    >
                       <option value="ordered">Ordered</option>
                       <option value="delivered">Delivered</option>
                       <option value="paid">Paid</option>
                     </select>
                   </label>
-                  <button type="submit" disabled={busy}>
+                  <button type="submit" disabled={Boolean(job.paidAt) || busy}>
                     Apply
                   </button>
                 </statusFetcher.Form>
 
-                <photoFetcher.Form
-                  method="post"
-                  action="/app/work-orders"
-                  encType="multipart/form-data"
-                  style={{
-                    marginTop: 12,
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 8,
-                    alignItems: "center",
-                  }}
-                >
-                  <input type="hidden" name="intent" value="upload-fulfillment-photo" />
-                  <input type="hidden" name="jobId" value={job.id} />
-                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span style={{ fontSize: "0.9em" }}>Fulfillment photo</span>
+                {!job.paidAt && job.hasPhasedDelivery && job.openPhaseId ? (
+                  <photoFetcher.Form
+                    method="post"
+                    action="/app/work-orders"
+                    encType="multipart/form-data"
+                    style={{ marginTop: 12 }}
+                  >
                     <input
-                      type="file"
-                      name="photo"
-                      accept="image/jpeg,image/png,image/webp"
-                      required
-                      disabled={busy}
+                      type="hidden"
+                      name="intent"
+                      value="upload-phase-fulfillment-photo"
                     />
-                  </label>
-                  <button type="submit" disabled={busy}>
-                    {job.hasFulfillmentPhoto ? "Replace photo" : "Upload photo"}
-                  </button>
-                </photoFetcher.Form>
+                    <input type="hidden" name="jobId" value={job.id} />
+                    <input type="hidden" name="phaseId" value={job.openPhaseId} />
+                    <p style={{ margin: "0 0 8px", fontSize: "0.9em", fontWeight: 600 }}>
+                      Delivery {job.openPhaseSequence ?? "?"} — mark what arrived
+                    </p>
+                    {job.deliveryInputs.length === 0 ? (
+                      <p style={{ margin: 0, fontSize: "0.9em", opacity: 0.85 }}>
+                        No remaining quantity on this drop. Reload the page.
+                      </p>
+                    ) : (
+                      <table
+                        style={{
+                          width: "100%",
+                          fontSize: "0.9rem",
+                          borderCollapse: "collapse",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: "left", padding: "4px 8px 4px 0" }}>
+                              Line
+                            </th>
+                            <th style={{ textAlign: "left", padding: "4px 8px" }}>
+                              Ordered
+                            </th>
+                            <th style={{ textAlign: "left", padding: "4px 8px" }}>
+                              Remaining
+                            </th>
+                            <th style={{ textAlign: "left", padding: "4px 0" }}>
+                              Qty this delivery
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {job.deliveryInputs.map((line) => (
+                            <tr key={line.jobItemId}>
+                              <td style={{ padding: "4px 8px 4px 0" }}>
+                                {line.displayName}
+                              </td>
+                              <td style={{ padding: "4px 8px" }}>
+                                {line.orderedQuantity}
+                              </td>
+                              <td style={{ padding: "4px 8px" }}>{line.remaining}</td>
+                              <td style={{ padding: "4px 0" }}>
+                                <input
+                                  type="number"
+                                  name={`qty_${line.jobItemId}`}
+                                  min={0}
+                                  max={line.remaining}
+                                  step={1}
+                                  defaultValue={line.remaining}
+                                  disabled={busy}
+                                  style={{ width: "5rem" }}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 8,
+                        alignItems: "center",
+                      }}
+                    >
+                      <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <span style={{ fontSize: "0.9em" }}>Fulfillment photo</span>
+                        <input
+                          type="file"
+                          name="photo"
+                          accept="image/jpeg,image/png,image/webp"
+                          required
+                          disabled={busy}
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={busy || job.deliveryInputs.length === 0}
+                      >
+                        Confirm delivery
+                      </button>
+                    </div>
+                  </photoFetcher.Form>
+                ) : null}
+
+                {!job.paidAt &&
+                job.hasPhasedDelivery &&
+                !job.openPhaseId &&
+                job.deliveredPercent >= 100 ? (
+                  <p style={{ margin: "12px 0 0", fontSize: "0.9em", opacity: 0.85 }}>
+                    All items delivered. Mark Paid when invoicing is complete.
+                  </p>
+                ) : null}
+
+                {!job.paidAt && !job.hasPhasedDelivery ? (
+                  <photoFetcher.Form
+                    method="post"
+                    action="/app/work-orders"
+                    encType="multipart/form-data"
+                    style={{
+                      marginTop: 12,
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 8,
+                      alignItems: "center",
+                    }}
+                  >
+                    <input type="hidden" name="intent" value="upload-fulfillment-photo" />
+                    <input type="hidden" name="jobId" value={job.id} />
+                    <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ fontSize: "0.9em" }}>
+                        Fulfillment photo (legacy)
+                        {job.hasFulfillmentPhoto ? (
+                          <span style={{ marginLeft: 6, opacity: 0.75 }}>
+                            (replace)
+                          </span>
+                        ) : null}
+                      </span>
+                      <input
+                        type="file"
+                        name="photo"
+                        accept="image/jpeg,image/png,image/webp"
+                        required
+                        disabled={busy}
+                      />
+                    </label>
+                    <button type="submit" disabled={busy}>
+                      {job.hasFulfillmentPhoto ? "Replace photo" : "Upload photo"}
+                    </button>
+                  </photoFetcher.Form>
+                ) : null}
               </div>
             ))}
           </s-stack>

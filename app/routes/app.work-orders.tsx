@@ -13,6 +13,10 @@ import { fetchVariantPriceUsd } from "../utils/shopifyVariantPrice.server";
 import { getAdminVariantInfo } from "../utils/adminVariants.server";
 import { shopStringFilter } from "../utils/projectAccess.server";
 import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";
+import {
+  confirmAdminPhaseFulfillment,
+  jobHasFulfillmentEvidence,
+} from "../utils/adminPhaseFulfillment.server";
 import { notifyMissionControl } from "../utils/missionControl.server";
 
 function parseNumericPrice(input: unknown): number | null {
@@ -163,7 +167,12 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
   const job = jobId
     ? await prisma.job.findFirst({
         where: { id: jobId, project: { shop: shopStringFilter(shop) } },
-        include: { project: true, items: true, orderLink: true },
+        include: {
+          project: true,
+          items: true,
+          orderLink: true,
+          deliveryPhases: { include: { lines: true }, orderBy: { sequence: "asc" } },
+        },
       })
     : null;
 
@@ -186,11 +195,17 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
        customer-visible value can never be set to "delivered" without a
        fulfillment photo on file. Staff should upload the photo from the
        storefront project page first, then come back here. */
-    if (next === "delivered" && !job.fulfillmentPhotoStorageKey) {
+    if (
+      next === "delivered" &&
+      !jobHasFulfillmentEvidence(
+        job.fulfillmentPhotoStorageKey,
+        job.deliveryPhases,
+      )
+    ) {
       return {
         ok: false,
         error:
-          'Use the "Fulfillment photo" row below to upload a photo \u2014 it will mark this order Delivered automatically.',
+          "Confirm at least one delivery with photo and quantities before marking Delivered.",
       };
     }
 
@@ -250,9 +265,33 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
     };
   }
 
+  if (intent === "upload-phase-fulfillment-photo") {
+    const phaseId = String(form.get("phaseId") || "");
+    if (!job || !phaseId) {
+      return { ok: false, error: "Invalid request." };
+    }
+    const result = await confirmAdminPhaseFulfillment({
+      shop,
+      jobId: job.id,
+      phaseId,
+      form,
+    });
+    if (!result.ok) {
+      return result;
+    }
+    return { ok: true, message: result.message };
+  }
+
   if (intent === "upload-fulfillment-photo") {
     if (!job) {
       return { ok: false, error: "Job not found." };
+    }
+    if (job.deliveryPhases.length > 0) {
+      return {
+        ok: false,
+        error:
+          "This order uses partial deliveries — use the delivery drop form with quantities and photo.",
+      };
     }
     if (job.paidAt) {
       return {
