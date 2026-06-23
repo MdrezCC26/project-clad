@@ -2601,6 +2601,21 @@ function OrderDeliveryFulfillmentSection({
   viewerIsAdmin: boolean;
   viewerCanFulfill: boolean;
 }) {
+  if (!viewerCanFulfill) {
+    const confirmedCount = job.deliveryPhases.filter((p) => p.hasPhoto).length;
+    return (
+      <div className="project-clad-delivery-fulfillment-section">
+        <p className="project-clad-delivery-fulfillment-progress" role="status">
+          {job.deliveredPercent}% delivered
+          {confirmedCount > 0
+            ? ` · ${confirmedCount} deliver${confirmedCount === 1 ? "y" : "ies"} confirmed`
+            : null}
+        </p>
+        <OrderDeliveryDocumentsPanel job={job} />
+      </div>
+    );
+  }
+
   return (
     <div className="project-clad-delivery-fulfillment-section">
       <StaffOrderLifecycleForm
@@ -2608,7 +2623,7 @@ function OrderDeliveryFulfillmentSection({
         projectId={projectId}
         idPrefix={`delivery-modal-${job.id}`}
       />
-      {(viewerIsAdmin || viewerCanFulfill) && job.deliveryPhases.length > 0 ? (
+      {job.deliveryPhases.length > 0 ? (
         <StaffPhaseDeliveryPanel
           job={job}
           projectId={projectId}
@@ -8435,15 +8450,13 @@ export default function ProjectDetailPage() {
             >
               Plan
             </button>
-            {viewerCanFulfill ? (
-              <button
-                type="button"
-                className="project-clad-delivery-modal-tabs__btn"
-                data-projectclad-delivery-tab="fulfillment"
-              >
-                Fulfillment
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="project-clad-delivery-modal-tabs__btn"
+              data-projectclad-delivery-tab="fulfillment"
+            >
+              Fulfillment
+            </button>
             <button
               type="button"
               className="project-clad-delivery-modal-tabs__btn"
@@ -8720,37 +8733,35 @@ export default function ProjectDetailPage() {
             </div>
           </form>
           </div>
-          {viewerCanFulfill ? (
-            <div
-              className="project-clad-delivery-modal-tab-panel"
-              data-projectclad-delivery-tab-panel="fulfillment"
-              hidden
-            >
-              {project.jobs.map((job) => (
-                <div
-                  key={job.id}
-                  data-projectclad-delivery-fulfillment-job={job.id}
-                  hidden
-                >
-                  <OrderDeliveryFulfillmentSection
-                    job={job}
-                    projectId={project.id}
-                    viewerIsAdmin={viewerIsAdmin}
-                    viewerCanFulfill={viewerCanFulfill}
-                  />
-                </div>
-              ))}
-              <div className="project-clad-actions project-clad-reject-modal-actions">
-                <button
-                  type="button"
-                  className="project-clad-button project-clad-reject-modal-btn"
-                  data-projectclad-order-delivery-cancel
-                >
-                  Close
-                </button>
+          <div
+            className="project-clad-delivery-modal-tab-panel"
+            data-projectclad-delivery-tab-panel="fulfillment"
+            hidden
+          >
+            {project.jobs.map((job) => (
+              <div
+                key={job.id}
+                data-projectclad-delivery-fulfillment-job={job.id}
+                hidden
+              >
+                <OrderDeliveryFulfillmentSection
+                  job={job}
+                  projectId={project.id}
+                  viewerIsAdmin={viewerIsAdmin}
+                  viewerCanFulfill={viewerCanFulfill}
+                />
               </div>
+            ))}
+            <div className="project-clad-actions project-clad-reject-modal-actions">
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                data-projectclad-order-delivery-cancel
+              >
+                Close
+              </button>
             </div>
-          ) : null}
+          </div>
           <div
             className="project-clad-delivery-modal-tab-panel"
             data-projectclad-delivery-tab-panel="documents"
@@ -9455,10 +9466,9 @@ export default function ProjectDetailPage() {
                         : resolvedJobDelivery.fee > 0
                           ? `Delivery · $${shopDeliveryFee.toFixed(2)} per phase`
                           : "Delivery · add address";
-                    if (canEdit || viewerCanFulfill) {
-                      const deliveryBtnLockedForCustomer =
-                        deliveryOptionsLocked && !viewerCanFulfill;
-                      orderFinanceActions.push({
+                    const canEditDeliveryPlan =
+                      (canEdit || viewerCanFulfill) && !deliveryOptionsLocked;
+                    orderFinanceActions.push({
                         key: "delivery-options",
                         kind: "button",
                         icon: PC_DELIVERY_OPTIONS_ICON,
@@ -9482,55 +9492,14 @@ export default function ProjectDetailPage() {
                             job.deliveredPercent ?? 0,
                           ),
                           "data-plan-locked": deliveryOptionsLocked ? "1" : "0",
+                          "data-can-edit-plan": canEditDeliveryPlan ? "1" : "0",
                           "data-staff-fulfillment": viewerCanFulfill ? "1" : "0",
-                          disabled: deliveryBtnLockedForCustomer,
-                          title: deliveryBtnLockedForCustomer
-                            ? "Delivery options cannot be changed after delivery"
-                            : "Delivery plan, fulfillment, and documents",
-                          "aria-label": deliveryBtnLockedForCustomer
-                            ? "Delivery & status (locked — order delivered)"
-                            : "Delivery & status for this order",
+                          title: canEditDeliveryPlan
+                            ? "Delivery plan, fulfillment, and documents"
+                            : "View delivery plan, progress, and documents",
+                          "aria-label": "Delivery & status for this order",
                         },
                       });
-                    }
-                    const hasConfirmedDeliveries = job.deliveryPhases.some(
-                      (p) => p.hasPhoto,
-                    );
-                    if (
-                      hasConfirmedDeliveries &&
-                      !(canEdit || viewerCanFulfill)
-                    ) {
-                      orderFinanceActions.push({
-                        key: "delivery-documents",
-                        kind: "button",
-                        icon: PC_DELIVERY_OPTIONS_ICON,
-                        label: "Delivery documents",
-                        description: `${job.deliveredPercent}% delivered · photo, packing slip & invoice per drop`,
-                        tone: "edit",
-                        buttonProps: {
-                          "data-projectclad-delivery-options": "",
-                          "data-delivery-open-tab": "documents",
-                          "data-job-id": job.id,
-                          "data-delivery-mode": job.deliveryMode,
-                          "data-ship-address1": job.shipAddress1 ?? "",
-                          "data-ship-city": job.shipCity ?? "",
-                          "data-ship-province": job.shipProvince ?? "",
-                          "data-ship-postal": job.shipPostal ?? "",
-                          "data-ship-country": job.shipCountry ?? "",
-                          "data-scheduled-date": job.scheduledDeliveryDate ?? "",
-                          "data-scheduled-window":
-                            job.scheduledDeliveryWindow ?? "",
-                          "data-order-lifecycle": job.orderLifecycleStatus,
-                          "data-delivered-percent": String(
-                            job.deliveredPercent ?? 0,
-                          ),
-                          "data-plan-locked": deliveryOptionsLocked ? "1" : "0",
-                          "data-staff-fulfillment": "0",
-                          title: "View delivery photo, packing slip, and invoice for each drop",
-                          "aria-label": "Delivery documents for this order",
-                        },
-                      });
-                    }
                     const orderFinanceActionsSlot =
                       orderFinanceActions.length > 0 ? (
                         <div className="project-clad-order-actions-stack">
@@ -12191,13 +12160,15 @@ export default function ProjectDetailPage() {
     var msg = orderDeliveryForm.querySelector('[data-projectclad-order-delivery-message]');
     if (msg instanceof HTMLElement) msg.textContent = '';
     var planLocked = btn.getAttribute('data-plan-locked') === '1';
+    var canEditPlan = btn.getAttribute('data-can-edit-plan') === '1';
+    var planReadOnly = planLocked || !canEditPlan;
     if (orderDeliveryModal instanceof HTMLElement) {
       orderDeliveryModal.setAttribute(
         'data-current-plan-locked',
-        planLocked ? '1' : '0',
+        planReadOnly ? '1' : '0',
       );
     }
-    pcSetDeliveryModalPlanLocked(planLocked);
+    pcSetDeliveryModalPlanLocked(planReadOnly);
     pcShowDeliveryModalJobPanels(jobIdOpen);
     var openTab = btn.getAttribute('data-delivery-open-tab') || '';
     pcSetDeliveryModalTab(openTab || pcDefaultDeliveryModalTab(btn));
@@ -12294,8 +12265,19 @@ export default function ProjectDetailPage() {
   function pcDefaultDeliveryModalTab(btn) {
     var staff = btn.getAttribute('data-staff-fulfillment') === '1';
     var lifecycle = (btn.getAttribute('data-order-lifecycle') || '').toLowerCase();
+    var planLocked = btn.getAttribute('data-plan-locked') === '1';
+    var deliveredPct = parseInt(btn.getAttribute('data-delivered-percent') || '0', 10) || 0;
     if (staff && (lifecycle === 'ordered' || lifecycle === 'delivered')) {
       return 'fulfillment';
+    }
+    if (
+      lifecycle === 'ordered' ||
+      lifecycle === 'delivered' ||
+      lifecycle === 'paid' ||
+      planLocked ||
+      deliveredPct > 0
+    ) {
+      return staff ? 'fulfillment' : 'documents';
     }
     return 'plan';
   }
