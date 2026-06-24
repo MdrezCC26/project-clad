@@ -14,19 +14,31 @@ body.cc-store-neu .cc-app-header {
   --cc-header-topbar-ink: #2f3d4c;
   --cc-header-page-margin: 16px;
   --cc-header-logo-padding-bottom: 12px;
-  /*
-   * App uses rgba + backdrop-filter over the header haze (reads solid).
-   * Storefront topbar sits over hero/media — use opaque stops so it matches the app look.
-   */
+  --cc-header-topbar-font-size: 12px;
+  --cc-header-mainbar-opacity: 0.95;
+  --cc-header-topbar-gradient: linear-gradient(
+    180deg,
+    var(--cc-header-topbar-bg-top) 0%,
+    var(--cc-header-topbar-bg-top) 72%,
+    #c8d3de 88%,
+    var(--cc-header-topbar-bg-bottom) 100%
+  );
+  --cc-header-mainbar-gradient: linear-gradient(
+    180deg,
+    rgb(204 214 226 / var(--cc-header-mainbar-opacity)) 0%,
+    rgb(214 223 234 / var(--cc-header-mainbar-opacity)) 22%,
+    rgb(226 233 243 / var(--cc-header-mainbar-opacity)) 48%,
+    rgb(236 241 248 / var(--cc-header-mainbar-opacity)) 100%
+  );
+  /* Legacy tokens (html fallbacks / overrides) */
   --cc-header-topbar-bg-top: #ced6dc;
-  --cc-header-topbar-bg-bottom: #b8c4ce;
-  --cc-header-topbar-border: rgba(168, 180, 192, 0.32);
-  --cc-header-topbar-highlight: rgba(252, 252, 253, 0.52);
-  /* Main menu row haze (CC v2 projects header — project-clad-proxy fullbleed backing) */
-  --cc-header-mainbar-haze-0: rgba(178, 198, 218, 0.44);
-  --cc-header-mainbar-haze-20: rgba(204, 218, 234, 0.54);
-  --cc-header-mainbar-haze-45: rgba(222, 230, 242, 0.82);
-  --cc-header-mainbar-haze-100: rgba(236, 241, 248, 0.95);
+  --cc-header-topbar-bg-bottom: #c4cfda;
+  --cc-header-topbar-border: transparent;
+  --cc-header-topbar-highlight: transparent;
+  --cc-header-mainbar-haze-0: #ccd6e2;
+  --cc-header-mainbar-haze-20: #d6dfea;
+  --cc-header-mainbar-haze-45: #e2e9f3;
+  --cc-header-mainbar-haze-100: #ecf1f8;
 }
 
 .cc-app-header {
@@ -48,21 +60,13 @@ body.cc-store-neu .cc-app-header {
   }
 }
 
-/* Frosted haze behind logo + main nav (utility strip stays on its own band above) */
+/* Main nav row — slightly translucent so page haze shows through */
 .cc-app-header__inner {
   width: 100%;
   max-width: none;
   margin: 0;
   box-sizing: border-box;
-  background: linear-gradient(
-    180deg,
-    var(--cc-header-mainbar-haze-0, rgba(178, 198, 218, 0.44)) 0%,
-    var(--cc-header-mainbar-haze-20, rgba(204, 218, 234, 0.54)) 20%,
-    var(--cc-header-mainbar-haze-45, rgba(222, 230, 242, 0.82)) 45%,
-    var(--cc-header-mainbar-haze-100, rgba(236, 241, 248, 0.95)) 100%
-  );
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--cc-header-mainbar-gradient);
 }
 
 /* —— Utility strip (edge-to-edge at viewport top) —— */
@@ -79,17 +83,12 @@ body.cc-store-neu .cc-app-header {
   padding: 5px max(1rem, var(--cc-header-page-margin));
   padding-top: max(5px, env(safe-area-inset-top, 0px));
   line-height: 1.2;
-  background-color: var(--cc-header-topbar-bg-top);
-  background-image: linear-gradient(
-    180deg,
-    var(--cc-header-topbar-bg-top) 0%,
-    var(--cc-header-topbar-bg-bottom) 100%
-  );
+  background: var(--cc-header-topbar-gradient);
   color: var(--cc-header-topbar-ink);
-  border-bottom: 1px solid var(--cc-header-topbar-border);
-  box-shadow: 0 1px 0 var(--cc-header-topbar-highlight) inset;
+  border-bottom: none;
+  box-shadow: none;
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-size: 11px;
+  font-size: var(--cc-header-topbar-font-size, 12px);
   font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: none;
@@ -119,12 +118,6 @@ body.cc-store-neu .cc-app-header {
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
-}
-
-.cc-app-header__account {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
 }
 
 .cc-app-header__topbar-right a {

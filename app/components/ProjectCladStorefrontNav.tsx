@@ -9,7 +9,9 @@ import {
 import { useLocation } from "react-router";
 import type { StorefrontAppNavLink } from "../types/storefrontAppNav";
 import {
+  CANADIAN_CLADDING_ACCOUNT_LOGOUT_URL,
   CANADIAN_CLADDING_PRIMARY_NAV,
+  CANADIAN_CLADDING_TOPBAR_LEAD_TIME,
   CANADIAN_CLADDING_TOPBAR_LINKS,
   matchCanadianCladdingPrimaryNavActive,
 } from "../utils/canadianCladdingPrimaryNav";
@@ -195,6 +197,8 @@ export function ProjectCladStorefrontNav({
   searchUrl = "/search",
   accountUrl = "/account",
   accountInitial = null,
+  /** First name for CC v2 top bar (e.g. "Mike" links to account). */
+  accountFirstName = null,
   cartItemCount = 0,
   utilityBarExtra = null,
   /** Renders inside the raised nav capsule between the logo cluster and search/account/cart. */
@@ -235,6 +239,8 @@ export function ProjectCladStorefrontNav({
   accountUrl?: string;
   /** Single letter for storefront-style account disc (e.g. first name initial). */
   accountInitial?: string | null;
+  /** Customer first name for utility-bar account link (htmlTemplateHeader). */
+  accountFirstName?: string | null;
   /** When greater than 0, shows a red count badge on the cart icon. */
   cartItemCount?: number;
   utilityBarExtra?: ReactNode;
@@ -249,6 +255,7 @@ export function ProjectCladStorefrontNav({
   hideTrailingIcons?: boolean;
 }) {
   const initial = accountInitial?.trim().charAt(0).toUpperCase() ?? "";
+  const accountMenuLabel = accountFirstName?.trim() || "Account";
   const storeMenuDrawerRef = useRef<HTMLDetailsElement>(null);
   const searchDrawerRef = useRef<HTMLDetailsElement>(null);
   const [liveCartCount, setLiveCartCount] = useState(() =>
@@ -465,7 +472,7 @@ export function ProjectCladStorefrontNav({
     <header className="cc-app-header" id="ccAppHeader" data-cc-app-header>
       <div className="cc-app-header__topbar">
         <div className="cc-app-header__topbar-left">
-          <span>72 Hour lead time</span>
+          <span>{CANADIAN_CLADDING_TOPBAR_LEAD_TIME}</span>
           <span className="cc-app-header__sep" aria-hidden="true">
             ·
           </span>
@@ -491,7 +498,8 @@ export function ProjectCladStorefrontNav({
           {utilityBarExtra ? (
             <span className="cc-app-header__topbar-extra">{utilityBarExtra}</span>
           ) : null}
-          <a href={accountUrl}>Account</a>
+          <a href={accountUrl}>{accountMenuLabel}</a>
+          <a href={CANADIAN_CLADDING_ACCOUNT_LOGOUT_URL}>Log out</a>
         </nav>
       </div>
       <div className="cc-app-header__inner">

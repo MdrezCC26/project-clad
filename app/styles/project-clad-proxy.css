@@ -7122,7 +7122,7 @@ html:has(.project-clad-page--projects) body {
   background: var(--pc-metallic-silver-bg);
 }
 
-/* CC v2 list: pull sticky header off pure #fdfdfd so it meets the cool utility strip + page haze. */
+/* CC v2 list: cool header haze behind frosted HTML header only (React header paints its own shell). */
 .project-clad-page--projects:not(.project-clad-page--detail).project-clad-page--cc-v2
   .project-clad-header--fullbleed:has(.project-clad-storefront-nav--html) {
   background:
@@ -15542,7 +15542,7 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 .project-clad-page--cc-v2 .project-clad-storefront-nav__html-topbar a,
 .project-clad-page--cc-v2 .project-clad-storefront-nav__html-topbar button {
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  font-size: 11px;
+  font-size: var(--cc-header-topbar-font-size, 12px);
   font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: none;
@@ -17315,14 +17315,30 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
   --cc-header-live-dot: #16a34a;
   --cc-header-page-margin: 16px;
   --cc-header-logo-padding-bottom: 12px;
+  --cc-header-topbar-font-size: 12px;
+  --cc-header-mainbar-opacity: 0.95;
   --cc-header-topbar-bg-top: #ced6dc;
-  --cc-header-topbar-bg-bottom: #b8c4ce;
-  --cc-header-topbar-border: rgba(168, 180, 192, 0.32);
-  --cc-header-topbar-highlight: rgba(252, 252, 253, 0.52);
-  --cc-header-mainbar-haze-0: rgba(178, 198, 218, 0.44);
-  --cc-header-mainbar-haze-20: rgba(204, 218, 234, 0.54);
-  --cc-header-mainbar-haze-45: rgba(222, 230, 242, 0.82);
-  --cc-header-mainbar-haze-100: rgba(236, 241, 248, 0.95);
+  --cc-header-topbar-bg-bottom: #c4cfda;
+  --cc-header-topbar-border: transparent;
+  --cc-header-topbar-highlight: transparent;
+  --cc-header-topbar-gradient: linear-gradient(
+    180deg,
+    var(--cc-header-topbar-bg-top) 0%,
+    var(--cc-header-topbar-bg-top) 72%,
+    #c8d3de 88%,
+    var(--cc-header-topbar-bg-bottom) 100%
+  );
+  --cc-header-mainbar-gradient: linear-gradient(
+    180deg,
+    rgb(204 214 226 / var(--cc-header-mainbar-opacity)) 0%,
+    rgb(214 223 234 / var(--cc-header-mainbar-opacity)) 22%,
+    rgb(226 233 243 / var(--cc-header-mainbar-opacity)) 48%,
+    rgb(236 241 248 / var(--cc-header-mainbar-opacity)) 100%
+  );
+  --cc-header-mainbar-haze-0: #ccd6e2;
+  --cc-header-mainbar-haze-20: #d6dfea;
+  --cc-header-mainbar-haze-45: #e2e9f3;
+  --cc-header-mainbar-haze-100: #ecf1f8;
 }
 
 @media screen and (min-width: 750px) {
@@ -17342,8 +17358,6 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
   margin-right: 0;
   margin-bottom: 0;
   overflow: visible;
-  background: transparent;
-  background-image: none;
 }
 
 .project-clad-page--cc-v2 .project-clad-header--fullbleed:has(.cc-app-header) .project-clad-storefront-nav,
@@ -17353,14 +17367,8 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
 
 .project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2
   .project-clad-header--fullbleed:has(.cc-app-header) {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(178, 198, 218, 0.44) 0%,
-      rgba(204, 218, 234, 0.54) 20%,
-      rgba(222, 230, 242, 0.82) 45%,
-      rgba(236, 241, 248, 0.95) 100%
-    );
+  background: transparent;
+  background-image: none;
 }
 
 .cc-app-header__mainbar:has(.project-clad-storefront-nav__html-trailing) {

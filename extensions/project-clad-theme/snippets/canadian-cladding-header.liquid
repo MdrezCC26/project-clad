@@ -38,17 +38,26 @@
 
   <div class="cc-topbar">
     <div class="tb-info">
-      <span>72HR LEAD TIME</span>
-      <span class="sep">|</span>
-      <span>OTTAWA, ON</span>
-      <span class="sep">|</span>
-      <span class="hi">245 PARTS IN SHOP</span>
+      <span>72 Hour Lead Time</span>
+      <span class="sep">·</span>
+      <span>Ottawa, ON</span>
     </div>
 
     <nav class="tb-right">
-      <a href="{{ nav_contact_url }}" class="hide-mobile">CONTACT</a>
-      <a href="{{ nav_colours_url }}" class="hide-mobile">COLOURS</a>
-      <a href="{{ account_href }}">ACCOUNT</a>
+      <a href="{{ nav_contact_url }}" class="hide-mobile">Contact</a>
+      <a href="{{ nav_colours_url }}" class="hide-mobile">Colours</a>
+      {% if customer %}
+        <a href="{{ account_href }}">
+          {% if customer.first_name != blank %}
+            {{ customer.first_name }}
+          {% else %}
+            Account
+          {% endif %}
+        </a>
+        <a href="{{ routes.account_logout_url }}">Log out</a>
+      {% else %}
+        <a href="{{ account_href }}">Account</a>
+      {% endif %}
       <a href="{{ routes.cart_url }}">CART <span class="cart-count">[{{ cart.item_count }}]</span></a>
     </nav>
   </div>

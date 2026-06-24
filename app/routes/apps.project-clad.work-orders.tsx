@@ -22,11 +22,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     where: { shop },
   });
   let navAccountInitial: string | null = null;
+  let navAccountFirstName: string | null = null;
   try {
     const numericId = normalizeStorefrontCustomerId(customerId);
     const customerInfo = await getCustomersByIds(shop, [numericId]);
     const viewer = customerInfo[numericId] ?? customerInfo[customerId];
     const fn = viewer?.firstName?.trim();
+    navAccountFirstName = fn || null;
     navAccountInitial = fn
       ? fn.charAt(0).toUpperCase()
       : customerEmail?.trim()
@@ -44,6 +46,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     logoDataUrl: settings?.logoDataUrl || null,
     storefrontAppNav: getStorefrontAppNav(settings),
     navAccountInitial,
+    navAccountFirstName,
   };
 };
 
@@ -83,6 +86,7 @@ export default function StorefrontWorkOrdersInfo() {
             searchUrl={storefrontAppNav.searchUrl}
             accountUrl={storefrontAppNav.accountUrl}
             accountInitial={data.navAccountInitial}
+            accountFirstName={data.navAccountFirstName}
             brandSuffix="WORK ORDERS"
             htmlTemplateHeader
             htmlTemplateNavActive="projects"

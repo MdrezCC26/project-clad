@@ -15,6 +15,12 @@ export const CANADIAN_CLADDING_TOPBAR_LINKS = {
   contact: "/pages/contact",
 } as const;
 
+/** Utility strip copy — keep in sync with live storefront header. */
+export const CANADIAN_CLADDING_TOPBAR_LEAD_TIME = "72 Hour Lead Time";
+
+/** Legacy customer accounts logout (matches Shopify storefront). */
+export const CANADIAN_CLADDING_ACCOUNT_LOGOUT_URL = "/account/logout";
+
 export function matchCanadianCladdingPrimaryNavActive(
   pathname: string,
   key: CanadianCladdingPrimaryNavKey,

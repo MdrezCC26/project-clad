@@ -108,11 +108,13 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const viewerNumericId = normalizeStorefrontCustomerId(customerId);
   let viewerTags: string[] = [];
   let navAccountInitial: string | null = null;
+  let navAccountFirstName: string | null = null;
   try {
     const info = await getCustomersByIds(shop, [viewerNumericId]);
     const v = info[viewerNumericId];
     viewerTags = v?.tags ?? [];
     const fn = v?.firstName?.trim();
+    navAccountFirstName = fn || null;
     navAccountInitial = fn
       ? fn.charAt(0).toUpperCase()
       : customerEmail?.trim()
@@ -193,6 +195,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
     storefrontAppNav: getStorefrontAppNav(settings),
     navAccountInitial,
+    navAccountFirstName,
   };
 };
 
@@ -570,6 +573,7 @@ export default function ProjectDetailPage() {
     logoDataUrl,
     backgroundLogoDataUrl,
     navAccountInitial,
+    navAccountFirstName,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const shareLink =
@@ -811,6 +815,7 @@ export default function ProjectDetailPage() {
             searchUrl={storefrontAppNav.searchUrl}
             accountUrl={storefrontAppNav.accountUrl}
             accountInitial={navAccountInitial}
+            accountFirstName={navAccountFirstName}
             htmlTemplateHeader
             htmlTemplateNavActive="projects"
             hideTrailingIcons={true}

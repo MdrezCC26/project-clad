@@ -3773,6 +3773,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const viewerCustomer =
     customerInfo[viewerNumericId] ?? customerInfo[customerId];
   const navName = viewerCustomer?.firstName?.trim();
+  const navAccountFirstName = navName || null;
   const navAccountInitial = navName
     ? navName.charAt(0).toUpperCase()
     : customerEmail?.trim()
@@ -3859,6 +3860,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shopDeliveryFee,
     storefrontAppNav: getStorefrontAppNav(settings),
     navAccountInitial,
+    navAccountFirstName,
     /** Owner's Shopify B2B company — for org-visibility toggle when `ownerCompanyKey` is not yet on the project. */
     ownerCompanyForShare: {
       hasB2bCompany: ownerCompanyForShare.keys.length > 0,
@@ -6929,6 +6931,7 @@ export default function ProjectDetailPage() {
     viewerHasNATag,
     shopDeliveryFee,
     navAccountInitial,
+    navAccountFirstName,
     ownerCompanyForShare,
     projectFormActionUrl,
   } = useLoaderData<typeof loader>();
@@ -8867,6 +8870,7 @@ export default function ProjectDetailPage() {
               searchUrl={storefrontAppNav.searchUrl}
               accountUrl={storefrontAppNav.accountUrl}
               accountInitial={navAccountInitial}
+              accountFirstName={navAccountFirstName}
               inAppSearch="orders"
               inAppSearchQuery={orderListSearchQ}
               onInAppSearchQueryChange={(query) => {

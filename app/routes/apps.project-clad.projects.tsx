@@ -331,6 +331,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   let hideAddToCart = false;
   let navAccountInitial: string | null = null;
+  let navAccountFirstName: string | null = null;
   try {
     const numericId = normalizeStorefrontCustomerId(customerId);
     const [customerInfo, viewerTagsFromRest] = await Promise.all([
@@ -342,6 +343,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     hideAddToCart =
       hasTag(viewerTagsFromRest, "NA") && !viewerIsAppAdmin;
     const fn = viewer?.firstName?.trim();
+    navAccountFirstName = fn || null;
     navAccountInitial = fn
       ? fn.charAt(0).toUpperCase()
       : customerEmail?.trim()
@@ -525,6 +527,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     logoDataUrl: settings?.logoDataUrl || null,
     backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
     navAccountInitial,
+    navAccountFirstName,
     viewerIsAppAdmin,
   };
 };
@@ -613,6 +616,7 @@ export default function ProjectsPage() {
     logoDataUrl,
     backgroundLogoDataUrl,
     navAccountInitial,
+    navAccountFirstName,
     viewerIsAppAdmin,
   } = useLoaderData<typeof loader>();
   const inlineStyles = themeStyles?.styles || [];
@@ -729,6 +733,7 @@ export default function ProjectsPage() {
             searchUrl={storefrontAppNav.searchUrl}
             accountUrl={storefrontAppNav.accountUrl}
             accountInitial={navAccountInitial}
+            accountFirstName={navAccountFirstName}
             inAppSearch="projects"
             inAppSearchQuery={listSearchQ}
             onInAppSearchQueryChange={(query) =>
