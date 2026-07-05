@@ -12707,9 +12707,7 @@ input[data-projectclad-unit-price-input] {
 }
 
 .project-clad-delivery-docs-table__qty {
-  max-width: 14rem;
-  font-size: calc(0.82rem * var(--pc-text-scale, 1));
-  line-height: 1.35;
+  white-space: nowrap;
   vertical-align: top;
 }
 
@@ -14587,18 +14585,27 @@ details.project-clad-edit-mode .project-clad-edit-view {
 
   body.project-clad-print-order-only tr[data-projectclad-item-row],
   body.project-clad-print-order-only .project-clad-order-line-tile {
-    break-inside: avoid;
-    page-break-inside: avoid;
+    break-inside: auto;
+    page-break-inside: auto;
   }
 
   body.project-clad-print-order-only .project-clad-order-finance {
-    break-inside: avoid;
-    page-break-inside: avoid;
+    break-inside: auto;
+    page-break-inside: auto;
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) 13.5rem !important;
     gap: 1.2rem !important;
     width: 100% !important;
     align-items: start !important;
+  }
+
+  body.project-clad-print-order-only.project-clad-print-hide-prices .project-clad-order-finance {
+    grid-template-columns: 1fr !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-order-tfoot-summary-cell {
+    break-inside: auto;
+    page-break-inside: auto;
   }
 
   body.project-clad-print-order-only .project-clad-order-finance__right {
@@ -14610,13 +14617,8 @@ details.project-clad-edit-mode .project-clad-edit-view {
 
   body.project-clad-print-order-only .project-clad-order-finance__row,
   body.project-clad-print-order-only .project-clad-order-finance__card {
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  body.project-clad-print-order-only .project-clad-order-tfoot-summary-cell {
-    break-inside: avoid;
-    page-break-inside: avoid;
+    break-inside: auto;
+    page-break-inside: auto;
   }
 
   body.project-clad-print-order-only .project-clad-receipt {
@@ -14715,13 +14717,58 @@ details.project-clad-edit-mode .project-clad-edit-view {
     display: none !important;
   }
 
+  /* PO upload UI — screen-only; filename still prints when a PDF exists */
+  body.project-clad-print-order-only .project-clad-order-po-pdf {
+    display: none !important;
+    margin: 0 !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-order-po-pdf:has(.project-clad-order-po-pdf__filename) {
+    display: flex !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-order-po-pdf__empty,
+  body.project-clad-print-order-only .project-clad-order-po-pdf__upload-form,
+  body.project-clad-print-order-only .project-clad-order-po-pdf__remove-form,
+  body.project-clad-print-order-only .project-clad-order-po-pdf__view-check {
+    display: none !important;
+  }
+
+  /* No PO # and no PO PDF — drop the whole row so print layout does not reserve empty space */
+  body.project-clad-print-order-only [data-projectclad-print-hide-po-row] {
+    display: none !important;
+  }
+
+  body.project-clad-print-order-only
+    [data-projectclad-purchase-order-input]:placeholder-shown {
+    display: none !important;
+  }
+
   /* Packing slip mode: suppress all monetary values/price blocks. */
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-orders-page-fact--price-total,
   body.project-clad-print-order-only.project-clad-print-hide-prices
     .project-clad-order-summary-head-row__subtotal,
   body.project-clad-print-order-only.project-clad-print-hide-prices
     .project-clad-order-line-tile__col--price,
   body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-order-card-price-stack,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-order-card-price-line,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
     .project-clad-order-finance__right,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-order-finance__payment-summary-head,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-order-finance__card,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-order-finance__fin--muted,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-order-finance__fin--total,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-order-finance__divider,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-order-finance__tax-meta,
   body.project-clad-print-order-only.project-clad-print-hide-prices [data-projectclad-price] {
     display: none !important;
   }
@@ -15139,7 +15186,7 @@ details.project-clad-edit-mode .project-clad-edit-view {
     margin-top: 0.3rem !important;
   }
 
-  body.project-clad-print-order-only
+  body.project-clad-print-order-only:not(.project-clad-print-hide-prices)
     .project-clad-page--projects.project-clad-page--detail
     details.project-clad-order-row
     .project-clad-order-finance__fin--total
@@ -15327,6 +15374,70 @@ details.project-clad-edit-mode .project-clad-edit-view {
     .project-clad-order-card-price-stack {
     align-items: flex-end !important;
     text-align: right !important;
+  }
+
+  /*
+   * Packing slip (no prices): re-assert hide after order-tile print typography so
+   * Payment Summary / Total cannot leak through later finance styling rules.
+   */
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-orders-shell
+    .project-clad-orders-page-fact--price-total,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-summary-head-row__subtotal,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-line-tile__col--price,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-card-price-stack,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-card-price-line,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__right,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__payment-summary-head,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__card,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__fin--muted,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__fin--total,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__divider,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    .project-clad-order-finance__tax-meta,
+  body.project-clad-print-order-only.project-clad-print-hide-prices
+    .project-clad-page--projects.project-clad-page--detail
+    details.project-clad-order-row
+    [data-projectclad-price] {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
   }
 }
 

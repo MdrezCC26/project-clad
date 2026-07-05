@@ -204,6 +204,13 @@ export function isOrderDeliveryPlanLocked(
   return ls === "delivered" || ls === "paid";
 }
 
+/** Reorder from a line is available once the order is fully delivered or paid. */
+export function isReorderEligibleOrderLifecycle(
+  orderLifecycleStatus: string | null | undefined,
+): boolean {
+  return isOrderDeliveryPlanLocked(orderLifecycleStatus);
+}
+
 /** True when Prisma/client errors indicate Job delivery columns are missing on the DB. */
 export function isJobDeliverySchemaError(e: unknown): boolean {
   if (e instanceof Error) {

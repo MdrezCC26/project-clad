@@ -150,6 +150,15 @@ export function phaseDeliveredUnitsTotal(
   );
 }
 
+/** Compact label for qty delivered on one drop (e.g. "2 items"). */
+export function formatPhaseDeliveredUnitsLabel(
+  phase: Pick<DeliveryPhaseView, "lines">,
+): string {
+  const total = phaseDeliveredUnitsTotal(phase);
+  if (total <= 0) return "—";
+  return `${total} item${total === 1 ? "" : "s"}`;
+}
+
 /** Human-readable summary of quantities delivered on one drop. */
 export function formatPhaseDeliveredSummary(
   phase: Pick<DeliveryPhaseView, "lines">,

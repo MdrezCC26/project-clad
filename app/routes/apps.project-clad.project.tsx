@@ -76,7 +76,7 @@ import {
   savePurchaseOrderPdf,
   validateUploadedPurchaseOrderPdf,
 } from "../utils/purchaseOrderPdfStorage.server";
-import { createBackupDraftOrderForJob } from "../utils/shopifyDraftOrder.server";
+import { createBackupDraftOrderForJob, settleBackupDraftOrderOnPaidBestEffort } from "../utils/shopifyDraftOrder.server";
 import {
   isPrePlacedOrderLifecycle,
   jobCountsTowardProjectSubtotal,
@@ -123,6 +123,7 @@ import {
   normalizeJobDeliveryMode,
   resolveJobDelivery,
   isOrderDeliveryPlanLocked,
+  isReorderEligibleOrderLifecycle,
   isJobDeliverySchemaError,
   type JobDeliveryMode,
 } from "../utils/jobDelivery";
@@ -130,8 +131,7 @@ import { getShopDeliveryFee } from "../utils/shopDeliveryFee.server";
 import {
   computeDeliveredPercent,
   deliveryPhaseHasProgress,
-  formatPhaseDeliveredSummary,
-  phaseDeliveredUnitsTotal,
+  formatPhaseDeliveredUnitsLabel,
   mapPhasesToViews,
   parsePhasesJson,
   parseDeliveryPlanReference,
@@ -1738,7 +1738,12 @@ function OrderFinancePanel({
             </span>
           </div>
 
-          <div className="project-clad-order-finance__row">
+          <div
+            className="project-clad-order-finance__row"
+            {...(!hasPo && !hasPurchaseOrderPdf
+              ? { "data-projectclad-print-hide-po-row": "" }
+              : {})}
+          >
             <span className="project-clad-order-finance__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -2249,9 +2254,9 @@ function OrderDeliveryDocumentsPanel({ job }: { job: JobView }) {
   return (
     <div className="project-clad-delivery-docs">
       <p className="project-clad-muted project-clad-delivery-docs__intro">
-        Each row is one confirmed delivery drop. Photo, packing slip, and invoice
-        show only the quantities delivered on that drop ({job.deliveredPercent}%
-        of order delivered so far).
+        Each row is one confirmed delivery drop. View the delivery photo for
+        quantities delivered on that drop ({job.deliveredPercent}% of order
+        delivered so far).
       </p>
     <table className="project-clad-table project-clad-delivery-docs-table">
       <thead>
@@ -2260,7 +2265,6 @@ function OrderDeliveryDocumentsPanel({ job }: { job: JobView }) {
           <th>Confirmed</th>
           <th>Qty this drop</th>
           <th>Photo</th>
-          <th>Documents</th>
         </tr>
       </thead>
       <tbody>
@@ -2268,8 +2272,7 @@ function OrderDeliveryDocumentsPanel({ job }: { job: JobView }) {
           const confirmedDate = p.deliveredAt
             ? p.deliveredAt.slice(0, 10)
             : "—";
-          const deliveredSummary = formatPhaseDeliveredSummary(p, job.items);
-          const unitsThisDrop = phaseDeliveredUnitsTotal(p);
+          const unitsLabel = formatPhaseDeliveredUnitsLabel(p);
           const isConfirmed = p.hasPhoto;
           return (
             <tr key={p.id}>
@@ -2281,8 +2284,8 @@ function OrderDeliveryDocumentsPanel({ job }: { job: JobView }) {
               </td>
               <td>{confirmedDate}</td>
               <td className="project-clad-delivery-docs-table__qty">
-                {unitsThisDrop > 0 ? (
-                  <span title={deliveredSummary}>{deliveredSummary}</span>
+                {unitsLabel !== "—" ? (
+                  <span>{unitsLabel}</span>
                 ) : (
                   <span className="project-clad-muted">—</span>
                 )}
@@ -2302,33 +2305,6 @@ function OrderDeliveryDocumentsPanel({ job }: { job: JobView }) {
                 ) : (
                   <span className="project-clad-muted">—</span>
                 )}
-              </td>
-              <td className="project-clad-delivery-docs-table__links">
-                {isConfirmed && p.packingSlipUrl ? (
-                  <a
-                    href={p.packingSlipUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Packing slip
-                  </a>
-                ) : (
-                  <span className="project-clad-muted">
-                    {isConfirmed ? "—" : "Confirm with photo"}
-                  </span>
-                )}
-                {isConfirmed && p.packingSlipUrl && p.invoiceUrl ? (
-                  <span aria-hidden="true"> · </span>
-                ) : null}
-                {isConfirmed && p.invoiceUrl ? (
-                  <a
-                    href={p.invoiceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Invoice
-                  </a>
-                ) : null}
               </td>
             </tr>
           );
@@ -5548,6 +5524,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
     notifyMissionControl(jobId);
+    settleBackupDraftOrderOnPaidBestEffort(shop, jobId);
     return redirectToProject(request, projectId, shop);
   }
 
@@ -5786,6 +5763,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     notifyMissionControl(jobId);
+    if (next === "paid") {
+      settleBackupDraftOrderOnPaidBestEffort(shop, jobId);
+    }
     return redirectToProject(request, projectId, shop);
   }
 
@@ -6085,9 +6065,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       throw new Response("Item not found", { status: 404 });
     }
 
-    if (sourceItem.job.orderLifecycleStatus !== "paid") {
+    if (!isReorderEligibleOrderLifecycle(sourceItem.job.orderLifecycleStatus)) {
       throw new Response(
-        "Reorder is only available from completed orders.",
+        "Reorder is only available from delivered or paid orders.",
         { status: 403 },
       );
     }
@@ -9264,11 +9244,15 @@ export default function ProjectDetailPage() {
                             })()}
                       </span>
                     </div>
-                    <div className="project-clad-orders-page-fact">
+                    <div className="project-clad-orders-page-fact project-clad-orders-page-fact--price-total">
                       <span className="project-clad-orders-page-fact-label">
                         Total
                       </span>
-                      <span className="project-clad-orders-page-fact-value">
+                      <span
+                        className="project-clad-orders-page-fact-value"
+                        data-projectclad-price
+                        data-price={projectSubtotalForDisplay.toFixed(2)}
+                      >
                         {pricingUnlocked
                           ? formatPrice(projectSubtotalForDisplay)
                           : "—"}
@@ -9937,7 +9921,9 @@ export default function ProjectDetailPage() {
                                           item={item}
                                           reorderOpen={
                                             canEdit &&
-                                            job.orderLifecycleStatus === "paid" &&
+                                            isReorderEligibleOrderLifecycle(
+                                              job.orderLifecycleStatus,
+                                            ) &&
                                             item.quantity > 0 &&
                                             String(item.variantId || "").trim()
                                               ? {

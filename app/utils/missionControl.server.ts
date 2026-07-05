@@ -14,7 +14,11 @@ import {
 import {
   computeDeliveredPercent,
   mapPhasesToViews,
+  totalDeliveryFeesFromPhases,
 } from "./jobDeliveryPhases";
+import { resolveJobDelivery } from "./jobDelivery";
+import { orderTaxFromSubtotal } from "./orderDisplayTax";
+import { getShopDeliveryFee } from "./shopDeliveryFee.server";
 
 /**
  * Push order/project snapshots to Mission Control (LAN ops dashboard).
@@ -78,6 +82,48 @@ function formatShipAddress(project: {
   return parts.length ? parts.join(" · ") : null;
 }
 
+type McJob = NonNullable<Awaited<ReturnType<typeof loadJobForMissionControl>>>;
+
+/** Match project page order total: lines + confirmed delivery fees + 13% HST. */
+async function orderMoneyForMissionControl(
+  job: McJob,
+  phaseViews: ReturnType<typeof mapPhasesToViews>,
+): Promise<{
+  subtotalCents: number;
+  deliveryFeeCents: number;
+  taxCents: number;
+  totalCents: number;
+}> {
+  const shopDeliveryFee = await getShopDeliveryFee(job.project.shop);
+  const projectCtx = {
+    shipAddress1: job.project.shipAddress1,
+    shipCity: job.project.shipCity,
+    shipProvince: job.project.shipProvince,
+    shipPostal: job.project.shipPostal,
+    shipCountry: job.project.shipCountry,
+    receiveMode: job.project.receiveMode,
+  };
+  const resolved = resolveJobDelivery(job, projectCtx, shopDeliveryFee);
+  let deliveryFee = 0;
+  if (resolved.method === "delivery") {
+    deliveryFee = totalDeliveryFeesFromPhases(phaseViews, resolved, shopDeliveryFee);
+  }
+  const subtotalDollars = job.items.reduce(
+    (s, item) => s + Number(item.priceSnapshot) * item.quantity,
+    0,
+  );
+  const taxable = subtotalDollars + deliveryFee;
+  const taxDollars = orderTaxFromSubtotal(taxable, { pricesIncludeTax: false });
+  const totalDollars = subtotalDollars + deliveryFee + taxDollars;
+  const toCents = (d: number) => Math.round(d * 100);
+  return {
+    subtotalCents: toCents(subtotalDollars),
+    deliveryFeeCents: toCents(deliveryFee),
+    taxCents: toCents(taxDollars),
+    totalCents: toCents(totalDollars),
+  };
+}
+
 function toCustomFields(customData: unknown): { name: string; value: string }[] {
   if (Array.isArray(customData)) {
     return customData
@@ -100,9 +146,62 @@ function toCustomFields(customData: unknown): { name: string; value: string }[] 
   return [];
 }
 
-function fieldSummary(title: string, fields: { name: string; value: string }[]): string {
-  const head = fields.slice(0, 4).map((f) => f.value).filter(Boolean);
-  return [title, ...head].join(" · ");
+function fieldSummary(
+  title: string,
+  customData: { name: string; value: string }[],
+  geo: { gauge: string; color: string | null; lengthIn: number },
+): string {
+  const flat: { name: string; value: string }[] = [];
+  for (const f of customData) {
+    const name = f.name.trim();
+    const val = f.value.trim();
+    if (val.startsWith("{") && val.endsWith("}")) {
+      try {
+        const obj = JSON.parse(val) as Record<string, unknown>;
+        if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+          for (const [k, v] of Object.entries(obj)) {
+            const s = String(v ?? "").trim();
+            if (s && !s.startsWith("{")) flat.push({ name: String(k), value: s });
+          }
+          continue;
+        }
+      } catch {
+        /* keep */
+      }
+    }
+    if (val.startsWith("{")) continue;
+    if (name) flat.push({ name, value: val });
+  }
+
+  const chunks = [title.trim() || "Part"];
+  const meta = [geo.gauge, geo.color ?? ""].filter(Boolean);
+  if (meta.length) chunks.push(meta.join(" "));
+
+  const dimTokens: { order: number; text: string }[] = [];
+  for (const f of flat) {
+    const lower = f.name.toLowerCase();
+    const val = f.value.trim();
+    if (!val || val === "0") continue;
+    const leg = /^l(\d+)$/.exec(lower);
+    if (leg) {
+      dimTokens.push({ order: Number.parseInt(leg[1], 10), text: `L${leg[1]}=${val}` });
+      continue;
+    }
+    const angle = /^a(\d+)$/.exec(lower);
+    if (angle) {
+      dimTokens.push({
+        order: 100 + Number.parseInt(angle[1], 10),
+        text: `A${angle[1]}=${val}`,
+      });
+    }
+  }
+  if (dimTokens.length) {
+    dimTokens.sort((a, b) => a.order - b.order);
+    chunks.push(dimTokens.map((t) => t.text).join(" | "));
+  }
+
+  if (geo.lengthIn > 0) chunks.push(`${geo.lengthIn}"`);
+  return chunks.join(" | ");
 }
 
 function clampIn(n: number, min: number, max: number): number {
@@ -286,13 +385,15 @@ async function buildIngestPayload(job: NonNullable<Awaited<ReturnType<typeof loa
       quantityDelivered: qtyDelivered,
       unitPriceCents,
       customData,
-      displaySummary: fieldSummary(title, customData),
+      displaySummary: fieldSummary(title, customData, geo),
       gauge: geo.gauge,
       color: geo.color,
       girthIn: geo.girthIn,
       lengthIn: geo.lengthIn,
     };
   });
+
+  const money = await orderMoneyForMissionControl(job, phaseViews);
 
   return {
     event: `job.${job.orderLifecycleStatus}`,
@@ -317,6 +418,10 @@ async function buildIngestPayload(job: NonNullable<Awaited<ReturnType<typeof loa
       company: job.project.companyName ?? null,
       status,
       currency: "CAD",
+      subtotalCents: money.subtotalCents,
+      deliveryFeeCents: money.deliveryFeeCents,
+      taxCents: money.taxCents,
+      totalCents: money.totalCents,
       scheduledDeliveryDate:
         openPhase?.scheduledDeliveryDate ?? job.scheduledDeliveryDate ?? null,
       scheduledDeliveryWindow:

@@ -18,6 +18,7 @@ import {
   jobHasFulfillmentEvidence,
 } from "../utils/adminPhaseFulfillment.server";
 import { notifyMissionControl } from "../utils/missionControl.server";
+import { settleBackupDraftOrderOnPaidBestEffort } from "../utils/shopifyDraftOrder.server";
 
 function parseNumericPrice(input: unknown): number | null {
   if (typeof input === "number") return Number.isFinite(input) ? input : null;
@@ -258,6 +259,9 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
     });
 
     notifyMissionControl(job.id);
+    if (next === "paid") {
+      settleBackupDraftOrderOnPaidBestEffort(shop, job.id);
+    }
 
     return {
       ok: true,

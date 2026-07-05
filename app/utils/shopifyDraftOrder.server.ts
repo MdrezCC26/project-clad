@@ -517,3 +517,444 @@ function buildCustomerGid(raw: string): string | undefined {
   if (!digits) return undefined;
   return `gid://shopify/Customer/${digits}`;
 }
+
+type AdminGraphqlResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string; userErrors?: Array<{ message: string; field?: string[] | null }> };
+
+async function shopifyAdminGraphql<T>(
+  shop: string,
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<AdminGraphqlResult<T>> {
+  const accessToken = await getOfflineAccessTokenForShop(shop);
+  if (!accessToken) {
+    return {
+      ok: false,
+      error: "Missing offline token. App needs to be reauthorized.",
+    };
+  }
+
+  const endpoint = `https://${shop.trim().toLowerCase()}/admin/api/${DRAFT_ORDER_API_VERSION}/graphql.json`;
+
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": accessToken,
+      },
+      body: JSON.stringify({ query, variables }),
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? `Shopify network error: ${err.message}`
+          : "Shopify network error.",
+    };
+  }
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: `Shopify responded ${response.status} ${response.statusText}.`,
+    };
+  }
+
+  const json = (await response.json().catch(() => null)) as {
+    data?: T;
+    errors?: Array<{ message?: string }>;
+  } | null;
+
+  if (!json) {
+    return { ok: false, error: "Shopify returned an unreadable response." };
+  }
+
+  if (json.errors?.length) {
+    return {
+      ok: false,
+      error: json.errors.map((e) => e.message).filter(Boolean).join(", "),
+    };
+  }
+
+  if (!json.data) {
+    return { ok: false, error: "Shopify returned no data." };
+  }
+
+  return { ok: true, data: json.data };
+}
+
+function extractUserErrors(payload: unknown): Array<{ message: string; field?: string[] | null }> {
+  if (!payload || typeof payload !== "object") return [];
+  const userErrors = (payload as { userErrors?: unknown }).userErrors;
+  if (!Array.isArray(userErrors)) return [];
+  return userErrors
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const message = String((entry as { message?: unknown }).message ?? "").trim();
+      if (!message) return null;
+      const field = (entry as { field?: string[] | null }).field;
+      return { message, field };
+    })
+    .filter(Boolean) as Array<{ message: string; field?: string[] | null }>;
+}
+
+type DraftOrderSnapshot = {
+  id: string;
+  status: string;
+  email: string | null;
+  order: { id: string } | null;
+};
+
+async function fetchDraftOrderSnapshot(
+  shop: string,
+  draftOrderId: string,
+): Promise<AdminGraphqlResult<DraftOrderSnapshot | null>> {
+  const query = `#graphql
+    query backupDraftOrderSnapshot($id: ID!) {
+      draftOrder(id: $id) {
+        id
+        status
+        email
+        order {
+          id
+        }
+      }
+    }
+  `;
+
+  const result = await shopifyAdminGraphql<{
+    draftOrder?: DraftOrderSnapshot | null;
+  }>(shop, query, { id: draftOrderId });
+
+  if (!result.ok) return result;
+  const draft = result.data.draftOrder ?? null;
+  return { ok: true, data: draft };
+}
+
+async function stripDraftOrderCustomerContact(
+  shop: string,
+  draftOrderId: string,
+): Promise<AdminGraphqlResult<void>> {
+  const mutation = `#graphql
+    mutation backupDraftOrderStripContact($id: ID!, $input: DraftOrderInput!) {
+      draftOrderUpdate(id: $id, input: $input) {
+        draftOrder {
+          id
+          email
+        }
+        userErrors {
+          message
+          field
+        }
+      }
+    }
+  `;
+
+  const attempts: Array<Record<string, unknown>> = [
+    { email: null, purchasingEntity: null },
+    { email: null },
+    { email: "" },
+  ];
+
+  let lastError = "Could not remove customer contact from backup draft.";
+
+  for (const input of attempts) {
+    const result = await shopifyAdminGraphql<{
+      draftOrderUpdate?: { draftOrder?: { id?: string }; userErrors?: unknown };
+    }>(shop, mutation, { id: draftOrderId, input });
+
+    if (!result.ok) {
+      lastError = result.error;
+      continue;
+    }
+
+    const userErrors = extractUserErrors(result.data.draftOrderUpdate);
+    if (userErrors.length) {
+      lastError = userErrors.map((e) => e.message).join(", ");
+      continue;
+    }
+
+    return { ok: true, data: undefined };
+  }
+
+  return { ok: false, error: lastError };
+}
+
+async function completeDraftOrderAsPaid(
+  shop: string,
+  draftOrderId: string,
+): Promise<AdminGraphqlResult<string>> {
+  const mutation = `#graphql
+    mutation backupDraftOrderComplete($id: ID!) {
+      draftOrderComplete(id: $id, paymentPending: false) {
+        draftOrder {
+          id
+          status
+          order {
+            id
+          }
+        }
+        userErrors {
+          message
+          field
+        }
+      }
+    }
+  `;
+
+  const result = await shopifyAdminGraphql<{
+    draftOrderComplete?: {
+      draftOrder?: { order?: { id?: string } | null };
+      userErrors?: unknown;
+    };
+  }>(shop, mutation, { id: draftOrderId });
+
+  if (!result.ok) return result;
+
+  const userErrors = extractUserErrors(result.data.draftOrderComplete);
+  if (userErrors.length) {
+    return {
+      ok: false,
+      error: userErrors.map((e) => e.message).join(", "),
+      userErrors,
+    };
+  }
+
+  const orderId = result.data.draftOrderComplete?.draftOrder?.order?.id;
+  if (!orderId) {
+    return { ok: false, error: "Shopify did not return an order id after completing draft." };
+  }
+
+  return { ok: true, data: orderId };
+}
+
+async function fulfillOrderWithoutCustomerNotify(
+  shop: string,
+  orderId: string,
+): Promise<AdminGraphqlResult<void>> {
+  const query = `#graphql
+    query backupDraftOrderFulfillmentTargets($id: ID!) {
+      order(id: $id) {
+        id
+        fulfillmentOrders(first: 20) {
+          nodes {
+            id
+            status
+            lineItems(first: 50) {
+              nodes {
+                id
+                remainingQuantity
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const targets = await shopifyAdminGraphql<{
+    order?: {
+      fulfillmentOrders?: {
+        nodes?: Array<{
+          id: string;
+          status: string;
+          lineItems?: {
+            nodes?: Array<{ id: string; remainingQuantity: number }>;
+          };
+        }>;
+      };
+    } | null;
+  }>(shop, query, { id: orderId });
+
+  if (!targets.ok) return targets;
+
+  const fulfillmentOrders =
+    targets.data.order?.fulfillmentOrders?.nodes?.filter(
+      (fo) => fo.status === "OPEN" || fo.status === "IN_PROGRESS",
+    ) ?? [];
+
+  if (fulfillmentOrders.length === 0) {
+    return { ok: true, data: undefined };
+  }
+
+  const lineItemsByFulfillmentOrder = fulfillmentOrders
+    .map((fo) => {
+      const fulfillmentOrderLineItems =
+        fo.lineItems?.nodes
+          ?.filter((li) => li.remainingQuantity > 0)
+          .map((li) => ({
+            id: li.id,
+            quantity: li.remainingQuantity,
+          })) ?? [];
+      if (fulfillmentOrderLineItems.length === 0) return null;
+      return {
+        fulfillmentOrderId: fo.id,
+        fulfillmentOrderLineItems,
+      };
+    })
+    .filter(Boolean);
+
+  if (lineItemsByFulfillmentOrder.length === 0) {
+    return { ok: true, data: undefined };
+  }
+
+  const mutation = `#graphql
+    mutation backupDraftOrderFulfill($fulfillment: FulfillmentV2Input!) {
+      fulfillmentCreateV2(fulfillment: $fulfillment) {
+        fulfillment {
+          id
+          status
+        }
+        userErrors {
+          message
+          field
+        }
+      }
+    }
+  `;
+
+  const fulfillResult = await shopifyAdminGraphql<{
+    fulfillmentCreateV2?: { userErrors?: unknown };
+  }>(shop, mutation, {
+    fulfillment: {
+      notifyCustomer: false,
+      lineItemsByFulfillmentOrder,
+    },
+  });
+
+  if (!fulfillResult.ok) return fulfillResult;
+
+  const userErrors = extractUserErrors(fulfillResult.data.fulfillmentCreateV2);
+  if (userErrors.length) {
+    return {
+      ok: false,
+      error: userErrors.map((e) => e.message).join(", "),
+      userErrors,
+    };
+  }
+
+  return { ok: true, data: undefined };
+}
+
+export type SettleBackupDraftOrderResult =
+  | { ok: true; skipped?: boolean; orderId?: string }
+  | { ok: false; error: string };
+
+/**
+ * When a ProjectClad job is marked paid, close out its silent Shopify backup draft:
+ * strip customer contact, complete as paid, and fulfill without notifying the buyer.
+ * Never throws.
+ */
+export async function settleBackupDraftOrderForPaidJob(args: {
+  shop: string;
+  jobId: string;
+}): Promise<SettleBackupDraftOrderResult> {
+  const { shop, jobId } = args;
+
+  const link = await prisma.jobDraftOrderLink.findUnique({
+    where: { jobId },
+  });
+  if (!link) {
+    return { ok: true, skipped: true };
+  }
+
+  const draftOrderId = link.shopifyDraftOrderId;
+  const snapshot = await fetchDraftOrderSnapshot(shop, draftOrderId);
+  if (!snapshot.ok) {
+    return { ok: false, error: snapshot.error };
+  }
+  if (!snapshot.data) {
+    return { ok: false, error: "Linked backup draft order was not found in Shopify." };
+  }
+
+  let orderId = snapshot.data.order?.id ?? null;
+
+  if (snapshot.data.status === "COMPLETED") {
+    if (!orderId) {
+      return {
+        ok: false,
+        error: "Backup draft is completed but Shopify did not return a linked order.",
+      };
+    }
+  } else if (snapshot.data.status === "OPEN") {
+    const strip = await stripDraftOrderCustomerContact(shop, draftOrderId);
+    if (!strip.ok) {
+      return { ok: false, error: `Could not remove customer contact: ${strip.error}` };
+    }
+
+    const complete = await completeDraftOrderAsPaid(shop, draftOrderId);
+    if (!complete.ok) {
+      return { ok: false, error: `Could not complete backup draft: ${complete.error}` };
+    }
+    orderId = complete.data;
+  } else {
+    return {
+      ok: false,
+      error: `Backup draft has unexpected status "${snapshot.data.status}".`,
+    };
+  }
+
+  const fulfill = await fulfillOrderWithoutCustomerNotify(shop, orderId);
+  if (!fulfill.ok) {
+    return {
+      ok: false,
+      error: `Draft completed but fulfillment failed: ${fulfill.error}`,
+    };
+  }
+
+  return { ok: true, orderId };
+}
+
+/**
+ * Fire-and-forget wrapper for {@link settleBackupDraftOrderForPaidJob}.
+ * Paid transitions must never block on Shopify admin latency.
+ */
+export function settleBackupDraftOrderOnPaidBestEffort(
+  shop: string,
+  jobId: string,
+): void {
+  void (async () => {
+    try {
+      const result = await settleBackupDraftOrderForPaidJob({ shop, jobId });
+      if (!result.ok) {
+        console.error(
+          "[project-clad] backup draft settle failed:",
+          jobId,
+          result.error,
+        );
+        const job = await prisma.job.findUnique({
+          where: { id: jobId },
+          select: { projectId: true },
+        });
+        if (job) {
+          const { logProjectActivity } = await import("./projectActivity.server");
+          await logProjectActivity({
+            projectId: job.projectId,
+            jobId,
+            type: "shopify_draft_settle_failed",
+            visibility: "admin",
+            payload: { error: result.error },
+          }).catch(() => undefined);
+        }
+        return;
+      }
+      if (!result.skipped) {
+        console.log(
+          "[project-clad] backup draft settled for paid job",
+          jobId,
+          result.orderId ?? "",
+        );
+      }
+    } catch (err) {
+      console.error(
+        "[project-clad] backup draft settle threw:",
+        jobId,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  })();
+}

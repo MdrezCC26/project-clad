@@ -3,6 +3,7 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
 import { notifyMissionControl } from "../utils/missionControl.server";
+import { settleBackupDraftOrderOnPaidBestEffort } from "../utils/shopifyDraftOrder.server";
 
 type LineItem = {
   name?: string;
@@ -107,6 +108,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   });
 
   notifyMissionControl(link.jobId);
+  settleBackupDraftOrderOnPaidBestEffort(shop, link.jobId);
 
   return new Response();
 };

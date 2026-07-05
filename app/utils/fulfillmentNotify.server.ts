@@ -33,7 +33,6 @@ import {
 import { STOREFRONT_ORDER_CONFIRMED_ACTIVITY } from "./projectActivity.server";
 import { orderTaxFromSubtotal } from "./orderDisplayTax";
 import { getShopDeliveryFee } from "./shopDeliveryFee.server";
-import { buildPhasePdfBuffer } from "./phaseDocumentPdf.server";
 import {
   computeDeliveredPercent,
   mapPhasesToViews,
@@ -386,7 +385,7 @@ export async function sendFulfillmentPackageEmails(args: {
 
   const documentsLines = phase
     ? [
-        `View delivery photo, packing slip, and invoice for this drop:`,
+        `View delivery photo for this drop:`,
         documentsUrl,
         ``,
       ]
@@ -519,8 +518,9 @@ export async function sendFulfillmentPackageEmails(args: {
     `Total: ${formatMoney(total)}`,
     ``,
     `Open order in app: ${projectOrderUrl}`,
-    `Delivery documents (photo, packing slip, invoice): ${documentsUrl}`,
-    ``,
+    ...(phase
+      ? [`Delivery photo: ${documentsUrl}`, ``]
+      : []),
   ].join("\n");
 
   const subject = phase
@@ -548,27 +548,6 @@ export async function sendFulfillmentPackageEmails(args: {
   }
   if (financePoPdfAttachment) {
     extraAttachments.push(financePoPdfAttachment);
-  }
-  if (phase) {
-    try {
-      const invoicePdf = await buildPhasePdfBuffer({
-        mode: "invoice",
-        project,
-        job,
-        phase,
-        shopDeliveryFee,
-      });
-      extraAttachments.push({
-        filename: `invoice-delivery-${phase.sequence}-${job.name.replace(/[^a-z0-9-_]+/gi, "-")}.pdf`,
-        content: invoicePdf,
-        contentType: "application/pdf",
-      });
-    } catch (err) {
-      console.error(
-        "[fulfillmentNotify] phase invoice PDF failed:",
-        err instanceof Error ? err.message : err,
-      );
-    }
   }
 
   if (sendOwner && customerDeliveryEmails.length > 0) {
