@@ -77,6 +77,7 @@ import {
   validateUploadedPurchaseOrderPdf,
 } from "../utils/purchaseOrderPdfStorage.server";
 import { createBackupDraftOrderForJob, settleBackupDraftOrderOnPaidBestEffort } from "../utils/shopifyDraftOrder.server";
+import { ensureJobOrderNumberForShop } from "../utils/jobOrderNumber.server";
 import {
   isPrePlacedOrderLifecycle,
   jobCountsTowardProjectSubtotal,
@@ -4571,9 +4572,34 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
 
       /* Per-order site contact is required for ALL fulfillment methods so
-         the warehouse / driver / counter has a real human + phone to call. */
-      const siteContactNameOk = Boolean(job.siteContactName?.trim());
-      const siteContactPhoneOk = Boolean(job.siteContactPhone?.trim());
+         the warehouse / driver / counter has a real human + phone to call.
+         Order Now may send the latest typed values (so users need not Save first). */
+      const payloadContactName =
+        typeof payload.siteContactName === "string"
+          ? payload.siteContactName.trim()
+          : "";
+      const payloadContactPhone =
+        typeof payload.siteContactPhone === "string"
+          ? payload.siteContactPhone.trim()
+          : "";
+      const contactPatch: {
+        siteContactName?: string;
+        siteContactPhone?: string;
+      } = {};
+      if (payloadContactName) contactPatch.siteContactName = payloadContactName;
+      if (payloadContactPhone) contactPatch.siteContactPhone = payloadContactPhone;
+      if (Object.keys(contactPatch).length > 0) {
+        await prisma.job.update({
+          where: { id: jobId },
+          data: contactPatch,
+        });
+      }
+      const siteContactNameOk = Boolean(
+        (contactPatch.siteContactName ?? job.siteContactName)?.trim(),
+      );
+      const siteContactPhoneOk = Boolean(
+        (contactPatch.siteContactPhone ?? job.siteContactPhone)?.trim(),
+      );
       if (!siteContactNameOk || !siteContactPhoneOk) {
         return Response.json(
           {
@@ -5762,6 +5788,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     }
 
+    if (next === "ordered") {
+      const numberResult = await ensureJobOrderNumberForShop(shop, jobId);
+      if (!numberResult.ok) {
+        console.error(
+          "[project] staff-set-order-lifecycle order number assign failed:",
+          jobId,
+          numberResult.error,
+        );
+      }
+    }
+
     notifyMissionControl(jobId);
     if (next === "paid") {
       settleBackupDraftOrderOnPaidBestEffort(shop, jobId);
@@ -5799,6 +5836,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           paidAt: null,
         },
       });
+      const numberResult = await ensureJobOrderNumberForShop(shop, jobId);
+      if (!numberResult.ok) {
+        console.error(
+          "[project] reset-order-delivery order number assign failed:",
+          jobId,
+          numberResult.error,
+        );
+      }
     }
     notifyMissionControl(jobId);
     return redirectToProject(request, projectId, shop);
@@ -7329,6 +7374,21 @@ export default function ProjectDetailPage() {
       }
       const hasDelivery = btn.getAttribute("data-has-delivery") === "1";
       const fulfillmentMethod = hasDelivery ? "delivery" : "pickup";
+      const detailsEl = document.querySelector(
+        'details.project-clad-order-row[data-job-id="' +
+          jobId.replace(/"/g, "") +
+          '"]',
+      );
+      const nameInput = detailsEl?.querySelector?.(
+        "[data-projectclad-site-contact-name-input]",
+      );
+      const phoneInput = detailsEl?.querySelector?.(
+        "[data-projectclad-site-contact-phone-input]",
+      );
+      const siteContactName =
+        nameInput instanceof HTMLInputElement ? nameInput.value.trim() : "";
+      const siteContactPhone =
+        phoneInput instanceof HTMLInputElement ? phoneInput.value.trim() : "";
       setOrderNowSubmittingJobId(jobId);
       void (async () => {
         try {
@@ -7343,6 +7403,8 @@ export default function ProjectDetailPage() {
               intent: "confirm-order-now",
               jobId,
               fulfillmentMethod,
+              siteContactName,
+              siteContactPhone,
             }),
           });
           const text = await res.text();
@@ -12350,6 +12412,80 @@ export default function ProjectDetailPage() {
   });
   pcSyncEditProjectDeliveryPanels();
 
+  function pcReadSiteContactForJob(jobId) {
+    var safeId = String(jobId || '').replace(/"/g, '');
+    var details = document.querySelector(
+      'details.project-clad-order-row[data-job-id="' + safeId + '"]',
+    );
+    var name = '';
+    var phone = '';
+    if (details) {
+      var nameInput = details.querySelector('[data-projectclad-site-contact-name-input]');
+      var phoneInput = details.querySelector('[data-projectclad-site-contact-phone-input]');
+      if (nameInput instanceof HTMLInputElement) name = nameInput.value.trim();
+      if (phoneInput instanceof HTMLInputElement) phone = phoneInput.value.trim();
+    }
+    return { siteContactName: name, siteContactPhone: phone };
+  }
+
+  function pcSyncOrderNowButtonForJob(jobId) {
+    var safeId = String(jobId || '').replace(/"/g, '');
+    if (!safeId) return;
+    var details = document.querySelector(
+      'details.project-clad-order-row[data-job-id="' + safeId + '"]',
+    );
+    if (!details) return;
+    var btn = details.querySelector('[data-projectclad-order-now-submit]');
+    if (!(btn instanceof HTMLButtonElement)) return;
+    if (btn.getAttribute('aria-busy') === 'true') return;
+    var nameInput = details.querySelector('[data-projectclad-site-contact-name-input]');
+    var phoneInput = details.querySelector('[data-projectclad-site-contact-phone-input]');
+    if (!(nameInput instanceof HTMLInputElement) || !(phoneInput instanceof HTMLInputElement)) {
+      return;
+    }
+    var ok = nameInput.value.trim().length > 0 && phoneInput.value.trim().length > 0;
+    btn.disabled = !ok;
+    btn.setAttribute('data-has-site-contact', ok ? '1' : '0');
+    if (!ok) {
+      btn.title = 'Add site contact & phone first.';
+      btn.setAttribute('aria-label', 'Add site contact and phone first');
+    } else {
+      btn.title = 'Confirm & Pay';
+      btn.setAttribute('aria-label', 'Confirm and pay');
+    }
+  }
+
+  function pcSyncAllOrderNowButtons() {
+    document.querySelectorAll('[data-projectclad-order-now-submit]').forEach(function (btn) {
+      if (!(btn instanceof HTMLButtonElement)) return;
+      pcSyncOrderNowButtonForJob(btn.getAttribute('data-job-id') || '');
+    });
+  }
+
+  document.addEventListener('input', function (event) {
+    var t = event.target;
+    if (!(t instanceof HTMLInputElement)) return;
+    if (
+      !t.hasAttribute('data-projectclad-site-contact-name-input') &&
+      !t.hasAttribute('data-projectclad-site-contact-phone-input')
+    ) {
+      return;
+    }
+    pcSyncOrderNowButtonForJob(t.getAttribute('data-job-id') || '');
+  });
+  document.addEventListener('change', function (event) {
+    var t = event.target;
+    if (!(t instanceof HTMLInputElement)) return;
+    if (
+      !t.hasAttribute('data-projectclad-site-contact-name-input') &&
+      !t.hasAttribute('data-projectclad-site-contact-phone-input')
+    ) {
+      return;
+    }
+    pcSyncOrderNowButtonForJob(t.getAttribute('data-job-id') || '');
+  });
+  pcSyncAllOrderNowButtons();
+
   document.addEventListener('click', (event) => {
     var tOnow = event.target;
     if (tOnow && tOnow.nodeType === 3 && tOnow.parentElement) {
@@ -12373,6 +12509,7 @@ export default function ProjectDetailPage() {
       var onowHasDel = onowBtn.getAttribute('data-has-delivery') === '1';
       var onowMethod = onowHasDel ? 'delivery' : 'pickup';
       var onowPath = window.location.pathname + window.location.search;
+      var onowContact = pcReadSiteContactForJob(onowJobId);
       onowBtn.disabled = true;
       fetch(onowPath, {
         method: 'POST',
@@ -12385,6 +12522,8 @@ export default function ProjectDetailPage() {
           intent: 'confirm-order-now',
           jobId: onowJobId,
           fulfillmentMethod: onowMethod,
+          siteContactName: onowContact.siteContactName,
+          siteContactPhone: onowContact.siteContactPhone,
         }),
       })
         .then(function (res) {
@@ -12405,6 +12544,7 @@ export default function ProjectDetailPage() {
           if (!o.res.ok || errLine) {
             window.alert(errLine || 'Unable to confirm order.');
             onowBtn.disabled = false;
+            pcSyncOrderNowButtonForJob(onowJobId);
             return;
           }
           window.location.reload();
@@ -12412,6 +12552,7 @@ export default function ProjectDetailPage() {
         .catch(function () {
           window.alert('Unable to confirm order.');
           onowBtn.disabled = false;
+          pcSyncOrderNowButtonForJob(onowJobId);
         });
       return;
     }

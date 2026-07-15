@@ -19,6 +19,7 @@ import {
 } from "../utils/adminPhaseFulfillment.server";
 import { notifyMissionControl } from "../utils/missionControl.server";
 import { settleBackupDraftOrderOnPaidBestEffort } from "../utils/shopifyDraftOrder.server";
+import { ensureJobOrderNumberForShop } from "../utils/jobOrderNumber.server";
 
 function parseNumericPrice(input: unknown): number | null {
   if (typeof input === "number") return Number.isFinite(input) ? input : null;
@@ -243,6 +244,17 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
       where: { id: job.id },
       data,
     });
+
+    if (next === "ordered") {
+      const numberResult = await ensureJobOrderNumberForShop(shop, job.id);
+      if (!numberResult.ok) {
+        console.error(
+          "[work-orders] order number assign failed:",
+          job.id,
+          numberResult.error,
+        );
+      }
+    }
 
     await logProjectActivity({
       projectId: job.projectId,

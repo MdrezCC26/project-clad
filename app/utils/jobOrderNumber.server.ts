@@ -4,13 +4,18 @@ import { shopStringFilter } from "./projectAccess.server";
 /**
  * Allocates the next value from `Job_orderNumber_seq` and sets `Job.orderNumber`
  * when it is currently null. Verifies the job belongs to the shop.
+ *
+ * When `opts.allowExisting` is true (default for auto-assign on → ordered),
+ * returns the existing number instead of erroring if one is already set.
  */
 export async function assignNextJobOrderNumberForShop(
   shop: string,
   jobId: string,
+  opts?: { allowExisting?: boolean },
 ): Promise<
   { ok: true; orderNumber: number } | { ok: false; error: string }
 > {
+  const allowExisting = opts?.allowExisting === true;
   try {
     return await prisma.$transaction(async (tx) => {
       const job = await tx.job.findFirst({
@@ -21,6 +26,9 @@ export async function assignNextJobOrderNumberForShop(
         return { ok: false, error: "Order not found." };
       }
       if (job.orderNumber != null) {
+        if (allowExisting) {
+          return { ok: true, orderNumber: job.orderNumber };
+        }
         return {
           ok: false,
           error: `This order already has number #${job.orderNumber}.`,
@@ -58,6 +66,17 @@ export async function assignNextJobOrderNumberForShop(
       error: e instanceof Error ? e.message : "Could not assign order number.",
     };
   }
+}
+
+/**
+ * Idempotent: assign next sequence number if missing. Use whenever lifecycle
+ * becomes `ordered` (staff dropdown, admin work orders, etc.).
+ */
+export async function ensureJobOrderNumberForShop(
+  shop: string,
+  jobId: string,
+): Promise<{ ok: true; orderNumber: number } | { ok: false; error: string }> {
+  return assignNextJobOrderNumberForShop(shop, jobId, { allowExisting: true });
 }
 
 const MIN_MANUAL_ORDER_NUMBER = 1100;
