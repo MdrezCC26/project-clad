@@ -193,12 +193,13 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
       return { ok: false, error: "Invalid status." };
     }
 
-    /* Mirrors the storefront's `staff-set-order-lifecycle` photo gate so the
-       customer-visible value can never be set to "delivered" without a
-       fulfillment photo on file. Staff should upload the photo from the
-       storefront project page first, then come back here. */
+    /* Photo required for Delivered unless staff explicitly skips (admin-only
+       override from this Shopify admin screen). */
+    const skipPhoto =
+      String(form.get("skipPhoto") || "").trim() === "1";
     if (
       next === "delivered" &&
+      !skipPhoto &&
       !jobHasFulfillmentEvidence(
         job.fulfillmentPhotoStorageKey,
         job.deliveryPhases,
@@ -207,7 +208,7 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
       return {
         ok: false,
         error:
-          "Confirm at least one delivery with photo and quantities before marking Delivered.",
+          "Confirm at least one delivery with photo and quantities before marking Delivered. Or check “Mark delivered without photo”.",
       };
     }
 
@@ -629,6 +630,24 @@ export default function AdminWorkOrdersPage() {
                       ))}
                     </select>
                   </label>
+                  {!job.hasFulfillmentPhoto ? (
+                    <label
+                      style={{
+                        display: "flex",
+                        gap: 6,
+                        alignItems: "center",
+                        fontSize: "0.9em",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        name="skipPhoto"
+                        value="1"
+                        disabled={Boolean(job.paidAt) || busy}
+                      />
+                      Mark delivered without photo
+                    </label>
+                  ) : null}
                   <button type="submit" disabled={Boolean(job.paidAt) || busy}>
                     Save status
                   </button>

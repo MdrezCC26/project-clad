@@ -91,6 +91,7 @@ import {
   isYmdBeforeMin,
   minPreferredDeliveryYmd,
   OTTAWA_DELIVERY_HOUR_WINDOWS,
+  PREFERRED_DELIVERY_CALENDAR_TIMEZONE,
   PREFERRED_DELIVERY_MIN_DAY_OFFSET_FROM_TODAY,
 } from "../utils/preferredDeliveryFormat";
 import { buildSignedFulfillmentPhotoUrl } from "../utils/fulfillmentPhotoSignedUrl.server";
@@ -2191,11 +2192,21 @@ function StaffOrderLifecycleForm({
   job,
   projectId,
   idPrefix,
+  allowDeliveredWithoutPhoto = false,
 }: {
   job: JobView;
   projectId: string;
   idPrefix: string;
+  /** App admins may mark Delivered without a fulfillment photo. */
+  allowDeliveredWithoutPhoto?: boolean;
 }) {
+  const canSelectDelivered =
+    job.hasFulfillmentPhoto || allowDeliveredWithoutPhoto;
+  const deliveredLabel = job.hasFulfillmentPhoto
+    ? "Delivered"
+    : allowDeliveredWithoutPhoto
+      ? "Delivered (no photo)"
+      : "Delivered (photo required)";
   return (
     <Form
       method="post"
@@ -2221,10 +2232,8 @@ function StaffOrderLifecycleForm({
           <option value="pending_review">Review</option>
           <option value="ready_to_order">Order now</option>
           <option value="ordered">Ordered</option>
-          <option value="delivered" disabled={!job.hasFulfillmentPhoto}>
-            {job.hasFulfillmentPhoto
-              ? "Delivered"
-              : "Delivered (photo required)"}
+          <option value="delivered" disabled={!canSelectDelivered}>
+            {deliveredLabel}
           </option>
           <option value="paid">Order complete</option>
         </select>
@@ -2599,6 +2608,7 @@ function OrderDeliveryFulfillmentSection({
         job={job}
         projectId={projectId}
         idPrefix={`delivery-modal-${job.id}`}
+        allowDeliveredWithoutPhoto={viewerIsAdmin}
       />
       {job.deliveryPhases.length > 0 ? (
         <StaffPhaseDeliveryPanel
@@ -3076,6 +3086,25 @@ function formatActivitySummary(ev: ActivityFeedItem): string {
   }
 }
 
+/**
+ * App-proxy HTML is SSR'd (often on a UTC host). `toLocaleString(undefined)`
+ * would show server timezone — pin Eastern so comment/activity times match
+ * Canadian Cladding local time (same as order emails).
+ */
+const PROJECT_DISPLAY_TIMEZONE = PREFERRED_DELIVERY_CALENDAR_TIMEZONE;
+
+function formatProjectDisplayDateTime(
+  iso: string,
+  options: Intl.DateTimeFormatOptions,
+): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-US", {
+    timeZone: PROJECT_DISPLAY_TIMEZONE,
+    ...options,
+  });
+}
+
 function ProjectActivityCommentLine({
   authorLabel,
   createdAt,
@@ -3089,7 +3118,7 @@ function ProjectActivityCommentLine({
   emptyAuthorLabel?: string;
 }) {
   const name = authorLabel.trim() || emptyAuthorLabel;
-  const when = new Date(createdAt).toLocaleString(undefined, {
+  const when = formatProjectDisplayDateTime(createdAt, {
     year: "numeric",
     month: "numeric",
     day: "numeric",
@@ -3119,9 +3148,7 @@ function ProjectActivityCommentLine({
 }
 
 function shortLocaleActivityTime(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString(undefined, {
+  return formatProjectDisplayDateTime(iso, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -3627,7 +3654,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         shipProvince: job.shipProvince ?? null,
         shipPostal: job.shipPostal ?? null,
         shipCountry: job.shipCountry ?? null,
-        hasFulfillmentPhoto: Boolean(job.fulfillmentPhotoStorageKey),
+        hasFulfillmentPhoto:
+          Boolean(job.fulfillmentPhotoStorageKey) ||
+          phaseEntities.some((p) => Boolean(p.fulfillmentPhotoStorageKey)),
         fulfillmentPhotoUrl: job.fulfillmentPhotoStorageKey
           ? !hasNATag ||
             viewerIsAppAdmin ||
@@ -5598,7 +5627,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       job.fulfillmentNotifiedAt = null;
     }
 
-    if (next === "delivered" && !job.fulfillmentPhotoStorageKey) {
+    if (
+      next === "delivered" &&
+      !viewerIsAppAdmin &&
+      !job.fulfillmentPhotoStorageKey &&
+      !job.deliveryPhases.some((p) => Boolean(p.fulfillmentPhotoStorageKey))
+    ) {
       const origin = getStorefrontOriginForAppProxyRedirect(request, shop);
       return redirect(
         `${origin}${storefrontProjectActionPath}?id=${encodeURIComponent(projectId)}&statusPhotoRequired=1`,
@@ -9089,7 +9123,11 @@ export default function ProjectDetailPage() {
               }}
             >
               <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.45 }}>
-                You cannot set status to <strong>delivered</strong> until a fulfillment photo is uploaded.
+                You cannot set status to <strong>delivered</strong> until a
+                fulfillment photo is uploaded.
+                {viewerIsAdmin
+                  ? " As an app admin, choose “Delivered (no photo)” under Order status to override."
+                  : null}
               </p>
               <button
                 type="button"

@@ -45,6 +45,7 @@ import {
 import { ProjectCladStorefrontFooter } from "../components/ProjectCladStorefrontFooter";
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
 import { getStorefrontAppNav } from "../utils/storefrontAppNav";
+import { STOREFRONT_ORDER_CONFIRMED_ACTIVITY } from "../utils/projectActivity.shared";
 import type {
   OrderLifecycleStatus,
   ProjectStorefrontStatus,
@@ -59,6 +60,11 @@ type ProjectListItem = {
   ownerLabel: string | null;
   name: string;
   createdAt: string;
+  /**
+   * Most recent time an order on this project was submitted / set to ordered
+   * (ISO), or null if none yet. Used by the Recent sort.
+   */
+  lastOrderedAt: string | null;
   poNumber: string | null;
   companyName: string | null;
   jobCount: number;
@@ -196,6 +202,12 @@ function listRankForSort(p: ProjectListItem): number {
   return p.isOwner ? 0 : p.viaCompany ? 2 : 1;
 }
 
+function lastOrderedMs(p: ProjectListItem): number {
+  if (!p.lastOrderedAt) return 0;
+  const t = new Date(p.lastOrderedAt).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
 function sortFilteredProjects(
   list: ProjectListItem[],
   sort: ProjectsSortKey,
@@ -206,6 +218,9 @@ function sortFilteredProjects(
       const ra = listRankForSort(a);
       const rb = listRankForSort(b);
       if (ra !== rb) return ra - rb;
+      const oa = lastOrderedMs(a);
+      const ob = lastOrderedMs(b);
+      if (oa !== ob) return ob - oa;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
     return out;
@@ -355,6 +370,39 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const projectIds = projects.map((p) => p.id);
 
+  const orderActivityRows =
+    projectIds.length > 0
+      ? await prisma.projectActivityEvent.findMany({
+          where: {
+            projectId: { in: projectIds },
+            type: {
+              in: [STOREFRONT_ORDER_CONFIRMED_ACTIVITY, "order_lifecycle_status"],
+            },
+          },
+          select: {
+            projectId: true,
+            createdAt: true,
+            type: true,
+            payload: true,
+          },
+        })
+      : [];
+
+  const lastOrderedAtByProjectId = new Map<string, Date>();
+  for (const row of orderActivityRows) {
+    if (row.type === "order_lifecycle_status") {
+      const payload =
+        row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+          ? (row.payload as Record<string, unknown>)
+          : null;
+      if (String(payload?.to || "").trim() !== "ordered") continue;
+    }
+    const prev = lastOrderedAtByProjectId.get(row.projectId);
+    if (!prev || row.createdAt > prev) {
+      lastOrderedAtByProjectId.set(row.projectId, row.createdAt);
+    }
+  }
+
   const pendingOrderApprovalRows = await prisma.approvalRequest.findMany({
     where: {
       projectId: { in: projectIds },
@@ -464,6 +512,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ownerLabel: labelForOwner(project.ownerCustomerId),
     name: project.name,
     createdAt: project.createdAt.toISOString(),
+    lastOrderedAt:
+      lastOrderedAtByProjectId.get(project.id)?.toISOString() ?? null,
     poNumber: project.poNumber,
     companyName: project.companyName,
     storefrontStatus: project.storefrontStatus,
@@ -511,6 +561,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const ra = listRank(a);
     const rb = listRank(b);
     if (ra !== rb) return ra - rb;
+    const oa = lastOrderedMs(a);
+    const ob = lastOrderedMs(b);
+    if (oa !== ob) return ob - oa;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
@@ -1019,6 +1072,11 @@ export default function ProjectsPage() {
                       : "0"
                   }
                   data-pc-created-at={String(new Date(project.createdAt).getTime())}
+                  data-pc-last-ordered-at={String(
+                    project.lastOrderedAt
+                      ? new Date(project.lastOrderedAt).getTime()
+                      : 0,
+                  )}
                   data-pc-name={project.name.toLowerCase()}
                   data-pc-search={`${project.name} ${project.poNumber || ""} ${project.companyName || ""}`.toLowerCase()}
                   data-pc-orders={String(project.jobCount)}
@@ -1303,9 +1361,13 @@ export default function ProjectsPage() {
         if (bo !== ao) return bo - ao;
         return bCreated - aCreated;
       }
+      /* recent: last order submitted, then ownership, then created */
       var aOwner = a.getAttribute('data-pc-owner') === '1' ? 0 : 1;
       var bOwner = b.getAttribute('data-pc-owner') === '1' ? 0 : 1;
       if (aOwner !== bOwner) return aOwner - bOwner;
+      var aOrdered = Number(a.getAttribute('data-pc-last-ordered-at') || '0');
+      var bOrdered = Number(b.getAttribute('data-pc-last-ordered-at') || '0');
+      if (aOrdered !== bOrdered) return bOrdered - aOrdered;
       return bCreated - aCreated;
     }
     function writeSummary() {
