@@ -1358,7 +1358,7 @@
   }
 
   function pcAddDaysYmd(ymd, days) {
-    var m = /^(d{4})-(d{2})-(d{2})$/.exec((ymd || '').trim());
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((ymd || '').trim());
     if (!m) return null;
     var u = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + days);
     var dt = new Date(u);
