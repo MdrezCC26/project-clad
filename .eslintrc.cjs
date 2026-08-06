@@ -19,7 +19,12 @@ module.exports = {
     commonjs: true,
     es6: true,
   },
-  ignorePatterns: ["!**/.server", "!**/.client"],
+  /*
+   * `app/client-scripts` is shipped verbatim to browsers by
+   * `routes/project-clad-script.$name.tsx`. Nothing imports it, and its contents must stay
+   * byte-identical to what the app-proxy pages used to inline, so it is not linted.
+   */
+  ignorePatterns: ["!**/.server", "!**/.client", "app/client-scripts"],
 
   // Base config
   extends: ["eslint:recommended"],

@@ -1,5 +1,6 @@
 package.json
 .shadowenv.d
+app/client-scripts
 .vscode
 node_modules
 prisma
