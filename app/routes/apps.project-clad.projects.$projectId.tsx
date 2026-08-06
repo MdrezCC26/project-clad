@@ -622,42 +622,6 @@ export default function ProjectDetailPage() {
     setJobs(project.jobs);
   }, [project.jobs]);
 
-  useEffect(() => {
-    const handleClick = (event: MouseEvent) => {
-      const showPriceBtn = (event.target as HTMLElement)?.closest?.(
-        "[data-projectclad-show-price]",
-      );
-      if (showPriceBtn instanceof HTMLElement) {
-        event.preventDefault();
-        const modal = document.querySelector(
-          "[data-projectclad-pricing-modal-backdrop]",
-        );
-        if (modal instanceof HTMLElement) {
-          modal.style.display = "flex";
-          const pw = modal.querySelector<HTMLInputElement>('input[name="password"]');
-          if (pw) {
-            pw.value = "";
-            setTimeout(() => pw.focus(), 50);
-          }
-        }
-      }
-      const cancel = (event.target as HTMLElement)?.closest?.(
-        "[data-projectclad-pricing-modal-cancel]",
-      );
-      const backdrop = (event.target as HTMLElement)?.closest?.(
-        "[data-projectclad-pricing-modal-backdrop]",
-      );
-      if (cancel || event.target === backdrop) {
-        const m = document.querySelector(
-          "[data-projectclad-pricing-modal-backdrop]",
-        );
-        if (m instanceof HTMLElement) m.style.display = "none";
-      }
-    };
-    document.addEventListener("click", handleClick);
-    return () => document.removeEventListener("click", handleClick);
-  }, []);
-
   const reorderItems = async (jobId: string, overItemId: string) => {
     if (!canEdit || !dragItemId.current || dragItemId.current === overItemId) {
       dragItemId.current = null;
@@ -1112,6 +1076,39 @@ export default function ProjectDetailPage() {
     e.preventDefault();
     e.stopImmediatePropagation();
   }, true);
+  /* Pricing gate. Ported from the equivalent handler on the main project route: the
+     "Hidden" buttons and the modal render server-side, but nothing revealed the modal
+     here because the only opener was a React useEffect, which never runs on the proxy. */
+  var pricingBackdrop = function() {
+    return document.querySelector('[data-projectclad-pricing-modal-backdrop]');
+  };
+  document.addEventListener('click', function(e) {
+    var target = e.target;
+    if (target && target.nodeType === 3 && target.parentElement) {
+      target = target.parentElement;
+    }
+    if (!(target instanceof Element)) return;
+
+    if (target.closest('[data-projectclad-show-price]')) {
+      e.preventDefault();
+      var openModal = pricingBackdrop();
+      if (openModal instanceof HTMLElement) {
+        openModal.style.display = 'flex';
+        var pw = openModal.querySelector('input[name="password"]');
+        if (pw instanceof HTMLInputElement) {
+          pw.value = '';
+          setTimeout(function() { pw.focus(); }, 50);
+        }
+      }
+      return;
+    }
+
+    var cancel = target.closest('[data-projectclad-pricing-modal-cancel]');
+    if (cancel || target === pricingBackdrop()) {
+      var closeModal = pricingBackdrop();
+      if (closeModal instanceof HTMLElement) closeModal.style.display = 'none';
+    }
+  });
   document.addEventListener('click', function(e) {
     var a = e.target.closest('a[href]');
     if (!a || a.target === '_blank' || a.getAttribute('data-projectclad-no-transition')) return;

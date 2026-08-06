@@ -91,7 +91,6 @@ import {
 import {
   addDaysToCalendarYmd,
   formatOrderDeliveryFootline,
-  isKnownOttawaHourWindow,
   isOttawaDeliveryWindowValidForDate,
   isYmdBeforeMin,
   minPreferredDeliveryYmd,
@@ -2071,90 +2070,6 @@ const CANADA_PROVINCE_OPTIONS: { code: string; label: string }[] = [
   { code: "SK", label: "Saskatchewan" },
   { code: "YT", label: "Yukon" },
 ];
-
-function PreferredDeliveryScheduleFields({
-  job,
-  minYmd,
-}: {
-  job: JobView;
-  minYmd: string | undefined;
-}) {
-  const [dateVal, setDateVal] = useState(job.scheduledDeliveryDate ?? "");
-  const [windowVal, setWindowVal] = useState(job.scheduledDeliveryWindow ?? "");
-
-  useEffect(() => {
-    setDateVal(job.scheduledDeliveryDate ?? "");
-    setWindowVal(job.scheduledDeliveryWindow ?? "");
-  }, [job.id, job.scheduledDeliveryDate, job.scheduledDeliveryWindow]);
-
-  const now = new Date();
-
-  return (
-    <div className="project-clad-preferred-delivery-fields">
-      <div
-        className="project-clad-preferred-delivery-row"
-        role="group"
-        aria-label="Preferred delivery day and time"
-      >
-        <div className="project-clad-preferred-delivery-field project-clad-preferred-delivery-field--date">
-          <input
-            type="date"
-            name="scheduledDeliveryDate"
-            value={dateVal}
-            onChange={(e) => {
-              const v = e.target.value;
-              setDateVal(v);
-              if (!v.trim()) {
-                setWindowVal("");
-                return;
-              }
-              setWindowVal((prev) =>
-                prev && !isOttawaDeliveryWindowValidForDate(prev, v, new Date())
-                  ? ""
-                  : prev,
-              );
-            }}
-            min={minYmd}
-            className="project-clad-preferred-delivery-input"
-            aria-label="Delivery day"
-          />
-        </div>
-        <span className="project-clad-preferred-delivery-between">between</span>
-        <div className="project-clad-preferred-delivery-field project-clad-preferred-delivery-field--time">
-          <select
-            name="scheduledDeliveryWindow"
-            disabled={!dateVal.trim()}
-            value={windowVal}
-            onChange={(e) => setWindowVal(e.target.value)}
-            className="project-clad-preferred-delivery-input"
-            aria-label="Delivery time"
-          >
-          <option value="">
-            {!dateVal.trim() ? "Select a day first…" : "Select…"}
-          </option>
-          {OTTAWA_DELIVERY_HOUR_WINDOWS.map((w) => {
-            const ended =
-              Boolean(dateVal.trim()) &&
-              !isOttawaDeliveryWindowValidForDate(w, dateVal, now);
-            return (
-              <option key={w} value={w} disabled={ended}>
-                {w}
-                {ended ? " (ended)" : ""}
-              </option>
-            );
-          })}
-          {job.scheduledDeliveryWindow &&
-          !isKnownOttawaHourWindow(job.scheduledDeliveryWindow) ? (
-            <option value={job.scheduledDeliveryWindow}>
-              {job.scheduledDeliveryWindow} (saved)
-            </option>
-          ) : null}
-        </select>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function findActiveDeliveryPhaseId(phases: DeliveryPhaseView[]): string {
   return phases.find((p) => !p.hasPhoto)?.id ?? "";
