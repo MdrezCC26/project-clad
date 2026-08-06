@@ -23,6 +23,19 @@ export default async function handleRequest(
   // keep an old shell (nav, CSS) after deploy until a hard refresh.
   try {
     const url = new URL(request.url);
+
+    /* TEMPORARY DIAGNOSTIC — delete once the Render log has been read.
+       Establishes whether the app proxy strips the /apps/project-clad prefix before
+       forwarding. That decides whether the no-store branch below ever runs, and
+       whether the nested-detail check in apps.project-clad.projects.tsx can match.
+       Param names only, never values: the proxy passes logged_in_customer_email. */
+    console.log(
+      "[pc-probe]",
+      url.pathname,
+      `prefixMatch=${url.pathname.startsWith("/apps/project-clad")}`,
+      `params=${Array.from(url.searchParams.keys()).sort().join("|")}`,
+    );
+
     if (url.pathname.startsWith("/apps/project-clad")) {
       responseHeaders.set(
         "Cache-Control",
