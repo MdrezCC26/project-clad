@@ -26,7 +26,8 @@ import {
 import { verifyPassword } from "../utils/passwords.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
-import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
+import { projectCladProxyStylesHref } from "../utils/projectCladProxyStyles.server";
+import { buildShopBrandingUrls } from "../utils/shopBrandingAssets.server";
 import { ProjectCladStorefrontFooter } from "../components/ProjectCladStorefrontFooter";
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
 import { getStorefrontAppNav } from "../utils/storefrontAppNav";
@@ -76,24 +77,27 @@ const createPricingCookie = () =>
   `${PRICING_COOKIE}; Path=/; Max-Age=3600; SameSite=Lax`;
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
-  const proxyStylesCss = rewriteProjectCladProxyFontUrls(request);
+  const proxyStylesHref = projectCladProxyStylesHref(request);
   const { shop, customerId, customerEmail } = requireAppProxyCustomer(request);
-  const themeStyles = await getThemeStyles(shop);
-  const settings = await prisma.shopSettings.findFirst({
-    where: { shop: shopStringFilter(shop) },
-  });
   const projectId = params.projectId || "";
 
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, shop: shopStringFilter(shop) },
-    include: {
-      jobs: {
-        orderBy: { sortOrder: "asc" },
-        include: { items: { orderBy: { sortOrder: "asc" } }, orderLink: true },
+  /* Independent reads — the project tree does not depend on theme CSS or shop settings. */
+  const [themeStyles, settings, project] = await Promise.all([
+    getThemeStyles(shop),
+    prisma.shopSettings.findFirst({
+      where: { shop: shopStringFilter(shop) },
+    }),
+    prisma.project.findFirst({
+      where: { id: projectId, shop: shopStringFilter(shop) },
+      include: {
+        jobs: {
+          orderBy: { sortOrder: "asc" },
+          include: { items: { orderBy: { sortOrder: "asc" } }, orderLink: true },
+        },
+        members: true,
       },
-      members: true,
-    },
-  });
+    }),
+  ]);
 
   if (!project) {
     throw new Response("Project not found", { status: 404 });
@@ -103,6 +107,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     shop,
     customerId,
     customerEmail,
+    settings,
   );
 
   const viewerNumericId = normalizeStorefrontCustomerId(customerId);
@@ -145,6 +150,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
             { members: { some: { customerId } } },
           ],
         },
+    /* Only the switcher label is rendered; full rows include card image data URLs. */
+    select: { id: true, name: true },
     orderBy: { createdAt: "desc" },
   });
 
@@ -180,7 +187,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   };
 
   return {
-    proxyStylesCss,
+    proxyStylesHref,
     project: payload,
     shop,
     otherProjects: otherProjects.map((other) => ({
@@ -191,8 +198,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     canEdit,
     isOwner,
     themeStyles,
-    logoDataUrl: settings?.logoDataUrl || null,
-    backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
+    ...buildShopBrandingUrls({ request, shop, settings }),
     storefrontAppNav: getStorefrontAppNav(settings),
     navAccountInitial,
     navAccountFirstName,
@@ -561,7 +567,7 @@ const buildCartLink = (items: JobItemView[]) => {
 
 export default function ProjectDetailPage() {
   const {
-    proxyStylesCss,
+    proxyStylesHref,
     project,
     shop,
     otherProjects,
@@ -570,8 +576,8 @@ export default function ProjectDetailPage() {
     isOwner,
     themeStyles,
     storefrontAppNav,
-    logoDataUrl,
-    backgroundLogoDataUrl,
+    logoUrl,
+    backgroundLogoUrl,
     navAccountInitial,
     navAccountFirstName,
   } = useLoaderData<typeof loader>();
@@ -794,20 +800,20 @@ export default function ProjectDetailPage() {
       {inlineStyles.map((css, index) => (
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
-      <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
+      <link rel="stylesheet" href={proxyStylesHref} />
       <main
-        className={`project-clad-page project-clad-page--detail project-clad-page--projects project-clad-page--cc-v2 cc-store-neu${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
+        className={`project-clad-page project-clad-page--detail project-clad-page--projects project-clad-page--cc-v2 cc-store-neu${backgroundLogoUrl ? " project-clad-page--card-bg-logo" : ""}`}
         style={
-          backgroundLogoDataUrl
+          backgroundLogoUrl
             ? {
-                ["--project-clad-bg-logo" as string]: `url(${backgroundLogoDataUrl})`,
+                ["--project-clad-bg-logo" as string]: `url("${backgroundLogoUrl}")`,
               }
             : undefined
         }
       >
         <header className="project-clad-header project-clad-header--fullbleed">
           <ProjectCladStorefrontNav
-            logoDataUrl={logoDataUrl}
+            logoSrc={logoUrl}
             logoHref="/"
             logoAlt="Canadian Cladding"
             links={storefrontAppNav.links}
@@ -903,11 +909,7 @@ export default function ProjectDetailPage() {
                       <div className="project-clad-actions">
                         <Form
                           method="post"
-                          onSubmit={(event) => {
-                            if (!confirm("Are you sure you want to delete this order?")) {
-                              event.preventDefault();
-                            }
-                          }}
+                          data-projectclad-confirm="Are you sure you want to delete this order?"
                         >
                           <input type="hidden" name="intent" value="delete-job" />
                           <input type="hidden" name="jobId" value={job.id} />
@@ -979,11 +981,7 @@ export default function ProjectDetailPage() {
                                   <td className="project-clad-table-right">
                                     <Form
                                       method="post"
-                                      onSubmit={(e) => {
-                                        if (!confirm("Are you sure you want to remove this item?")) {
-                                          e.preventDefault();
-                                        }
-                                      }}
+                                      data-projectclad-confirm="Are you sure you want to remove this item?"
                                     >
                                       <input type="hidden" name="intent" value="delete-item" />
                                       <input type="hidden" name="itemId" value={item.id} />
@@ -1083,7 +1081,7 @@ export default function ProjectDetailPage() {
           </section>
         </div>
         <ProjectCladStorefrontFooter
-          logoDataUrl={logoDataUrl}
+          logoSrc={logoUrl}
           logoAlt="Canadian Cladding"
           logoHref="/"
         />
@@ -1103,6 +1101,17 @@ export default function ProjectDetailPage() {
       });
     });
   }
+  /* React does not hydrate on the app proxy, so a React onSubmit confirm never runs and
+     destructive forms would post on first click. Capture phase to beat any other handler. */
+  document.addEventListener('submit', function(e) {
+    var form = e.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    var message = form.getAttribute('data-projectclad-confirm');
+    if (!message) return;
+    if (window.confirm(message)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }, true);
   document.addEventListener('click', function(e) {
     var a = e.target.closest('a[href]');
     if (!a || a.target === '_blank' || a.getAttribute('data-projectclad-no-transition')) return;

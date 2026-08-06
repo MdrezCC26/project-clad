@@ -249,16 +249,17 @@ export async function listCompanyContactCustomers(
       COMPANY_CONTACTS_MAX - results.length,
     );
 
-    const data = await adminGraphql<CompanyContactsQueryResult>(
-      shop,
-      token,
-      COMPANY_CONTACTS_QUERY,
-      {
-        companyId: companyGid(companyId),
-        first,
-        after,
-      },
-    );
+    const data: CompanyContactsQueryResult =
+      await adminGraphql<CompanyContactsQueryResult>(
+        shop,
+        token,
+        COMPANY_CONTACTS_QUERY,
+        {
+          companyId: companyGid(companyId),
+          first,
+          after,
+        },
+      );
 
     const nodes = data.company?.contacts?.nodes ?? [];
     for (const node of nodes) {

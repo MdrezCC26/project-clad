@@ -368,6 +368,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       projectId,
       actorCustomerId: customerId,
       type: "project_owner_transferred",
+      visibility: "member",
       payload: {
         previousOwnerCustomerId: project.ownerCustomerId,
         newOwnerCustomerId: memberCustomerId,

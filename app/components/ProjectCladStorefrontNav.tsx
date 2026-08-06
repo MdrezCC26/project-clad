@@ -189,7 +189,7 @@ const StorefrontNavInAppSearch = forwardRef<HTMLDetailsElement, {
 StorefrontNavInAppSearch.displayName = "StorefrontNavInAppSearch";
 
 export function ProjectCladStorefrontNav({
-  logoDataUrl,
+  logoSrc,
   logoAlt = "Home",
   logoHref = "/",
   links,
@@ -230,7 +230,7 @@ export function ProjectCladStorefrontNav({
    */
   hideTrailingIcons = false,
 }: {
-  logoDataUrl: string | null;
+  logoSrc: string | null;
   logoAlt?: string;
   logoHref?: string;
   links: StorefrontAppNavLink[];
@@ -416,8 +416,13 @@ export function ProjectCladStorefrontNav({
 
   const logoBlock = (
     <a href={logoHref} className="project-clad-storefront-nav__logo-link">
-      {logoDataUrl ? (
-        <img src={logoDataUrl} alt={logoAlt} className="project-clad-storefront-nav__logo-img" />
+      {logoSrc ? (
+        <img
+          src={logoSrc}
+          alt={logoAlt}
+          decoding="async"
+          className="project-clad-storefront-nav__logo-img"
+        />
       ) : (
         <span className="project-clad-storefront-nav__logo-fallback">{logoAlt}</span>
       )}
@@ -438,7 +443,7 @@ export function ProjectCladStorefrontNav({
       </div>
     ) : null;
 
-  /* Header uses the live theme wordmark asset (not admin logoDataUrl — that asset is often smaller). */
+  /* Header uses the live theme wordmark asset (not the admin logo — that asset is often smaller). */
   const storefrontLogoSrc = CANADIAN_CLADDING_STOREFRONT_LOGO_URL;
   const storefrontLogoSrcSet = buildCanadianCladdingLogoSrcSet(storefrontLogoSrc);
 

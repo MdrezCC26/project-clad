@@ -15,10 +15,13 @@ import { orderTaxFromSubtotal } from "./orderDisplayTax";
 import { STOREFRONT_ORDER_CONFIRMED_ACTIVITY } from "./projectActivity.shared";
 import { getShopDeliveryFee } from "./shopDeliveryFee.server";
 
-const formatDate = (d: Date | null | undefined): string => {
+/* Phase views carry ISO strings while Prisma rows carry Date, and both reach this helper. */
+const formatDate = (d: Date | string | null | undefined): string => {
   if (!d) return "";
+  const date = typeof d === "string" ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
 const formatMoney = (n: number): string | number =>

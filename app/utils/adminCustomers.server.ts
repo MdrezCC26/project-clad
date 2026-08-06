@@ -11,12 +11,43 @@ const CUSTOMER_API_VERSION = "2024-10";
 const shopHost = (shop: string) => shop.trim().toLowerCase();
 
 /**
+ * Resolving the token used to cost two session lookups plus a case-insensitive `Session` scan on
+ * *every* Admin API call, and a single page render makes several. Offline tokens are long-lived,
+ * so the result is memoized briefly; `invalidateOfflineAccessTokenCache` drops the entry as soon
+ * as Shopify rejects it.
+ */
+const OFFLINE_TOKEN_TTL_MS = 5 * 60 * 1000;
+const offlineTokenCache = new Map<
+  string,
+  { token: string; expiresAt: number }
+>();
+
+export function invalidateOfflineAccessTokenCache(shop: string): void {
+  offlineTokenCache.delete(shopHost(shop));
+}
+
+/**
  * Offline Admin token for storefront proxy requests. Session rows sometimes differ
  * in shop string casing from the signed `shop` query param, so we fall back to DB.
  */
 export async function getOfflineAccessTokenForShop(
   shop: string,
 ): Promise<string | null> {
+  const cacheKey = shopHost(shop);
+  const cached = offlineTokenCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.token;
+  }
+  offlineTokenCache.delete(cacheKey);
+
+  const remember = (token: string) => {
+    offlineTokenCache.set(cacheKey, {
+      token,
+      expiresAt: Date.now() + OFFLINE_TOKEN_TTL_MS,
+    });
+    return token;
+  };
+
   const trimmed = shop.trim();
   const tryShops = Array.from(new Set([trimmed, trimmed.toLowerCase()]));
 
@@ -24,7 +55,7 @@ export async function getOfflineAccessTokenForShop(
     const sessions = await sessionStorage.findSessionsByShop(s);
     const offline = sessions.find((sess) => !sess.isOnline);
     if (offline?.accessToken) {
-      return offline.accessToken;
+      return remember(offline.accessToken);
     }
   }
 
@@ -35,7 +66,7 @@ export async function getOfflineAccessTokenForShop(
     },
     orderBy: { expires: "desc" },
   });
-  return row?.accessToken ?? null;
+  return row?.accessToken ? remember(row.accessToken) : null;
 }
 
 /** So `logged_in_customer_id` matches GraphQL map keys (leading zeros, formatting). */
@@ -120,6 +151,7 @@ export const findCustomerIdByEmail = async (
   });
 
   if (response.status === 401 || response.status === 403) {
+    invalidateOfflineAccessTokenCache(shop);
     throw new Error(
       "Customer lookup unavailable. Reauthorize the app with read_customers.",
     );
@@ -157,6 +189,7 @@ export const findCustomerIdByEmail = async (
   });
 
   if (restResponse.status === 401 || restResponse.status === 403) {
+    invalidateOfflineAccessTokenCache(shop);
     throw new Error(
       "Customer lookup unavailable. Reauthorize the app with read_customers.",
     );
@@ -223,6 +256,7 @@ export const getCustomersByIds = async (
     });
 
     if (response.status === 401 || response.status === 403) {
+      invalidateOfflineAccessTokenCache(shop);
       throw new Error(
         "Customer lookup unavailable. Reauthorize the app with read_customers.",
       );
@@ -309,6 +343,7 @@ export const listCustomers = async (
   });
 
   if (response.status === 401 || response.status === 403) {
+    invalidateOfflineAccessTokenCache(shop);
     throw new Error(
       "Customer details unavailable. Reauthorize the app to refresh access.",
     );

@@ -142,10 +142,20 @@ function allowlistRawMatchesCustomer(
  *
  * @param customerEmail Signed `logged_in_customer_email` from the app proxy when present — enables access without Admin Customer API.
  */
+export type ViewerAdminTagSettings = {
+  appAdminCustomerIds: string | null;
+  globalStaffEmails: string | null;
+};
+
+/**
+ * `prefetchedSettings` lets a caller that already loaded `ShopSettings` skip a repeat query —
+ * pass `null` to mean "there is no row".
+ */
 export async function viewerHasAdminTag(
   shop: string,
   customerId: string,
   customerEmail?: string | null,
+  prefetchedSettings?: ViewerAdminTagSettings | null,
 ): Promise<boolean> {
   if (process.env.PROJECTCLAD_DEBUG_STAFF === "1") {
     const key = customerIdDigitKey(customerId);
@@ -163,10 +173,13 @@ export async function viewerHasAdminTag(
     return true;
   }
 
-  const staffRow = await prisma.shopSettings.findFirst({
-    where: { shop: shopStringFilter(shop) },
-    select: { appAdminCustomerIds: true, globalStaffEmails: true },
-  });
+  const staffRow =
+    prefetchedSettings !== undefined
+      ? prefetchedSettings
+      : await prisma.shopSettings.findFirst({
+          where: { shop: shopStringFilter(shop) },
+          select: { appAdminCustomerIds: true, globalStaffEmails: true },
+        });
 
   if (emailMatchesGlobalStaffList(customerEmail, staffRow?.globalStaffEmails)) {
     return true;

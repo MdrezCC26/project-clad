@@ -29,7 +29,8 @@ import {
 } from "../utils/variantInfo.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
-import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
+import { projectCladProxyStylesHref } from "../utils/projectCladProxyStyles.server";
+import { buildShopBrandingUrls } from "../utils/shopBrandingAssets.server";
 import {
   getViewerCompanyContext,
   hasTag,
@@ -290,16 +291,19 @@ function projectListItemMatchesQuery(project: ProjectListItem, qRaw: string): bo
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const proxyStylesCss = rewriteProjectCladProxyFontUrls(request);
+  const proxyStylesHref = projectCladProxyStylesHref(request);
   const { shop, customerId, customerEmail } = requireAppProxyCustomer(request);
-  const themeStyles = await getThemeStyles(shop);
-  const settings = await prisma.shopSettings.findFirst({
-    where: { shop: shopStringFilter(shop) },
-  });
+  const [themeStyles, settings] = await Promise.all([
+    getThemeStyles(shop),
+    prisma.shopSettings.findFirst({
+      where: { shop: shopStringFilter(shop) },
+    }),
+  ]);
   const viewerIsAppAdmin = await viewerHasAdminTag(
     shop,
     customerId,
     customerEmail,
+    settings,
   );
 
   /* Single list: yours (owner or member) + company-visible coworker projects when applicable. */
@@ -338,6 +342,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           id: item.id,
           variantId: item.variantId,
           variantSnapshot: item.variantSnapshot,
+          catalogProductId: item.catalogProductId,
+          catalogSku: item.catalogSku,
         })),
       ),
     ),
@@ -568,17 +574,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 
   const storefrontAppNav = getStorefrontAppNav(settings);
+  const branding = buildShopBrandingUrls({ request, shop, settings });
 
   return {
-    proxyStylesCss,
+    proxyStylesHref,
     projects: payload,
     themeStyles,
     shop,
     variantLookupError,
     hideAddToCart,
     storefrontAppNav,
-    logoDataUrl: settings?.logoDataUrl || null,
-    backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
+    logoUrl: branding.logoUrl,
+    backgroundLogoUrl: branding.backgroundLogoUrl,
     navAccountInitial,
     navAccountFirstName,
     viewerIsAppAdmin,
@@ -660,14 +667,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function ProjectsPage() {
   const {
-    proxyStylesCss,
+    proxyStylesHref,
     projects,
     themeStyles,
     variantLookupError,
     hideAddToCart,
     storefrontAppNav,
-    logoDataUrl,
-    backgroundLogoDataUrl,
+    logoUrl,
+    backgroundLogoUrl,
     navAccountInitial,
     navAccountFirstName,
     viewerIsAppAdmin,
@@ -767,18 +774,18 @@ export default function ProjectsPage() {
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
       {/* After theme inlines so Project Clad rules win over storefront base.css */}
-      <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
+      <link rel="stylesheet" href={proxyStylesHref} />
       <main
-        className={`project-clad-page project-clad-page--projects project-clad-page--cc-v2 cc-store-neu${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
+        className={`project-clad-page project-clad-page--projects project-clad-page--cc-v2 cc-store-neu${backgroundLogoUrl ? " project-clad-page--card-bg-logo" : ""}`}
         style={
-          backgroundLogoDataUrl
-            ? { ["--project-clad-bg-logo" as string]: `url(${backgroundLogoDataUrl})` }
+          backgroundLogoUrl
+            ? { ["--project-clad-bg-logo" as string]: `url("${backgroundLogoUrl}")` }
             : undefined
         }
       >
         <header className="project-clad-header project-clad-header--fullbleed">
           <ProjectCladStorefrontNav
-            logoDataUrl={logoDataUrl}
+            logoSrc={logoUrl}
             logoHref="/"
             logoAlt="Canadian Cladding"
             links={storefrontAppNav.links}
@@ -1236,7 +1243,7 @@ export default function ProjectsPage() {
           )}
         </div>
         <ProjectCladStorefrontFooter
-          logoDataUrl={logoDataUrl}
+          logoSrc={logoUrl}
           logoAlt="Canadian Cladding"
           logoHref="/"
         />
@@ -1461,10 +1468,26 @@ export default function ProjectsPage() {
       function setMsg(t) { if (msgEl) msgEl.textContent = t || ''; }
       setMsg('');
       var intent = form.getAttribute('data-intent') || 'submit-for-approval';
+
+      /* Disable while in flight — the request round-trips and then reloads, so an active button
+         reads as "nothing happened" and invites a duplicate submit. */
+      var submitters = Array.prototype.slice.call(form.elements).filter(function(el) {
+        if (el.disabled) return false;
+        return (el.tagName === 'BUTTON' || el.tagName === 'INPUT') && el.type === 'submit';
+      });
+      var navigating = false;
+      function setBusy(busy) {
+        form.setAttribute('aria-busy', busy ? 'true' : 'false');
+        submitters.forEach(function(el) { el.disabled = busy; });
+      }
+      function release() { if (!navigating) setBusy(false); }
+      setBusy(true);
+
       var url = '/apps/project-clad/api/project-actions?intent=' + encodeURIComponent(intent) + '&projectId=' + encodeURIComponent(projectId);
       fetch(url, { credentials: 'include' }).then(function(r) {
         return r.json().then(function(data) {
           if (!r.ok && data?.redirectTo) {
+            navigating = true;
             window.location.href = data.redirectTo;
             return;
           }
@@ -1475,11 +1498,12 @@ export default function ProjectsPage() {
         var data = result.data;
         if (data.ok) {
           setMsg(intent === 'cancel-approval-request' ? 'Approval request cancelled.' : 'Approval request sent.');
+          navigating = true;
           window.location.reload();
         } else {
           setMsg(data.error || '');
         }
-      }).catch(function() { setMsg('Unable to send.'); });
+      }).catch(function() { setMsg('Unable to send.'); }).then(release, release);
     });
   });
 })();

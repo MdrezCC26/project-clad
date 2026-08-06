@@ -351,6 +351,53 @@ export async function spawnNextFulfillmentPhaseIfNeeded(
   });
 }
 
+/**
+ * Whether `ensureOpenFulfillmentPhase` would actually change anything, decided from an
+ * already-loaded phase graph. Callers that render a whole project use this first, so the normal
+ * case (nothing to repair) costs zero queries instead of two reads plus a line-update
+ * transaction for every order on the page.
+ */
+export function jobNeedsOpenFulfillmentPhaseSync(
+  job: Pick<JobWithPhaseGraph, "items" | "deliveryPhases">,
+): boolean {
+  if (job.items.length === 0) return false;
+
+  const phaseViews = mapPhasesToViews(job.deliveryPhases);
+  if (isJobFullyDelivered(job.items, phaseViews)) return false;
+
+  const deliveredByItem = new Map<string, number>();
+  for (const item of job.items) {
+    deliveredByItem.set(item.id, 0);
+  }
+  for (const phase of job.deliveryPhases) {
+    for (const line of phase.lines) {
+      deliveredByItem.set(
+        line.jobItemId,
+        (deliveredByItem.get(line.jobItemId) ?? 0) + line.quantityDelivered,
+      );
+    }
+  }
+
+  const remainingFor = (item: { id: string; quantity: number }) =>
+    Math.max(0, item.quantity - (deliveredByItem.get(item.id) ?? 0));
+
+  const openPhase = job.deliveryPhases.find(
+    (p) => !p.fulfillmentPhotoStorageKey && !p.deliveredAt,
+  );
+
+  /* No open phase: one gets spawned when any quantity is still outstanding. */
+  if (!openPhase) {
+    return job.items.some((item) => remainingFor(item) > 0);
+  }
+
+  /* Open phase exists: its planned quantities get re-synced to what is still outstanding. */
+  return job.items.some((item) => {
+    const existing = openPhase.lines.find((l) => l.jobItemId === item.id);
+    const remaining = remainingFor(item);
+    return existing ? existing.quantityPlanned !== remaining : remaining > 0;
+  });
+}
+
 /** Keep a single open fulfillment phase; sync lines to remaining order qty. */
 export async function ensureOpenFulfillmentPhase(
   jobId: string,
@@ -395,6 +442,8 @@ export async function ensureOpenFulfillmentPhase(
       );
       const existing = openPhase.lines.find((l) => l.jobItemId === item.id);
       if (existing) {
+        /* Skip rows that already match, so a no-op sync writes nothing. */
+        if (existing.quantityPlanned === remaining) continue;
         await tx.jobDeliveryPhaseLine.update({
           where: { id: existing.id },
           data: { quantityPlanned: remaining },

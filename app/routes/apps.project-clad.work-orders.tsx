@@ -6,7 +6,8 @@ import { normalizeStorefrontCustomerId } from "../utils/customerTags.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
-import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
+import { projectCladProxyStylesHref } from "../utils/projectCladProxyStyles.server";
+import { buildShopBrandingUrls } from "../utils/shopBrandingAssets.server";
 import { ProjectCladStorefrontFooter } from "../components/ProjectCladStorefrontFooter";
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
 import { getStorefrontAppNav } from "../utils/storefrontAppNav";
@@ -15,7 +16,7 @@ import { getStorefrontAppNav } from "../utils/storefrontAppNav";
  * Work orders are managed from the embedded Shopify admin app (staff), not the storefront.
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const proxyStylesCss = rewriteProjectCladProxyFontUrls(request);
+  const proxyStylesHref = projectCladProxyStylesHref(request);
   const { shop, customerId, customerEmail } = requireAppProxyCustomer(request);
   const themeStyles = await getThemeStyles(shop);
   const settings = await prisma.shopSettings.findUnique({
@@ -39,11 +40,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ? customerEmail.trim().charAt(0).toUpperCase()
       : null;
   }
+  const branding = buildShopBrandingUrls({ request, shop, settings });
   return {
-    proxyStylesCss,
+    proxyStylesHref,
     themeStyles,
-    backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
-    logoDataUrl: settings?.logoDataUrl || null,
+    backgroundLogoUrl: branding.backgroundLogoUrl,
+    logoUrl: branding.logoUrl,
     storefrontAppNav: getStorefrontAppNav(settings),
     navAccountInitial,
     navAccountFirstName,
@@ -65,20 +67,20 @@ export default function StorefrontWorkOrdersInfo() {
       {inlineStyles.map((css, index) => (
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
-      <style dangerouslySetInnerHTML={{ __html: data.proxyStylesCss }} />
+      <link rel="stylesheet" href={data.proxyStylesHref} />
       <main
-        className={`project-clad-page project-clad-page--projects project-clad-page--cc-v2 cc-store-neu${data.backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
+        className={`project-clad-page project-clad-page--projects project-clad-page--cc-v2 cc-store-neu${data.backgroundLogoUrl ? " project-clad-page--card-bg-logo" : ""}`}
         style={
-          data.backgroundLogoDataUrl
+          data.backgroundLogoUrl
             ? {
-                ["--project-clad-bg-logo" as string]: `url(${data.backgroundLogoDataUrl})`,
+                ["--project-clad-bg-logo" as string]: `url("${data.backgroundLogoUrl}")`,
               }
             : undefined
         }
       >
         <header className="project-clad-header project-clad-header--fullbleed">
           <ProjectCladStorefrontNav
-            logoDataUrl={data.logoDataUrl}
+            logoSrc={data.logoUrl}
             logoHref="/"
             logoAlt="Canadian Cladding"
             links={storefrontAppNav.links}
@@ -107,7 +109,7 @@ export default function StorefrontWorkOrdersInfo() {
           </p>
         </div>
         <ProjectCladStorefrontFooter
-          logoDataUrl={data.logoDataUrl}
+          logoSrc={data.logoUrl}
           logoAlt="Canadian Cladding"
           logoHref="/"
         />

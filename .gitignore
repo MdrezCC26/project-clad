@@ -28,3 +28,5 @@ database.sqlite
 
 # Local fulfillment photo uploads (dev)
 /storage/
+projectclad-orders-*.xlsx
+projectclad-orders-*.csv

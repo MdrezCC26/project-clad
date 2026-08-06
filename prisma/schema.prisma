@@ -36,6 +36,9 @@ model Session {
   emailVerified Boolean?  @default(false)
   refreshToken  String?
   refreshTokenExpires DateTime?
+
+  /// Offline-token lookup on storefront proxy requests filters on exactly these two columns.
+  @@index([shop, isOnline])
 }
 
 enum OrderLifecycleStatus {
@@ -109,6 +112,8 @@ model Project {
   @@index([shop])
   @@index([ownerCustomerId])
   @@index([shop, ownerCompanyKey])
+  /// Every project list scopes by shop and sorts newest-first.
+  @@index([shop, createdAt])
 }
 
 model Job {
@@ -166,6 +171,12 @@ model Job {
 
   @@index([projectId])
   @@index([projectId, sortOrder])
+  /// Admin order queues, order tabs, exports and Mission Control all filter on lifecycle status
+  /// and sort by one of these timestamps.
+  @@index([orderLifecycleStatus, createdAt])
+  @@index([orderLifecycleStatus, paidAt])
+  @@index([createdAt])
+  @@index([completedAt])
 }
 
 /// One scheduled drop for a job (default: single phase with full qty). Pickup phases use deliveryFeeAmount 0.
@@ -189,6 +200,8 @@ model JobDeliveryPhase {
 
   @@unique([jobId, sequence])
   @@index([jobId])
+  /// Mission Control sync selects jobs with phases touched since a cutoff.
+  @@index([updatedAt])
 }
 
 model JobDeliveryPhaseLine {
@@ -314,6 +327,10 @@ model ProjectActivityEvent {
 
   @@index([projectId])
   @@index([createdAt])
+  /// Timeline reads page by project + createdAt; notification and export lookups key on job + type.
+  @@index([projectId, createdAt])
+  @@index([projectId, type])
+  @@index([jobId, type])
 }
 
 model ProjectComment {
@@ -328,6 +345,7 @@ model ProjectComment {
   project               Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
+  @@index([projectId, createdAt])
 }
 
 model ApprovalRequest {
@@ -342,6 +360,9 @@ model ApprovalRequest {
 
   @@unique([projectId, jobId, itemId])
   @@index([projectId])
+  /// Pending-approval scans filter by project + approvedAt; work orders look up by job alone.
+  @@index([projectId, approvedAt])
+  @@index([jobId])
 }
 
 model GaugeConfig {

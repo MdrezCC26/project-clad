@@ -306,7 +306,13 @@ export function buildVariantPresentation(args: {
  * API hiccups or catalog changes when possible.
  */
 export async function persistVariantSnapshotsFromLive(args: {
-  items: Array<{ id: string; variantId: string; variantSnapshot: unknown }>;
+  items: Array<{
+    id: string;
+    variantId: string;
+    variantSnapshot: unknown;
+    catalogProductId?: string | null;
+    catalogSku?: string | null;
+  }>;
   liveByVariantId: Record<string, VariantDisplayInfo>;
 }): Promise<void> {
   const { items, liveByVariantId } = args;
@@ -323,16 +329,20 @@ export async function persistVariantSnapshotsFromLive(args: {
       vendor: prev?.vendor ?? null,
       source: "shopify_api",
     };
-    const snapshotChanged = !(prev && snapshotsEqual(prev, next));
 
+    /**
+     * Each field is compared against what is already stored. Assigning unconditionally meant any
+     * item with a live `catalogProductId` produced a non-empty `data`, so the "nothing changed"
+     * guard below never fired and every page view issued an UPDATE per line item.
+     */
     const data: Prisma.JobItemUpdateInput = {};
-    if (snapshotChanged) {
+    if (!(prev && snapshotsEqual(prev, next))) {
       data.variantSnapshot = next as unknown as Prisma.InputJsonValue;
     }
-    if (live.catalogProductId) {
+    if (live.catalogProductId && live.catalogProductId !== item.catalogProductId) {
       data.catalogProductId = live.catalogProductId;
     }
-    if (live.sku) {
+    if (live.sku && live.sku !== item.catalogSku) {
       data.catalogSku = live.sku;
     }
     if (Object.keys(data).length === 0) continue;

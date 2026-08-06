@@ -1,11 +1,11 @@
 export type ProjectCladStorefrontFooterProps = {
-  logoDataUrl: string | null;
+  logoSrc: string | null;
   logoAlt?: string;
   logoHref?: string;
 };
 
 export function ProjectCladStorefrontFooter({
-  logoDataUrl,
+  logoSrc,
   logoAlt = "Canadian Cladding",
   logoHref = "/",
 }: ProjectCladStorefrontFooterProps) {
@@ -14,11 +14,13 @@ export function ProjectCladStorefrontFooter({
       className="project-clad-storefront-footer project-clad-storefront-footer--fullbleed"
       role="contentinfo"
     >
-      {logoDataUrl ? (
+      {logoSrc ? (
         <a href={logoHref} className="project-clad-storefront-footer__logo-link">
           <img
-            src={logoDataUrl}
+            src={logoSrc}
             alt={logoAlt}
+            loading="lazy"
+            decoding="async"
             className="project-clad-storefront-footer__logo-img"
           />
         </a>

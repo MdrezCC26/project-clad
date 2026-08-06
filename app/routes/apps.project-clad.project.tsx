@@ -56,7 +56,8 @@ import {
 import { verifyPassword } from "../utils/passwords.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
-import { rewriteProjectCladProxyFontUrls } from "../utils/projectCladProxyStyles.server";
+import { projectCladProxyStylesHref } from "../utils/projectCladProxyStyles.server";
+import { buildShopBrandingUrls } from "../utils/shopBrandingAssets.server";
 import { ProjectCladStorefrontFooter } from "../components/ProjectCladStorefrontFooter";
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
 import { getStorefrontAppNav } from "../utils/storefrontAppNav";
@@ -78,6 +79,10 @@ import {
 } from "../utils/purchaseOrderPdfStorage.server";
 import { createBackupDraftOrderForJob, settleBackupDraftOrderOnPaidBestEffort } from "../utils/shopifyDraftOrder.server";
 import { ensureJobOrderNumberForShop } from "../utils/jobOrderNumber.server";
+import {
+  CANADIAN_CLADDING_STOREFRONT_LOGO_URL,
+  buildCanadianCladdingLogoSrcSet,
+} from "../utils/canadianCladdingStorefrontLogo";
 import {
   isPrePlacedOrderLifecycle,
   jobCountsTowardProjectSubtotal,
@@ -155,12 +160,14 @@ import {
   spawnNextFulfillmentPhaseIfNeeded,
   ensureOpenFulfillmentPhase,
   jobHasFulfillmentProgress,
+  jobNeedsOpenFulfillmentPhaseSync,
   resetJobDeliveryPhasesProgress,
 } from "../utils/jobDeliveryPhases.server";
 
 declare global {
   interface Window {
     __pcShareCopyInitialized?: boolean;
+    __pcHandleExportOrderPdf?: (btn: HTMLButtonElement) => void;
   }
 }
 
@@ -617,10 +624,6 @@ function OrderLineThumbMedia({ item }: { item: JobItemView }) {
   const showPdfThumb =
     isUploadPart &&
     Boolean(item.uploadPartFileUrl && isLikelyPdfUrl(item.uploadPartFileUrl));
-  const showCustomBadge =
-    isUploadPart ||
-    /\bcustom\b/i.test(item.displayName) ||
-    /\bupload\b/i.test(item.displayName);
 
   const thumbInner = showPdfThumb ? (
     <PdfThumbIcon label="PDF attachment" />
@@ -650,9 +653,6 @@ function OrderLineThumbMedia({ item }: { item: JobItemView }) {
         aria-label={`Expand product drawing for ${item.displayName}`}
       >
         {thumbInner}
-        {showCustomBadge ? (
-          <span className="project-clad-order-card-thumb-badge">Custom</span>
-        ) : null}
       </button>
     );
   }
@@ -666,16 +666,10 @@ function OrderLineThumbMedia({ item }: { item: JobItemView }) {
       onClick={(event) => event.stopPropagation()}
     >
       {thumbInner}
-      {showCustomBadge ? (
-        <span className="project-clad-order-card-thumb-badge">Custom</span>
-      ) : null}
     </a>
   ) : (
     <div className="project-clad-order-line-thumbwrap project-clad-order-card-thumb-frame">
       {thumbInner}
-      {showCustomBadge ? (
-        <span className="project-clad-order-card-thumb-badge">Custom</span>
-      ) : null}
     </div>
   );
 
@@ -1264,14 +1258,14 @@ function orderLinesTableColSpan(canEditLineActions: boolean) {
   return canEditLineActions ? 5 : 4;
 }
 
-/** Order created timestamp shown under the order title (local calendar MM-DD-YYYY). */
+/** Order created timestamp under the order title (same YYYY.MM.DD as Created fact). */
 function formatJobCreatedMmDdYyyy(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${mm}-${dd}-${yyyy}`;
+  return `${yyyy}.${mm}.${dd}`;
 }
 
 type JobView = {
@@ -1740,12 +1734,7 @@ function OrderFinancePanel({
             </span>
           </div>
 
-          <div
-            className="project-clad-order-finance__row"
-            {...(!hasPo && !hasPurchaseOrderPdf
-              ? { "data-projectclad-print-hide-po-row": "" }
-              : {})}
-          >
+          <div className="project-clad-order-finance__row">
             <span className="project-clad-order-finance__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -2429,15 +2418,7 @@ function StaffPhaseDeliveryPanel({
           method="post"
           action={actionUrl}
           className="project-clad-staff-delivery-reset-form"
-          onSubmit={(event) => {
-            if (
-              !confirm(
-                "Reset all delivery progress for this order? Delivered quantities, photos, and documents will be cleared so you can record deliveries again.",
-              )
-            ) {
-              event.preventDefault();
-            }
-          }}
+          data-projectclad-confirm="Reset all delivery progress for this order? Delivered quantities, photos, and documents will be cleared so you can record deliveries again."
         >
           <input type="hidden" name="intent" value="reset-order-delivery" />
           <input type="hidden" name="jobId" value={job.id} />
@@ -2765,7 +2746,12 @@ function OrderPoPdfControls({
         />
       </form>
       {hasPurchaseOrderPdf ? (
-        <form method="post" action={actionUrl} className="project-clad-order-po-pdf__remove-form">
+        <form
+          method="post"
+          action={actionUrl}
+          className="project-clad-order-po-pdf__remove-form"
+          data-projectclad-confirm="Remove the uploaded PO PDF from this order?"
+        >
           <input type="hidden" name="intent" value="remove-order-po-pdf" />
           <input type="hidden" name="jobId" value={jobId} />
           <button type="submit" className="project-clad-order-po-pdf__remove">
@@ -3289,14 +3275,16 @@ function MemberRoleSelect({
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const proxyStylesCss = rewriteProjectCladProxyFontUrls(request);
+  const proxyStylesHref = projectCladProxyStylesHref(request);
   const { shop, customerId: viewerCustomerId, customerEmail } =
     requireAppProxyCustomer(request);
   const customerId = viewerCustomerId as string;
-  const themeStyles = await getThemeStyles(shop);
-  const settings = await prisma.shopSettings.findFirst({
-    where: { shop: shopStringFilter(shop) },
-  });
+  const [themeStyles, settings] = await Promise.all([
+    getThemeStyles(shop),
+    prisma.shopSettings.findFirst({
+      where: { shop: shopStringFilter(shop) },
+    }),
+  ]);
   const projectId = getProjectId(request);
 
   if (!projectId) {
@@ -3314,6 +3302,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shop,
     customerId,
     customerEmail,
+    settings,
   );
 
   const project = await prisma.project.findFirst({
@@ -3338,7 +3327,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw projectMissingHtmlResponse(request, shop, projectId);
   }
 
-  const shopDeliveryFee = await getShopDeliveryFee(shop);
+  const shopDeliveryFee = await getShopDeliveryFee(shop, settings);
   const projectDeliveryCtxForEnsure = {
     receiveMode: project.receiveMode,
     shipAddress1: project.shipAddress1,
@@ -3347,12 +3336,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shipPostal: project.shipPostal,
     shipCountry: project.shipCountry,
   };
+  /**
+   * Rendering a project used to repair every order's delivery-phase graph, costing several
+   * queries plus a write transaction per order on every page view. The repairs still happen, but
+   * whether each one is needed is now decided from the graph already loaded above, so the steady
+   * state (nothing to repair) issues no queries at all.
+   */
+  let phaseGraphChanged = false;
   for (const job of project.jobs) {
     const resolved = resolveJobDelivery(job, projectDeliveryCtxForEnsure, shopDeliveryFee);
-    await ensureJobDeliveryPhases(job, shopDeliveryFee, resolved);
-    if (resolved.method === "delivery") {
+    const isDelivery = resolved.method === "delivery";
+
+    if (job.deliveryPhases.length === 0) {
+      await ensureJobDeliveryPhases(job, shopDeliveryFee, resolved);
+      if (isDelivery) {
+        await ensureOpenFulfillmentPhase(job.id);
+      }
+      phaseGraphChanged = true;
+    } else if (isDelivery && jobNeedsOpenFulfillmentPhaseSync(job)) {
       await ensureOpenFulfillmentPhase(job.id);
+      phaseGraphChanged = true;
     }
+
     /* Repair orders marked delivered without a confirmed phase photo (legacy qty-only saves). */
     const hasConfirmedPhase = job.deliveryPhases.some((p) =>
       Boolean(p.fulfillmentPhotoStorageKey),
@@ -3383,16 +3388,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }
     }
   }
-  const phaseRows = await prisma.jobDeliveryPhase.findMany({
-    where: { jobId: { in: project.jobs.map((j) => j.id) } },
-    include: { lines: true },
-    orderBy: [{ jobId: "asc" }, { sequence: "asc" }],
-  });
-  const phasesByJobId = new Map<string, typeof phaseRows>();
-  for (const p of phaseRows) {
-    const list = phasesByJobId.get(p.jobId) ?? [];
-    list.push(p);
-    phasesByJobId.set(p.jobId, list);
+  /* The project query above already loaded every phase with its lines. Re-read only when a repair
+     actually changed the graph. */
+  type PhaseWithLines = (typeof project.jobs)[number]["deliveryPhases"][number];
+  const phasesByJobId = new Map<string, PhaseWithLines[]>();
+  if (phaseGraphChanged) {
+    const phaseRows = await prisma.jobDeliveryPhase.findMany({
+      where: { jobId: { in: project.jobs.map((j) => j.id) } },
+      include: { lines: true },
+      orderBy: [{ jobId: "asc" }, { sequence: "asc" }],
+    });
+    for (const p of phaseRows) {
+      const list = phasesByJobId.get(p.jobId) ?? [];
+      list.push(p);
+      phasesByJobId.set(p.jobId, list);
+    }
+  } else {
+    for (const job of project.jobs) {
+      phasesByJobId.set(job.id, job.deliveryPhases);
+    }
   }
 
   const viewerNumericId = normalizeStorefrontCustomerId(customerId);
@@ -3475,6 +3489,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             { members: { some: { customerId } } },
           ],
         },
+    /* Only the switcher label is rendered; full rows include card image data URLs. */
+    select: { id: true, name: true },
     orderBy: { createdAt: "desc" },
   });
 
@@ -3490,6 +3506,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         id: item.id,
         variantId: item.variantId,
         variantSnapshot: item.variantSnapshot,
+        catalogProductId: item.catalogProductId,
+        catalogSku: item.catalogSku,
       })),
     ),
     liveByVariantId: variantInfo,
@@ -3797,7 +3815,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   })();
 
   return {
-    proxyStylesCss,
+    proxyStylesHref,
     project: payload,
     otherProjects: otherProjects.map((other) => ({
       id: other.id,
@@ -3859,8 +3877,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     variantLookupError,
     themeStyles,
     shop,
-    logoDataUrl: settings?.logoDataUrl || null,
-    backgroundLogoDataUrl: settings?.backgroundLogoDataUrl || null,
+    ...buildShopBrandingUrls({ request, shop, settings }),
     viewerCanFulfill,
     viewerHasNATag: hasNATag,
     shopDeliveryFee,
@@ -4900,7 +4917,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     const deliveryPayload = jobDeliveryPrismaData(deliveryMode, ship);
     const planMode = normalizeDeliveryPlanMode(
-      formData.get("deliveryPlanMode"),
+      String(formData.get("deliveryPlanMode") || ""),
     );
     let dateRaw = "";
     let windowRaw = "";
@@ -6596,6 +6613,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       projectId,
       actorCustomerId: customerId,
       type: "project_owner_transferred",
+      visibility: "member",
       payload: {
         previousOwnerCustomerId: project.ownerCustomerId,
         newOwnerCustomerId: memberCustomerId,
@@ -6964,7 +6982,7 @@ function storefrontBrowseLinksFromNav(
 
 export default function ProjectDetailPage() {
   const {
-    proxyStylesCss,
+    proxyStylesHref,
     project,
     otherProjects,
     canViewPricing,
@@ -6983,8 +7001,8 @@ export default function ProjectDetailPage() {
     variantLookupError,
     shop,
     storefrontAppNav,
-    logoDataUrl,
-    backgroundLogoDataUrl,
+    logoUrl,
+    backgroundLogoUrl,
     themeStyles,
     viewerCanFulfill,
     viewerHasNATag,
@@ -8179,15 +8197,7 @@ export default function ProjectDetailPage() {
                               <Form
                                 method="post"
                                 action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
-                                onSubmit={(event) => {
-                                  if (
-                                    !confirm(
-                                      `Make ${memberLabel} the project owner? You will stay on the project as an editor.`,
-                                    )
-                                  ) {
-                                    event.preventDefault();
-                                  }
-                                }}
+                                data-projectclad-confirm={`Make ${memberLabel} the project owner? You will stay on the project as an editor.`}
                                 data-projectclad-member-form
                                 data-projectclad-member-intent="transfer-project-owner"
                                 data-projectclad-project-id={project.id}
@@ -8219,11 +8229,7 @@ export default function ProjectDetailPage() {
                               <Form
                                 method="post"
                                 action={`https://${shop}/apps/project-clad/project?id=${project.id}`}
-                                onSubmit={(event) => {
-                                  if (!confirm("Remove this member?")) {
-                                    event.preventDefault();
-                                  }
-                                }}
+                                data-projectclad-confirm="Remove this member?"
                                 data-projectclad-member-form
                                 data-projectclad-member-intent="remove-member"
                                 data-projectclad-project-id={project.id}
@@ -8347,6 +8353,7 @@ export default function ProjectDetailPage() {
                       type="submit"
                       form="projectclad-add-member-form"
                       className="project-clad-button project-clad-reject-modal-btn"
+                      data-projectclad-busy-label="Adding…"
                     >
                       Add member
                     </button>
@@ -8923,14 +8930,14 @@ export default function ProjectDetailPage() {
       {inlineStyles.map((css, index) => (
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
-      <style dangerouslySetInnerHTML={{ __html: proxyStylesCss }} />
+      <link rel="stylesheet" href={proxyStylesHref} />
       <main
-        className={`project-clad-page project-clad-page--detail project-clad-page--projects project-clad-page--cc-v2 cc-store-neu${backgroundLogoDataUrl ? " project-clad-page--card-bg-logo" : ""}`}
+        className={`project-clad-page project-clad-page--detail project-clad-page--projects project-clad-page--cc-v2 cc-store-neu${backgroundLogoUrl ? " project-clad-page--card-bg-logo" : ""}`}
         data-pc-na-workflow={viewerHasNATag === true ? "1" : "0"}
         style={
-          backgroundLogoDataUrl
+          backgroundLogoUrl
             ? {
-                ["--project-clad-bg-logo" as string]: `url(${backgroundLogoDataUrl})`,
+                ["--project-clad-bg-logo" as string]: `url("${backgroundLogoUrl}")`,
               }
             : undefined
         }
@@ -8938,7 +8945,7 @@ export default function ProjectDetailPage() {
         {/* Sticky header hit-testing: see project-clad-proxy.css (avoid pointer-events:none on this wrapper — orders shell must receive clicks). */}
         <header className="project-clad-header project-clad-header--fullbleed">
           <ProjectCladStorefrontNav
-              logoDataUrl={logoDataUrl}
+              logoSrc={logoUrl}
               logoHref="/"
               logoAlt="Canadian Cladding"
               links={storefrontAppNav.links}
@@ -9198,6 +9205,7 @@ export default function ProjectDetailPage() {
                     <button
                       type="submit"
                       className="project-clad-button project-clad-button--approve"
+                      data-projectclad-busy-label="Approving…"
                     >
                       Approve
                     </button>
@@ -9283,6 +9291,22 @@ export default function ProjectDetailPage() {
                         #{project.poNumber || "—"}
                       </div>
                     </div>
+                    <img
+                      className="project-clad-orders-page-print-logo"
+                      src={
+                        CANADIAN_CLADDING_STOREFRONT_LOGO_URL.startsWith("//")
+                          ? `https:${CANADIAN_CLADDING_STOREFRONT_LOGO_URL}`
+                          : CANADIAN_CLADDING_STOREFRONT_LOGO_URL
+                      }
+                      srcSet={buildCanadianCladdingLogoSrcSet(
+                        CANADIAN_CLADDING_STOREFRONT_LOGO_URL,
+                      )}
+                      sizes="160px"
+                      alt="Canadian Cladding"
+                      width={160}
+                      height={48}
+                      decoding="async"
+                    />
                     {canEdit ? (
                       <div className="project-clad-orders-page-status-stack">
                         <button
@@ -9790,16 +9814,20 @@ export default function ProjectDetailPage() {
                             <h3 className="project-clad-title project-clad-order-summary-name">
                               {jobSummaryDisplayName}
                             </h3>
-                            {/* `#1174  ·  05-08-2026` — date inlined next to the
-                                order number with matching typography. The date
-                                also keeps its <time> semantics for screen
-                                readers. */}
+                            {/* Screen: `#1174 · 2026.05.07` under the title.
+                                Print: same row as the title, fact-style columns
+                                (label over value) matching Company / Created. */}
                             <div className="project-clad-order-summary-id-row">
                               {job.orderNumber != null ? (
                                 <>
-                                  <span className="project-clad-orders-page-name-num project-clad-order-summary-order-no">
-                                    #{job.orderNumber}
-                                  </span>
+                                  <div className="project-clad-order-summary-meta-fact project-clad-order-summary-meta-fact--order-no">
+                                    <span className="project-clad-order-summary-meta-fact__label">
+                                      Order number
+                                    </span>
+                                    <span className="project-clad-orders-page-name-num project-clad-order-summary-order-no project-clad-order-summary-meta-fact__value">
+                                      #{job.orderNumber}
+                                    </span>
+                                  </div>
                                   <span
                                     aria-hidden="true"
                                     className="project-clad-order-summary-id-row__sep"
@@ -9808,12 +9836,17 @@ export default function ProjectDetailPage() {
                                   </span>
                                 </>
                               ) : null}
-                              <time
-                                className="project-clad-order-created-date project-clad-order-summary-id-row__date"
-                                dateTime={job.createdAt}
-                              >
-                                {formatJobCreatedMmDdYyyy(job.createdAt)}
-                              </time>
+                              <div className="project-clad-order-summary-meta-fact project-clad-order-summary-meta-fact--date">
+                                <span className="project-clad-order-summary-meta-fact__label">
+                                  Date ordered
+                                </span>
+                                <time
+                                  className="project-clad-order-created-date project-clad-order-summary-id-row__date project-clad-order-summary-meta-fact__value"
+                                  dateTime={job.createdAt}
+                                >
+                                  {formatJobCreatedMmDdYyyy(job.createdAt)}
+                                </time>
+                              </div>
                             </div>
                           </div>
                           {canExportOrderCsv ? (
@@ -10071,12 +10104,24 @@ export default function ProjectDetailPage() {
                                           </button>
                                         ) : (
                                           <div className="project-clad-order-card-price-stack project-clad-normal-view">
-                                            <span className="project-clad-order-card-price-unit">
-                                              {formatPrice(item.priceSnapshot)}
-                                            </span>
-                                            <span className="project-clad-order-card-price-each">per unit</span>
+                                            <div className="project-clad-order-card-price-unit-block">
+                                              <span
+                                                className="project-clad-order-card-price-unit-label"
+                                                aria-hidden="true"
+                                              >
+                                                Unit cost
+                                              </span>
+                                              <span className="project-clad-order-card-price-unit">
+                                                {formatPrice(item.priceSnapshot)}
+                                              </span>
+                                              <span className="project-clad-order-card-price-each">
+                                                per unit
+                                              </span>
+                                            </div>
                                             <div className="project-clad-order-card-price-line">
-                                              Total{" "}
+                                              <span className="project-clad-order-card-price-total-label">
+                                                Total
+                                              </span>{" "}
                                               <strong>{formatPrice(lineTotalDisplay)}</strong>
                                             </div>
                                           </div>
@@ -10175,11 +10220,7 @@ export default function ProjectDetailPage() {
                                                 method="post"
                                                 action={`/apps/project-clad/project?id=${project.id}`}
                                                 style={{ display: "inline" }}
-                                                onSubmit={(e) => {
-                                                  if (!confirm("Are you sure you want to remove this item?")) {
-                                                    e.preventDefault();
-                                                  }
-                                                }}
+                                                data-projectclad-confirm="Are you sure you want to remove this item?"
                                               >
                                                 <input type="hidden" name="intent" value="delete-item" />
                                                 <input type="hidden" name="itemId" value={item.id} />
@@ -10353,6 +10394,7 @@ export default function ProjectDetailPage() {
                           <button
                             type="submit"
                             className="project-clad-button project-clad-button--approve"
+                            data-projectclad-busy-label="Approving…"
                           >
                             Approve
                           </button>
@@ -10644,6 +10686,375 @@ export default function ProjectDetailPage() {
             dangerouslySetInnerHTML={{
               __html: `
 (() => {
+  /*
+   * Print pagination must refresh on every script inject (HMR / soft nav).
+   * Assign before the once-guard so stale handlers are replaced.
+   */
+  window.__pcPrintPinVersion = 9;
+  window.__pcHandleExportOrderPdf = function (exportPdfBtn) {
+      if (!(exportPdfBtn instanceof HTMLButtonElement)) return;
+      const jobId = exportPdfBtn.getAttribute('data-job-id') || '';
+      const printMode = (exportPdfBtn.getAttribute('data-print-mode') || 'packing').toLowerCase();
+      const safeId = jobId.replace(/"/g, '');
+      const target = document.querySelector(
+        'details.project-clad-order-row[data-job-id="' + safeId + '"]',
+      );
+      if (!(target instanceof HTMLDetailsElement)) {
+        window.alert('Could not find that order on the page.');
+        return;
+      }
+      var wasOpen = target.open;
+      target.open = true;
+      var suppressed = [];
+      function suppressForPrint(el) {
+        if (el instanceof HTMLElement) {
+          suppressed.push(el);
+          el.classList.add('project-clad-print-suppressed');
+        }
+      }
+      document.body.classList.add('project-clad-print-order-only');
+      if (printMode === 'packing') {
+        document.body.classList.add('project-clad-print-hide-prices');
+      }
+      var hdr = document.querySelector('header.project-clad-header');
+      if (hdr) suppressForPrint(hdr);
+      var container = document.querySelector('.project-clad-container');
+      if (container) {
+        Array.from(container.children).forEach(function (el) {
+          if (!(el instanceof HTMLElement)) return;
+          if (!el.contains(target)) {
+            suppressForPrint(el);
+          }
+        });
+      }
+      suppressForPrint(document.querySelector('#project-clad-comments'));
+      document.querySelectorAll('.project-clad-modal-backdrop').forEach(suppressForPrint);
+      var ordersShell = document.querySelector('.project-clad-orders-shell');
+      if (ordersShell) {
+        Array.from(ordersShell.children).forEach(function (el) {
+          if (!(el instanceof HTMLElement)) return;
+          if (el.contains(target)) return;
+          if (
+            el.classList.contains("project-clad-project-meta-strip") ||
+            el.classList.contains("project-clad-orders-page-banner") ||
+            el.hasAttribute("data-projectclad-project-meta-print-banner")
+          )
+            return;
+          suppressForPrint(el);
+        });
+      }
+      document.querySelectorAll('.project-clad-order-row-shell').forEach(function (wrap) {
+        var det = wrap.querySelector('details.project-clad-order-row[data-job-id]');
+        var idAttr = det ? det.getAttribute('data-job-id') : '';
+        if (idAttr !== safeId) suppressForPrint(wrap);
+      });
+      var scope = document.getElementById('project-clad-orders-font-scope');
+      if (scope) {
+        Array.from(scope.children).forEach(function (el) {
+          if (!(el instanceof HTMLElement)) return;
+          if (el.contains(target)) return;
+          suppressForPrint(el);
+        });
+      }
+      document.querySelectorAll('[data-projectclad-export-order-pdf]').forEach(suppressForPrint);
+      document.querySelectorAll('[data-projectclad-export-order-csv]').forEach(suppressForPrint);
+      document.querySelectorAll('.project-clad-storefront-footer--fullbleed, .project-clad-storefront-footer').forEach(suppressForPrint);
+
+      var PRINT_ITEMS_PER_PAGE = 10;
+      var printPagesRoot = null;
+      var printBannerEl = null;
+      var printShellEl = target.closest('.project-clad-order-row-shell');
+      function stripCloneIds(root) {
+        if (!(root instanceof HTMLElement)) return;
+        root.querySelectorAll('[id]').forEach(function (node) {
+          node.removeAttribute('id');
+        });
+        root.querySelectorAll('label[for]').forEach(function (lab) {
+          lab.removeAttribute('for');
+        });
+      }
+      function findPrintBanner() {
+        if (!ordersShell) return null;
+        return (
+          ordersShell.querySelector('[data-projectclad-project-meta-print-banner]') ||
+          ordersShell.querySelector('.project-clad-orders-page-banner') ||
+          ordersShell.querySelector('.project-clad-project-meta-strip')
+        );
+      }
+      /* Letter page usable height — keep compact CSS so 10 lines + finance fit. */
+      function getPrintTargetPx() {
+        var probe = document.createElement('div');
+        probe.setAttribute('aria-hidden', 'true');
+        probe.style.cssText =
+          'position:absolute;visibility:hidden;pointer-events:none;left:0;top:0;width:1px;height:10.7in;';
+        document.body.appendChild(probe);
+        var targetPx = probe.offsetHeight;
+        probe.remove();
+        if (!targetPx || targetPx < 200) {
+          targetPx = Math.round(10.7 * 96);
+        }
+        return targetPx;
+      }
+      function collectItemRows(root) {
+        var rows = Array.from(
+          root.querySelectorAll(
+            '.project-clad-orders-table > tbody > tr[data-projectclad-item-row]',
+          ),
+        );
+        if (!rows.length) {
+          rows = Array.from(root.querySelectorAll('tr[data-projectclad-item-row]'));
+        }
+        return rows;
+      }
+      /*
+       * One print sheet: banner + up to 10 item rows.
+       * Contact/Payment footer is only on the LAST page, pinned via spacer img.
+       * Never reduce item count to make finance fit — pack exactly 10 per page.
+       */
+      function createPrintPage(sliceStart, sliceEnd, pageIndex, pageCount, keepFinance) {
+        var page = document.createElement('table');
+        page.className = 'project-clad-print-page';
+        page.setAttribute('data-projectclad-print-page', String(pageIndex + 1));
+        page.setAttribute('data-projectclad-print-page-count', String(pageCount));
+        page.setAttribute('cellpadding', '0');
+        page.setAttribute('cellspacing', '0');
+        page.setAttribute('role', 'presentation');
+        if (pageIndex < pageCount - 1) {
+          page.classList.add('project-clad-print-page--break-after');
+        }
+        if (!keepFinance) {
+          page.classList.add('project-clad-print-page--continued');
+        }
+
+        var topRow = page.insertRow();
+        var top = topRow.insertCell();
+        top.className = 'project-clad-print-page__top';
+        top.vAlign = 'top';
+
+        if (printBannerEl instanceof HTMLElement) {
+          var bannerClone = printBannerEl.cloneNode(true);
+          if (bannerClone instanceof HTMLElement) {
+            stripCloneIds(bannerClone);
+            bannerClone.classList.add('project-clad-print-page__banner');
+            top.appendChild(bannerClone);
+          }
+        }
+
+        var shellClone = printShellEl.cloneNode(true);
+        if (!(shellClone instanceof HTMLElement)) return null;
+        stripCloneIds(shellClone);
+        shellClone.classList.remove('project-clad-print-suppressed');
+        shellClone.classList.remove('project-clad-print-source-hidden');
+        shellClone.classList.add('project-clad-print-page__shell');
+
+        var detailsClone = shellClone.querySelector('details.project-clad-order-row');
+        if (detailsClone instanceof HTMLDetailsElement) {
+          detailsClone.open = true;
+          detailsClone.classList.add('project-clad-print-page__details');
+        }
+
+        var cloneRows = collectItemRows(shellClone);
+        cloneRows.forEach(function (row, idx) {
+          if (idx < sliceStart || idx >= sliceEnd) row.remove();
+        });
+
+        var financeEl = shellClone.querySelector('.project-clad-order-finance');
+        var financeParent = null;
+        if (financeEl instanceof HTMLElement) {
+          financeParent = financeEl.closest('tfoot');
+          if (!keepFinance) {
+            if (financeParent) financeParent.remove();
+            else financeEl.remove();
+            financeEl = null;
+            financeParent = null;
+          }
+        }
+
+        shellClone
+          .querySelectorAll(
+            '.project-clad-order-actions, .project-clad-order-edit-panel, .project-clad-receipt',
+          )
+          .forEach(function (el) {
+            el.remove();
+          });
+
+        top.appendChild(shellClone);
+
+        /* Spacer + footer on every page that keeps finance (last page). */
+        if (keepFinance) {
+          var spacerRow = page.insertRow();
+          spacerRow.className = 'project-clad-print-page__spacer-row';
+          var spacerCell = spacerRow.insertCell();
+          spacerCell.className = 'project-clad-print-page__spacer';
+          spacerCell.setAttribute('aria-hidden', 'true');
+          var spacerImg = document.createElement('img');
+          spacerImg.className = 'project-clad-print-page__spacer-img';
+          spacerImg.alt = '';
+          spacerImg.width = 1;
+          spacerImg.height = 1;
+          spacerImg.setAttribute('width', '1');
+          spacerImg.setAttribute('height', '1');
+          spacerImg.src =
+            'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+          spacerCell.appendChild(spacerImg);
+
+          var footerRow = page.insertRow();
+          var footerCell = footerRow.insertCell();
+          footerCell.className = 'project-clad-print-page__footer';
+          footerCell.vAlign = 'bottom';
+          if (financeEl instanceof HTMLElement) {
+            footerCell.appendChild(financeEl);
+            if (financeParent) financeParent.remove();
+          }
+        }
+
+        return page;
+      }
+      function buildPrintPages() {
+        if (!(printShellEl instanceof HTMLElement)) return;
+
+        var itemRows = collectItemRows(target);
+        var totalItems = itemRows.length;
+        printBannerEl = findPrintBanner();
+        printPagesRoot = document.createElement('div');
+        printPagesRoot.className = 'project-clad-print-pages';
+        printPagesRoot.setAttribute('data-projectclad-print-pages', '');
+
+        /* Strict chunks of 10 — never shrink the last page to make finance fit. */
+        var pageCount = Math.max(1, Math.ceil(Math.max(totalItems, 1) / PRINT_ITEMS_PER_PAGE));
+        for (var pageIndex = 0; pageIndex < pageCount; pageIndex++) {
+          var sliceStart = pageIndex * PRINT_ITEMS_PER_PAGE;
+          var sliceEnd = Math.min(sliceStart + PRINT_ITEMS_PER_PAGE, totalItems);
+          var keepFinance = pageIndex === pageCount - 1;
+          var page = createPrintPage(
+            sliceStart,
+            sliceEnd,
+            pageIndex,
+            pageCount,
+            keepFinance,
+          );
+          if (page) printPagesRoot.appendChild(page);
+        }
+
+        if (printBannerEl instanceof HTMLElement) {
+          suppressForPrint(printBannerEl);
+        }
+        suppressForPrint(printShellEl);
+        var fontScope = document.getElementById('project-clad-orders-font-scope');
+        if (fontScope instanceof HTMLElement) {
+          fontScope.appendChild(printPagesRoot);
+        } else if (ordersShell instanceof HTMLElement) {
+          ordersShell.appendChild(printPagesRoot);
+        } else {
+          printShellEl.after(printPagesRoot);
+        }
+        document.body.classList.add('project-clad-print-paginated');
+      }
+      function sizePrintPageSpacers() {
+        if (!(printPagesRoot instanceof HTMLElement)) return;
+        var targetPx = getPrintTargetPx();
+        Array.prototype.forEach.call(
+          printPagesRoot.querySelectorAll('table.project-clad-print-page'),
+          function (page) {
+            if (!(page instanceof HTMLElement)) return;
+            var topEl = page.querySelector('.project-clad-print-page__top');
+            var footerEl = page.querySelector('.project-clad-print-page__footer');
+            var spacerImg = page.querySelector('.project-clad-print-page__spacer-img');
+            /* Item-only / continued pages — natural height, no pin. */
+            if (
+              !(topEl instanceof HTMLElement) ||
+              !(footerEl instanceof HTMLElement) ||
+              !(spacerImg instanceof HTMLImageElement)
+            ) {
+              page.style.removeProperty('height');
+              page.style.removeProperty('min-height');
+              page.removeAttribute('height');
+              return;
+            }
+            spacerImg.height = 1;
+            spacerImg.setAttribute('height', '1');
+            spacerImg.style.setProperty('height', '1px', 'important');
+            page.style.setProperty('height', 'auto', 'important');
+            page.style.removeProperty('min-height');
+
+            var topH = topEl.offsetHeight;
+            var footerH = footerEl.offsetHeight;
+            var safety = 8;
+            var gap = Math.max(0, Math.floor(targetPx - topH - footerH - safety));
+
+            page.style.setProperty('height', targetPx + 'px', 'important');
+            page.style.setProperty('min-height', targetPx + 'px', 'important');
+            page.setAttribute('height', String(targetPx));
+
+            var gapPx = Math.max(1, gap);
+            spacerImg.height = gapPx;
+            spacerImg.setAttribute('height', String(gapPx));
+            spacerImg.style.setProperty('display', 'block', 'important');
+            spacerImg.style.setProperty('width', '1px', 'important');
+            spacerImg.style.setProperty('height', gapPx + 'px', 'important');
+            spacerImg.style.setProperty('min-height', gapPx + 'px', 'important');
+            spacerImg.style.setProperty('max-height', gapPx + 'px', 'important');
+            spacerImg.style.setProperty('border', '0', 'important');
+
+            console.info('[project-clad] print pin v9', {
+              page: page.getAttribute('data-projectclad-print-page'),
+              targetPx: targetPx,
+              topH: topH,
+              footerH: footerH,
+              gap: gapPx,
+            });
+          },
+        );
+      }
+      function teardownPrintPages() {
+        if (printPagesRoot && printPagesRoot.parentNode) {
+          printPagesRoot.parentNode.removeChild(printPagesRoot);
+        }
+        printPagesRoot = null;
+        document.body.classList.remove('project-clad-print-paginated');
+        printBannerEl = null;
+      }
+      try {
+        buildPrintPages();
+      } catch (err) {
+        console.error('[project-clad] print pagination failed:', err);
+        teardownPrintPages();
+      }
+
+      var printRestoreDone = false;
+      var printRestoreTimer = null;
+      function restorePrintLayout() {
+        if (printRestoreDone) return;
+        printRestoreDone = true;
+        if (printRestoreTimer !== null) {
+          window.clearTimeout(printRestoreTimer);
+          printRestoreTimer = null;
+        }
+        window.removeEventListener('beforeprint', sizePrintPageSpacers);
+        teardownPrintPages();
+        suppressed.forEach(function (el) {
+          el.classList.remove('project-clad-print-suppressed');
+        });
+        suppressed.length = 0;
+        document.body.classList.remove('project-clad-print-order-only');
+        document.body.classList.remove('project-clad-print-hide-prices');
+        target.open = wasOpen;
+      }
+      window.addEventListener('afterprint', restorePrintLayout, { once: true });
+      window.addEventListener('beforeprint', sizePrintPageSpacers);
+      printRestoreTimer = window.setTimeout(restorePrintLayout, 8000);
+      window.requestAnimationFrame(function () {
+        sizePrintPageSpacers();
+        window.setTimeout(function () {
+          sizePrintPageSpacers();
+          window.setTimeout(function () {
+            sizePrintPageSpacers();
+            window.print();
+          }, 80);
+        }, 160);
+      });
+  };
+
   if (window.__pcShareCopyInitialized) return;
   window.__pcShareCopyInitialized = true;
   const actionsEndpoint = '/apps/project-clad/api/project-actions';
@@ -11201,95 +11612,9 @@ export default function ProjectDetailPage() {
     if (exportPdfBtn instanceof HTMLButtonElement) {
       event.preventDefault();
       event.stopPropagation();
-      const jobId = exportPdfBtn.getAttribute('data-job-id') || '';
-      const printMode = (exportPdfBtn.getAttribute('data-print-mode') || 'packing').toLowerCase();
-      const safeId = jobId.replace(/"/g, '');
-      const target = document.querySelector(
-        'details.project-clad-order-row[data-job-id="' + safeId + '"]',
-      );
-      if (!(target instanceof HTMLDetailsElement)) {
-        window.alert('Could not find that order on the page.');
-        return;
+      if (typeof window.__pcHandleExportOrderPdf === 'function') {
+        window.__pcHandleExportOrderPdf(exportPdfBtn);
       }
-      var wasOpen = target.open;
-      target.open = true;
-      var suppressed = [];
-      function suppressForPrint(el) {
-        if (el instanceof HTMLElement) {
-          suppressed.push(el);
-          el.classList.add('project-clad-print-suppressed');
-        }
-      }
-      document.body.classList.add('project-clad-print-order-only');
-      if (printMode === 'packing') {
-        document.body.classList.add('project-clad-print-hide-prices');
-      }
-      var hdr = document.querySelector('header.project-clad-header');
-      if (hdr) suppressForPrint(hdr);
-      var container = document.querySelector('.project-clad-container');
-      if (container) {
-        Array.from(container.children).forEach(function (el) {
-          if (!(el instanceof HTMLElement)) return;
-          if (!el.contains(target)) {
-            suppressForPrint(el);
-          }
-        });
-      }
-      suppressForPrint(document.querySelector('#project-clad-comments'));
-      document.querySelectorAll('.project-clad-modal-backdrop').forEach(suppressForPrint);
-      var ordersShell = document.querySelector('.project-clad-orders-shell');
-      if (ordersShell) {
-        Array.from(ordersShell.children).forEach(function (el) {
-          if (!(el instanceof HTMLElement)) return;
-          if (el.contains(target)) return;
-          /* Same copy as the Orders page banner — show above the printed order tile. */
-          if (
-            el.classList.contains("project-clad-project-meta-strip") ||
-            el.classList.contains("project-clad-orders-page-banner") ||
-            el.hasAttribute("data-projectclad-project-meta-print-banner")
-          )
-            return;
-          suppressForPrint(el);
-        });
-      }
-      document.querySelectorAll('.project-clad-order-row-shell').forEach(function (wrap) {
-        var det = wrap.querySelector('details.project-clad-order-row[data-job-id]');
-        var idAttr = det ? det.getAttribute('data-job-id') : '';
-        if (idAttr !== safeId) suppressForPrint(wrap);
-      });
-      var scope = document.getElementById('project-clad-orders-font-scope');
-      if (scope) {
-        Array.from(scope.children).forEach(function (el) {
-          if (!(el instanceof HTMLElement)) return;
-          if (el.contains(target)) return;
-          suppressForPrint(el);
-        });
-      }
-      document.querySelectorAll('[data-projectclad-export-order-pdf]').forEach(suppressForPrint);
-      document.querySelectorAll('[data-projectclad-export-order-csv]').forEach(suppressForPrint);
-      document.querySelectorAll('.project-clad-storefront-footer--fullbleed, .project-clad-storefront-footer').forEach(suppressForPrint);
-      var printRestoreDone = false;
-      var printRestoreTimer = null;
-      function restorePrintLayout() {
-        if (printRestoreDone) return;
-        printRestoreDone = true;
-        if (printRestoreTimer !== null) {
-          window.clearTimeout(printRestoreTimer);
-          printRestoreTimer = null;
-        }
-        suppressed.forEach(function (el) {
-          el.classList.remove('project-clad-print-suppressed');
-        });
-        suppressed.length = 0;
-        document.body.classList.remove('project-clad-print-order-only');
-        document.body.classList.remove('project-clad-print-hide-prices');
-        target.open = wasOpen;
-      }
-      window.addEventListener('afterprint', restorePrintLayout, { once: true });
-      printRestoreTimer = window.setTimeout(restorePrintLayout, 5000);
-      window.setTimeout(function () {
-        window.print();
-      }, 200);
       return;
     }
     const editOrderBtn = event.target?.closest?.('[data-projectclad-edit-order]');
@@ -12941,6 +13266,23 @@ export default function ProjectDetailPage() {
     }
   });
 
+  /* Capture phase so declining also cancels the ajax hub below, which would otherwise
+     preventDefault and fetch regardless. Declarative rather than keyed off intent so it
+     guards plain POST forms too, and so it stays the single confirm if React ever hydrates. */
+  document.addEventListener(
+    'submit',
+    function (event) {
+      var confirmForm = event.target;
+      if (!(confirmForm instanceof HTMLFormElement)) return;
+      var confirmMessage = confirmForm.getAttribute('data-projectclad-confirm');
+      if (!confirmMessage) return;
+      if (window.confirm(confirmMessage)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    },
+    true,
+  );
+
   document.addEventListener('submit', async (event) => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) return;
@@ -12966,11 +13308,44 @@ export default function ProjectDetailPage() {
     if (intent === 'delete-item' && !confirm('Are you sure you want to remove this item?')) {
       return;
     }
-    if (intent === 'transfer-project-owner' && !confirm('Make this member the project owner? You will stay on the project as an editor.')) {
-      return;
-    }
     const memberCustomerId =
       form.getAttribute('data-projectclad-member-id') || '';
+
+    /* Without this the page looks frozen: these submits round-trip to the server and then reload,
+       so an un-disabled button invites a second click that fires the action twice.
+       form.elements (not querySelectorAll) also covers buttons attached from outside the form via
+       the form attribute — e.g. "Add member" in the modal footer. */
+    var busySubmitters = Array.prototype.slice
+      .call(form.elements)
+      .filter(function (el) {
+        if (el.disabled) return false;
+        return (el.tagName === 'BUTTON' || el.tagName === 'INPUT') && el.type === 'submit';
+      });
+    var busyActive = false;
+    var navigating = false;
+    var setBusy = function (busy) {
+      busyActive = busy;
+      form.setAttribute('aria-busy', busy ? 'true' : 'false');
+      busySubmitters.forEach(function (el) {
+        el.disabled = busy;
+        var busyLabel = el.getAttribute('data-projectclad-busy-label');
+        if (!busyLabel) return;
+        if (busy) {
+          el.setAttribute('data-projectclad-idle-label', el.textContent || '');
+          el.textContent = busyLabel;
+        } else {
+          var idle = el.getAttribute('data-projectclad-idle-label');
+          if (idle !== null) {
+            el.textContent = idle;
+            el.removeAttribute('data-projectclad-idle-label');
+          }
+        }
+      });
+    };
+    var releaseBusy = function () {
+      if (busyActive) setBusy(false);
+    };
+    setBusy(true);
 
     const params = new URLSearchParams({ intent, projectId });
     const passwordInput = form.querySelector('input[name="password"]');
@@ -13022,6 +13397,7 @@ export default function ProjectDetailPage() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         if (payload?.redirectTo) {
+          navigating = true;
           window.location.href = payload.redirectTo;
           return;
         }
@@ -13035,6 +13411,7 @@ export default function ProjectDetailPage() {
       if (payload?.pricingUnlocked) {
         document.cookie = '${PRICING_COOKIE}; Path=/; Max-Age=3600; SameSite=Lax';
         closePricingModal();
+        navigating = true;
         window.location.reload();
         return;
       }
@@ -13053,6 +13430,7 @@ export default function ProjectDetailPage() {
       }
       if ((intent === 'submit-for-approval' || intent === 'cancel-approval-request') && payload?.ok) {
         setFormMessage(intent === 'submit-for-approval' ? 'Approval request sent.' : 'Approval request cancelled.');
+        navigating = true;
         window.location.reload();
         return;
       }
@@ -13061,12 +13439,17 @@ export default function ProjectDetailPage() {
         url.searchParams.delete('approve');
         url.searchParams.delete('approveJobId');
         url.searchParams.delete('approveItemId');
+        navigating = true;
         window.location.href = url.toString();
         return;
       }
+      navigating = true;
       window.location.reload();
     } catch {
       setFormMessage('Unable to complete action.');
+    } finally {
+      /* Stay disabled while a reload/redirect is in flight so the action cannot double-fire. */
+      if (!navigating) releaseBusy();
     }
   });
 })();
@@ -13076,7 +13459,7 @@ export default function ProjectDetailPage() {
 
         </div>
         <ProjectCladStorefrontFooter
-          logoDataUrl={logoDataUrl}
+          logoSrc={logoUrl}
           logoAlt="Canadian Cladding"
           logoHref="/"
         />
