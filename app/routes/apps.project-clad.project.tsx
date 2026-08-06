@@ -7295,14 +7295,6 @@ export default function ProjectDetailPage() {
   };
 
   useEffect(() => {
-    if (!selectedJobId) return;
-    const target = document.getElementById(`job-${selectedJobId}`);
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [selectedJobId]);
-
-  useEffect(() => {
     if (!actionData || typeof actionData !== "object") return;
     if ("pricingUnlocked" in actionData && actionData.pricingUnlocked) {
       document.cookie = createPricingCookie();
@@ -13522,16 +13514,51 @@ export default function ProjectDetailPage() {
       });
     });
   }
+  /* A ?job= deep link renders that order's <details> open server-side, but the browser
+     only auto-scrolls for a #hash, so the user lands at the top of a very long page.
+     After a mutation reload, jump straight there; on a fresh link, glide so it's clear
+     where you ended up. */
+  try {
+    var deepJobId = new URLSearchParams(location.search).get('job');
+    if (deepJobId) {
+      window.addEventListener('load', function() {
+        var jobEl = document.getElementById('job-' + deepJobId);
+        if (!jobEl) return;
+        var nav = performance.getEntriesByType('navigation')[0];
+        jobEl.scrollIntoView({
+          behavior: nav && nav.type === 'reload' ? 'auto' : 'smooth',
+          block: 'start'
+        });
+      });
+    }
+  } catch (err) {}
+  /* The safety timer matters because we no longer drive the navigation ourselves: if
+     something cancels it, the page must not stay faded out permanently. */
+  var leaveTimer = 0;
+  function beginLeaveTransition() {
+    document.body.classList.add('project-clad-leaving');
+    if (leaveTimer) window.clearTimeout(leaveTimer);
+    leaveTimer = window.setTimeout(function() {
+      document.body.classList.remove('project-clad-leaving');
+    }, 3000);
+  }
+  /*
+   * Leave-transition for same-origin links. The browser keeps painting this document
+   * until the next response arrives, so the fade plays during the load and there is no
+   * reason to hold navigation behind a timer first.
+   *
+   * Runs in the bubble phase and never calls preventDefault, so the browser performs the
+   * navigation itself: modifier- and middle-clicks still open new tabs, and nothing
+   * downstream can be wedged by this listener. The interactive-element skip below is kept
+   * so clicking a control nested in an <a> doesn't fade a page that isn't leaving.
+   */
   document.addEventListener('click', function(e) {
+    if (e.defaultPrevented) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (typeof e.button === 'number' && e.button !== 0) return;
     var target = e.target;
     if (target && target.nodeType === Node.TEXT_NODE) target = target.parentElement;
     if (!(target instanceof Element)) return;
-    /*
-     * Same-origin link transitions: only hijack real navigations on <a>.
-     * If a theme (or invalid markup) nests <button> inside <a href>, capture on
-     * document would stopPropagation before the button's React handlers run — e.g.
-     * order line image preview never opens. Skip when the hit target is interactive.
-     */
     if (
       target.closest(
         'button, input, textarea, select, option, [role="button"], [data-projectclad-line-thumb-preview]',
@@ -13544,15 +13571,14 @@ export default function ProjectDetailPage() {
     var href = a.getAttribute('href');
     if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
     try {
-      var url = new URL(href, location.origin);
-      if (url.origin !== location.origin) return;
+      if (new URL(href, location.origin).origin !== location.origin) return;
     } catch (err) { return; }
-    e.preventDefault();
-    e.stopPropagation();
-    document.body.classList.add('project-clad-leaving');
-    setTimeout(function() { window.location.href = href; }, 180);
-  }, true);
+    beginLeaveTransition();
+  });
   window.addEventListener('pageshow', function(ev) {
+    /* A restored page keeps whatever classes it had when it left, so clear the fade
+       before anything else or the document comes back invisible. */
+    document.body.classList.remove('project-clad-leaving');
     if (ev.persisted) window.location.reload();
   });
 })();
@@ -13939,26 +13965,26 @@ export default function ProjectDetailPage() {
       ev.stopImmediatePropagation();
     }
     /* Signed app-proxy params are only valid for the current proxy request.
-       Reusing them on /projects can produce a Shopify 404. */
+       Reusing them on /projects can produce a Shopify 404. This one has to keep
+       intercepting because it rewrites the URL, but the navigation starts now — the
+       fade plays while the next page loads rather than before the request begins. */
     document.body.classList.add('project-clad-leaving');
-    window.setTimeout(function() {
-      try {
-        var url = new URL(href, location.origin);
-        [
-          'signature',
-          'shop',
-          'path_prefix',
-          'timestamp',
-          'logged_in_customer_id',
-          'logged_in_customer_email'
-        ].forEach(function(key) {
-          url.searchParams.delete(key);
-        });
-        window.location.href = url.pathname + url.search + url.hash;
-      } catch (e) {
-        window.location.href = '/apps/project-clad/projects';
-      }
-    }, 120);
+    try {
+      var url = new URL(href, location.origin);
+      [
+        'signature',
+        'shop',
+        'path_prefix',
+        'timestamp',
+        'logged_in_customer_id',
+        'logged_in_customer_email'
+      ].forEach(function(key) {
+        url.searchParams.delete(key);
+      });
+      window.location.href = url.pathname + url.search + url.hash;
+    } catch (e) {
+      window.location.href = '/apps/project-clad/projects';
+    }
   }, true);
 })();
           `,

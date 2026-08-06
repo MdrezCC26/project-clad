@@ -611,14 +611,6 @@ export default function ProjectDetailPage() {
   const dragJobId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!selectedJobId) return;
-    const target = document.getElementById(`job-${selectedJobId}`);
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [selectedJobId]);
-
-  useEffect(() => {
     setJobs(project.jobs);
   }, [project.jobs]);
 
@@ -1109,20 +1101,52 @@ export default function ProjectDetailPage() {
       if (closeModal instanceof HTMLElement) closeModal.style.display = 'none';
     }
   });
+  /* A ?job= deep link opens that order server-side but leaves the viewport at the top
+     of a long page, so bring it into view. Instant after a reload, smooth otherwise. */
+  try {
+    var deepJobId = new URLSearchParams(location.search).get('job');
+    if (deepJobId) {
+      window.addEventListener('load', function() {
+        var jobEl = document.getElementById('job-' + deepJobId);
+        if (!jobEl) return;
+        var nav = performance.getEntriesByType('navigation')[0];
+        jobEl.scrollIntoView({
+          behavior: nav && nav.type === 'reload' ? 'auto' : 'smooth',
+          block: 'start'
+        });
+      });
+    }
+  } catch (err) {}
+  /* Leave-transition for same-origin links. Bubble phase and no preventDefault, so the
+     browser navigates itself: the fade plays while the next page loads instead of
+     delaying the request, and modifier/middle-clicks still open new tabs. */
+  var leaveTimer = 0;
   document.addEventListener('click', function(e) {
-    var a = e.target.closest('a[href]');
+    if (e.defaultPrevented) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (typeof e.button === 'number' && e.button !== 0) return;
+    var target = e.target;
+    if (target && target.nodeType === 3 && target.parentElement) {
+      target = target.parentElement;
+    }
+    if (!(target instanceof Element)) return;
+    var a = target.closest('a[href]');
     if (!a || a.target === '_blank' || a.getAttribute('data-projectclad-no-transition')) return;
     var href = a.getAttribute('href');
     if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
     try {
-      var url = new URL(href, location.origin);
-      if (url.origin !== location.origin) return;
+      if (new URL(href, location.origin).origin !== location.origin) return;
     } catch (err) { return; }
-    e.preventDefault();
-    e.stopPropagation();
     document.body.classList.add('project-clad-leaving');
-    setTimeout(function() { window.location.href = href; }, 180);
-  }, true);
+    /* Don't strand the page invisible if the navigation never happens. */
+    if (leaveTimer) window.clearTimeout(leaveTimer);
+    leaveTimer = window.setTimeout(function() {
+      document.body.classList.remove('project-clad-leaving');
+    }, 3000);
+  });
+  window.addEventListener('pageshow', function() {
+    document.body.classList.remove('project-clad-leaving');
+  });
 })();
           `,
         }}
