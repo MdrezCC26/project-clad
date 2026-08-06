@@ -610,6 +610,10 @@ export default function ProjectDetailPage() {
   const dragItemId = useRef<string | null>(null);
   const dragJobId = useRef<string | null>(null);
 
+  /* Local copy exists so a drag reorders the list immediately; the server stays the
+     source of truth, so adopt fresh loader data whenever it arrives. The reorder POSTs
+     below are plain fetches and don't revalidate, so this cannot clobber one in flight —
+     they roll their own state back if the write fails. */
   useEffect(() => {
     setJobs(project.jobs);
   }, [project.jobs]);
@@ -620,6 +624,7 @@ export default function ProjectDetailPage() {
       return;
     }
 
+    const previousJobs = jobs;
     let reordered: string[] | null = null;
 
     setJobs((current) =>
@@ -642,23 +647,35 @@ export default function ProjectDetailPage() {
       dragItemId.current = null;
       return;
     }
-    const res = await fetch(`/apps/project-clad/projects/${project.id}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        intent: "reorder-items",
-        jobId,
-        itemIds: reordered,
-      }),
-      credentials: "include",
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok && payload?.redirectTo) {
-      window.location.href = payload.redirectTo;
-      return;
-    }
 
-    dragItemId.current = null;
+    try {
+      const res = await fetch(`/apps/project-clad/projects/${project.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          intent: "reorder-items",
+          jobId,
+          itemIds: reordered,
+        }),
+        credentials: "include",
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (payload?.redirectTo) {
+          window.location.href = payload.redirectTo;
+          return;
+        }
+        /* The optimistic move above already happened, so put it back rather than
+           leaving the list showing an order the server rejected. */
+        setJobs(previousJobs);
+        window.alert("Could not save the new item order.");
+      }
+    } catch {
+      setJobs(previousJobs);
+      window.alert("Could not save the new item order.");
+    } finally {
+      dragItemId.current = null;
+    }
   };
 
   const reorderJobs = async (overJobId: string) => {
@@ -667,6 +684,7 @@ export default function ProjectDetailPage() {
       return;
     }
 
+    const previousJobs = jobs;
     let reordered: string[] | null = null;
 
     setJobs((current) => {
@@ -685,22 +703,31 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    const res = await fetch(`/apps/project-clad/projects/${project.id}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        intent: "reorder-jobs",
-        jobIds: reordered,
-      }),
-      credentials: "include",
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok && payload?.redirectTo) {
-      window.location.href = payload.redirectTo;
-      return;
+    try {
+      const res = await fetch(`/apps/project-clad/projects/${project.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          intent: "reorder-jobs",
+          jobIds: reordered,
+        }),
+        credentials: "include",
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (payload?.redirectTo) {
+          window.location.href = payload.redirectTo;
+          return;
+        }
+        setJobs(previousJobs);
+        window.alert("Could not save the new order sequence.");
+      }
+    } catch {
+      setJobs(previousJobs);
+      window.alert("Could not save the new order sequence.");
+    } finally {
+      dragJobId.current = null;
     }
-
-    dragJobId.current = null;
   };
 
 

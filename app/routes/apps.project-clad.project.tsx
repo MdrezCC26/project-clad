@@ -2256,76 +2256,6 @@ function StaffPhaseDeliveryPanel({
   /** Any open phase without a photo must be confirmed with photo + qty (not qty-only). */
   const confirmDeliveryWithPhoto = canSubmitFulfillment;
 
-  const saveDeliveredQty = (form: HTMLFormElement) => {
-    const lines = job.items.map((item) => {
-      const inp = form.querySelector(`input[name="qty_${item.id}"]`);
-      const qty =
-        inp instanceof HTMLInputElement
-          ? Math.floor(Number(inp.value) || 0)
-          : 0;
-      return { jobItemId: item.id, quantityDelivered: qty };
-    });
-    const fd = new FormData();
-    fd.set("intent", "record-phase-delivery");
-    fd.set("jobId", job.id);
-    fd.set("phaseId", openPhase?.id ?? "");
-    fd.set("deliveredLinesJson", JSON.stringify(lines));
-    const url = new URL(window.location.href);
-    url.searchParams.set("pcJson", "1");
-    fetch(url.pathname + url.search, {
-      method: "POST",
-      credentials: "include",
-      body: fd,
-    })
-      .then((r) => r.json())
-      .then((ack) => {
-        if (ack?.error) {
-          window.alert(String(ack.error));
-          return;
-        }
-        url.searchParams.delete("pcJson");
-        window.location.replace(url.pathname + url.search);
-      })
-      .catch(() => {
-        window.alert("Could not save delivered quantities.");
-      });
-  };
-
-  const confirmDeliveryWithPhotoSubmit = (form: HTMLFormElement) => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("pcFulfillment", "1");
-    const fd = new FormData(form);
-    fetch(url.pathname + url.search, {
-      method: "POST",
-      credentials: "include",
-      body: fd,
-    })
-      .then(async (r) => {
-        let ack: { ok?: boolean; error?: string } | null = null;
-        try {
-          ack = (await r.json()) as { ok?: boolean; error?: string };
-        } catch {
-          const text = (await r.text()).trim();
-          if (text) {
-            window.alert(text);
-            return;
-          }
-        }
-        if (!r.ok || ack?.error) {
-          window.alert(
-            ack?.error ||
-              "Could not confirm delivery. Reload the page and try again.",
-          );
-          return;
-        }
-        url.searchParams.delete("pcFulfillment");
-        window.location.replace(url.pathname + url.search);
-      })
-      .catch(() => {
-        window.alert("Could not confirm delivery.");
-      });
-  };
-
   return (
     <div className="project-clad-staff-phase-delivery">
       {canResetDelivery && hasRecordedDelivery ? (
@@ -2441,20 +2371,11 @@ function StaffPhaseDeliveryPanel({
                 />
               </>
             ) : null}
-            <button
-              type="submit"
-              className="project-clad-button"
-              onClick={(e) => {
-                e.preventDefault();
-                const form = e.currentTarget.closest("form");
-                if (!(form instanceof HTMLFormElement)) return;
-                if (confirmDeliveryWithPhoto) {
-                  confirmDeliveryWithPhotoSubmit(form);
-                } else {
-                  saveDeliveredQty(form);
-                }
-              }}
-            >
+            {/* Plain submit: the enclosing form posts multipart natively, which is the
+                path that actually runs in production and the only one where the required
+                photo input is validated. A click handler calling preventDefault would run
+                before that validation and could submit the delivery with no photo. */}
+            <button type="submit" className="project-clad-button">
               {confirmDeliveryWithPhoto
                 ? "Confirm delivery"
                 : "Save delivered qty"}
@@ -9689,30 +9610,6 @@ export default function ProjectDetailPage() {
                         .filter(Boolean)
                         .join(" ")
                     }
-                    onToggle={(e) => {
-                      const el = e.currentTarget;
-                      if (!(el instanceof HTMLDetailsElement)) return;
-                      if (el.open) {
-                        setSearchParams(
-                          (prev) => {
-                            const next = new URLSearchParams(prev);
-                            next.set("job", job.id);
-                            return next;
-                          },
-                          { replace: true },
-                        );
-                      } else {
-                        setSearchParams(
-                          (prev) => {
-                            if (prev.get("job") !== job.id) return prev;
-                            const next = new URLSearchParams(prev);
-                            next.delete("job");
-                            return next;
-                          },
-                          { replace: true },
-                        );
-                      }
-                    }}
                   >
                     <summary className="project-clad-summary">
                       <div className="project-clad-summary-row project-clad-order-summary-head-row">
@@ -13532,6 +13429,42 @@ export default function ProjectDetailPage() {
       });
     }
   } catch (err) {}
+  /*
+   * Keep ?job= pointing at whichever order is expanded, so the URL stays shareable and
+   * the card survives the reload that follows a mutation (the server renders it open
+   * from this param).
+   *
+   * replaceState, never a router navigation: expanding a card is a free, instant native
+   * <details> toggle and must not cost a refetch. The React onToggle this replaces would
+   * have done exactly that once hydrated.
+   *
+   * Capture phase because the toggle event does not bubble. The deep-link scroll above
+   * reads the job id once at parse time, so rewriting the URL here never re-triggers it.
+   */
+  document.addEventListener('toggle', function(ev) {
+    var d = ev.target;
+    if (!(d instanceof HTMLDetailsElement) || !d.isConnected) return;
+    if (!d.classList.contains('project-clad-order-row')) return;
+    /* Print builds detached clones of these rows and forces them open. */
+    if (d.closest('.project-clad-print-page')) return;
+    var jobId = d.getAttribute('data-job-id');
+    if (!jobId) return;
+    try {
+      var url = new URL(window.location.href);
+      if (d.open) {
+        if (url.searchParams.get('job') === jobId) return;
+        url.searchParams.set('job', jobId);
+      } else {
+        if (url.searchParams.get('job') !== jobId) return;
+        url.searchParams.delete('job');
+      }
+      window.history.replaceState(
+        window.history.state,
+        '',
+        url.pathname + url.search + url.hash
+      );
+    } catch (err) {}
+  }, true);
   /* The safety timer matters because we no longer drive the navigation ourselves: if
      something cancels it, the page must not stay faded out permanently. */
   var leaveTimer = 0;

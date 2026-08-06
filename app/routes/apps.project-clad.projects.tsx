@@ -6,7 +6,7 @@ import {
   useLoaderData,
   useLocation,
 } from "react-router";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import prisma from "../db.server";
 import { requireAppProxyCustomer } from "../utils/appProxy.server";
 import {
@@ -156,26 +156,6 @@ type ProjectsListUiState = {
   view: ProjectsViewFilter;
   sort: ProjectsSortKey;
 };
-
-function parseStatusFilter(raw: string | null): ProjectsStatusFilter {
-  const s = (raw || "").trim().toLowerCase();
-  if (s === "approval") return "approval";
-  return "all";
-}
-
-function parseViewFilter(raw: string | null): ProjectsViewFilter {
-  const s = (raw || "").trim().toLowerCase();
-  if (s === "mine" || s === "company") return s;
-  return "all";
-}
-
-function parseSortKey(raw: string | null): ProjectsSortKey {
-  const s = (raw || "").trim().toLowerCase();
-  if (s === "newest" || s === "oldest" || s === "name" || s === "orders") {
-    return s;
-  }
-  return "recent";
-}
 
 function projectMatchesStatusFilter(
   project: ProjectListItem,
@@ -681,12 +661,21 @@ export default function ProjectsPage() {
   } = useLoaderData<typeof loader>();
   const inlineStyles = themeStyles?.styles || [];
   const { pathname } = useLocation();
-  const [listUiState, setListUiState] = useState<ProjectsListUiState>({
+  /*
+   * Search, filtering and sorting for this list are owned by the vanilla controls script
+   * at the bottom of this route: it shows, hides and reorders the rendered cards in place
+   * and rewrites the summary counts. These are the values the server renders with, and the
+   * same defaults that script initialises itself from, so the two always agree.
+   *
+   * Deliberately constants rather than state. As state, a keystroke would re-render the
+   * card list out from under the script that had just finished mutating those same nodes.
+   */
+  const listUiState: ProjectsListUiState = {
     q: "",
     status: "all",
     view: "all",
     sort: "recent",
-  });
+  };
   const listSearchQ = listUiState.q;
   const statusFilter = listUiState.status;
   const viewFilter = listUiState.view;
@@ -734,26 +723,6 @@ export default function ProjectsPage() {
     viewFilter !== "all" ||
     sortKey !== "recent";
 
-  const updateListUiState = (updates: Record<string, string | null>) => {
-    setListUiState((prev) => ({
-      q: updates.q !== undefined ? (updates.q || "").trim() : prev.q,
-      status:
-        updates.status !== undefined
-          ? parseStatusFilter(updates.status)
-          : prev.status,
-      view:
-        updates.view !== undefined
-          ? parseViewFilter(updates.view)
-          : prev.view,
-      sort:
-        updates.sort !== undefined
-          ? parseSortKey(updates.sort)
-          : prev.sort,
-    }));
-  };
-  const clearListUiParams = () =>
-    setListUiState({ q: "", status: "all", view: "all", sort: "recent" });
-
   /** Nested legacy route `apps.project-clad.projects.$projectId` — parent must render `<Outlet />`. */
   const isNestedProjectDetail = pathnameHasProjectsListDetailSegment(pathname);
 
@@ -796,9 +765,6 @@ export default function ProjectsPage() {
             accountFirstName={navAccountFirstName}
             inAppSearch="projects"
             inAppSearchQuery={listSearchQ}
-            onInAppSearchQueryChange={(query) =>
-              updateListUiState({ q: query || null })
-            }
             htmlTemplateHeader
             htmlTemplateNavActive="projects"
             hideTrailingIcons={true}
@@ -991,25 +957,31 @@ export default function ProjectsPage() {
                             type="search"
                             className="project-clad-projects-toolbar__search"
                             placeholder="Search Projects"
-                            value={listSearchQ}
-                            onChange={(e) =>
-                              updateListUiState({ q: e.target.value || null })
-                            }
+                            /* Uncontrolled: the controls script reads this input on
+                               every keystroke and filters the cards itself. */
+                            defaultValue={listSearchQ}
                             autoComplete="off"
                             data-pc-search
                           />
                         </div>
-                        {listSearchQ || hasNonDefaultFilters ? (
-                          <button
-                            type="button"
-                            onClick={clearListUiParams}
-                            className="project-clad-projects-toolbar__clear"
-                            data-pc-reset
-                            data-projectclad-no-transition
-                          >
-                            Reset all
-                          </button>
-                        ) : null}
+                        {/* Always in the DOM so the controls script can reveal it once a
+                            filter is active. Gated on React state it never rendered at
+                            all, which left the reset handler unreachable and no way to
+                            clear a filter short of reloading. Inline display beats the
+                            class rule; the script clears it to show the button. */}
+                        <button
+                          type="button"
+                          className="project-clad-projects-toolbar__clear"
+                          data-pc-reset
+                          data-projectclad-no-transition
+                          style={
+                            listSearchQ || hasNonDefaultFilters
+                              ? undefined
+                              : { display: "none" }
+                          }
+                        >
+                          Reset all
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1039,7 +1011,6 @@ export default function ProjectsPage() {
                 )}{" "}
                 <button
                   type="button"
-                  onClick={clearListUiParams}
                   className="project-clad-hidden-link"
                   style={{ textDecoration: "underline" }}
                 >
@@ -1420,6 +1391,16 @@ export default function ProjectsPage() {
       setActive('data-pc-status', ui.status);
       setActive('data-pc-view', ui.view);
       setActive('data-pc-sort', ui.sort);
+      /* Only offer the reset once something is actually filtered. */
+      var resetEl = controlsRoot.querySelector('[data-pc-reset]');
+      if (resetEl instanceof HTMLElement) {
+        var isFiltered =
+          Boolean(ui.q) ||
+          ui.status !== 'all' ||
+          ui.view !== 'all' ||
+          ui.sort !== 'recent';
+        resetEl.style.display = isFiltered ? '' : 'none';
+      }
       writeSummary();
     }
     controlsRoot.addEventListener('click', function(ev) {
