@@ -38,6 +38,9 @@
     } catch (err) { return; }
     e.preventDefault();
     e.stopPropagation();
+    /* We drive this navigation ourselves, so ask about unsaved work here rather than
+       letting beforeunload fire on top of it and prompt twice. */
+    if (typeof window.pcConfirmLeave === 'function' && !window.pcConfirmLeave()) return;
     /* Still intercepting because the proxy params have to be carried onto the next
        URL, but the request starts immediately — the fade runs during the load. */
     document.body.classList.add('project-clad-leaving');
@@ -58,7 +61,13 @@
     /* A restored page keeps the class it left with, so clear it before anything else
        or the document comes back invisible. */
     document.body.classList.remove('project-clad-leaving');
-    if (ev.persisted) window.location.reload();
+    if (!ev.persisted) return;
+    /* bfcache restores the typed values with the document; keep them over a refresh. */
+    if (typeof window.pcReload === 'function') {
+      window.pcReload({ skipIfDirty: true });
+      return;
+    }
+    window.location.reload();
   });
 })();
           

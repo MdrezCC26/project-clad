@@ -460,8 +460,25 @@ function shippingBlockForProject(project: {
 }
 
 /**
+ * What actually went out, so the caller can tell the user "the order is placed but the mail
+ * was not sent" instead of leaving a failed notification invisible to both parties.
+ * A leg that was never attempted (SMTP unconfigured, notification switched off, no address
+ * on file) is not a failure — only a send that threw is.
+ */
+export type OrderPlacedEmailOutcome = {
+  customerFailed: boolean;
+  shopFailed: boolean;
+};
+
+const ORDER_PLACED_EMAILS_OK: OrderPlacedEmailOutcome = {
+  customerFailed: false,
+  shopFailed: false,
+};
+
+/**
  * After **Order now**: thank-you to the placing customer (when email on file) + shop operations mail.
- * Does not throw on SMTP failure (logs only); order is already persisted.
+ * Does not throw on SMTP failure (logs, and reports it in the returned outcome); the order is
+ * already persisted and must not be rolled back because a notification failed.
  */
 export async function sendOrderPlacedEmails(args: {
   shop: string;
@@ -469,15 +486,15 @@ export async function sendOrderPlacedEmails(args: {
   jobId: string;
   fulfillmentMethod: "pickup" | "delivery";
   actorCustomerId: string;
-}): Promise<void> {
-  if (!isEmailConfigured()) return;
+}): Promise<OrderPlacedEmailOutcome> {
+  if (!isEmailConfigured()) return ORDER_PLACED_EMAILS_OK;
   const notifyPrefs = await getEmailNotificationPrefs(args.shop);
   const sendCustomer = isEmailNotificationEnabled(
     notifyPrefs,
     "orderPlacedCustomer",
   );
   const sendShop = isEmailNotificationEnabled(notifyPrefs, "orderPlacedShop");
-  if (!sendCustomer && !sendShop) return;
+  if (!sendCustomer && !sendShop) return ORDER_PLACED_EMAILS_OK;
 
   const project = await prisma.project.findFirst({
     where: { id: args.projectId, shop: shopStringFilter(args.shop) },
@@ -498,10 +515,10 @@ export async function sendOrderPlacedEmails(args: {
     include: { items: { orderBy: { sortOrder: "asc" } } },
   });
 
-  if (!project || !job) return;
+  if (!project || !job) return ORDER_PLACED_EMAILS_OK;
 
   const rows = job.items;
-  if (rows.length === 0) return;
+  if (rows.length === 0) return ORDER_PLACED_EMAILS_OK;
 
   await hydrateJobItemVariantSnapshots(
     args.shop,
@@ -623,6 +640,9 @@ export async function sendOrderPlacedEmails(args: {
     `Open app home: ${adminHomeUrl}`,
   ].join("\n");
 
+  let customerFailed = false;
+  let shopFailed = false;
+
   const customerTo = ac?.email?.trim();
   if (sendCustomer && customerTo) {
     try {
@@ -633,32 +653,48 @@ export async function sendOrderPlacedEmails(args: {
         text: customerBody,
       });
     } catch (err) {
+      customerFailed = true;
       console.error(
-        "[orderPlacedEmail] customer send failed:",
+        `[orderPlacedEmail] customer send failed (shop=${args.shop} project=${args.projectId} job=${args.jobId}):`,
         err instanceof Error ? err.message : err,
       );
     }
   }
 
-  if (!sendShop) return;
+  if (!sendShop) return { customerFailed, shopFailed };
 
   const shopRecipients = parseShopOrderPlacedRecipients();
   if (shopRecipients.length === 0) {
     console.warn("[orderPlacedEmail] no shop notify recipients (check PROJECTCLAD_SHOP_ORDER_NOTIFY_EMAIL).");
-    return;
+    return { customerFailed, shopFailed };
   }
 
   try {
-    await sendTransactionalEmailToRecipients({
+    /* Per-recipient sends are caught inside the helper, which reports a count rather than
+       throwing — same treatment as `fulfillmentNotify`: none accepted means it failed. */
+    const accepted = await sendTransactionalEmailToRecipients({
       shop: args.shop,
       recipients: shopRecipients,
       subject: `ProjectClad [Shop]: Order placed — ${job.name} — ${project.name}`,
       text: shopBody,
     });
+    if (accepted === 0) {
+      shopFailed = true;
+      console.error(
+        `[orderPlacedEmail] shop send failed for all ${shopRecipients.length} recipient(s) (shop=${args.shop} project=${args.projectId} job=${args.jobId})`,
+      );
+    } else if (accepted < shopRecipients.length) {
+      console.warn(
+        `[orderPlacedEmail] shop send partial success: ${accepted}/${shopRecipients.length} (job=${args.jobId})`,
+      );
+    }
   } catch (err) {
+    shopFailed = true;
     console.error(
-      "[orderPlacedEmail] shop send failed:",
+      `[orderPlacedEmail] shop send failed (shop=${args.shop} project=${args.projectId} job=${args.jobId}):`,
       err instanceof Error ? err.message : err,
     );
   }
+
+  return { customerFailed, shopFailed };
 }

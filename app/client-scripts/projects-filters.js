@@ -1,5 +1,15 @@
 
 (function() {
+  /* Routes the approval reloads through pc-dirty-guard.js so anything typed elsewhere on
+     the page is stashed first; falls back to a plain reload if that script is missing. */
+  function pcGuardedReload(options) {
+    if (typeof window.pcReload === 'function') return window.pcReload(options);
+    var opts = options || {};
+    if (opts.mode === 'assign' && opts.href) window.location.href = opts.href;
+    else window.location.reload();
+    return true;
+  }
+
   var root = document.querySelector('.project-clad-page--projects');
   var controlsRoot = root && root.querySelector('.project-clad-projects-controls-grid');
   var grid = root && root.querySelector('.project-clad-grid');
@@ -182,8 +192,13 @@
       fetch(url, { credentials: 'include' }).then(function(r) {
         return r.json().then(function(data) {
           if (!r.ok && data?.redirectTo) {
-            navigating = true;
-            window.location.href = data.redirectTo;
+            /* pcGuardedReload returns false when a discard prompt is declined; the button
+               must come back out of its busy state in that case. */
+            navigating = pcGuardedReload({
+              mode: 'assign',
+              href: data.redirectTo,
+              except: form,
+            });
             return;
           }
           return { response: r, data: data };
@@ -193,8 +208,7 @@
         var data = result.data;
         if (data.ok) {
           setMsg(intent === 'cancel-approval-request' ? 'Approval request cancelled.' : 'Approval request sent.');
-          navigating = true;
-          window.location.reload();
+          navigating = pcGuardedReload({ except: form });
         } else {
           setMsg(data.error || '');
         }

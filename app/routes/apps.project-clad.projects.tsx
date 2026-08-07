@@ -276,6 +276,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const proxyScriptSrcs = {
     pageNav: projectCladScriptSrc(request, "projects-page-nav.js"),
     filters: projectCladScriptSrc(request, "projects-filters.js"),
+    dirtyGuard: projectCladScriptSrc(request, "pc-dirty-guard.js"),
   };
   const { shop, customerId, customerEmail } = requireAppProxyCustomer(request);
   const [themeStyles, settings] = await Promise.all([
@@ -778,6 +779,10 @@ export default function ProjectsPage() {
           />
         </header>
         <div className="page-width project-clad-container project-clad-container--full-width">
+          {/* No visible page title by design — the nav bar and the control tiles carry
+              the context. The heading still has to exist, or the project card <h2>s start
+              the document outline at level 2 with nothing above them. */}
+          <h1 className="project-clad-sr-only">Projects</h1>
           {projects.length > 0 ? (
             <>
               <div
@@ -969,6 +974,9 @@ export default function ProjectsPage() {
                             defaultValue={listSearchQ}
                             autoComplete="off"
                             data-pc-search
+                            /* Filtering the list in place is not work to lose — this must
+                               never arm the unsaved-changes guard. */
+                            data-pc-no-dirty
                           />
                         </div>
                         {/* Always in the DOM so the controls script can reveal it once a
@@ -1020,6 +1028,8 @@ export default function ProjectsPage() {
                   type="button"
                   className="project-clad-hidden-link"
                   style={{ textDecoration: "underline" }}
+                  data-pc-reset
+                  data-projectclad-no-transition
                 >
                   Reset search and filters
                 </button>
@@ -1231,6 +1241,13 @@ export default function ProjectsPage() {
       />
       <script src={proxyScriptSrcs.pageNav} />
       <script src={proxyScriptSrcs.filters} />
+      {/*
+        Unsaved-work guard — same script as the project detail page. Little on this page is
+        typed into, but it supplies `pcReload`/`pcConfirmLeave` to the two scripts above so
+        the card-link navigation and the post-approval reload behave the same everywhere.
+        Loaded last so its submit listener runs after the per-form ajax handlers.
+      */}
+      <script src={proxyScriptSrcs.dirtyGuard} />
     </>
   );
 }

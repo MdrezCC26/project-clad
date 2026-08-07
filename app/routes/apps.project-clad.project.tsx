@@ -3133,6 +3133,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       request,
       "project-projects-link-nav.js",
     ),
+    bannerDismiss: projectCladScriptSrc(request, "pc-banner-dismiss.js"),
+    dirtyGuard: projectCladScriptSrc(request, "pc-dirty-guard.js"),
   };
   const { shop, customerId: viewerCustomerId, customerEmail } =
     requireAppProxyCustomer(request);
@@ -3759,8 +3761,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       `${storefrontProjectActionPath}?id=${encodeURIComponent(project.id)}`,
       request,
     ),
+    /* First selectable preferred-delivery date, as `YYYY-MM-DD`. Computed here rather
+       than in the component because this route is served through the app proxy and
+       never hydrates — anything derived in an effect would leave the date inputs with
+       no `min` at all. Same call the `save-order-schedule` action validates with, so
+       the greyed-out days and the server rule cannot drift apart. */
+    preferredDeliveryDateMinYmd: minPreferredDeliveryYmd(
+      PREFERRED_DELIVERY_MIN_DAY_OFFSET_FROM_TODAY,
+    ),
   };
 };
+
+/*
+ * Copy for the non-blocking `?notifyWarning=` banner. A failed notification never rolls the
+ * mutation back, so every one of these has to start by confirming that the thing the user did
+ * actually happened, then say what did not.
+ */
+const ORDER_PLACED_CUSTOMER_MAIL_WARNING =
+  "Your order was placed, but we could not email your confirmation. The order itself is safe — contact us if you need a copy.";
+const REORDER_MAIL_WARNING =
+  "The reorder was created, but its confirmation email did not go out. The order itself is safe — contact us if you need a copy.";
 
 async function emailProjectStatusSnapshot(args: {
   shop: string;
@@ -3791,8 +3811,11 @@ async function emailProjectStatusSnapshot(args: {
       introLines: args.introLines,
     });
   } catch (err) {
+    /* Not surfaced to the user: this is a background snapshot of state the page already shows,
+       sent on nearly every project edit, so a banner here would fire constantly and train
+       people to ignore it. The log carries enough to find the project and the trigger. */
     console.error(
-      "[project] status email failed:",
+      `[project] status email failed (shop=${args.shop} project=${args.projectId} headline="${args.headline}"):`,
       err instanceof Error ? err.message : err,
     );
   }
@@ -4575,7 +4598,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         visibility: "member",
         actorCustomerId: customerId,
         payload: notifyEmail ? { notifyEmail } : undefined,
-      }).catch(() => undefined);
+      }).catch((err: unknown) => {
+        /* The order is placed; a missing timeline row must not fail it. Logged because a
+           lost `storefront_order_confirmed` row is what later suppresses the delivered
+           email to the person who placed the order. */
+        console.error(
+          `[project] order-confirmed activity log failed (project=${projectId} job=${jobId}):`,
+          err instanceof Error ? err.message : err,
+        );
+      });
 
       /* Silent backup draft order in Shopify admin. Best-effort: never blocks Order now. */
       console.log(
@@ -4609,7 +4640,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             visibility: "admin",
             actorCustomerId: customerId,
             payload: { error: backup.error },
-          }).catch(() => undefined);
+          }).catch((logErr: unknown) => {
+            console.error(
+              `[project] draft-backup-failed activity log failed (project=${projectId} job=${jobId}):`,
+              logErr instanceof Error ? logErr.message : logErr,
+            );
+          });
         }
       } catch (err) {
         console.error(
@@ -4618,22 +4654,35 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         );
       }
 
+      /*
+       * A notification that does not go out must never undo the order — it is already
+       * committed above. It must not be invisible either, so the mail task reports back what
+       * happened and the ack carries a non-blocking warning for the reloaded page.
+       */
       /* Run in parallel: SMTP can be slow; phone push (ntfy) should not wait on email. */
-      await Promise.allSettled([
-        (async () => {
+      const [orderPlacedMailTask] = await Promise.allSettled([
+        (async (): Promise<string | null> => {
           try {
-            await sendOrderPlacedEmails({
+            const mail = await sendOrderPlacedEmails({
               shop,
               projectId,
               jobId,
               fulfillmentMethod,
               actorCustomerId: customerId,
             });
+            if (mail.customerFailed) {
+              return ORDER_PLACED_CUSTOMER_MAIL_WARNING;
+            }
+            if (mail.shopFailed) {
+              return "Your order was placed, but our notification email did not go out. Please contact us to confirm we received it.";
+            }
+            return null;
           } catch (err) {
             console.error(
-              "[project] order placed email failed:",
+              `[project] order placed email failed (shop=${shop} project=${projectId} job=${jobId}):`,
               err instanceof Error ? err.message : err,
             );
+            return ORDER_PLACED_CUSTOMER_MAIL_WARNING;
           }
         })(),
         (async () => {
@@ -4658,7 +4707,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           }
         })(),
       ]);
-      return Response.json({ ok: true });
+      const orderPlacedEmailWarning =
+        orderPlacedMailTask.status === "fulfilled"
+          ? orderPlacedMailTask.value
+          : null;
+      return Response.json({
+        ok: true,
+        ...(orderPlacedEmailWarning
+          ? { emailWarning: orderPlacedEmailWarning }
+          : {}),
+      });
     }
 
     return Response.json(
@@ -4794,6 +4852,34 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       windowRaw = String(
         formData.get("deliveryRecurringStartWindow") || "",
       ).trim();
+    }
+    /*
+     * Minimum delivery date, enforced here rather than only in the browser. The date inputs
+     * carry a `min`, but this page never hydrates and the modal posts through `fetch`, so the
+     * attribute is advisory: it is computed at render time (stale on a tab left open past
+     * Ottawa midnight) and absent entirely for any non-browser submit. Same helper and same
+     * constant as the `min` the loader renders and as the rule in `save-order-schedule`, so
+     * the three cannot drift apart.
+     *
+     * Only a *changed* date is checked. The modal repopulates whatever is already stored, so
+     * rejecting an unchanged (and by now past) date would block edits to the address or the
+     * delivery plan on every older order.
+     */
+    if (
+      dateRaw !== (job.scheduledDeliveryDate ?? "") &&
+      dateRaw &&
+      isYmdBeforeMin(
+        dateRaw,
+        minPreferredDeliveryYmd(PREFERRED_DELIVERY_MIN_DAY_OFFSET_FROM_TODAY),
+      )
+    ) {
+      return Response.json(
+        {
+          error:
+            "The delivery date cannot be today or tomorrow on the Ottawa (Eastern) calendar. Pick a later date.",
+        },
+        { status: 400 },
+      );
     }
     await prisma.job.update({
       where: { id: jobId },
@@ -5185,6 +5271,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
 
+    /* The delivery is recorded either way — a notification that did not go out must not undo
+       it — but staff need to know nobody was told, because they are the ones who will be
+       asked "why didn't I get an email?". */
+    let notifyWarning = "";
     if (!phase.fulfillmentNotifiedAt) {
       try {
         await sendFulfillmentPackageEmails({
@@ -5198,8 +5288,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           data: { fulfillmentNotifiedAt: new Date() },
         });
       } catch (err) {
+        notifyWarning =
+          "Delivery recorded, but the customer and finance notification email could not be sent. Let them know another way.";
         console.error(
-          "[project] phase fulfillment notify failed:",
+          `[project] phase fulfillment notify failed (shop=${shop} project=${projectId} job=${jobId} phase=${phaseId}):`,
           err instanceof Error ? err.message : err,
         );
       }
@@ -5212,9 +5304,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     notifyMissionControl(jobId);
     if (fulfillmentAckFromQuery) {
-      return Response.json({ ok: true as const });
+      return Response.json({
+        ok: true as const,
+        ...(notifyWarning ? { warning: notifyWarning } : {}),
+      });
     }
-    return redirectToProject(request, projectId, shop);
+    return redirectToProject(request, projectId, shop, {
+      ...(notifyWarning ? { notifyWarning } : {}),
+    });
   }
 
   if (intent === "save-order-schedule") {
@@ -5329,6 +5426,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
 
+    let photoNotifyWarning = "";
     if (!job.fulfillmentNotifiedAt) {
       try {
         await sendFulfillmentPackageEmails({
@@ -5341,15 +5439,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           data: { fulfillmentNotifiedAt: new Date() },
         });
       } catch (err) {
+        photoNotifyWarning =
+          "Photo uploaded and the order marked delivered, but the customer and finance notification email could not be sent. Let them know another way.";
         console.error(
-          "[project] fulfillment notify failed:",
+          `[project] fulfillment notify failed (shop=${shop} project=${projectId} job=${jobId}):`,
           err instanceof Error ? err.message : err,
         );
       }
     }
 
     notifyMissionControl(jobId);
-    return redirectToProject(request, projectId, shop);
+    return redirectToProject(request, projectId, shop, {
+      ...(photoNotifyWarning ? { notifyWarning: photoNotifyWarning } : {}),
+    });
   }
 
   if (intent === "upload-order-po-pdf") {
@@ -5679,6 +5781,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       await removeFulfillmentPhotoFromStorage(storageKeyToRemove);
     }
 
+    let lifecycleNotifyWarning = "";
     if (next === "delivered") {
       const post = await prisma.job.findFirst({
         where: { id: jobId, projectId },
@@ -5696,8 +5799,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             data: { fulfillmentNotifiedAt: new Date() },
           });
         } catch (err) {
+          lifecycleNotifyWarning =
+            "Status set to Delivered, but the customer and finance notification email could not be sent. Let them know another way.";
           console.error(
-            "[project] staff-set-order-lifecycle delivered notify failed:",
+            `[project] staff-set-order-lifecycle delivered notify failed (shop=${shop} project=${projectId} job=${jobId}):`,
             err instanceof Error ? err.message : err,
           );
         }
@@ -5719,7 +5824,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (next === "paid") {
       settleBackupDraftOrderOnPaidBestEffort(shop, jobId);
     }
-    return redirectToProject(request, projectId, shop);
+    return redirectToProject(request, projectId, shop, {
+      ...(lifecycleNotifyWarning
+        ? { notifyWarning: lifecycleNotifyWarning }
+        : {}),
+    });
   }
 
   if (intent === "reset-order-delivery") {
@@ -6219,7 +6328,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       visibility: "member",
       actorCustomerId: customerId,
       payload: reorderNotifyEmail ? { notifyEmail: reorderNotifyEmail } : undefined,
-    }).catch(() => undefined);
+    }).catch((err: unknown) => {
+      console.error(
+        `[project] reorder order-confirmed activity log failed (project=${targetProjectId} job=${newJobId}):`,
+        err instanceof Error ? err.message : err,
+      );
+    });
 
     notifyMissionControl(newJobId);
 
@@ -6249,18 +6363,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.error("[project-clad] reorder backup draft failed:", err);
     }
 
-    await Promise.allSettled([
-      (async () => {
+    const [reorderMailTask] = await Promise.allSettled([
+      (async (): Promise<string | null> => {
         try {
-          await sendOrderPlacedEmails({
+          const mail = await sendOrderPlacedEmails({
             shop,
             projectId: targetProjectId,
             jobId: newJobId,
             fulfillmentMethod,
             actorCustomerId: customerId,
           });
+          return mail.customerFailed || mail.shopFailed
+            ? REORDER_MAIL_WARNING
+            : null;
         } catch (e) {
-          console.error("[project] reorder order-placed email failed:", e);
+          console.error(
+            `[project] reorder order-placed email failed (shop=${shop} project=${targetProjectId} job=${newJobId}):`,
+            e instanceof Error ? e.message : e,
+          );
+          return REORDER_MAIL_WARNING;
         }
       })(),
       (async () => {
@@ -6289,7 +6410,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
     }
 
-    return redirectToProject(request, targetProjectId, shop);
+    const reorderEmailWarning =
+      reorderMailTask.status === "fulfilled" ? reorderMailTask.value : null;
+    return redirectToProject(request, targetProjectId, shop, {
+      ...(reorderEmailWarning ? { notifyWarning: reorderEmailWarning } : {}),
+    });
   }
 
   if (intent === "delete-item") {
@@ -6509,7 +6634,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       : undefined;
 
     if (!name) {
-      return redirectToProject(request, projectId, shop);
+      return redirectToProject(request, projectId, shop, {
+        projectEditError: "name",
+      });
     }
 
     let ownerCompanyKeyToSet: string | undefined;
@@ -6583,7 +6710,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       receiveModeRaw === "delivery" ? "delivery" : "pickup";
 
     if (receiveMode === "delivery" && !hasCompleteShipToDetails(ship)) {
-      return redirectToProject(request, projectId, shop);
+      return redirectToProject(request, projectId, shop, {
+        projectEditError: "address",
+      });
     }
 
     await prisma.project.update({
@@ -6640,12 +6769,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const receiveMode: "pickup" | "delivery" =
       receiveModeRaw === "delivery" ? "delivery" : "pickup";
 
+    /* Both of these used to redirect exactly like a successful save, so the page reloaded
+       with nothing changed and no explanation. */
     if (!name) {
-      return redirectToProject(request, projectId, shop);
+      return redirectToProject(request, projectId, shop, {
+        projectEditError: "name",
+      });
     }
 
     if (receiveMode === "delivery" && !hasCompleteShipToDetails(ship)) {
-      return redirectToProject(request, projectId, shop);
+      return redirectToProject(request, projectId, shop, {
+        projectEditError: "address",
+      });
     }
 
     let ownerCompanyKeyToSet: string | undefined;
@@ -6878,6 +7013,7 @@ export default function ProjectDetailPage() {
     navAccountFirstName,
     ownerCompanyForShare,
     projectFormActionUrl,
+    preferredDeliveryDateMinYmd,
   } = useLoaderData<typeof loader>();
 
   const orderLifecycleLabel = (status: string) => {
@@ -6962,21 +7098,6 @@ export default function ProjectDetailPage() {
 
   const actionData = useActionData<typeof action>();
 
-  const [preferredDeliveryDateMinYmd, setPreferredDeliveryDateMinYmd] =
-    useState<string | undefined>(undefined);
-  useEffect(() => {
-    const updateMin = () => {
-      setPreferredDeliveryDateMinYmd(
-        minPreferredDeliveryYmd(PREFERRED_DELIVERY_MIN_DAY_OFFSET_FROM_TODAY),
-      );
-    };
-    updateMin();
-    const onVis = () => {
-      if (document.visibilityState === "visible") updateMin();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, []);
   const pricingUnlocked =
     canViewPricing ||
     (actionData &&
@@ -7531,7 +7652,14 @@ export default function ProjectDetailPage() {
             data-projectclad-project-id={project.id}
           >
             <input type="hidden" name="intent" value="unlock-pricing" />
+            <label
+              className="project-clad-sr-only"
+              htmlFor="projectclad-pricing-password"
+            >
+              Password to view price
+            </label>
             <input
+              id="projectclad-pricing-password"
               type="password"
               name="password"
               placeholder="Enter password to view price"
@@ -8339,6 +8467,16 @@ export default function ProjectDetailPage() {
                 ×
               </button>
             </div>
+            {/* Filled by project-main.js when the save is refused (locked order, permissions,
+                network). Empty and hidden until then; the modal stays open so the edits behind
+                it survive, because nothing reloads on a failed save. */}
+            <p
+              className="project-clad-muted project-clad-approval-msg"
+              style={{ color: "#b71c1c" }}
+              data-projectclad-edit-save-message
+              role="alert"
+              hidden
+            />
             <div className="project-clad-actions project-clad-reject-modal-actions">
             <button type="button" className="project-clad-button project-clad-reject-modal-btn" data-projectclad-edit-save-yes>
               Yes
@@ -8853,11 +8991,72 @@ export default function ProjectDetailPage() {
                 type="button"
                 className="project-clad-button project-clad-reject-modal-btn"
                 style={{ marginTop: "0.65rem" }}
-                onClick={() => {
-                  const next = new URLSearchParams(searchParams);
-                  next.delete("scheduleDateError");
-                  setSearchParams(next, { replace: true });
-                }}
+                data-pc-dismiss-banner="scheduleDateError"
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+          {searchParams.get("projectEditError") ? (
+            <div
+              role="alert"
+              className="project-clad-card"
+              style={{
+                marginBottom: "1rem",
+                padding: "0.85rem 1rem",
+                borderColor: "#b71c1c",
+                background: "rgba(183, 28, 28, 0.06)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.45 }}>
+                {searchParams.get("projectEditError") === "address" ? (
+                  <>
+                    Your project was <strong>not saved</strong>. Delivery needs a complete address
+                    (street, city, province and postal code) — fill in the missing fields in Edit
+                    project, or switch the project to store pickup.
+                  </>
+                ) : (
+                  <>
+                    Your project was <strong>not saved</strong>. A project name is required — enter
+                    one in Edit project and save again.
+                  </>
+                )}
+              </p>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                style={{ marginTop: "0.65rem" }}
+                data-pc-dismiss-banner="projectEditError"
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+          {/*
+            Non-blocking: the mutation itself succeeded, only the notification email did not
+            go out. Styled amber to separate it from the red "nothing was saved" banners, but
+            still role="alert" so it is announced and so the shared dismiss handler (which
+            looks for the enclosing [role="alert"]) removes the whole banner.
+          */}
+          {searchParams.get("notifyWarning") ? (
+            <div
+              role="alert"
+              className="project-clad-card"
+              style={{
+                marginBottom: "1rem",
+                padding: "0.85rem 1rem",
+                borderColor: "#b26a00",
+                background: "rgba(178, 106, 0, 0.08)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.45 }}>
+                {searchParams.get("notifyWarning")}
+              </p>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                style={{ marginTop: "0.65rem" }}
+                data-pc-dismiss-banner="notifyWarning"
               >
                 Dismiss
               </button>
@@ -8882,11 +9081,7 @@ export default function ProjectDetailPage() {
                 type="button"
                 className="project-clad-button project-clad-reject-modal-btn"
                 style={{ marginTop: "0.65rem" }}
-                onClick={() => {
-                  const next = new URLSearchParams(searchParams);
-                  next.delete("pcNewOrderError");
-                  setSearchParams(next, { replace: true });
-                }}
+                data-pc-dismiss-banner="pcNewOrderError"
               >
                 Dismiss
               </button>
@@ -8910,11 +9105,7 @@ export default function ProjectDetailPage() {
                 type="button"
                 className="project-clad-button project-clad-reject-modal-btn"
                 style={{ marginTop: "0.65rem" }}
-                onClick={() => {
-                  const next = new URLSearchParams(searchParams);
-                  next.delete("scheduleLocked");
-                  setSearchParams(next, { replace: true });
-                }}
+                data-pc-dismiss-banner="scheduleLocked"
               >
                 Dismiss
               </button>
@@ -8938,11 +9129,7 @@ export default function ProjectDetailPage() {
                 type="button"
                 className="project-clad-button project-clad-reject-modal-btn"
                 style={{ marginTop: "0.65rem" }}
-                onClick={() => {
-                  const next = new URLSearchParams(searchParams);
-                  next.delete("scheduleWindowNeedsDate");
-                  setSearchParams(next, { replace: true });
-                }}
+                data-pc-dismiss-banner="scheduleWindowNeedsDate"
               >
                 Dismiss
               </button>
@@ -8967,11 +9154,7 @@ export default function ProjectDetailPage() {
                 type="button"
                 className="project-clad-button project-clad-reject-modal-btn"
                 style={{ marginTop: "0.65rem" }}
-                onClick={() => {
-                  const next = new URLSearchParams(searchParams);
-                  next.delete("scheduleWindowPastError");
-                  setSearchParams(next, { replace: true });
-                }}
+                data-pc-dismiss-banner="scheduleWindowPastError"
               >
                 Dismiss
               </button>
@@ -8999,11 +9182,7 @@ export default function ProjectDetailPage() {
                 type="button"
                 className="project-clad-button project-clad-reject-modal-btn"
                 style={{ marginTop: "0.65rem" }}
-                onClick={() => {
-                  const next = new URLSearchParams(searchParams);
-                  next.delete("statusPhotoRequired");
-                  setSearchParams(next, { replace: true });
-                }}
+                data-pc-dismiss-banner="statusPhotoRequired"
               >
                 Dismiss
               </button>
@@ -9027,11 +9206,7 @@ export default function ProjectDetailPage() {
                 type="button"
                 className="project-clad-button project-clad-reject-modal-btn"
                 style={{ marginTop: "0.65rem" }}
-                onClick={() => {
-                  const next = new URLSearchParams(searchParams);
-                  next.delete("fulfillmentError");
-                  setSearchParams(next, { replace: true });
-                }}
+                data-pc-dismiss-banner="fulfillmentError"
               >
                 Dismiss
               </button>
@@ -9830,7 +10005,7 @@ export default function ProjectDetailPage() {
                       ) : (
                       <div className="project-clad-table-x-scroll">
                       <table className="project-clad-table project-clad-orders-table">
-                          <thead className="project-clad-sr-only" aria-hidden="true">
+                          <thead className="project-clad-sr-only">
                             <tr>
                               <th>Product</th>
                               <th>Details</th>
@@ -10603,6 +10778,29 @@ export default function ProjectDetailPage() {
         entirely and we own the navigation here.
       */}
       <script src={proxyScriptSrcs.projectsLinkNav} />
+      {/*
+        Dismissible error banners (vanilla JS).
+
+        One delegated click handler for every `data-pc-dismiss-banner` button above. It
+        removes the banner and strips the query param that renders it, so a refresh does
+        not bring it back and `role="alert"` does not re-announce it.
+      */}
+      <script src={proxyScriptSrcs.bannerDismiss} />
+      {/*
+        Unsaved-work guard (vanilla JS).
+
+        This page hosts many independent forms at once and every mutation ends in a full
+        reload, which used to wipe everything typed into the other forms. The guard tracks
+        which forms are dirty, snapshots them to sessionStorage before any scripted reload
+        and restores them afterwards, and arms a beforeunload prompt for departures the
+        browser owns (tab close, back button, ordinary links).
+
+        Loaded LAST on purpose: its document-level `submit` listener has to run after the
+        ajax hub in `project-main.js` so it can tell a native submit (which navigates away
+        now, and must be snapshotted here) from an ajax one (which preventDefaults and
+        reloads through `pcReload` later).
+      */}
+      <script src={proxyScriptSrcs.dirtyGuard} />
     </>
   );
 }

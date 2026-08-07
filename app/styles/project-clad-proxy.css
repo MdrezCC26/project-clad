@@ -146,6 +146,22 @@ body.project-clad-leaving .project-clad-page {
   transform: translateY(-8px);
 }
 
+/* The enter state is the whole page at opacity 0, so reduced motion cannot just shorten
+   the transition — the resting state has to be the starting state. Leaving stops moving
+   the page for the same reason: an instant fade-out reads as a flash, not as feedback. */
+@media (prefers-reduced-motion: reduce) {
+  .project-clad-page {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  body.project-clad-leaving .project-clad-page {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* Staff mode label on projects list (centered, red glow) */
 .project-clad-staff-banner {
   display: block;
@@ -5580,6 +5596,14 @@ html:has(.project-clad-page--projects) body {
   background: rgba(210, 80, 80, 0.08);
   color: var(--pc-text, #2f3542);
   outline: none;
+}
+
+/* The rule above drops the outline so a pointer hover and a mouse-click focus look the
+   same. Keyboard focus still needs a ring, or there is no way to tell which suggestion is
+   current. Inset offset because the list scrolls and an outward ring would be clipped. */
+.project-clad-member-typeahead__item:focus-visible {
+  outline: 2px solid rgba(180, 35, 35, 0.55);
+  outline-offset: -2px;
 }
 
 /* Inline checkbox row used in the edit-project modal */

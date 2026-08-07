@@ -20,6 +20,9 @@
     if (typeof ev.stopImmediatePropagation === 'function') {
       ev.stopImmediatePropagation();
     }
+    /* This handler owns the navigation, so it also owns the unsaved-work prompt —
+       leaving it to beforeunload would ask twice. */
+    if (typeof window.pcConfirmLeave === 'function' && !window.pcConfirmLeave()) return;
     /* Signed app-proxy params are only valid for the current proxy request.
        Reusing them on /projects can produce a Shopify 404. This one has to keep
        intercepting because it rewrites the URL, but the navigation starts now — the

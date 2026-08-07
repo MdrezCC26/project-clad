@@ -26,6 +26,8 @@ const SCRIPTS_DIR = path.join(process.cwd(), "app", "client-scripts");
 
 /** Allowlist. A name that is not in here is never touched on the filesystem. */
 export const PROJECT_CLAD_SCRIPT_NAMES = [
+  "pc-banner-dismiss.js",
+  "pc-dirty-guard.js",
   "project-main.js",
   "project-customer-search.js",
   "project-page-transitions.js",

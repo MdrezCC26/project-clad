@@ -142,7 +142,6 @@ const StorefrontNavInAppSearch = forwardRef<HTMLDetailsElement, {
       <summary
         className="project-clad-storefront-nav__icon-btn project-clad-storefront-nav__icon-btn--search"
         aria-label={aria}
-        aria-haspopup="dialog"
       >
         <IconSearch className="project-clad-storefront-nav__icon" />
       </summary>

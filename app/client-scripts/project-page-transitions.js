@@ -8,10 +8,21 @@
       });
     });
   }
+  function prefersReducedMotion() {
+    try {
+      return (
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      );
+    } catch (err) {
+      return false;
+    }
+  }
   /* A ?job= deep link renders that order's <details> open server-side, but the browser
      only auto-scrolls for a #hash, so the user lands at the top of a very long page.
      After a mutation reload, jump straight there; on a fresh link, glide so it's clear
-     where you ended up. */
+     where you ended up — unless the reader has asked for reduced motion, in which case
+     scrolling a very long page is exactly the kind of movement they opted out of. */
   try {
     var deepJobId = new URLSearchParams(location.search).get('job');
     if (deepJobId) {
@@ -19,8 +30,9 @@
         var jobEl = document.getElementById('job-' + deepJobId);
         if (!jobEl) return;
         var nav = performance.getEntriesByType('navigation')[0];
+        var glide = !(nav && nav.type === 'reload') && !prefersReducedMotion();
         jobEl.scrollIntoView({
-          behavior: nav && nav.type === 'reload' ? 'auto' : 'smooth',
+          behavior: glide ? 'smooth' : 'auto',
           block: 'start'
         });
       });
@@ -103,13 +115,27 @@
     try {
       if (new URL(href, location.origin).origin !== location.origin) return;
     } catch (err) { return; }
+    /* This handler never calls preventDefault, so the browser owns the navigation and
+       pc-dirty-guard's beforeunload is what asks about unsaved work. Skip the fade in that
+       case: declining the prompt leaves the page here, and it should not be greyed out. */
+    if (window.pcDirty && typeof window.pcDirty.count === 'function' && window.pcDirty.count()) {
+      return;
+    }
     beginLeaveTransition();
   });
   window.addEventListener('pageshow', function(ev) {
     /* A restored page keeps whatever classes it had when it left, so clear the fade
        before anything else or the document comes back invisible. */
     document.body.classList.remove('project-clad-leaving');
-    if (ev.persisted) window.location.reload();
+    if (!ev.persisted) return;
+    /* bfcache hands back the document with the user's typed values intact. Refreshing is
+       only about staleness, so when there is unsaved work the values win and the refresh
+       is skipped — the next action reloads the page anyway. */
+    if (typeof window.pcReload === 'function') {
+      window.pcReload({ skipIfDirty: true });
+      return;
+    }
+    window.location.reload();
   });
 })();
           

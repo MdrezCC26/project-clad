@@ -373,6 +373,71 @@
   window.__pcShareCopyInitialized = true;
   const actionsEndpoint = '/apps/project-clad/api/project-actions';
 
+  /*
+   * Every scripted reload/redirect on this page routes through here so pc-dirty-guard.js
+   * can stash work typed into the page's other forms before the document is thrown away,
+   * and can keep its beforeunload prompt from firing on top of a deliberate save.
+   *
+   * `except` is the form or order card whose save triggered this — its own fields are on
+   * their way to the server and must not be restored over the fresh render.
+   *
+   * Degrades to a plain reload if the guard script failed to load: losing the unsaved-work
+   * safety net must never also lose the mutation the user just made.
+   */
+  function pcGuardedReload(options) {
+    if (typeof window.pcReload === 'function') return window.pcReload(options);
+    var opts = options || {};
+    if (opts.mode === 'assign' && opts.href) window.location.href = opts.href;
+    else if (opts.mode === 'replace' && opts.href) window.location.replace(opts.href);
+    else window.location.reload();
+    return true;
+  }
+
+  /* Closing a modal without saving discards its edits, so they must stop counting as dirty. */
+  function pcForgetDirtyWithin(root) {
+    if (root && window.pcDirty && typeof window.pcDirty.forgetWithin === 'function') {
+      window.pcDirty.forgetWithin(root);
+    }
+  }
+
+  /** Line numbers are positional, so they have to be rewritten after any move or undo. */
+  function pcRenumberItemRows(tbody) {
+    if (!(tbody instanceof HTMLElement)) return;
+    Array.prototype.forEach.call(
+      tbody.querySelectorAll('[data-projectclad-item-row]'),
+      function (r, idx) {
+        var num = r.querySelector('.project-clad-order-line-num');
+        if (num) num.textContent = String(idx + 1);
+      },
+    );
+  }
+
+  /**
+   * Put the item rows back into `orderedRows`. Walks backwards inserting each row before the
+   * one that follows it, so the block's position relative to anything else in the tbody is
+   * left alone.
+   */
+  function pcApplyItemRowOrder(tbody, orderedRows) {
+    if (!(tbody instanceof HTMLElement) || !orderedRows) return;
+    var anchor = null;
+    for (var i = orderedRows.length - 1; i >= 0; i--) {
+      var r = orderedRows[i];
+      if (!r || r.parentElement !== tbody) continue;
+      if (anchor) tbody.insertBefore(r, anchor);
+      anchor = r;
+    }
+    pcRenumberItemRows(tbody);
+  }
+
+  function pcOrderCard(jobId) {
+    if (!jobId) return null;
+    return document.querySelector(
+      'details.project-clad-order-row[data-job-id="' +
+        String(jobId).replace(/"/g, '') +
+        '"]',
+    );
+  }
+
   function syncMemberRoleSelect(details) {
     const labelEl = details.querySelector('[data-role-label]');
     var promptRaw = details.getAttribute('data-projectclad-role-prompt');
@@ -502,6 +567,8 @@
     closeEditProjectUnsavedModal();
     var modal = document.querySelector('[data-projectclad-edit-project-modal]');
     if (!(modal instanceof HTMLElement)) return;
+    /* Only reached once the modal's own unsaved-changes prompt has been satisfied. */
+    pcForgetDirtyWithin(modal);
     if (editProjectModalCloseTimer) {
       clearTimeout(editProjectModalCloseTimer);
       editProjectModalCloseTimer = null;
@@ -685,6 +752,29 @@
   let editPendingDeleteJobId = null;
   let editSnapshotItems = {};
 
+  function pcEnterOrderEditMode(jobId, details) {
+    const card = details || pcOrderCard(jobId);
+    if (!(card instanceof HTMLElement)) return;
+    editingJobId = jobId;
+    editRemovedItemIds[jobId] = [];
+    editPendingDeleteJobId = null;
+    const rows = card.querySelectorAll('[data-projectclad-item-row]');
+    editSnapshotItems[jobId] = Array.from(rows)
+      .map((r) => r.getAttribute('data-item-id'))
+      .filter(Boolean);
+    card.classList.add('project-clad-edit-mode');
+  }
+
+  /*
+   * Edit-order mode is in-memory state, so a reload drops it while the quantity and unit
+   * price inputs it reveals keep their values. pc-dirty-guard.js restores those values and
+   * fires this so they come back visible and editable instead of inside a hidden panel.
+   */
+  window.addEventListener('pc-dirty-restore-edit-mode', function (ev) {
+    const jobId = ev && ev.detail ? ev.detail.jobId : '';
+    if (jobId) pcEnterOrderEditMode(jobId, null);
+  });
+
   const syncReorderDestination = function() {
     var selected = document.querySelector('[data-projectclad-reorder-target-mode]:checked');
     var mode = selected instanceof HTMLInputElement ? selected.value : 'same';
@@ -778,6 +868,12 @@
       if (!(row instanceof HTMLElement)) return;
       const tbody = row.parentElement;
       if (!(tbody instanceof HTMLElement)) return;
+      /* Kept so a refused save can be undone. Without it the row stayed where the user
+         dropped it and quietly snapped back on the next load, which reads as the app
+         losing the change rather than never having accepted it. */
+      const rowsBeforeMove = Array.from(
+        tbody.querySelectorAll('[data-projectclad-item-row]'),
+      );
       const direction = moveBtn.getAttribute('data-direction') || '';
       if (direction === 'up') {
         const prev = row.previousElementSibling;
@@ -786,13 +882,10 @@
         const next = row.nextElementSibling;
         if (next) tbody.insertBefore(next, row);
       }
+      pcRenumberItemRows(tbody);
       const rows = Array.from(
         tbody.querySelectorAll('[data-projectclad-item-row]'),
       );
-      rows.forEach(function (r, idx) {
-        const num = r.querySelector('.project-clad-order-line-num');
-        if (num) num.textContent = String(idx + 1);
-      });
       const jobId = moveBtn.getAttribute('data-job-id') || '';
       if (jobId) {
         const itemIds = rows
@@ -800,6 +893,13 @@
             return r.getAttribute('data-item-id') || '';
           })
           .filter(Boolean);
+        const undoMove = function (message) {
+          pcApplyItemRowOrder(tbody, rowsBeforeMove);
+          window.alert(
+            message ||
+              "Couldn't save the new line order, so the lines have been put back. Try again.",
+          );
+        };
         void fetch(window.location.pathname + window.location.search, {
           method: 'POST',
           headers: {
@@ -812,7 +912,31 @@
             jobId: jobId,
             itemIds: itemIds,
           }),
-        }).catch(function () {});
+        })
+          .then(function (res) {
+            return res
+              .json()
+              .catch(function () {
+                return {};
+              })
+              .then(function (payload) {
+                return { res: res, payload: payload || {} };
+              });
+          })
+          .then(function (o) {
+            var err =
+              (typeof o.payload.error === 'string' && o.payload.error.trim()) ||
+              (!o.res.ok ? 'Server rejected the new order (' + o.res.status + ').' : '');
+            if (!err) return;
+            console.error('[project-clad] Reorder lines failed:', o.res.status, err);
+            undoMove(
+              err + " The lines have been put back the way they were.",
+            );
+          })
+          .catch(function (e) {
+            console.error('[project-clad] Reorder lines network error:', e);
+            undoMove();
+          });
       }
       return;
     }
@@ -871,7 +995,11 @@
           function stripPcJsonAndReload() {
             var u = new URL(window.location.href);
             u.searchParams.delete('pcJson');
-            window.location.replace(u.pathname + u.search);
+            pcGuardedReload({
+              mode: 'replace',
+              href: u.pathname + u.search,
+              except: details,
+            });
           }
           if (res.status >= 300 && res.status < 400) {
             stripPcJsonAndReload();
@@ -943,15 +1071,18 @@
         const saveModal = document.querySelector('[data-projectclad-edit-save-modal]');
         if (saveModal instanceof HTMLElement) {
           saveModal.dataset.pendingJobId = jobId;
+          /* An error left over from the previous attempt would read as a fresh refusal. */
+          const staleMsg = saveModal.querySelector(
+            '[data-projectclad-edit-save-message]',
+          );
+          if (staleMsg instanceof HTMLElement) {
+            staleMsg.textContent = '';
+            staleMsg.hidden = true;
+          }
           saveModal.style.display = 'flex';
         }
       } else {
-        editingJobId = jobId;
-        editRemovedItemIds[jobId] = [];
-        editPendingDeleteJobId = null;
-        const rows = details.querySelectorAll('[data-projectclad-item-row]');
-        editSnapshotItems[jobId] = Array.from(rows).map(r => r.getAttribute('data-item-id')).filter(Boolean);
-        details.classList.add('project-clad-edit-mode');
+        pcEnterOrderEditMode(jobId, details);
       }
     }
     const showPriceBtn = event.target?.closest?.('[data-projectclad-show-price]');
@@ -992,6 +1123,7 @@
     }
     if (event.target?.closest?.('[data-projectclad-reject-cancel]') || event.target === rejectModal) {
       if (rejectModal instanceof HTMLElement) rejectModal.style.display = 'none';
+      pcForgetDirtyWithin(rejectModal);
     }
     const reorderOpenBtn = event.target?.closest?.('[data-projectclad-reorder-open]');
     if (reorderOpenBtn instanceof HTMLElement) {
@@ -1034,6 +1166,7 @@
       event.target === reorderModal
     ) {
       if (reorderModal instanceof HTMLElement) reorderModal.style.display = 'none';
+      pcForgetDirtyWithin(reorderModal);
     }
     const editSaveClose = event.target?.closest?.('[data-projectclad-edit-save-close]');
     if (editSaveClose) {
@@ -1053,6 +1186,29 @@
       const jobId = modal?.getAttribute?.('data-pending-job-id') || '';
       const projectId = new URLSearchParams(window.location.search).get('id') || document.querySelector('.project-clad-container')?.getAttribute?.('data-projectclad-project-id') || '';
       if (!jobId || !projectId) return;
+      /*
+       * The server returns real, actionable errors here — a locked order, a unit-price
+       * permission refusal — and this used to reload regardless, so the user watched the page
+       * refresh and concluded the save had worked. Failures now stay on the page: the message
+       * goes in the modal, edit mode stays open and every typed quantity is still there.
+       */
+      const editSaveMsgEl = modal?.querySelector?.(
+        '[data-projectclad-edit-save-message]',
+      );
+      const setEditSaveMessage = function (text) {
+        if (!(editSaveMsgEl instanceof HTMLElement)) {
+          if (text) window.alert(text);
+          return;
+        }
+        /* Unhide before writing: a hidden node is out of the accessibility tree, so
+           role="alert" would have nothing to announce if the text landed first. */
+        editSaveMsgEl.hidden = !text;
+        editSaveMsgEl.textContent = text || '';
+      };
+      setEditSaveMessage('');
+      if (editSaveYes.dataset && editSaveYes.dataset.projectcladSaving === '1') return;
+      if (editSaveYes.dataset) editSaveYes.dataset.projectcladSaving = '1';
+      editSaveYes.setAttribute('aria-busy', 'true');
       const details = document.querySelector('details[data-job-id="' + jobId + '"]');
       const deleteJob = editPendingDeleteJobId === jobId;
       const itemUpdates = [];
@@ -1103,12 +1259,28 @@
         });
         const payload = await res.json().catch(() => ({}));
         if (!res.ok && payload?.redirectTo) {
-          window.location.href = payload.redirectTo;
+          pcGuardedReload({ mode: 'assign', href: payload.redirectTo });
           return;
         }
-        window.location.reload();
+        /* A successful save answers with a redirect that fetch has already followed, so the
+           body is HTML and `payload` is `{}` — only an explicit error stops the reload. */
+        const saveError =
+          (payload && typeof payload.error === 'string' && payload.error.trim()) ||
+          (!res.ok ? 'Save failed (' + res.status + '). Nothing was changed.' : '');
+        if (saveError) {
+          console.error('[project-clad] Save order edit failed:', res.status, saveError);
+          setEditSaveMessage(saveError);
+          return;
+        }
+        pcGuardedReload({ except: details });
       } catch (e) {
-        console.error(e);
+        console.error('[project-clad] Save order edit network error:', e);
+        setEditSaveMessage(
+          "Couldn't save — check your connection and try again. Your changes are still on this page.",
+        );
+      } finally {
+        if (editSaveYes.dataset) editSaveYes.dataset.projectcladSaving = '';
+        editSaveYes.removeAttribute('aria-busy');
       }
     }
     const editSaveNo = event.target?.closest?.('[data-projectclad-edit-save-no]');
@@ -1119,7 +1291,9 @@
       editingJobId = null;
       editPendingDeleteJobId = null;
       if (jobId) editRemovedItemIds[jobId] = [];
-      window.location.reload();
+      /* "Don't save" is an explicit discard of this order's edits — but only this order's,
+         so the other cards still get their typed values back after the reload. */
+      pcGuardedReload({ except: pcOrderCard(jobId) });
     }
   });
 
@@ -1149,7 +1323,7 @@
         const payload = await res.json().catch(() => ({}));
         if (!res.ok || payload.error) {
           if (payload?.redirectTo) {
-            window.location.href = payload.redirectTo;
+            pcGuardedReload({ mode: 'assign', href: payload.redirectTo });
             return;
           }
           if (errEl) errEl.textContent = payload.error || 'Unable to reject.';
@@ -1157,7 +1331,7 @@
         }
         if (rejectModal instanceof HTMLElement) rejectModal.style.display = 'none';
         if (rejectMessageSpan) rejectMessageSpan.textContent = 'Order rejected.';
-        window.location.reload();
+        pcGuardedReload({ except: rejectForm });
       } catch {
         if (errEl) errEl.textContent = 'Unable to complete action.';
       }
@@ -1909,6 +2083,9 @@
     if (orderDeliveryModal instanceof HTMLElement) {
       orderDeliveryModal.style.display = 'none';
     }
+    /* Reopening repopulates every field from the job, so whatever is left in there is
+       already discarded and must not keep the page marked dirty. */
+    pcForgetDirtyWithin(orderDeliveryModal);
   }
 
   (function pcOpenDeliveryDocumentsFromUrl() {
@@ -2214,7 +2391,7 @@
             payload = o.text ? JSON.parse(o.text) : null;
           } catch (e) {}
           if (payload && payload.redirectTo) {
-            window.location.href = payload.redirectTo;
+            pcGuardedReload({ mode: 'assign', href: payload.redirectTo });
             return;
           }
           var errLine = (payload && payload.error) || null;
@@ -2224,7 +2401,20 @@
             pcSyncOrderNowButtonForJob(onowJobId);
             return;
           }
-          window.location.reload();
+          /* The order is placed either way; the reload just carries the notification
+             failure across as a query param so the page can show its warning banner. */
+          var onowReload = { except: pcOrderCard(onowJobId) };
+          if (payload && typeof payload.emailWarning === 'string' && payload.emailWarning) {
+            var warnUrl = new URL(window.location.href);
+            warnUrl.searchParams.set('notifyWarning', payload.emailWarning);
+            onowReload.mode = 'assign';
+            onowReload.href = warnUrl.toString();
+          }
+          if (!pcGuardedReload(onowReload)) {
+            /* Declined the discard prompt: put the button back rather than stranding it. */
+            onowBtn.disabled = false;
+            pcSyncOrderNowButtonForJob(onowJobId);
+          }
         })
         .catch(function () {
           window.alert('Unable to confirm order.');
@@ -2418,7 +2608,11 @@
           pcCloseOrderDeliveryModal();
           var u = new URL(window.location.href);
           u.searchParams.delete('pcJson');
-          window.location.replace(u.pathname + u.search);
+          pcGuardedReload({
+            mode: 'replace',
+            href: u.pathname + u.search,
+            except: orderDeliveryForm,
+          });
         })
         .catch(function () {
           if (deliveryMsg instanceof HTMLElement) {
@@ -2495,7 +2689,7 @@
           if (createBtnEl instanceof HTMLButtonElement) createBtnEl.disabled = false;
           if (!o.res.ok) {
             if (o.payload && o.payload.redirectTo) {
-              window.location.href = o.payload.redirectTo;
+              pcGuardedReload({ mode: 'assign', href: o.payload.redirectTo });
               return;
             }
             setNewOrderMsg((o.payload && o.payload.error) || 'Unable to complete action.');
@@ -2505,7 +2699,7 @@
             setNewOrderMsg(o.payload.error);
             return;
           }
-          window.location.reload();
+          pcGuardedReload({ except: mainFormCreate });
         })
         .catch(function () {
           if (createBtnEl instanceof HTMLButtonElement) createBtnEl.disabled = false;
@@ -2602,6 +2796,25 @@
     if (!(form instanceof HTMLFormElement)) return;
     if (form.hasAttribute('data-projectclad-reject-form')) return;
     if (!form.hasAttribute('data-projectclad-ajax')) return;
+    /*
+     * Constraint validation, consulted before this handler commits to the ajax path. A submit
+     * event that arrives here with invalid fields got past the browser's own pre-submit check
+     * — a programmatic `form.submit()`, a dispatched submit event, `novalidate` or a
+     * `formnovalidate` button — and preventing default unconditionally would post the empty
+     * `required` field and bring back a generic server failure instead of the inline browser
+     * prompt the field already has.
+     *
+     * The abort still preventDefaults: once the submit event has fired the browser is
+     * committed to navigating, so returning early would send the invalid form natively. That
+     * also keeps this off pc-dirty-guard.js's native-submit branch, which bails on
+     * `defaultPrevented`. Nothing is snapshotted, the form stays registered as dirty, and the
+     * unload guard is never suspended — which is right, because nothing is navigating.
+     */
+    if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
+      event.preventDefault();
+      if (typeof form.reportValidity === 'function') form.reportValidity();
+      return;
+    }
     event.preventDefault();
     const messageNode = form.querySelector('[data-projectclad-form-message]');
     const setFormMessage = (text) => {
@@ -2711,8 +2924,14 @@
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         if (payload?.redirectTo) {
-          navigating = true;
-          window.location.href = payload.redirectTo;
+          /* Only stay disabled if we are actually leaving: pcGuardedReload returns false
+             when the user declines to discard a file selection, and a button left disabled
+             on a page that is going nowhere is a dead end. */
+          navigating = pcGuardedReload({
+            mode: 'assign',
+            href: payload.redirectTo,
+            except: form,
+          });
           return;
         }
         setFormMessage(payload.error || 'Unable to complete action.');
@@ -2725,8 +2944,7 @@
       if (payload?.pricingUnlocked) {
         document.cookie = (window.__PROJECT_CLAD__ || {}).pricingCookie + '; Path=/; Max-Age=3600; SameSite=Lax';
         closePricingModal();
-        navigating = true;
-        window.location.reload();
+        navigating = pcGuardedReload({ except: form });
         return;
       }
       if (payload?.shareLink) {
@@ -2744,8 +2962,7 @@
       }
       if ((intent === 'submit-for-approval' || intent === 'cancel-approval-request') && payload?.ok) {
         setFormMessage(intent === 'submit-for-approval' ? 'Approval request sent.' : 'Approval request cancelled.');
-        navigating = true;
-        window.location.reload();
+        navigating = pcGuardedReload({ except: form });
         return;
       }
       if (intent === 'approve' && payload?.ok) {
@@ -2753,12 +2970,14 @@
         url.searchParams.delete('approve');
         url.searchParams.delete('approveJobId');
         url.searchParams.delete('approveItemId');
-        navigating = true;
-        window.location.href = url.toString();
+        navigating = pcGuardedReload({
+          mode: 'assign',
+          href: url.toString(),
+          except: form,
+        });
         return;
       }
-      navigating = true;
-      window.location.reload();
+      navigating = pcGuardedReload({ except: form });
     } catch {
       setFormMessage('Unable to complete action.');
     } finally {

@@ -104,7 +104,6 @@
   /* Init: mark the default chip active. The DOM is already in "recent" order
      via the SSR memo, so we don't need to re-sort on load. */
   setActive('recent');
-  cluster.setAttribute('aria-pressed', 'recent');
 
   cluster.addEventListener('click', function(ev) {
     var target = ev.target;
