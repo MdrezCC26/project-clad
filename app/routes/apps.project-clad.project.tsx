@@ -166,6 +166,16 @@ import {
   jobNeedsOpenFulfillmentPhaseSync,
   resetJobDeliveryPhasesProgress,
 } from "../utils/jobDeliveryPhases.server";
+import {
+  collectOrderLineDimensionRows,
+  collectOrderLineSpecMap,
+  formatGirthDisplay,
+  formatJobCreatedMmDdYyyy,
+  formatValuesUsedDisplay,
+  isCustomDimensionLineSpec,
+  orderLineDisplayNameWithGauge,
+  titleCaseWords,
+} from "../utils/orderLineSpecs";
 
 declare global {
   interface Window {
@@ -681,126 +691,8 @@ function OrderLineThumbMedia({ item }: { item: JobItemView }) {
 
 type OrderLineSpecRow = { label: string; value: ReactNode };
 
-function normalizeOrderSpecKey(key: string): string {
-  return key.trim().toLowerCase().replace(/[\s_-]+/g, "_");
-}
-
-function titleCaseWords(value: string): string {
-  return value
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-}
-
-function formatGirthDisplay(value: string): string {
-  const t = value.trim();
-  if (/["']|in\b/i.test(t)) return t;
-  return `${t}"`;
-}
-
-function formatValuesUsedDisplay(lengthUsed?: string, angleUsed?: string): string | null {
-  const l = lengthUsed?.trim();
-  const a = angleUsed?.trim();
-  if (!l && !a) return null;
-  const lengthLabel = l ? (/l$/i.test(l) ? l.toUpperCase() : `${l}L`) : null;
-  const angleLabel = a ? (/a$/i.test(a) ? a.toUpperCase() : `${a}A`) : null;
-  if (lengthLabel && angleLabel) return `${lengthLabel} - ${angleLabel}`;
-  return lengthLabel || angleLabel;
-}
-
-function collectOrderLineSpecMap(properties: { name: string; value: string }[]): {
-  map: Map<string, string>;
-  calcParseError: string | null;
-} {
-  const map = new Map<string, string>();
-  let calcParseError: string | null = null;
-
-  const calcPayload = properties.find((p) => p.name === "__ooCalcPayload");
-  if (calcPayload?.value) {
-    try {
-      const parsed = JSON.parse(calcPayload.value) as Record<string, unknown>;
-      for (const [key, value] of Object.entries(parsed)) {
-        if (value == null) continue;
-        const v = String(value).trim();
-        if (!v) continue;
-        const nk = normalizeOrderSpecKey(key);
-        if (nk === "product_price") continue;
-        map.set(nk, v);
-      }
-    } catch {
-      calcParseError = calcPayload.value;
-    }
-  }
-
-  for (const p of properties) {
-    const rawName = p.name.trim();
-    const v = (p.value || "").trim();
-    if (!rawName || rawName.startsWith("__oo") || rawName.startsWith("_")) continue;
-    const nk = normalizeOrderSpecKey(rawName);
-    if (!map.has(nk)) map.set(nk, v || rawName);
-  }
-
-  return { map, calcParseError };
-}
-
-function getOrderLineSpecValue(item: JobItemView, key: string): string {
-  if (!item.properties?.length) return "";
-  const normalized = normalizeOrderSpecKey(key);
-  for (const prop of item.properties) {
-    if (normalizeOrderSpecKey(prop.name) === normalized) {
-      return (prop.value || "").trim();
-    }
-  }
-  return "";
-}
-
-function formatGaugeLabel(value: string): string {
-  const t = value.trim();
-  if (!t) return "";
-  return /\bgauge\b/i.test(t) ? t : `${t} Gauge`;
-}
-
-function orderLineDisplayNameWithGauge(item: JobItemView): string {
-  const base = item.displayName.trim();
-  const gaugeLabel = formatGaugeLabel(getOrderLineSpecValue(item, "gauge"));
-  if (!gaugeLabel) return base;
-  if (base.toLowerCase().includes(gaugeLabel.toLowerCase())) return base;
-  return `${base} - ${gaugeLabel}`;
-}
-
-function isCustomDimensionLineSpec(map: Map<string, string>): boolean {
-  return (
-    map.has("shape_type") ||
-    (map.has("l1") && map.has("l2")) ||
-    map.has("a1") ||
-    map.has("a2")
-  );
-}
-
 function CustomDimensionLineSpecs({ map }: { map: Map<string, string> }) {
-  const rows: Array<{ label: string; value: string; extra?: boolean }> = [];
-
-  for (let i = 1; i <= 12; i += 1) {
-    const value = map.get(`l${i}`);
-    if (!value) continue;
-    rows.push({ label: `L${i}`, value });
-  }
-  for (let i = 1; i <= 12; i += 1) {
-    const value = map.get(`a${i}`);
-    if (!value) continue;
-    rows.push({ label: `A${i}`, value });
-  }
-
-  const additionalDetails = map.get("additional_details");
-  if (additionalDetails) {
-    rows.push({
-      label: "Additional Details",
-      value: additionalDetails,
-      extra: true,
-    });
-  }
+  const rows = collectOrderLineDimensionRows(map);
 
   if (!rows.length) return null;
 
@@ -1261,16 +1153,6 @@ function orderLinesTableColSpan(canEditLineActions: boolean) {
   return canEditLineActions ? 5 : 4;
 }
 
-/** Order created timestamp under the order title (same YYYY.MM.DD as Created fact). */
-function formatJobCreatedMmDdYyyy(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}.${mm}.${dd}`;
-}
-
 type JobView = {
   id: string;
   name: string;
@@ -1305,6 +1187,8 @@ type JobView = {
   hasPurchaseOrderPdf: boolean;
   purchaseOrderPdfFileName: string | null;
   purchaseOrderPdfUrl: string | null;
+  /** Standalone shop cut sheet / packing slip document, opened in a new tab. */
+  shopSlipUrl: string;
   deliveryPhases: DeliveryPhaseView[];
   deliveredPercent: number;
   deliveryPlanMode: string | null;
@@ -3557,6 +3441,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               request,
             )
           : null,
+        shopSlipUrl: mergeAppProxyParamsFromRequest(
+          `/apps/project-clad/shop-slip?id=${encodeURIComponent(project.id)}&jobId=${encodeURIComponent(job.id)}`,
+          request,
+        ),
         deliveryPhases,
         deliveredPercent,
         deliveryPlanMode: job.deliveryPlanMode ?? null,
@@ -9670,18 +9558,17 @@ export default function ProjectDetailPage() {
                     const paymentSummaryPdfActionsSlot = (
                       <>
                         {/*
-                         * PDF exports (also passed into OrderFinancePanel header row):
-                         * - Packing slip (no pricing) is always available.
-                         * - Invoice (with pricing) appears once delivered/paid.
+                         * Document exports (also passed into OrderFinancePanel header row):
+                         * - Shop cut sheet / packing slip opens the server-rendered document.
+                         * - Invoice (with pricing) temporarily hidden (see false && below).
                          */}
-                        <button
-                          type="button"
+                        <a
                           className="project-clad-order-export-pdf"
-                          data-projectclad-export-order-pdf
-                          data-print-mode="packing"
-                          data-job-id={job.id}
-                          title="Export packing slip (without prices)"
-                          aria-label="Export packing slip PDF"
+                          href={job.shopSlipUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Open shop cut sheet / packing slip"
+                          aria-label="Open shop cut sheet / packing slip"
                         >
                           <svg
                             className="project-clad-order-export-pdf__icon"
@@ -9698,10 +9585,12 @@ export default function ProjectDetailPage() {
                             <line x1="8" y1="12" x2="13" y2="12" />
                             <rect x="8" y="15" width="4" height="4" rx="0.5" />
                           </svg>
-                        </button>
-                        {viewerIsAdmin ||
-                        job.orderLifecycleStatus === "delivered" ||
-                        job.orderLifecycleStatus === "paid" ? (
+                        </a>
+                        {/* Invoice / print-with-prices (receipt icon) temporarily hidden — flip false → restore. */}
+                        {false &&
+                        (viewerIsAdmin ||
+                          job.orderLifecycleStatus === "delivered" ||
+                          job.orderLifecycleStatus === "paid") ? (
                           <button
                             type="button"
                             className="project-clad-order-export-pdf project-clad-order-export-pdf--invoice"
@@ -10799,6 +10688,11 @@ export default function ProjectDetailPage() {
         ajax hub in `project-main.js` so it can tell a native submit (which navigates away
         now, and must be snapshotted here) from an ajax one (which preventDefaults and
         reloads through `pcReload` later).
+
+        It also owns the session mutation stamp behind `pcDataChangedSince`, which is what
+        decides whether a back/forward restore is stale enough to be worth reloading. That
+        it loads last is why the check is made from the `pageshow` handler rather than at
+        the page-transition script's own init, when the helper does not exist yet.
       */}
       <script src={proxyScriptSrcs.dirtyGuard} />
     </>
