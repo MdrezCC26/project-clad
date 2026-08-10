@@ -92,16 +92,40 @@ function lineProperties(item: JobItem): { name: string; value: string }[] {
   });
 }
 
-/** The calculator's reference render beats the catalog photo for a shop drawing. */
+/** Prefer customer uploads / calculator reference art over the catalog photo. */
 function resolveItemImage(
+  displayName: string,
   properties: { name: string; value: string }[],
   snapshotImageUrl: string | null,
 ): string | null {
+  const isUploadPart = displayName.toLowerCase().includes("upload part");
+
+  // Upload Part: any http(s) property is the customer file (same rule as the project page).
+  if (isUploadPart) {
+    for (const p of properties) {
+      const href = normalizeHttpUrl(p.value || "");
+      if (href && !isLikelyPdfUrl(href)) return href;
+    }
+    // PDFs can't render in <img>; leave the panel empty rather than showing the how-to art.
+    return null;
+  }
+
   for (const p of properties) {
     if (!isReferenceImagePropertyName(p.name)) continue;
     const href = normalizeHttpUrl(p.value);
     if (href && !isLikelyPdfUrl(href)) return href;
   }
+
+  // Also accept a generic File / Image / Upload URL property when present.
+  for (const p of properties) {
+    const name = p.name.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+    if (name !== "file" && name !== "image" && name !== "upload" && name !== "uploaded file") {
+      continue;
+    }
+    const href = normalizeHttpUrl(p.value || "");
+    if (href && !isLikelyPdfUrl(href)) return href;
+  }
+
   const snap = snapshotImageUrl ? normalizeHttpUrl(snapshotImageUrl) : null;
   return snap && !isLikelyPdfUrl(snap) ? snap : null;
 }
@@ -220,7 +244,7 @@ function toShopSlipItem(item: JobItem, index: number): ShopSlipItem {
     dimensionRows: buildSlipDimensionRows(map),
     partNumber: capture?.sku?.trim() || item.catalogSku?.trim() || null,
     gaugeLabel: gaugeLabel || null,
-    imageUrl: resolveItemImage(properties, snapshot?.imageUrl ?? null),
+    imageUrl: resolveItemImage(displayName, properties, snapshot?.imageUrl ?? null),
     imageAlt: displayName,
   };
 }
