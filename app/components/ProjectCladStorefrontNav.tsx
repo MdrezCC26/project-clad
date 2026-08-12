@@ -11,7 +11,6 @@ import type { StorefrontAppNavLink } from "../types/storefrontAppNav";
 import {
   CANADIAN_CLADDING_ACCOUNT_LOGOUT_URL,
   CANADIAN_CLADDING_PRIMARY_NAV,
-  CANADIAN_CLADDING_TOPBAR_LEAD_TIME,
   CANADIAN_CLADDING_TOPBAR_LINKS,
   matchCanadianCladdingPrimaryNavActive,
 } from "../utils/canadianCladdingPrimaryNav";
@@ -475,13 +474,6 @@ export function ProjectCladStorefrontNav({
   const ccAppHeader = (
     <header className="cc-app-header" id="ccAppHeader" data-cc-app-header>
       <div className="cc-app-header__topbar">
-        <div className="cc-app-header__topbar-left">
-          <span>{CANADIAN_CLADDING_TOPBAR_LEAD_TIME}</span>
-          <span className="cc-app-header__sep" aria-hidden="true">
-            ·
-          </span>
-          <span>Ottawa, ON</span>
-        </div>
         <nav className="cc-app-header__topbar-right" aria-label="Quick links">
           {showBackToTop ? (
             <button
