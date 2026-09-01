@@ -188,7 +188,8 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
     body,
     .email-root { background-color:#FFFFFF !important; }
     .email-container,
-    .email-card-bg { background-color:#EEECE7 !important; }
+    .email-card-bg,
+    .email-line-card { background-color:#EEECE7 !important; }
     .email-text,
     .hero-headline { color:#1E2124 !important; }
     .email-muted { color:#5A5F66 !important; }
@@ -206,8 +207,10 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
   [data-ogsb] .email-root { background-color:#FFFFFF !important; }
   [data-ogsc] .email-container,
   [data-ogsc] .email-card-bg,
+  [data-ogsc] .email-line-card,
   [data-ogsb] .email-container,
-  [data-ogsb] .email-card-bg { background-color:#EEECE7 !important; }
+  [data-ogsb] .email-card-bg,
+  [data-ogsb] .email-line-card { background-color:#EEECE7 !important; }
   [data-ogsc] .email-text,
   [data-ogsc] .hero-headline,
   [data-ogsb] .email-text,

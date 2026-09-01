@@ -4,17 +4,23 @@ import {
   getCustomersByIds,
   resolvePlacerNotifyEmail,
 } from "./adminCustomers.server";
-import { customerFacingPropertiesIndentedBlock } from "./customerFacingEmailLines.server";
+import {
+  customerFacingPropertiesIndentedBlock,
+  filterCustomerFacingProperties,
+} from "./customerFacingEmailLines.server";
 import {
   getEmailNotificationPrefs,
   isEmailNotificationEnabled,
 } from "./emailNotificationPrefs.server";
 import { dedupeEmailAddresses, isEmailConfigured } from "./email.server";
+import { buildOrderPlacedEmailHtml } from "./financeDeliveredEmailHtml.server";
 import {
+  getShopLogoDataUrlForEmail,
   sendTransactionalEmail,
   sendTransactionalEmailToRecipients,
 } from "./transactionalEmail.server";
 import { shopStringFilter } from "./projectAccess.server";
+import { resolveOrderLineImageUrl } from "./orderLineSpecs";
 import { orderTaxFromSubtotal } from "./orderDisplayTax";
 import { formatOrderDeliveryFootline } from "./preferredDeliveryFormat";
 import {
@@ -52,15 +58,6 @@ function formatOrderPlacedTimestamp(instant: Date): string {
     hour12: true,
   }).format(instant);
   return `${datePart} at ${timePart}`;
-}
-
-function adminAppHomeUrl(shopDomain: string): string {
-  const storeSlug = shopDomain
-    .replace(/\.myshopify\.com$/i, "")
-    .replace(/[^a-z0-9]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .toLowerCase();
-  return `https://admin.shopify.com/store/${storeSlug}/apps/projectclad/app/active-orders`;
 }
 
 function parseShopOrderPlacedRecipients(): string[] {
@@ -257,10 +254,6 @@ function formatJobPoLine(jobPurchaseOrderNumber?: string | null): string {
   return `PO Number: ${v || "—"}`;
 }
 
-function formatOrderNumberTag(orderNumber: number | null | undefined): string {
-  return `ORDER ${orderNumber ?? "—"}`;
-}
-
 /**
  * Cart save: lines for the affected order only (no shop/project/order IDs, no full snapshot).
  */
@@ -438,6 +431,24 @@ function buildShopOrderLinesNoPricingBlock(
     .join("\n\n");
 }
 
+function shippingLinesForProject(project: {
+  shipAddress1: string | null;
+  shipCity: string | null;
+  shipProvince: string | null;
+  shipPostal: string | null;
+  shipCountry: string | null;
+}): string[] {
+  return [
+    project.shipAddress1,
+    [project.shipCity, project.shipProvince, project.shipPostal]
+      .filter(Boolean)
+      .join(", "),
+    project.shipCountry,
+  ]
+    .filter((l) => l && String(l).trim())
+    .map((l) => String(l).trim());
+}
+
 function shippingBlockForProject(project: {
   shipAddress1: string | null;
   shipCity: string | null;
@@ -445,22 +456,19 @@ function shippingBlockForProject(project: {
   shipPostal: string | null;
   shipCountry: string | null;
 }): string {
-  const lines = [
-    project.shipAddress1,
-    [
-      project.shipCity,
-      project.shipProvince,
-      project.shipPostal,
-    ]
-      .filter(Boolean)
-      .join(", "),
-    project.shipCountry,
-  ]
-    .filter((l) => l && String(l).trim())
-    .map((l) => String(l).trim());
+  const lines = shippingLinesForProject(project);
   return lines.length
     ? ["Ship to:", ...lines.map((l) => `  ${l}`)].join("\n")
     : "Ship to: (not on file)";
+}
+
+function customerNameFromRow(row?: {
+  firstName?: string | null;
+  lastName?: string | null;
+} | null): string {
+  return (
+    [row?.firstName, row?.lastName].filter(Boolean).join(" ").trim() || "—"
+  );
 }
 
 /**
@@ -562,7 +570,8 @@ export async function sendOrderPlacedEmails(args: {
   const total = Math.round((subtotal + tax + deliveryFee) * 100) / 100;
 
   const projectUrl = `https://${args.shop}/apps/project-clad/project?id=${encodeURIComponent(args.projectId)}`;
-  const adminHomeUrl = adminAppHomeUrl(args.shop);
+  const projectOrderUrl = `${projectUrl}&job=${encodeURIComponent(args.jobId)}`;
+  const isDelivery = args.fulfillmentMethod === "delivery";
 
   const headerLines = [
     `Project: ${project.name}`,
@@ -572,13 +581,68 @@ export async function sendOrderPlacedEmails(args: {
     `Company: ${(project.companyName ?? "").trim() || "—"}`,
   ];
 
-  const addressBlock =
-    args.fulfillmentMethod === "delivery"
-      ? [shippingBlockForProject(project), ``]
-      : [`This order is store pickup (no delivery address).`, ``];
+  const addressBlock = isDelivery
+    ? [shippingBlockForProject(project), ``]
+    : [`Fulfillment: Store pickup`, ``];
 
+  const placedAtInstant = new Date();
+  const placedAt = formatOrderPlacedTimestamp(placedAtInstant);
+  const customerCustomerId =
+    args.customerCustomerId?.trim() || args.actorCustomerId;
+  const lookupIds = Array.from(
+    new Set([
+      customerCustomerId,
+      args.actorCustomerId,
+      project.ownerCustomerId,
+    ]),
+  );
+  const customerInfo = await getCustomersByIds(args.shop, lookupIds).catch(
+    () => ({} as Awaited<ReturnType<typeof getCustomersByIds>>),
+  );
+  const customerRow = getCustomerRowFromFetchedMap(
+    customerCustomerId,
+    customerInfo,
+  );
+  const ownerRow = getCustomerRowFromFetchedMap(
+    project.ownerCustomerId,
+    customerInfo,
+  );
+  const ac = getCustomerRowFromFetchedMap(args.actorCustomerId, customerInfo);
+  const customerName = customerNameFromRow(customerRow);
+  const customerEmailDisplay = customerRow?.email?.trim() || "—";
+  const customerPhone = (customerRow?.phone ?? "").trim() || "—";
+  const ownerName = customerNameFromRow(ownerRow);
+  const ownerEmail = ownerRow?.email?.trim() || "—";
+  const ownerPhone = (ownerRow?.phone ?? "").trim() || "—";
+  const actorName = customerNameFromRow(ac);
+  const actorEmail = ac?.email?.trim() || "—";
+  const actorPhone = (ac?.phone ?? "").trim() || "—";
+
+  const scheduleLine = formatOrderDeliveryFootline({
+    orderLifecycleStatus: "ordered",
+    paidAt: null,
+    completedAt: null,
+    scheduledDeliveryDate: job.scheduledDeliveryDate,
+    scheduledDeliveryWindow: job.scheduledDeliveryWindow,
+    fulfillmentMethod: args.fulfillmentMethod,
+  });
+  const requestedDelivery =
+    scheduleLine != null && String(scheduleLine).trim()
+      ? String(scheduleLine).toUpperCase()
+      : null;
+  const requestedBlock = requestedDelivery
+    ? [`Requested delivery:`, requestedDelivery, ``]
+    : [];
+
+  const shopLines = buildShopOrderLinesNoPricingBlock(args.shop, freshItems, live);
+
+  const customerIntro = `${job.name} has been placed. Click Open order to view your order details. Thank you for using Canadian Cladding!`;
   const customerBody = [
-    `${formatOrderNumberTag(job.orderNumber)} has been successfully placed, thank you for choosing Canadian Cladding.`,
+    customerIntro,
+    ``,
+    `Customer: ${customerName}`,
+    `Email: ${customerEmailDisplay}`,
+    `Phone: ${customerPhone}`,
     ``,
     ...headerLines,
     ``,
@@ -592,69 +656,117 @@ export async function sendOrderPlacedEmails(args: {
     `Tax: ${formatMoney(tax)}`,
     `Total: ${formatMoney(total)}`,
     ``,
-    `Open project: ${projectUrl}`,
+    `Open order: ${projectOrderUrl}`,
   ].join("\n");
 
-  const placedAt = formatOrderPlacedTimestamp(new Date());
-  const customerCustomerId =
-    args.customerCustomerId?.trim() || args.actorCustomerId;
-  const lookupIds = Array.from(
-    new Set([customerCustomerId, args.actorCustomerId]),
-  );
-  const customerInfo = await getCustomersByIds(args.shop, lookupIds).catch(
-    () => ({} as Awaited<ReturnType<typeof getCustomersByIds>>),
-  );
-  const customerRow = getCustomerRowFromFetchedMap(
-    customerCustomerId,
-    customerInfo,
-  );
-  const ac = getCustomerRowFromFetchedMap(args.actorCustomerId, customerInfo);
-  const actorName =
-    [ac?.firstName, ac?.lastName].filter(Boolean).join(" ").trim() || "—";
-  const actorEmail = ac?.email?.trim() || "—";
-  const actorPhone = (ac?.phone ?? "").trim() || "—";
-
-  const scheduleLine = formatOrderDeliveryFootline({
-    orderLifecycleStatus: "ordered",
-    paidAt: null,
-    completedAt: null,
-    scheduledDeliveryDate: job.scheduledDeliveryDate,
-    scheduledDeliveryWindow: job.scheduledDeliveryWindow,
-    fulfillmentMethod: args.fulfillmentMethod,
-  });
-  const requestedBlock =
-    scheduleLine != null && String(scheduleLine).trim()
-      ? [`Requested delivery:`, String(scheduleLine).toUpperCase(), ``]
-      : [];
-
-  const shopLines = buildShopOrderLinesNoPricingBlock(args.shop, freshItems, live);
-
   const shopBody = [
-    `${formatOrderNumberTag(job.orderNumber)} has been placed on ${placedAt},`,
+    `Order placed on ${placedAt}.`,
     ``,
-    `Placed by`,
-    `Customer name: ${actorName}`,
-    `Email: ${actorEmail}`,
-    `Phone: ${actorPhone}`,
+    `Customer`,
+    `Customer name: ${ownerName}`,
+    `Email: ${ownerEmail}`,
+    `Phone: ${ownerPhone}`,
+    ...(actorName !== ownerName
+      ? [
+          ``,
+          `Placed by`,
+          `Name: ${actorName}`,
+          `Email: ${actorEmail}`,
+          `Phone: ${actorPhone}`,
+        ]
+      : []),
     ``,
     `Project / order`,
-    `Project: ${project.name}`,
-    formatProjectNumberLine(project.poNumber),
-    `Order: ${job.name}`,
-    formatJobPoLine(job.purchaseOrderNumber),
-    `Company: ${(project.companyName ?? "").trim() || "—"}`,
-    `Fulfillment: ${args.fulfillmentMethod === "delivery" ? "Delivery" : "Pickup"}`,
+    ...headerLines,
+    `Fulfillment: ${isDelivery ? "Delivery" : "Pickup"}`,
     ``,
     ...requestedBlock,
-    ...(args.fulfillmentMethod === "delivery"
-      ? [`${shippingBlockForProject(project)}`, ``]
-      : []),
+    ...(isDelivery ? [`${shippingBlockForProject(project)}`, ``] : []),
     `Line items:`,
     ``,
     shopLines,
     ``,
-    `Open app home: ${adminHomeUrl}`,
+    `Open order: ${projectOrderUrl}`,
   ].join("\n");
+
+  const logoDataUrl = await getShopLogoDataUrlForEmail(args.shop);
+  const hasLogo = Boolean(logoDataUrl?.trim());
+  const companyName = (project.companyName ?? "").trim() || "—";
+  const shipToLines = shippingLinesForProject(project);
+  const htmlLineItems = freshItems.map((row) => {
+    const props =
+      row.customData && Array.isArray(row.customData)
+        ? (row.customData as { name: string; value: string }[])
+        : null;
+    const snap = parseVariantSnapshot(row.variantSnapshot);
+    const pres = buildVariantPresentation({
+      shop: args.shop,
+      variantId: row.variantId,
+      live: live[row.variantId],
+      snapshot: snap,
+    });
+    const unit = Number(row.priceSnapshot?.toString?.() ?? row.priceSnapshot ?? 0);
+    return {
+      displayName: pres.displayName,
+      quantity: row.quantity,
+      unit,
+      lineTotal: unit * row.quantity,
+      properties: filterCustomerFacingProperties(props),
+      imageUrl: resolveOrderLineImageUrl({
+        displayName: pres.displayName,
+        properties: props,
+        storefrontImageUrl: pres.imageUrl,
+        snapshotImageUrl: snap?.imageUrl ?? null,
+      }),
+    };
+  });
+
+  const sharedPlacedHtml = {
+    hasLogo,
+    isDelivery,
+    placedAt: placedAtInstant,
+    companyName,
+    projectName: project.name,
+    orderName: job.name,
+    orderNumber: job.orderNumber,
+    projectNumber: (project.poNumber ?? "").trim() || "—",
+    poNumber: (job.purchaseOrderNumber ?? "").trim() || "—",
+    shipToLines,
+    requestedDelivery,
+    projectOrderUrl,
+  };
+
+  const customerHtml = buildOrderPlacedEmailHtml({
+    ...sharedPlacedHtml,
+    customerName,
+    customerEmail: customerEmailDisplay,
+    customerPhone,
+    includePriceBox: true,
+    subtotal,
+    deliveryFee,
+    tax,
+    total,
+    lineItems: htmlLineItems,
+    showLineItemPrices: true,
+    title: "Your order has been placed",
+    preheader: `${job.name} has been placed — ${project.name}`,
+  });
+
+  const shopHtml = buildOrderPlacedEmailHtml({
+    ...sharedPlacedHtml,
+    customerName: ownerName,
+    customerEmail: ownerEmail,
+    customerPhone: ownerPhone,
+    placedByName: actorName,
+    placedByEmail: actorEmail,
+    placedByPhone: actorPhone,
+    includePriceBox: false,
+    lineItems: htmlLineItems,
+    showLineItemPrices: false,
+    title: "Shop — order placed",
+    preheader: `Shop: ${job.name} placed — ${project.name}`,
+    subcopy: `Order placed on ${placedAt}. Click Open order to view the project.`,
+  });
 
   let customerFailed = false;
   let shopFailed = false;
@@ -670,8 +782,9 @@ export async function sendOrderPlacedEmails(args: {
       await sendTransactionalEmail({
         shop: args.shop,
         to: customerTo,
-        subject: `ProjectClad: Your order has been placed — ${project.name}`,
+        subject: `ProjectClad: Order placed — ${project.name} · ${job.name}`,
         text: customerBody,
+        html: customerHtml,
       });
     } catch (err) {
       customerFailed = true;
@@ -696,8 +809,9 @@ export async function sendOrderPlacedEmails(args: {
     const accepted = await sendTransactionalEmailToRecipients({
       shop: args.shop,
       recipients: shopRecipients,
-      subject: `ProjectClad [Shop]: Order placed — ${job.name} — ${project.name}`,
+      subject: `ProjectClad [Shop]: Order placed — ${project.name} · ${job.name}`,
       text: shopBody,
+      html: shopHtml,
     });
     if (accepted === 0) {
       shopFailed = true;
