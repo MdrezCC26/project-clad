@@ -371,14 +371,18 @@ export function buildVariantPresentation(args: {
   const { shop, variantId, live, snapshot } = args;
 
   if (live) {
+    /* Order lines keep the image captured at save time; live catalog thumbs (e.g. OPC
+       reference art) must not replace historical line drawings on every page view. */
+    const imageUrl = snapshot?.imageUrl ?? live.imageUrl;
+    const imageAlt = snapshot?.imageAlt ?? live.imageAlt;
     return {
       displayName: formatVariantLineLabel(live.productTitle, live.title),
-      imageUrl: live.imageUrl,
-      imageAlt: live.imageAlt,
+      imageUrl,
+      imageAlt,
       productUrl: live.productHandle
         ? `https://${shop}/products/${live.productHandle}?variant=${variantId}`
         : null,
-      source: "live",
+      source: snapshot?.imageUrl ? "snapshot" : "live",
     };
   }
 
@@ -407,8 +411,8 @@ export function buildVariantPresentation(args: {
 }
 
 /**
- * When Shopify returns live data, persist it on the line item so titles/images survive
- * API hiccups or catalog changes when possible.
+ * When Shopify returns live data, persist titles/SKU on the line item so labels survive
+ * API hiccups or catalog changes. Image URLs captured at save time are never overwritten.
  */
 export async function persistVariantSnapshotsFromLive(args: {
   items: Array<{
@@ -428,11 +432,14 @@ export async function persistVariantSnapshotsFromLive(args: {
     if (!live) continue;
 
     const prev = parseVariantSnapshot(item.variantSnapshot);
+    const fromLive = snapshotFromLive(live);
     const next: VariantSnapshotV1 = {
-      ...snapshotFromLive(live),
+      ...fromLive,
+      imageUrl: prev?.imageUrl ?? fromLive.imageUrl,
+      imageAlt: prev?.imageAlt ?? fromLive.imageAlt,
       sku: live.sku ?? prev?.sku ?? null,
       vendor: prev?.vendor ?? null,
-      source: "shopify_api",
+      source: prev?.source ?? "shopify_api",
     };
 
     /**
