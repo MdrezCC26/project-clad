@@ -34,6 +34,7 @@
 
   var SNAPSHOT_KEY = 'pc-dirty-snapshot-v1';
   var SNAPSHOT_MAX_AGE_MS = 15 * 60 * 1000;
+  var MUTATION_KEY = 'pc-mutated-at';
   /*
    * How long the unload guard stays down after we hand off to a navigation. Long enough
    * to cover the browser starting the request, short enough that a navigation that never
@@ -482,6 +483,61 @@
     window.setTimeout(dismiss, 12000);
   }
 
+  /* ------------------------------------------------------------ mutation stamp */
+
+  /*
+   * Back/forward restores from the bfcache are instant and keep scroll position, so the
+   * only reason to throw one away is that the data behind it has moved on. Every mutation
+   * bumps a session-wide stamp; each document records the stamp it was rendered against.
+   * On a restore, a stamp newer than the document's watermark means someone changed
+   * something after this page was drawn, and only then is a reload worth its cost.
+   *
+   * A plain "something changed" boolean cannot express this. The mutation itself reloads
+   * the page it happened on, so any rule that cleared the flag on a fresh load would clear
+   * it before the user ever pressed back; never clearing it leaks and reloads forever.
+   *
+   * Wall-clock, bumped past the last value rather than trusting it to advance, so two
+   * mutations in the same millisecond (or a clock that steps backwards) still produce a
+   * strictly increasing sequence.
+   */
+  function readMutationStamp() {
+    try {
+      return Number(window.sessionStorage.getItem(MUTATION_KEY)) || 0;
+    } catch (err) {
+      /* private mode / storage disabled */
+      return 0;
+    }
+  }
+
+  function markMutated() {
+    try {
+      var prev = readMutationStamp();
+      var next = Date.now();
+      if (next <= prev) next = prev + 1;
+      window.sessionStorage.setItem(MUTATION_KEY, String(next));
+    } catch (err) {
+      /* No storage means no stamp, so restores read as unchanged and stand as they are.
+         Stale-until-refreshed beats reloading on every back press. */
+    }
+  }
+
+  /* The watermark: what the session had already seen when this document was rendered. */
+  var documentStamp = readMutationStamp();
+
+  /**
+   * Has anything been mutated since this document was rendered?
+   *
+   * `seenStamp` defaults to this document's watermark, which is what the two page-nav
+   * scripts want. They cannot capture one themselves — both load *before* this file, so
+   * at their init `window.sessionStorage` is readable but no helper exists yet — and the
+   * closure variable above survives a bfcache round trip on the same JS heap, so it still
+   * holds the value from when the page was first drawn.
+   */
+  function pcDataChangedSince(seenStamp) {
+    var seen = arguments.length ? Number(seenStamp) || 0 : documentStamp;
+    return readMutationStamp() > seen;
+  }
+
   /* ---------------------------------------------------------------- navigation */
 
   function suspend(ms) {
@@ -505,17 +561,29 @@
    * options.mode        'reload' (default) | 'assign' | 'replace'
    * options.href        target for assign/replace
    * options.skipIfDirty leave the page alone instead of reloading when work is pending
+   * options.mutation    false when this navigation is not the result of a data change
    *
    * Returns false when the navigation was declined or skipped.
+   *
+   * Every caller but one is a save, a reject, an approval or the redirect a failed one
+   * hands back, so the stamp is bumped by default. The exception is the pageshow refresh
+   * itself: it is a reaction to someone else's mutation, and letting it stamp would make
+   * every restored page in the session look stale in turn — back to the list would reload
+   * the list, then forward to the project would reload the project, forever.
+   *
+   * The bump sits on the paths that actually navigate. A run that returns false left the
+   * user on this page with their work intact and changed nothing.
    */
   function pcReload(options) {
     var opts = options || {};
     var except = opts.except && opts.except.nodeType === 1 ? opts.except : null;
     var mode = opts.mode || 'reload';
+    var isMutation = opts.mutation !== false;
     var groups = dirtyGroups(except);
 
     if (!groups.length) {
       clearSnapshot();
+      if (isMutation) markMutated();
       suspend();
       go(mode, opts.href);
       return true;
@@ -529,6 +597,7 @@
     }
 
     writeSnapshot(groups);
+    if (isMutation) markMutated();
     suspend();
     go(mode, opts.href);
     return true;
@@ -594,6 +663,11 @@
     if (event.defaultPrevented) return;
     if (!isMutatingForm(form)) return;
     writeSnapshot(dirtyGroups(form));
+    /* The same three forms are the only mutations that never reach pcReload, so this is
+       the other half of the stamp. `isMutatingForm` has already excluded GET forms, and a
+       declined data-projectclad-confirm never gets here — that guard cancels in the
+       capture phase with stopImmediatePropagation. */
+    markMutated();
     forget(form);
     suspend();
   });
@@ -626,6 +700,7 @@
   };
   window.pcReload = pcReload;
   window.pcConfirmLeave = pcConfirmLeave;
+  window.pcDataChangedSince = pcDataChangedSince;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', restoreSnapshot);

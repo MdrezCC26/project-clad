@@ -156,6 +156,16 @@ model Job {
   purchaseOrderPdfStorageKey String?
   /// Original filename of the uploaded purchase order PDF (display/download).
   purchaseOrderPdfFileName String?
+  /// Relative storage key for finance-uploaded customer invoice PDF.
+  invoicePdfStorageKey String?
+  /// Original filename of the uploaded invoice PDF.
+  invoicePdfFileName String?
+  /// When finance uploaded the invoice PDF.
+  invoiceUploadedAt DateTime?
+  /// When the customer invoice email was sent (idempotency / resend guard).
+  invoiceEmailedAt DateTime?
+  /// Last payment-reminder email sent (every 15 days until paid).
+  paymentReminderLastSentAt DateTime?
   /// Set when fulfillment emails + invoice hook ran (idempotency).
   fulfillmentNotifiedAt   DateTime?
   /// unread | in_progress | complete — only meaningful after job-level approval
@@ -421,4 +431,92 @@ model PurchaseOrderPdf {
   contentType String
   data        Bytes
   createdAt   DateTime @default(now())
+}
+
+/// Durable finance invoice PDF bytes keyed by Job `invoicePdfStorageKey`.
+model InvoicePdf {
+  storageKey  String   @id
+  contentType String
+  data        Bytes
+  createdAt   DateTime @default(now())
+}
+
+/// Merchant-authored starting shapes for the public templates page.
+model ShapeTemplate {
+  id        String   @id @default(cuid())
+  shop      String
+  slug      String
+  name      String
+  segments  Json
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shop, slug])
+  @@index([shop])
+}
+
+/// Staging cart for the storefront shape builder: profiles accumulate here, then go to the Shopify
+/// cart or into a project/order in one action. Keyed by the app-proxy `logged_in_customer_id`.
+model ShapeCartItem {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String
+  segments   Json
+  gauge      String
+  color      String
+  girth      Float
+  bends      Int      @default(0)
+  lengthIn   Float
+  quantity   Int      @default(1)
+  /// Catalogue unit price at add time: rate × girth × length × markup + bends × bend cost.
+  unitPrice  Decimal  @db.Decimal(10, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([shop, customerId, createdAt])
+}
+
+/// One Shopify product (single variant) per distinct orderable custom profile, created on demand the
+/// first time that profile is saved to a project. Gives every custom part a real, priced variant id
+/// instead of sharing one carrier variant, so draft orders, invoices, and reports line up.
+model ShapeVariant {
+  id           String   @id @default(cuid())
+  shop         String
+  /// Identity of an orderable part: geometry hash + gauge + colour + length.
+  specKey      String
+  geometryHash String
+  segments     Json
+  gauge        String
+  color        String
+  girth        Float
+  bends        Int
+  lengthIn     Float
+  unitPrice    Decimal  @db.Decimal(10, 2)
+  /// Legacy numeric Shopify ids, matching what the storefront cart reports elsewhere.
+  productId    String
+  variantId    String
+  sku          String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([shop, specKey])
+  @@index([shop, variantId])
+}
+
+/// Public library of distinct saved custom profiles (geometry only — no order data).
+model ShapeLibraryEntry {
+  id            String   @id @default(cuid())
+  shop          String
+  geometryHash  String
+  segments      Json
+  girth         Float
+  gauge         String?
+  color         String?
+  useCount      Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([shop, geometryHash])
+  @@index([shop, updatedAt])
 }

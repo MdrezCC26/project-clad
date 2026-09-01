@@ -1,6 +1,7 @@
 import { reactRouter } from "@react-router/dev/vite";
 import { defineConfig, type Plugin, type UserConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { execSync } from "node:child_process";
 import { applyHostToShopifyAppUrlFromEnv } from "./app/utils/publicAppOrigin";
 
 // Related: https://github.com/remix-run/remix/issues/2835#issuecomment-1144102176
@@ -45,6 +46,17 @@ export default defineConfig({
     },
   },
   plugins: [
+    {
+      name: "shape-builder-island",
+      buildStart() {
+        execSync("node scripts/build-shape-builder-island.mjs", {
+          stdio: "inherit",
+        });
+        this.addWatchFile("app/islands/shape-builder-entry.tsx");
+        this.addWatchFile("app/components/shape-builder/ShapeBuilder.jsx");
+        this.addWatchFile("app/utils/shapeProfile.ts");
+      },
+    } as Plugin,
     {
       name: "fix-app-proxy-forwarded-host",
       configureServer(server) {

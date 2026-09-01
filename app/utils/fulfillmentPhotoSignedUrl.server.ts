@@ -40,6 +40,12 @@ export function buildSignedFulfillmentPhotoUrl(args: {
   jobId: string;
   shop: string;
   phaseId?: string;
+  /**
+   * `image` — raw bytes (default, for `<img src>`).
+   * `view` — HTML page wrapping the image (preferred for email links; avoids
+   * Outlook’s raw-image loading chrome).
+   */
+  mode?: "image" | "view";
 }): string | null {
   const origin = resolvePublicAppOrigin();
   const secret = process.env.SHOPIFY_API_SECRET?.trim();
@@ -57,9 +63,14 @@ export function buildSignedFulfillmentPhotoUrl(args: {
   });
   const sig = crypto.createHmac("sha256", secret).update(message).digest("hex");
 
+  const path =
+    args.mode === "view"
+      ? "/public/fulfillment-photo-view"
+      : "/public/fulfillment-photo";
+
   let base: URL;
   try {
-    base = new URL("/public/fulfillment-photo", `${origin}/`);
+    base = new URL(path, `${origin}/`);
   } catch {
     return null;
   }

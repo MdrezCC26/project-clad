@@ -12,7 +12,7 @@
    *   <button type="button" data-pc-dismiss-banner="scheduleDateError">Dismiss</button>
    *
    * Hiding alone is not enough: the banner is a function of the URL, so a refresh would
-   * bring it straight back and `role="alert"` would announce it again. The param is
+   * bring it straight back and the live region would announce it again. The param is
    * stripped with history.replaceState, which changes the address bar without a request,
    * a loader refetch or a history entry.
    *
@@ -49,7 +49,10 @@
     var trigger = target.closest('[' + ATTR + ']');
     if (!trigger) return;
     event.preventDefault();
-    var banner = trigger.closest('[role="alert"]') || trigger;
+    /* Success banners are role="status" rather than role="alert" — announcing "3 orders
+       marked delivered" as an alert would be wrong — so both have to be matched here or the
+       Dismiss button would delete itself and leave the message behind. */
+    var banner = trigger.closest('[role="alert"],[role="status"]') || trigger;
     stripParam(trigger.getAttribute(ATTR));
     if (banner.parentNode) banner.parentNode.removeChild(banner);
   });

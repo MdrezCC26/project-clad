@@ -39,9 +39,10 @@ type McStatus =
   | "ready_to_order"
   | "ordered"
   | "delivered"
+  | "invoiced"
   | "paid";
 
-function mapStatus(pcStatus: string): McStatus {
+function mapLifecycleStatus(pcStatus: string): McStatus {
   switch (pcStatus) {
     case "pending_review":
       return "submitted";
@@ -54,6 +55,21 @@ function mapStatus(pcStatus: string): McStatus {
     default:
       return "ordered";
   }
+}
+
+/** Paid wins; else invoiced when customer invoice email was sent. */
+function mapOrderStatus(job: {
+  orderLifecycleStatus: string;
+  paidAt: Date | null;
+  invoiceEmailedAt: Date | null;
+}): McStatus {
+  if (job.orderLifecycleStatus === "paid" || job.paidAt) {
+    return "paid";
+  }
+  if (job.invoiceEmailedAt) {
+    return "invoiced";
+  }
+  return mapLifecycleStatus(job.orderLifecycleStatus);
 }
 
 function iso(d: Date | string | null | undefined): string | null {
@@ -354,7 +370,7 @@ async function buildIngestPayload(job: NonNullable<Awaited<ReturnType<typeof loa
       : null;
 
   const shipAddress = formatShipAddress(job.project);
-  const status = mapStatus(job.orderLifecycleStatus);
+  const status = mapOrderStatus(job);
 
   const lines = job.items.map((item) => {
     const customData = toCustomFields(item.customData);
@@ -396,7 +412,7 @@ async function buildIngestPayload(job: NonNullable<Awaited<ReturnType<typeof loa
   const money = await orderMoneyForMissionControl(job, phaseViews);
 
   return {
-    event: `job.${job.orderLifecycleStatus}`,
+    event: `job.${status}`,
     sentAt: new Date().toISOString(),
     project: {
       id: job.project.id,
@@ -430,6 +446,7 @@ async function buildIngestPayload(job: NonNullable<Awaited<ReturnType<typeof loa
       createdAt: iso(job.createdAt) ?? new Date().toISOString(),
       orderedAt: iso(confirmed?.createdAt),
       deliveredAt: iso(job.completedAt),
+      invoicedAt: iso(job.invoiceEmailedAt),
       paidAt: iso(job.paidAt),
       deliveryPhotoUrl,
       deliveredPercent,
@@ -624,6 +641,7 @@ async function listChangedMissionControlJobIds(
         OR: [
           { completedAt: { gte: since } },
           { paidAt: { gte: since } },
+          { invoiceEmailedAt: { gte: since } },
           { createdAt: { gte: since } },
           { deliveryPhases: { some: { updatedAt: { gte: since } } } },
         ],

@@ -19,8 +19,9 @@ export default async function handleRequest(
 ) {
   addDocumentResponseHeaders(request, responseHeaders);
 
-  // App-proxy HTML must not be cached by intermediaries or the browser, or customers
-  // keep an old shell (nav, CSS) after deploy until a hard refresh.
+  // App-proxy HTML must never be served from an intermediary, and the browser must
+  // revalidate before reusing it, or customers keep an old shell (nav, CSS) after
+  // deploy until a hard refresh.
   try {
     const url = new URL(request.url);
 
@@ -37,9 +38,16 @@ export default async function handleRequest(
     );
 
     if (url.pathname.startsWith("/apps/project-clad")) {
+      /* Deliberately no-cache and NOT no-store. Both force revalidation before the
+         browser may reuse a response, so either one prevents the stale shell. But
+         no-store also disqualifies the page from the back/forward cache, which turned
+         every back press into a full network refetch — a flash, a lost scroll position
+         and a wait. Staleness on a restored page is handled instead by the mutation
+         stamp in pc-dirty-guard.js, which refreshes on back only when something
+         actually changed. Do not add no-store back. */
       responseHeaders.set(
         "Cache-Control",
-        "private, no-store, no-cache, max-age=0, must-revalidate",
+        "private, no-cache, max-age=0, must-revalidate",
       );
       responseHeaders.set("Pragma", "no-cache");
       /* Shopify / some CDNs honor this in addition to Cache-Control */

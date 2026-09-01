@@ -21,12 +21,6 @@ import {
   isEmailNotificationEnabled,
 } from "../utils/emailNotificationPrefs.server";
 import { sendTransactionalEmail } from "../utils/transactionalEmail.server";
-import {
-  buildVariantPresentation,
-  parseVariantSnapshot,
-  persistVariantSnapshotsFromLive,
-  resolveVariantDisplayInfo,
-} from "../utils/variantInfo.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { projectCladProxyStylesHref } from "../utils/projectCladProxyStyles.server";
@@ -34,6 +28,7 @@ import { projectCladScriptSrc } from "../utils/projectCladProxyScripts.server";
 import { buildShopBrandingUrls } from "../utils/shopBrandingAssets.server";
 import {
   getViewerCompanyContext,
+  getViewerTagsCached,
   hasTag,
   normalizeStorefrontCustomerId,
   viewerHasAdminTag,
@@ -75,22 +70,11 @@ type ProjectListItem = {
   approvedBy: string[];
   approvalStatus: { requested: boolean; approved: boolean };
   storefrontStatus: ProjectStorefrontStatus;
+  /** Tiles only show aggregates; line items are resolved on the project detail page. */
   jobs: {
     id: string;
     name: string;
-    createdAt: string;
-    isLocked: boolean;
     orderLifecycleStatus: OrderLifecycleStatus;
-    itemCount: number;
-    items: {
-      id: string;
-      variantId: string;
-      quantity: number;
-      displayName: string;
-      imageUrl: string | null;
-      imageAlt: string | null;
-      productUrl: string | null;
-    }[];
   }[];
 };
 
@@ -114,14 +98,19 @@ function getProjectTileMetrics(project: ProjectListItem): {
   return { deliveredCount };
 }
 
-function getProjectUnitCount(project: ProjectListItem): number {
-  let units = 0;
-  for (const j of project.jobs) {
-    for (const it of j.items) {
-      units += it.quantity ?? 0;
-    }
-  }
-  return units;
+/**
+ * Single source of truth for search: rendered into `data-pc-search` so `projects-filters.js` and
+ * the server-side matcher below stay in agreement.
+ */
+function projectSearchHaystack(project: ProjectListItem): string {
+  return [
+    project.name,
+    project.poNumber || "",
+    project.companyName || "",
+    ...project.jobs.map((job) => job.name),
+  ]
+    .join(" ")
+    .toLowerCase();
 }
 
 /** Base path fragment for nested project-detail detection (`.../projects/:id`). */
@@ -253,22 +242,11 @@ function projectsListQueryString(
 function projectListItemMatchesQuery(project: ProjectListItem, qRaw: string): boolean {
   const q = qRaw.trim().toLowerCase();
   if (!q) return true;
-  const parts = q.split(/\s+/).filter(Boolean);
-  const pill = getProjectTileStatusPill(project);
-  const hay = [
-    project.name,
-    project.poNumber || "",
-    project.companyName || "",
-    String(project.jobCount),
-    pill?.label || "",
-    ...project.jobs.flatMap((job) => [
-      job.name,
-      ...job.items.map((item) => item.displayName ?? ""),
-    ]),
-  ]
-    .join(" ")
-    .toLowerCase();
-  return parts.every((part) => hay.includes(part));
+  const hay = projectSearchHaystack(project);
+  return q
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((part) => hay.includes(part));
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -304,36 +282,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
     include: {
       members: { select: { customerId: true } },
+      /* Tiles render aggregates and job names only. Pulling every line item also meant resolving
+         every variant through the Storefront and Admin APIs for a list nothing displayed them on. */
       jobs: {
         orderBy: { sortOrder: "asc" },
-        include: {
-          items: { orderBy: { sortOrder: "asc" } },
-          orderLink: true,
+        select: {
+          id: true,
+          name: true,
+          orderLifecycleStatus: true,
         },
       },
     },
     orderBy: { createdAt: "desc" },
-  });
-
-  const variantIds = projects.flatMap((project) =>
-    project.jobs.flatMap((job) => job.items.map((item) => item.variantId)),
-  );
-  const { info: variantInfo, error: variantLookupError } =
-    await resolveVariantDisplayInfo(shop, variantIds);
-
-  await persistVariantSnapshotsFromLive({
-    items: projects.flatMap((project) =>
-      project.jobs.flatMap((job) =>
-        job.items.map((item) => ({
-          id: item.id,
-          variantId: item.variantId,
-          variantSnapshot: item.variantSnapshot,
-          catalogProductId: item.catalogProductId,
-          catalogSku: item.catalogSku,
-        })),
-      ),
-    ),
-    liveByVariantId: variantInfo,
   });
 
   let hideAddToCart = false;
@@ -343,7 +303,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const numericId = normalizeStorefrontCustomerId(customerId);
     const [customerInfo, viewerTagsFromRest] = await Promise.all([
       getCustomersByIds(shop, [numericId]),
-      fetchCustomerTagsRest(shop, numericId),
+      getViewerTagsCached(shop, numericId),
     ]);
     const viewer =
       customerInfo[numericId] ?? customerInfo[customerId];
@@ -362,23 +322,52 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const projectIds = projects.map((p) => p.id);
 
-  const orderActivityRows =
-    projectIds.length > 0
-      ? await prisma.projectActivityEvent.findMany({
-          where: {
-            projectId: { in: projectIds },
-            type: {
-              in: [STOREFRONT_ORDER_CONFIRMED_ACTIVITY, "order_lifecycle_status"],
-            },
-          },
-          select: {
-            projectId: true,
-            createdAt: true,
-            type: true,
-            payload: true,
-          },
-        })
-      : [];
+  /* These four reads are independent of each other; running them serially added three round-trips
+     to every list render. */
+  const [
+    orderActivityRows,
+    pendingOrderApprovalRows,
+    projectLevelApprovals,
+    jobLevelApprovals,
+  ] = await Promise.all([
+    prisma.projectActivityEvent.findMany({
+      where: {
+        projectId: { in: projectIds },
+        type: {
+          in: [STOREFRONT_ORDER_CONFIRMED_ACTIVITY, "order_lifecycle_status"],
+        },
+      },
+      select: {
+        projectId: true,
+        createdAt: true,
+        type: true,
+        payload: true,
+      },
+    }),
+    prisma.approvalRequest.findMany({
+      where: {
+        projectId: { in: projectIds },
+        approvedAt: null,
+        NOT: { jobId: "" },
+      },
+      select: { projectId: true },
+    }),
+    prisma.approvalRequest.findMany({
+      where: {
+        projectId: { in: projectIds },
+        jobId: "",
+        itemId: "",
+      },
+    }),
+    prisma.approvalRequest.findMany({
+      where: {
+        projectId: { in: projectIds },
+        NOT: { jobId: "" },
+        itemId: "",
+        approvedAt: { not: null },
+      },
+    }),
+  ]);
 
   const lastOrderedAtByProjectId = new Map<string, Date>();
   for (const row of orderActivityRows) {
@@ -395,14 +384,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }
 
-  const pendingOrderApprovalRows = await prisma.approvalRequest.findMany({
-    where: {
-      projectId: { in: projectIds },
-      approvedAt: null,
-      NOT: { jobId: "" },
-    },
-    select: { projectId: true },
-  });
   const pendingApprovalCountByProjectId = new Map<string, number>();
   for (const row of pendingOrderApprovalRows) {
     pendingApprovalCountByProjectId.set(
@@ -411,13 +392,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     );
   }
 
-  const projectLevelApprovals = await prisma.approvalRequest.findMany({
-    where: {
-      projectId: { in: projectIds },
-      jobId: "",
-      itemId: "",
-    },
-  });
   const approvalByProjectId = new Map(
     projectLevelApprovals.map((a) => [
       a.projectId,
@@ -425,14 +399,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ]),
   );
 
-  const jobLevelApprovals = await prisma.approvalRequest.findMany({
-    where: {
-      projectId: { in: projectIds },
-      NOT: { jobId: "" },
-      itemId: "",
-      approvedAt: { not: null },
-    },
-  });
   const approverCustomerIds = [
     ...new Set(
       jobLevelApprovals
@@ -440,23 +406,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         .filter((id): id is string => Boolean(id)),
     ),
   ];
-  const approverInfo =
-    approverCustomerIds.length > 0
-      ? await getCustomersByIds(shop, approverCustomerIds).catch(
-          () => ({}) as Record<string, CustomerInfo>,
-        )
-      : {};
-
   /* Owner attribution for rows where the viewer is not the owner. */
   const ownerIds = Array.from(
     new Set(projects.map((p) => p.ownerCustomerId).filter(Boolean)),
   );
-  const ownerInfo =
-    ownerIds.length > 0
-      ? await getCustomersByIds(shop, ownerIds).catch(
+  /* Approvers and owners overlap heavily, so one batched lookup serves both label maps. */
+  const approverAndOwnerIds = Array.from(
+    new Set([...approverCustomerIds, ...ownerIds]),
+  );
+  const approverInfo =
+    approverAndOwnerIds.length > 0
+      ? await getCustomersByIds(shop, approverAndOwnerIds).catch(
           () => ({}) as Record<string, CustomerInfo>,
         )
       : ({} as Record<string, CustomerInfo>);
+  const ownerInfo = approverInfo;
   const labelForOwner = (id: string): string | null => {
     const c = ownerInfo[id];
     if (!c) return null;
@@ -516,28 +480,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     jobs: project.jobs.map((job) => ({
       id: job.id,
       name: job.name,
-      createdAt: job.createdAt.toISOString(),
-      isLocked: job.isLocked || Boolean(job.orderLink),
       orderLifecycleStatus: job.orderLifecycleStatus,
-      itemCount: job.items.reduce((sum, item) => sum + item.quantity, 0),
-      items: job.items.map((item) => {
-        const pres = buildVariantPresentation({
-          shop,
-          variantId: item.variantId,
-          live: variantInfo[item.variantId],
-          snapshot: parseVariantSnapshot(item.variantSnapshot),
-        });
-
-        return {
-          id: item.id,
-          variantId: item.variantId,
-          quantity: item.quantity,
-          displayName: pres.displayName,
-          imageUrl: pres.imageUrl,
-          imageAlt: pres.imageAlt,
-          productUrl: pres.productUrl,
-        };
-      }),
     })),
     approvalStatus: approvalByProjectId.get(project.id) ?? {
       requested: false,
@@ -568,7 +511,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     projects: payload,
     themeStyles,
     shop,
-    variantLookupError,
     hideAddToCart,
     storefrontAppNav,
     logoUrl: branding.logoUrl,
@@ -658,7 +600,6 @@ export default function ProjectsPage() {
     proxyScriptSrcs,
     projects,
     themeStyles,
-    variantLookupError,
     hideAddToCart,
     storefrontAppNav,
     logoUrl,
@@ -1004,9 +945,6 @@ export default function ProjectsPage() {
               </div>
             </>
           ) : null}
-          {variantLookupError && (
-            <p className="project-clad-muted">{variantLookupError}</p>
-          )}
           {projects.length === 0 ? (
             <section className="project-clad-card">
               <p className="project-clad-muted">
@@ -1041,7 +979,6 @@ export default function ProjectsPage() {
               {filteredProjects.map((project) => {
                 const m = getProjectTileMetrics(project);
                 const pill = getProjectTileStatusPill(project);
-                const unitCount = getProjectUnitCount(project);
                 const ownsTile =
                   project.isOwner || viewerIsAppAdmin;
                 const ownershipCls = ownsTile
@@ -1073,9 +1010,8 @@ export default function ProjectsPage() {
                       : 0,
                   )}
                   data-pc-name={project.name.toLowerCase()}
-                  data-pc-search={`${project.name} ${project.poNumber || ""} ${project.companyName || ""}`.toLowerCase()}
+                  data-pc-search={projectSearchHaystack(project)}
                   data-pc-orders={String(project.jobCount)}
-                  data-pc-units={String(unitCount)}
                 >
                   <a
                     href={`/apps/project-clad/project?id=${encodeURIComponent(project.id)}`}
@@ -1229,6 +1165,23 @@ export default function ProjectsPage() {
               })}
             </section>
           )}
+          {/* Paging is client-side: every card is already in the DOM, so revealing more is instant
+              and search/sort keep working across the whole list. `projects-filters.js` owns the
+              visible window and unhides this button when there is more to show. */}
+          <div
+            className="project-clad-projects-show-more"
+            data-pc-show-more-wrap
+            style={{ display: "none" }}
+          >
+            <button
+              type="button"
+              className="project-clad-button"
+              data-pc-show-more
+              data-projectclad-no-transition
+            >
+              Show more
+            </button>
+          </div>
         </div>
         <ProjectCladStorefrontFooter
           logoSrc={logoUrl}
@@ -1244,7 +1197,9 @@ export default function ProjectsPage() {
       {/*
         Unsaved-work guard — same script as the project detail page. Little on this page is
         typed into, but it supplies `pcReload`/`pcConfirmLeave` to the two scripts above so
-        the card-link navigation and the post-approval reload behave the same everywhere.
+        the card-link navigation and the post-approval reload behave the same everywhere,
+        and `pcDataChangedSince`, which tells the `pageshow` handler whether a restored
+        page is stale enough to be worth reloading.
         Loaded last so its submit listener runs after the per-form ajax handlers.
       */}
       <script src={proxyScriptSrcs.dirtyGuard} />

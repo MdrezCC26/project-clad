@@ -12,7 +12,10 @@
             "l2": null,
             "l3": null,
             "gauge": null,
-            "shapeType": null
+            "shapeType": null,
+            "girth": null,
+            "bends": null,
+            "length": null
           }
         ]
       }

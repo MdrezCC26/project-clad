@@ -28,10 +28,17 @@ export const APP_PROXY_QUERY_KEYS = [
 
 const APP_PROXY_SIGNATURE_PARAM = "signature";
 
+/**
+ * Shopify sorts the signed params by code point, not by locale. `localeCompare` collates
+ * case-insensitively, so a page whose query mixes cases — `?L1=6&color=Galvanized` — produced a
+ * different order than Shopify signed and every such request 401'd.
+ */
+const byCodePoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
 const buildMessage = (params: URLSearchParams) => {
   const pairs = Array.from(params.entries())
     .filter(([key]) => key !== APP_PROXY_SIGNATURE_PARAM)
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => byCodePoint(a, b))
     .map(([key, value]) => `${key}=${value}`);
 
   return pairs.join("");

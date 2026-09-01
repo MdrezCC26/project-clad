@@ -27,7 +27,10 @@ Known entry points (verify in repo):
 |------|------|--------|
 | Core send | `app/utils/email.server.ts` | `sendEmail`, `isEmailConfigured` |
 | Order / project status copy | `app/utils/orderCreatedEmail.server.ts` | `sendOrderCreatedNotificationEmail`, `sendProjectStatusNotificationEmail` |
-| Fulfillment / package photos | `app/utils/fulfillmentNotify.server.ts` | `sendFulfillmentPackageEmails` → `sendEmail` |
+| Fulfillment / package photos | `app/utils/fulfillmentNotify.server.ts` | `sendFulfillmentPackageEmails` → **customer + finance** branded HTML; both attach delivery photo |
+| Branded HTML shell | `app/utils/brandedEmailHtml.server.ts` | Shared cream/card/zigzag layout |
+| Delivered HTML (customer/finance) | `app/utils/financeDeliveredEmailHtml.server.ts` | Shared confirmation; finance adds price box |
+| Finance recipients + mutes | `app/utils/financeEmailRecipients.server.ts` | Env list; Admin mutes in `emailNotificationPrefsJson` |
 | API actions (many intents) | `app/routes/apps.project-clad.api.project-actions.tsx` | Direct `sendEmail` calls for specific actions |
 | Projects list / admin-style actions | `app/routes/apps.project-clad.projects.tsx` | At least one `sendEmail` path |
 | Save job → order created mail | `app/routes/apps.project-clad.save-job.tsx` | Imports `sendOrderCreatedNotificationEmail` |
@@ -50,3 +53,14 @@ Known entry points (verify in repo):
 ## Optional: dedicated chat
 
 For large email refactors, open a **new chat** titled around “Project Clad emails” and @-mention this skill or say “use the project-clad-emails skill” so context stays scoped.
+
+## Local HTML preview (no SMTP)
+
+```powershell
+npm run preview:finance-email
+npm run preview:finance-email -- --open
+npm run preview:customer-email
+npm run preview:customer-email -- --open
+```
+
+Writes under `docs/email-mockups/` (sample data). Override path with `$env:OUT="…"`.

@@ -17,6 +17,13 @@ import {
   confirmAdminPhaseFulfillment,
   jobHasFulfillmentEvidence,
 } from "../utils/adminPhaseFulfillment.server";
+import {
+  confirmBatchDelivery,
+  fulfillmentPhotoExtFromName,
+  summarizeBatchDelivery,
+  MAX_FULFILLMENT_PHOTO_BYTES,
+} from "../utils/batchDelivery.server";
+import { readFormUploadedImage } from "../utils/uploadedImageFile.server";
 import { notifyMissionControl } from "../utils/missionControl.server";
 import { settleBackupDraftOrderOnPaidBestEffort } from "../utils/shopifyDraftOrder.server";
 import { ensureJobOrderNumberForShop } from "../utils/jobOrderNumber.server";
@@ -297,6 +304,42 @@ export const action = async ({ request }: ActionFunctionArgs): Promise<ActionDat
       return result;
     }
     return { ok: true, message: result.message };
+  }
+
+  /* One photo, several orders — a single truckload routinely covers more than one. Each order
+     still records its own delivery and sends its own emails; only the image is shared. */
+  if (intent === "batch-confirm-delivery") {
+    const jobIds = form
+      .getAll("jobIds")
+      .map((v) => String(v).trim())
+      .filter(Boolean);
+    if (jobIds.length === 0) {
+      return { ok: false, error: "Select at least one order to confirm." };
+    }
+    const uploaded = await readFormUploadedImage(form, "photo");
+    if (!uploaded) {
+      return { ok: false, error: "Photo file is required." };
+    }
+    if (uploaded.size > MAX_FULFILLMENT_PHOTO_BYTES) {
+      return { ok: false, error: "Photo must be 8MB or smaller." };
+    }
+    const batch = await confirmBatchDelivery({
+      shop,
+      jobIds,
+      photo: {
+        buffer: uploaded.buffer,
+        ext: fulfillmentPhotoExtFromName(uploaded.name),
+      },
+      source: "shopify_admin",
+      logActivity: true,
+    });
+    const summary = summarizeBatchDelivery(batch);
+    /* Anything confirmed is real progress, so a partial batch reports as success with the
+       failures named — returning an error would imply nothing happened. */
+    if (batch.confirmed.length === 0) {
+      return { ok: false, error: summary };
+    }
+    return { ok: true, message: summary };
   }
 
   if (intent === "upload-fulfillment-photo") {

@@ -18,6 +18,7 @@ import {
   buildVariantPresentation,
   parseVariantSnapshot,
 } from "./variantInfo.server";
+import { formatPhoneNumber } from "./phoneFormat";
 
 export type AdminOrderQueueJobItem = {
   id: string;
@@ -41,6 +42,15 @@ export type AdminOrderQueueJobRow = {
   confirmedPhaseCount: number;
   openPhaseId: string | null;
   openPhaseSequence: number | null;
+  /**
+   * Where this order is going, and who is meeting the truck. Shown beside the batch
+   * checkboxes so confirming several orders off one photo is an informed choice rather than
+   * a guess at which ones were on the same drop.
+   */
+  deliveryAddressLine: string | null;
+  deliveryMethod: "pickup" | "delivery";
+  siteContactName: string | null;
+  siteContactPhone: string | null;
   /** Qty inputs for the open delivery drop (empty when no open phase). */
   deliveryInputs: Array<{
     jobItemId: string;
@@ -112,7 +122,18 @@ export async function loadAdminOrderQueueJobs(
           where: { id: { in: jobs.map((j) => j.id) } },
           orderBy: { createdAt: "asc" },
           include: {
-            project: { select: { id: true, name: true } },
+            project: {
+              select: {
+                id: true,
+                name: true,
+                receiveMode: true,
+                shipAddress1: true,
+                shipCity: true,
+                shipProvince: true,
+                shipPostal: true,
+                shipCountry: true,
+              },
+            },
             orderLink: { select: { orderName: true } },
             items: { orderBy: { sortOrder: "asc" } },
             deliveryPhases: {
@@ -135,6 +156,11 @@ export async function loadAdminOrderQueueJobs(
   }
 
   return refreshed.map((job) => {
+    const resolvedDelivery = resolveJobDelivery(
+      job,
+      projectDeliveryCtx(job.project),
+      shopDeliveryFee,
+    );
     const phaseViews = mapPhasesToViews(job.deliveryPhases);
     const deliveredPercent = computeDeliveredPercent(job.items, phaseViews);
     const confirmedPhaseCount = phaseViews.filter((p) => p.hasPhoto).length;
@@ -193,6 +219,10 @@ export async function loadAdminOrderQueueJobs(
       confirmedPhaseCount,
       openPhaseId,
       openPhaseSequence: openPhase?.sequence ?? null,
+      deliveryAddressLine: resolvedDelivery.addressLine,
+      deliveryMethod: resolvedDelivery.method,
+      siteContactName: job.siteContactName?.trim() || null,
+      siteContactPhone: formatPhoneNumber(job.siteContactPhone) || null,
       deliveryInputs,
       items,
     };

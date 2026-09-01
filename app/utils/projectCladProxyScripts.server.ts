@@ -38,6 +38,7 @@ export const PROJECT_CLAD_SCRIPT_NAMES = [
   "projects-page-nav.js",
   "projects-filters.js",
   "project-detail-page.js",
+  "shape-cart.js",
 ] as const;
 
 export type ProjectCladScriptName = (typeof PROJECT_CLAD_SCRIPT_NAMES)[number];

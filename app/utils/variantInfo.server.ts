@@ -190,6 +190,78 @@ export async function hydrateJobItemVariantSnapshots(
 }
 
 /**
+ * Every storefront page render resolved each line's variant through a Storefront GraphQL call plus
+ * an Admin call for whatever the storefront did not return. Catalog titles and images change far
+ * more slowly than pages are viewed, so results are memoized per (shop, variant). Misses are cached
+ * too, on a shorter clock, so deleted or draft-only variants stop re-triggering the Admin fallback.
+ */
+const VARIANT_INFO_TTL_MS = 5 * 60 * 1000;
+const VARIANT_INFO_MISS_TTL_MS = 60 * 1000;
+const VARIANT_INFO_CACHE_MAX_ENTRIES = 5000;
+
+const variantInfoCache = new Map<
+  string,
+  { info: VariantDisplayInfo | null; expiresAt: number }
+>();
+
+function variantInfoCacheKey(shop: string, variantId: string) {
+  return `${shop.trim().toLowerCase()}::${variantId}`;
+}
+
+function readVariantInfoCache(
+  shop: string,
+  variantId: string,
+): { info: VariantDisplayInfo | null } | undefined {
+  const key = variantInfoCacheKey(shop, variantId);
+  const hit = variantInfoCache.get(key);
+  if (!hit) return undefined;
+  if (hit.expiresAt <= Date.now()) {
+    variantInfoCache.delete(key);
+    return undefined;
+  }
+  return hit;
+}
+
+function writeVariantInfoCache(
+  shop: string,
+  variantId: string,
+  info: VariantDisplayInfo | null,
+): void {
+  const key = variantInfoCacheKey(shop, variantId);
+  /* Re-insert so Map iteration order stays least-recently-written first for eviction. */
+  variantInfoCache.delete(key);
+  variantInfoCache.set(key, {
+    info,
+    expiresAt:
+      Date.now() + (info ? VARIANT_INFO_TTL_MS : VARIANT_INFO_MISS_TTL_MS),
+  });
+  while (variantInfoCache.size > VARIANT_INFO_CACHE_MAX_ENTRIES) {
+    const oldest = variantInfoCache.keys().next();
+    if (oldest.done) break;
+    variantInfoCache.delete(oldest.value);
+  }
+}
+
+/** Drop memoized catalog data for specific variants (or the whole shop when none are given). */
+export function invalidateVariantInfoCache(
+  shop: string,
+  variantIds?: string[],
+): void {
+  if (variantIds?.length) {
+    for (const id of variantIds) {
+      variantInfoCache.delete(variantInfoCacheKey(shop, id));
+    }
+    return;
+  }
+  const prefix = `${shop.trim().toLowerCase()}::`;
+  for (const key of variantInfoCache.keys()) {
+    if (key.startsWith(prefix)) {
+      variantInfoCache.delete(key);
+    }
+  }
+}
+
+/**
  * Merge Storefront + Admin lookups so partial Storefront responses still fill gaps
  * (previously Admin ran only when Storefront returned zero keys).
  */
@@ -203,18 +275,36 @@ export async function resolveVariantDisplayInfo(
     return { info: {}, error: null };
   }
 
-  let merged: Record<string, VariantDisplayInfo> = {};
+  const merged: Record<string, VariantDisplayInfo> = {};
+  const lookupIds: string[] = [];
+  for (const id of unique) {
+    const cached = readVariantInfoCache(shop, id);
+    if (!cached) {
+      lookupIds.push(id);
+    } else if (cached.info) {
+      merged[id] = cached.info;
+    }
+  }
+
+  if (lookupIds.length === 0) {
+    return { info: merged, error: null };
+  }
+
+  let fresh: Record<string, VariantDisplayInfo> = {};
   let storefrontError: string | null = null;
 
   try {
-    const fromStore = await getVariantInfo(shop, unique);
-    merged = fromStore as Record<string, VariantDisplayInfo>;
+    fresh = (await getVariantInfo(shop, lookupIds)) as Record<
+      string,
+      VariantDisplayInfo
+    >;
   } catch (e) {
     storefrontError =
       e instanceof Error ? e.message : "Storefront variant lookup failed.";
   }
 
-  const missingAfterStorefront = unique.filter((id) => !merged[id]);
+  const missingAfterStorefront = lookupIds.filter((id) => !fresh[id]);
+  let adminError: string | null = null;
 
   if (missingAfterStorefront.length > 0) {
     try {
@@ -223,22 +313,37 @@ export async function resolveVariantDisplayInfo(
         missingAfterStorefront,
         options?.adminSession,
       );
-      merged = {
-        ...merged,
+      fresh = {
+        ...fresh,
         ...(admin as Record<string, VariantDisplayInfo>),
       };
     } catch (e) {
-      const adminMsg =
+      adminError =
         e instanceof Error ? e.message : "Admin variant lookup failed.";
-      if (Object.keys(merged).length === 0) {
-        return { info: {}, error: adminMsg };
-      }
-      return {
-        info: merged,
-        error: storefrontError
-          ? `${storefrontError} · ${adminMsg}`
-          : adminMsg,
-      };
+    }
+  }
+
+  for (const [id, info] of Object.entries(fresh)) {
+    writeVariantInfoCache(shop, id, info);
+    merged[id] = info;
+  }
+
+  if (adminError) {
+    /* A failed lookup says nothing about whether the variant exists, so nothing is cached. */
+    if (Object.keys(merged).length === 0) {
+      return { info: {}, error: adminError };
+    }
+    return {
+      info: merged,
+      error: storefrontError
+        ? `${storefrontError} · ${adminError}`
+        : adminError,
+    };
+  }
+
+  for (const id of lookupIds) {
+    if (!fresh[id]) {
+      writeVariantInfoCache(shop, id, null);
     }
   }
 

@@ -215,8 +215,9 @@ export async function viewerHasAdminTag(
     return true;
   }
 
-  const restTags = await fetchCustomerTagsRest(shop, id);
-  return hasStaffStorefrontTag(restTags);
+  /* Same REST read the loaders need for the NA tag — share the cache so a page render pays for it
+     once instead of here and again downstream. */
+  return hasStaffStorefrontTag(await getViewerTagsCached(shop, id));
 }
 
 /* -------------------------------------------------------------------------- */

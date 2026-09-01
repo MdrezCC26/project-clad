@@ -129,34 +129,41 @@
   - Form inputs                    caesura inset + pill; 16px min (no iOS zoom)
 */
 
-/* Page transition: enter (fade + slide up) and exit (fade + slide up) */
-.project-clad-page {
+/* Page transition: fade + slide the body only — keep the storefront header
+ * fully opaque so crossing from theme pages into the app proxy doesn't blink
+ * the nav chrome away and back. */
+.project-clad-page > .project-clad-container,
+.project-clad-page > .project-clad-storefront-footer {
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 0.16s ease-out, transform 0.16s ease-out;
 }
 
-.project-clad-page.project-clad-enter-done {
+.project-clad-page.project-clad-enter-done > .project-clad-container,
+.project-clad-page.project-clad-enter-done > .project-clad-storefront-footer {
   opacity: 1;
   transform: translateY(0);
 }
 
-body.project-clad-leaving .project-clad-page {
+body.project-clad-leaving .project-clad-page > .project-clad-container,
+body.project-clad-leaving .project-clad-page > .project-clad-storefront-footer {
   opacity: 0;
   transform: translateY(-8px);
 }
 
-/* The enter state is the whole page at opacity 0, so reduced motion cannot just shorten
-   the transition — the resting state has to be the starting state. Leaving stops moving
-   the page for the same reason: an instant fade-out reads as a flash, not as feedback. */
+/* The enter state starts at opacity 0, so reduced motion cannot just shorten
+   the transition — the resting state has to be the starting state. Leaving stops
+   moving the page for the same reason: an instant fade-out reads as a flash. */
 @media (prefers-reduced-motion: reduce) {
-  .project-clad-page {
+  .project-clad-page > .project-clad-container,
+  .project-clad-page > .project-clad-storefront-footer {
     opacity: 1;
     transform: none;
     transition: none;
   }
 
-  body.project-clad-leaving .project-clad-page {
+  body.project-clad-leaving .project-clad-page > .project-clad-container,
+  body.project-clad-leaving .project-clad-page > .project-clad-storefront-footer {
     opacity: 1;
     transform: none;
   }
@@ -662,8 +669,31 @@ body.project-clad-leaving .project-clad-page {
  */
 body:has(.project-clad-page) #ccHeader,
 body:has(.project-clad-page) header.cc-header[data-cc-header],
-body:has(.project-clad-page) .cc-header#ccHeader {
+body:has(.project-clad-page) .cc-header#ccHeader,
+body:has(.project-clad-page) #header-component {
   display: none !important;
+}
+
+/*
+ * Horizon still pads `#header-group` (`--cc-header-top-air`) after the embed is hidden.
+ * Projects/orders sit flush because this group is gone; match that on every proxy page.
+ */
+body.cc-store-neu:has(.project-clad-page) #header-group,
+body.cc-store-neu:has(.project-clad-page) #header-group .header-section:first-of-type,
+body.cc-store-neu:has(.project-clad-page) #header-group > .shopify-section.header-section,
+body:has(.project-clad-page) #header-group {
+  display: none !important;
+  padding: 0 !important;
+  padding-block-start: 0 !important;
+  padding-block-end: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
+.project-clad-page:has(.project-clad-header--fullbleed) {
+  padding-top: 0;
 }
 
 /**
@@ -8113,6 +8143,18 @@ html:has(.project-clad-page--projects) body {
   gap: 1.25rem;
 }
 
+/* Reveals the next page of project tiles; hidden by inline style until the filter script
+   finds cards beyond the visible window. */
+.project-clad-projects-show-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.project-clad-projects-show-more__count {
+  opacity: 0.7;
+}
+
 .project-clad-card {
   border: 1px solid #000;
   border-radius: var(--card-corner-radius, 16px);
@@ -12663,17 +12705,17 @@ input[data-projectclad-unit-price-input] {
   display: none !important;
 }
 
+/* Close sat flush against the block above it, so it read as the last control inside that card
+   rather than as the way out of the modal. */
+.project-clad-delivery-modal-tab-panel > .project-clad-actions {
+  margin-top: 1.5rem;
+}
+
 .project-clad-delivery-fulfillment-section {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   max-width: 100%;
-}
-
-.project-clad-delivery-fulfillment-progress {
-  margin: 0;
-  font-size: calc(0.9rem * var(--pc-text-scale, 1));
-  font-weight: 600;
 }
 
 .project-clad-delivery-drop-chips {
@@ -12706,11 +12748,6 @@ input[data-projectclad-unit-price-input] {
   opacity: 0.55;
 }
 
-.project-clad-delivery-drop-card {
-  padding: 0.75rem 0;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
-
 .project-clad-delivery-drop-collapsible {
   margin-top: 0.5rem;
   font-size: calc(0.85rem * var(--pc-text-scale, 1));
@@ -12727,28 +12764,526 @@ input[data-projectclad-unit-price-input] {
   padding-left: 1.1rem;
 }
 
-.project-clad-staff-delivery-reset-form {
-  margin: 0 0 0.65rem;
+/* ------------------------------------------------------- Delivery modal: Fulfillment tab
+ *
+ * Status, progress and the single form that records a drop. The three used to run together
+ * as one undifferentiated column of headings, grey paragraphs and a raw file input, which
+ * made "Confirm delivery" and "Reset delivery progress" look equally routine. Each concern
+ * now sits in its own bordered block, and the reset is demoted to a quiet link at the end.
+ */
+.project-clad-staff-phase-delivery {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
 }
 
-.project-clad-delivery-docs__intro {
-  margin: 0 0 0.75rem;
-  font-size: calc(0.85rem * var(--pc-text-scale, 1));
-  line-height: 1.45;
+/* Tinted rather than white so the controls and delivery cards inside it, which are white,
+   read as sitting on the block instead of merging into it. */
+.project-clad-fulfil-block {
+  padding: 0.8rem 0.9rem 0.9rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  background: #f4f6f8;
+  min-width: 0;
 }
 
-.project-clad-delivery-docs-table {
-  font-size: calc(0.88rem * var(--pc-text-scale, 1));
+.project-clad-fulfil-block__title {
+  margin: 0 0 0.7rem;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: max(11px, calc(0.58rem * var(--pc-text-scale, 1)));
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+/* Same reason as the button rule below: page-scoped theming does not reach inside a modal,
+   so the status row and its select arrive as raw browser controls without this. */
+.project-clad-modal-backdrop .project-clad-staff-fulfillment-status-row,
+.project-clad-modal-backdrop .project-clad-staff-fulfillment-upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.project-clad-modal-backdrop select.project-clad-staff-fulfillment__status {
+  flex: 1 1 9rem;
+  box-sizing: border-box;
+  min-width: 8rem;
+  max-width: 16rem;
+  margin: 0;
+  padding: 0.45rem 2.1rem 0.45rem 0.75rem;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 8px;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M2.5 4.25 6 7.75 9.5 4.25z'/%3E%3C/svg%3E");
+  background-position: right 0.7rem center;
+  background-repeat: no-repeat;
+  background-size: 12px 12px;
+  -webkit-appearance: none;
+  appearance: none;
+  color: #0e1a26;
+  font-family: inherit;
+  font-size: max(14px, calc(0.85rem * var(--pc-text-scale, 1)));
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.project-clad-modal-backdrop
+  .project-clad-staff-fulfillment-status-row
+  .project-clad-button,
+.project-clad-modal-backdrop
+  .project-clad-staff-fulfillment-upload-row
+  .project-clad-button {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.project-clad-modal-backdrop .project-clad-staff-fulfillment-status-hint {
+  margin: 0.5rem 0 0;
+}
+
+.project-clad-fulfil-progress__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.2rem 0.75rem;
+}
+
+.project-clad-fulfil-progress__pct {
+  font-size: calc(1.05rem * var(--pc-text-scale, 1));
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.project-clad-fulfil-progress__units {
+  font-size: calc(0.82rem * var(--pc-text-scale, 1));
+  font-weight: 600;
+  color: var(--pc-muted, #64748b);
+}
+
+.project-clad-fulfil-progress__track {
+  margin-top: 0.5rem;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.1);
+  overflow: hidden;
+}
+
+.project-clad-fulfil-progress__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #e53935 0%, #b71c1c 100%);
+}
+
+.project-clad-fulfil-progress__note {
+  margin: 0.45rem 0 0;
+  font-size: calc(0.8rem * var(--pc-text-scale, 1));
+  color: var(--pc-muted, #64748b);
+}
+
+.project-clad-fulfil-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+/* Fixed layout so the two narrow number columns cannot squeeze the line name into a
+   one-word-per-row column, which is what happens when the header text sets their width. */
+.project-clad-fulfil-table {
   width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: calc(0.88rem * var(--pc-text-scale, 1));
 }
 
-.project-clad-delivery-docs-table__qty {
-  white-space: nowrap;
-  vertical-align: top;
+.project-clad-fulfil-table th,
+.project-clad-fulfil-table td {
+  padding: 0.45rem 0.35rem;
+  text-align: left;
+  vertical-align: middle;
 }
 
-.project-clad-delivery-docs-table__links a {
+.project-clad-fulfil-table thead th {
+  padding-bottom: 0.35rem;
+  /* Bottom-aligned so a heading that does wrap in a narrow column still shares a baseline
+     with the two that did not. */
+  vertical-align: bottom;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.14);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: max(10px, calc(0.54rem * var(--pc-text-scale, 1)));
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+.project-clad-fulfil-table tbody tr + tr th,
+.project-clad-fulfil-table tbody tr + tr td {
+  border-top: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+.project-clad-fulfil-table__line {
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* Centred so each heading sits over its own value. Qualified by th/td because the blanket
+   `.project-clad-fulfil-table th, td { text-align: left }` above out-specifies a bare class,
+   which is why the numbers used to ignore this rule entirely. */
+.project-clad-fulfil-table th.project-clad-fulfil-table__num,
+.project-clad-fulfil-table td.project-clad-fulfil-table__num {
+  width: 5.5rem;
+  text-align: center;
+}
+
+input.project-clad-fulfil-qty {
+  box-sizing: border-box;
+  width: 4.25rem;
+  margin: 0;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  border-radius: 8px;
+  background: #fff;
+  color: #0e1a26;
+  text-align: center;
+  font-family: inherit;
+  font-size: max(15px, calc(0.88rem * var(--pc-text-scale, 1)));
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+input.project-clad-fulfil-qty:focus-visible {
+  outline: 2px solid rgba(15, 23, 42, 0.35);
+  outline-offset: 1px;
+  border-color: rgba(15, 23, 42, 0.3);
+}
+
+.project-clad-fulfil-hint {
+  margin: 0;
+  font-size: calc(0.78rem * var(--pc-text-scale, 1));
+  line-height: 1.45;
+  color: var(--pc-muted, #64748b);
+}
+
+.project-clad-fulfil-empty {
+  margin: 0;
+  font-size: calc(0.88rem * var(--pc-text-scale, 1));
+  line-height: 1.45;
+  color: var(--pc-muted, #64748b);
+}
+
+.project-clad-fulfil-photo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+.project-clad-fulfil-photo__label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: calc(0.85rem * var(--pc-text-scale, 1));
+  font-weight: 700;
+}
+
+.project-clad-fulfil-photo__required {
+  padding: 0.1rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(196, 0, 0, 0.1);
+  color: var(--color-1, #c40000);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: max(9px, calc(0.48rem * var(--pc-text-scale, 1)));
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* The browser default file input is the ugliest control on the page; ::file-selector-button
+   lets it match the rest without a JS-driven fake label that loses the chosen filename. */
+input.project-clad-fulfil-photo__input {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.5rem;
+  border: 1px dashed rgba(15, 23, 42, 0.25);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--pc-muted, #64748b);
+  font-family: inherit;
+  font-size: max(13px, calc(0.78rem * var(--pc-text-scale, 1)));
+  cursor: pointer;
+}
+
+input.project-clad-fulfil-photo__input::file-selector-button {
+  margin-right: 0.65rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 8px;
+  background: #fff;
+  color: #0e1a26;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: max(11px, calc(0.58rem * var(--pc-text-scale, 1)));
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+input.project-clad-fulfil-photo__input::file-selector-button:hover {
+  background: #f8fafc;
+  border-color: rgba(15, 23, 42, 0.28);
+}
+
+input.project-clad-fulfil-photo__input:focus-visible {
+  outline: 2px solid rgba(15, 23, 42, 0.35);
+  outline-offset: 2px;
+}
+
+.project-clad-fulfil-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+/*
+ * These modals sit outside `.project-clad-page`, so the page's button theming never reaches
+ * them and every control arrives as the same flat white pill. The one action each block is
+ * built around gets filled, which needs to out-specify the blanket
+ * `.project-clad-modal-backdrop .project-clad-button` rule near the top of this file.
+ */
+.project-clad-modal-backdrop .project-clad-fulfil-actions .project-clad-button:not(:disabled) {
+  margin: 0;
+  background: linear-gradient(180deg, #b4231a 0%, #991b1b 100%) !important;
+  color: #fff !important;
+  border-color: rgba(0, 0, 0, 0.18) !important;
+}
+
+.project-clad-modal-backdrop
+  .project-clad-fulfil-actions
+  .project-clad-button:not(:disabled):hover,
+.project-clad-modal-backdrop
+  .project-clad-fulfil-actions
+  .project-clad-button:not(:disabled):active {
+  background: linear-gradient(180deg, #9f2018 0%, #7f1a15 100%) !important;
+  color: #fff !important;
+  border-color: rgba(0, 0, 0, 0.22) !important;
+}
+
+.project-clad-fulfil-reset {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0 0.2rem;
+}
+
+.project-clad-fulfil-reset__btn {
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--color-1, #c40000);
+  font-family: inherit;
+  font-size: calc(0.82rem * var(--pc-text-scale, 1));
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.project-clad-fulfil-reset__btn:hover {
+  color: #8f0000;
+}
+
+.project-clad-fulfil-reset__btn:focus-visible {
+  outline: 2px solid rgba(196, 0, 0, 0.45);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .project-clad-fulfil-block {
+    padding: 0.7rem 0.65rem 0.75rem;
+  }
+
+  .project-clad-fulfil-table th,
+  .project-clad-fulfil-table td {
+    padding: 0.4rem 0.25rem;
+  }
+
+  .project-clad-fulfil-table th.project-clad-fulfil-table__num,
+  .project-clad-fulfil-table td.project-clad-fulfil-table__num {
+    width: 4.6rem;
+  }
+
+  input.project-clad-fulfil-qty {
+    width: 3.75rem;
+  }
+}
+
+/* ------------------------------------------------------ Delivery modal: Batch tab
+ *
+ * One photo, several orders. Each row has to carry enough context — where it is going and who
+ * is meeting the truck — that ticking the wrong order is visible before submitting, so the
+ * rows are cards rather than a bare checkbox list.
+ */
+.project-clad-batch-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.project-clad-batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-clad-batch-row {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  background: #fff;
+  min-width: 0;
+}
+
+.project-clad-batch-row__label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  cursor: pointer;
+  min-width: 0;
+}
+
+/* Modals sit outside `.project-clad-page`, so the page's control theming never reaches them
+   and the box would otherwise render at its unscaled browser default. */
+.project-clad-modal-backdrop input.project-clad-batch-row__check {
+  flex: 0 0 auto;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0.15rem 0 0;
+  accent-color: #b4231a;
+}
+
+.project-clad-batch-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.project-clad-batch-row__title {
+  font-weight: 700;
+  font-size: calc(0.88rem * var(--pc-text-scale, 1));
+  line-height: 1.3;
+  color: #0e1a26;
+  overflow-wrap: anywhere;
+}
+
+.project-clad-batch-row__meta {
+  font-size: calc(0.78rem * var(--pc-text-scale, 1));
+  line-height: 1.4;
+  color: var(--pc-muted, #64748b);
+  overflow-wrap: anywhere;
+}
+
+/* Documents tab: one card per confirmed drop, matching the Fulfillment tab's blocks. */
+.project-clad-delivery-docs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-clad-delivery-doc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  background: #fff;
+  min-width: 0;
+}
+
+.project-clad-delivery-doc__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem 0.6rem;
+}
+
+.project-clad-delivery-doc__title {
+  font-size: calc(0.92rem * var(--pc-text-scale, 1));
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.project-clad-delivery-doc__status {
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(180, 35, 26, 0.1);
+  color: #8f1d16;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: max(9px, calc(0.48rem * var(--pc-text-scale, 1)));
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   white-space: nowrap;
+}
+
+.project-clad-delivery-doc__status.is-confirmed {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.project-clad-delivery-doc__meta {
+  margin: 0;
+  font-size: calc(0.82rem * var(--pc-text-scale, 1));
+  line-height: 1.4;
+  color: var(--pc-muted, #64748b);
+}
+
+/* Modals sit outside `.project-clad-page`, so without this the photo link renders as the
+   browser default blue underline. */
+.project-clad-modal-backdrop a.project-clad-delivery-doc__photo {
+  align-self: flex-start;
+  max-width: 100%;
+  color: #b4231a;
+  font-size: calc(0.82rem * var(--pc-text-scale, 1));
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.project-clad-modal-backdrop a.project-clad-delivery-doc__photo:hover {
+  color: #7f1a15;
+}
+
+.project-clad-modal-backdrop a.project-clad-delivery-doc__photo:focus-visible {
+  outline: 2px solid rgba(180, 35, 26, 0.45);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .project-clad-delivery-drop-status {
@@ -13594,6 +14129,23 @@ details.project-clad-edit-mode .project-clad-normal-view {
 }
 details.project-clad-edit-mode .project-clad-edit-view {
   display: flex !important;
+}
+
+/* Stacked/narrow line tiles: qty + price inputs stay under centered labels. */
+details.project-clad-edit-mode
+  .project-clad-order-line-tile__col--qty
+  .project-clad-edit-view,
+details.project-clad-edit-mode
+  .project-clad-order-line-tile__col--price
+  .project-clad-edit-view {
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+#project-clad-orders-font-scope input[data-projectclad-qty-input] {
+  box-sizing: border-box;
+  margin-inline: auto;
 }
 
 /* Approve + Reject buttons - consistent alignment */
@@ -14690,6 +15242,9 @@ details.project-clad-edit-mode .project-clad-edit-view {
     width: 100% !important;
     table-layout: fixed !important;
     margin: 0 !important;
+    --pc-order-card-thumb-col: 3.25rem;
+    --pc-order-thumb-size: 36px;
+    --pc-order-card-thumb-max-h: 36px;
   }
 
   body.project-clad-print-order-only.project-clad-print-paginated
@@ -15291,6 +15846,9 @@ details.project-clad-edit-mode .project-clad-edit-view {
     width: 100% !important;
     table-layout: fixed !important;
     margin: 0 !important;
+    --pc-order-card-thumb-col: 3.25rem;
+    --pc-order-thumb-size: 36px;
+    --pc-order-card-thumb-max-h: 36px;
   }
 
   body.project-clad-print-order-only.project-clad-print-paginated
@@ -15317,9 +15875,10 @@ details.project-clad-edit-mode .project-clad-edit-view {
       minmax(0, 1fr)
       max-content
       max-content !important;
-    gap: 0.2rem 0.75rem !important;
+    gap: 0.2rem 0.55rem !important;
     align-items: center !important;
     justify-items: stretch !important;
+    overflow: visible !important;
   }
 
   body.project-clad-print-order-only .project-clad-order-line-tile__col--actions,
@@ -15342,8 +15901,8 @@ details.project-clad-edit-mode .project-clad-edit-view {
 
   body.project-clad-print-order-only .project-clad-thumb,
   body.project-clad-print-order-only .project-clad-order-card-thumb-frame {
-    max-width: 46px !important;
-    max-height: 46px !important;
+    max-width: 36px !important;
+    max-height: 36px !important;
   }
 
   body.project-clad-print-order-only .project-clad-order-card-thumb-frame,
@@ -15370,6 +15929,10 @@ details.project-clad-edit-mode .project-clad-edit-view {
     padding: 0 !important;
   }
 
+  /*
+   * Lock print thumbs so the drawing cannot overflow and paint over the
+   * line number / title / L1 specs / colour chips beside it.
+   */
   body.project-clad-print-order-only
     .project-clad-page--projects.project-clad-page--detail
     .project-clad-orders-table
@@ -15379,12 +15942,34 @@ details.project-clad-edit-mode .project-clad-edit-view {
     .project-clad-page--projects.project-clad-page--detail
     .project-clad-orders-table
     .project-clad-order-line-tile__col--thumb
+    .project-clad-thumb:not(.project-clad-thumb--placeholder):not(.project-clad-thumb--pdf),
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-line-tile__col--thumb
+    .project-clad-order-card-thumb-frame,
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-line-tile__col--thumb
     .project-clad-thumb:not(.project-clad-thumb--placeholder):not(.project-clad-thumb--pdf) {
-    width: 72px !important;
-    max-width: 72px !important;
-    height: auto !important;
-    max-height: 72px !important;
+    width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    max-height: 36px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
     object-fit: contain !important;
+    box-sizing: border-box !important;
+  }
+
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-line-tile__col--thumb
+    .project-clad-order-card-thumb-frame {
+    overflow: hidden !important;
+    flex: 0 0 36px !important;
   }
 
   /* Save / Order now (or lifecycle) / Edit order — not part of the PDF */
@@ -16666,11 +17251,12 @@ details.project-clad-edit-mode .project-clad-edit-view {
     .project-clad-print-page
     .project-clad-order-line-tile.project-clad-order-line-tile--line-item {
     container-type: normal !important;
-    padding: 0.06rem 0.12rem !important;
+    padding: 0.08rem 0.2rem 0.08rem 0.35rem !important;
     margin: 0 !important;
     border: none !important;
     background: transparent !important;
     box-shadow: none !important;
+    overflow: visible !important;
   }
 
   body.project-clad-print-order-only
@@ -16692,6 +17278,14 @@ details.project-clad-edit-mode .project-clad-edit-view {
     .project-clad-page--projects.project-clad-page--detail
     details.project-clad-order-row
     .project-clad-order-line-tile
+    .project-clad-order-line-tile__grid--with-actions,
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-line-tile__grid,
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
     .project-clad-order-line-tile__grid--with-actions {
     display: grid !important;
     grid-template-columns:
@@ -16699,10 +17293,11 @@ details.project-clad-edit-mode .project-clad-edit-view {
       minmax(0, 1fr)
       max-content
       max-content !important;
-    gap: 0.2rem 0.75rem !important;
+    gap: 0.2rem 0.55rem !important;
     align-items: center !important;
     justify-items: stretch !important;
     width: 100% !important;
+    overflow: visible !important;
   }
 
   body.project-clad-print-order-only.project-clad-print-hide-prices
@@ -16753,9 +17348,39 @@ details.project-clad-edit-mode .project-clad-edit-view {
     .project-clad-print-page
     .project-clad-order-line-tile__col--thumb
     .project-clad-order-card-thumb-frame {
-    width: 2.1rem !important;
-    max-width: 2.1rem !important;
+    width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    max-height: 36px !important;
     margin: 0 !important;
+    overflow: hidden !important;
+    flex: 0 0 36px !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--thumb,
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-line-tile__col--thumb {
+    overflow: visible !important;
+    min-width: max-content !important;
+    max-width: none !important;
+    padding-left: 0.15rem !important;
+    z-index: 0 !important;
+  }
+
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-tile__col--details,
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-line-tile__col--details {
+    overflow: visible !important;
+    min-width: 0 !important;
+    z-index: 1 !important;
   }
 
   /* Keep 10 lines + finance on one letter sheet: drop tall secondary stacks. */
@@ -16781,11 +17406,11 @@ details.project-clad-edit-mode .project-clad-edit-view {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: wrap !important;
-    gap: 0.1rem 0.55rem !important;
+    gap: 0.1rem 0.65rem !important;
     margin: 0 !important;
     padding: 0 !important;
-    font-size: 8px !important;
-    line-height: 1.15 !important;
+    font-size: 8.5px !important;
+    line-height: 1.2 !important;
   }
 
   body.project-clad-print-order-only
@@ -16832,13 +17457,20 @@ details.project-clad-edit-mode .project-clad-edit-view {
     .project-clad-page--projects.project-clad-page--detail
     .project-clad-orders-table
     .project-clad-order-line-tile__col--thumb
+    .project-clad-order-line-num,
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
     .project-clad-order-line-num {
     order: 1 !important;
     align-self: center !important;
-    min-width: 0 !important;
+    flex: 0 0 auto !important;
+    min-width: 1.15rem !important;
+    width: auto !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 0 0.15rem 0 0 !important;
     text-align: right !important;
+    overflow: visible !important;
   }
 
   body.project-clad-print-order-only
@@ -16850,18 +17482,33 @@ details.project-clad-edit-mode .project-clad-edit-view {
     .project-clad-page--projects.project-clad-page--detail
     .project-clad-orders-table
     .project-clad-order-line-tile__col--thumb
+    .project-clad-order-line-thumbwrap,
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-line-tile__col--thumb
+    .project-clad-order-card-thumb-frame,
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-line-tile__col--thumb
     .project-clad-order-line-thumbwrap {
     order: 2 !important;
   }
 
   body.project-clad-print-order-only
     .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-line-num,
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
     .project-clad-order-line-num {
     color: #5c6570 !important;
     font-family: "Inter", system-ui, sans-serif !important;
     font-size: 9px !important;
-    font-weight: 500 !important;
+    font-weight: 600 !important;
     text-shadow: none !important;
+    opacity: 1 !important;
   }
 
   body.project-clad-print-order-only
@@ -17307,11 +17954,14 @@ details.project-clad-edit-mode .project-clad-edit-view {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: wrap !important;
-    align-items: flex-start !important;
+    align-items: baseline !important;
     justify-content: flex-start !important;
-    gap: 0.35rem 1rem !important;
+    gap: 0.2rem 0.75rem !important;
     width: 100% !important;
     max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
   }
 
   body.project-clad-print-order-only
@@ -17324,9 +17974,10 @@ details.project-clad-edit-mode .project-clad-edit-view {
     .project-clad-order-card-details
     > .project-clad-order-card-name-row {
     flex: 0 1 auto !important;
-    max-width: 42% !important;
+    max-width: 38% !important;
     min-width: 0 !important;
     margin: 0 !important;
+    overflow: visible !important;
   }
 
   body.project-clad-print-order-only
@@ -17346,7 +17997,7 @@ details.project-clad-edit-mode .project-clad-edit-view {
     max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
-    gap: 0.1rem 0.75rem !important;
+    gap: 0.1rem 0.65rem !important;
     align-content: flex-start !important;
     align-items: baseline !important;
     font-family: "Inter", system-ui, sans-serif !important;
@@ -17355,6 +18006,7 @@ details.project-clad-edit-mode .project-clad-edit-view {
     letter-spacing: 0.02em !important;
     text-transform: uppercase !important;
     color: #344256 !important;
+    overflow: visible !important;
   }
 
   body.project-clad-print-order-only
@@ -17460,7 +18112,75 @@ details.project-clad-edit-mode .project-clad-edit-view {
     flex: 0 0 100% !important;
     width: 100% !important;
     max-width: 100% !important;
-    margin-top: 0.12rem !important;
+    margin-top: 0.08rem !important;
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+  }
+
+  /*
+   * Colour / Length chips must match L1/L2 print meta (same Inter size/weight/color).
+   * Screen chip rules use 0.75rem !important and grey labels — override here.
+   */
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-card-specs,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-card-specs {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 0.1rem 0.75rem !important;
+    align-items: baseline !important;
+  }
+
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-card-chip,
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-card-chip__k,
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-card-chip__v,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-card-chip,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-card-chip__k,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-card-chip__v {
+    font-family: "Inter", system-ui, sans-serif !important;
+    font-size: 8.5px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.02em !important;
+    line-height: 1.2 !important;
+    text-transform: uppercase !important;
+    color: #344256 !important;
+    text-shadow: none !important;
+    opacity: 1 !important;
+    max-width: none !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+  }
+
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-card-colour-swatch,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-card-colour-swatch {
+    display: none !important;
   }
 
   /*
@@ -19833,4 +20553,487 @@ form[data-projectclad-submit-approval][aria-busy="true"] button:disabled,
 form[data-projectclad-submit-approval][aria-busy="true"] input[type="submit"]:disabled {
   opacity: 0.55;
   cursor: progress;
+}
+
+/* Custom shape templates / library / builder (app proxy) */
+.pc-shape-page-head {
+  margin: 1.35rem 0 1.25rem;
+}
+.pc-shape-page-head__title {
+  margin: 0;
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-transform: none;
+}
+.pc-shape-page-head__sub {
+  margin: 0.4rem 0 0;
+  color: #5c6570;
+  max-width: 40rem;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+/*
+ * Shape destinations live in the primary nav as peers of Siding / Roofing. A light rule before
+ * Templates and after Parts cart groups them without looking like a second, pill-shaped menu.
+ */
+.project-clad-page .cc-app-header__nav > a.cc-app-header__nav-shape--start {
+  margin-left: 0.15rem;
+  padding-left: 0.85rem;
+  border-left: 1px solid rgba(60, 66, 78, 0.22);
+}
+.project-clad-page .cc-app-header__nav > a.cc-app-header__nav-shape--end {
+  margin-right: 0.15rem;
+  padding-right: 0.85rem;
+  border-right: 1px solid rgba(60, 66, 78, 0.22);
+}
+.project-clad-page .cc-app-header__nav > a.cc-app-header__nav-shape--has-badge {
+  gap: 0.35rem;
+}
+.project-clad-page .cc-app-header__nav-shape-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.32rem;
+  border-radius: 999px;
+  background: var(--cc-header-nav-accent, #c41e1e);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+@media screen and (max-width: 989px) {
+  .project-clad-page .cc-app-header__nav > a.cc-app-header__nav-shape--start,
+  .project-clad-page .cc-app-header__nav > a.cc-app-header__nav-shape--end {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+    border-left: none;
+    border-right: none;
+  }
+}
+
+.pc-shape-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+.pc-shape-card {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #dfe3e8;
+  border-radius: 1.1rem;
+  overflow: hidden;
+  color: inherit;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+.pc-shape-card__link {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  text-decoration: none !important;
+  color: inherit !important;
+  min-width: 0;
+}
+.pc-shape-card:hover {
+  border-color: #c8102e;
+}
+.pc-shape-card__art {
+  background: #eef1f4;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+}
+.pc-shape-card__art svg {
+  width: 100%;
+  height: 100%;
+}
+.pc-shape-card__body {
+  padding: 0.85rem 1rem 0.35rem;
+}
+.pc-shape-card__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+}
+.pc-shape-card__meta {
+  margin: 0.3rem 0 0;
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+.pc-shape-card__actions {
+  padding: 0 1rem 0.9rem;
+}
+.pc-shape-card__delete {
+  margin: 0;
+}
+.pc-shape-card__delete button {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #b42318;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.pc-shape-card__delete button:hover {
+  color: #912018;
+}
+.pc-shape-builder-mount {
+  margin: 0 0 2rem;
+  color: #111;
+}
+.pc-shape-builder-pending {
+  margin: 0;
+  padding: 1.25rem 0.25rem;
+  color: #111;
+  font-size: 1rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/*
+ * The shape builder is a React island styled with Tailwind, so none of the app-proxy page
+ * treatment above may reach it: uppercase inheritance, the `!important` Helvetica stack, and the
+ * caesura/neu field chrome all fight its own design. Scoped by **id** on purpose — the page rules
+ * carry `!important` plus long `:not()` chains, and only an id selector reliably outranks them.
+ */
+#pc-shape-builder-root,
+#pc-shape-builder-root * {
+  font-family: Inter, "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Tailwind's `min-h-screen` on the island root adds a whole viewport below the header. */
+#pc-shape-builder-root > div {
+  min-height: 0 !important;
+  background: transparent !important;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+#pc-shape-builder-root input,
+#pc-shape-builder-root select,
+#pc-shape-builder-root textarea {
+  border: 1px solid #d1d5db !important;
+  border-radius: 0.75rem !important;
+  background-color: #fff !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: #111827 !important;
+  text-shadow: none !important;
+  transition: none !important;
+}
+
+#pc-shape-builder-root button {
+  box-shadow: none !important;
+  background-image: none !important;
+  text-shadow: none !important;
+  min-width: 0;
+}
+
+/* Sticky drawing panel: start below the sticky storefront header (measured by the island). */
+#pc-shape-builder-root #shape-builder-drawing-panel {
+  top: var(--pc-shape-sticky-top, 6.5rem);
+}
+
+@media screen and (max-width: 1023px) {
+  /* Single-column layout: a sticky canvas would sit on top of the fields being edited. */
+  #pc-shape-builder-root #shape-builder-drawing-panel {
+    position: static;
+  }
+}
+
+/* Custom parts cart (app proxy) */
+.pc-cart-empty {
+  margin: 0 0 2.5rem;
+  color: #5c6570;
+  font-size: 1rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.pc-cart {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  align-items: start;
+  gap: 1.25rem;
+  margin-bottom: 3rem;
+}
+.pc-cart-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.pc-cart-line {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  background: #fff;
+  border: 1px solid #dfe3e8;
+  border-radius: 1.1rem;
+}
+.pc-cart-line__art {
+  width: 5.5rem;
+  height: 5.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef1f4;
+  border-radius: 0.9rem;
+  padding: 0.5rem;
+}
+.pc-cart-line__art svg {
+  width: 100%;
+  height: 100%;
+}
+.pc-cart-line__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: none;
+  letter-spacing: -0.01em;
+}
+.pc-cart-line__meta,
+.pc-cart-line__legs {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: #6b7280;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.pc-cart-line__links {
+  display: flex;
+  gap: 0.85rem;
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+}
+.pc-cart-line__links a,
+.pc-cart-line__links button {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: #c8102e !important;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+.pc-cart-line__qty {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.pc-cart-line__qty button {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid #111;
+  border-radius: 0.6rem;
+  background: #fff;
+  box-shadow: none;
+  color: #111;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+.pc-cart-line__qty input {
+  width: 2.75rem;
+  height: 2rem;
+  padding: 0 0.25rem;
+  border: 1px solid #d8dde3;
+  border-radius: 0.6rem;
+  background: #fff;
+  box-shadow: none;
+  text-align: center;
+  font-weight: 700;
+}
+.pc-cart-line__money {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 6rem;
+}
+.pc-cart-line__total {
+  font-size: 1rem;
+  font-weight: 800;
+}
+.pc-cart-line__unit {
+  font-size: 0.72rem;
+  color: #6b7280;
+}
+.pc-cart-summary {
+  padding: 1.1rem;
+  background: #fff;
+  border: 1px solid #dfe3e8;
+  border-radius: 1.1rem;
+  position: sticky;
+  top: 1rem;
+}
+.pc-cart-summary__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.pc-cart-summary__row strong {
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+.pc-cart-summary__note {
+  margin: 0.6rem 0 0.9rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.pc-cart-btn {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid #111;
+  border-radius: 0.9rem;
+  background: #fff;
+  box-shadow: none;
+  color: #111;
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.pc-cart-btn--primary {
+  border-color: #c8102e;
+  background: #c8102e;
+  color: #fff;
+}
+.pc-cart-btn--quiet {
+  border-color: transparent;
+  color: #6b7280;
+  font-weight: 600;
+}
+.pc-cart-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pc-cart-save {
+  grid-column: 1 / -1;
+  padding: 1.15rem;
+  background: #fff;
+  border: 1px solid #dfe3e8;
+  border-radius: 1.1rem;
+}
+.pc-cart-save__title {
+  margin: 0 0 0.9rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-transform: none;
+}
+.pc-cart-save__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.75rem;
+}
+.pc-cart-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+/* The author `display` above outranks the UA `[hidden]` rule, so restate it for toggled fields. */
+.pc-cart-field[hidden],
+.pc-cart-save[hidden] {
+  display: none;
+}
+.pc-cart-field > span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pc-cart-field input,
+.pc-cart-field select {
+  height: 2.5rem;
+  padding: 0 0.65rem;
+  border: 1px solid #d8dde3 !important;
+  border-radius: 0.7rem !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  font-size: 0.85rem;
+  text-transform: none;
+}
+.pc-cart-save__status {
+  margin: 0.85rem 0 0;
+  min-height: 1.1rem;
+  font-size: 0.8rem;
+  color: #6b7280;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.pc-cart-save__status[data-error="1"] {
+  color: #b91c1c;
+  font-weight: 700;
+}
+.pc-cart-save__actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+.pc-cart-save__actions .pc-cart-btn {
+  width: auto;
+  min-width: 9rem;
+}
+.pc-cart[aria-busy="true"] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+@media screen and (max-width: 900px) {
+  .pc-cart {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pc-cart-summary {
+    position: static;
+  }
+  .pc-cart-line {
+    grid-template-columns: 4rem minmax(0, 1fr);
+    row-gap: 0.6rem;
+  }
+  .pc-cart-line__art {
+    width: 4rem;
+    height: 4rem;
+  }
+  .pc-cart-line__qty {
+    grid-column: 1 / -1;
+  }
+  .pc-cart-line__money {
+    grid-column: 1 / -1;
+    align-items: flex-start;
+  }
 }

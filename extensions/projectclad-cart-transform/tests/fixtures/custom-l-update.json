@@ -12,7 +12,10 @@
             "l2": { "value": "5" },
             "l3": null,
             "gauge": { "value": "16" },
-            "shapeType": { "value": "L" }
+            "shapeType": { "value": "L" },
+            "girth": null,
+            "bends": null,
+            "length": null
           }
         ]
       }

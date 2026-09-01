@@ -31,6 +31,11 @@ import {
   normalizeJobDeliveryMode,
   type ShipToFields,
 } from "../utils/jobDelivery";
+import { publishShapeLibraryEntry } from "../utils/shapeLibrary.server";
+import {
+  isShapeBuilderLine,
+  legsFromLineProperties,
+} from "../utils/shapeProfile";
 
 type SaveJobPayload = {
   mode: "newProject" | "existingProject" | "existingJob";
@@ -326,6 +331,31 @@ function isDeliverySchemaError(e: unknown): boolean {
   );
 }
 
+async function publishSavedCustomShapes(
+  shop: string,
+  items: Array<{ properties?: { name: string; value: string }[] }>,
+) {
+  for (const item of items) {
+    const properties = item.properties;
+    if (!isShapeBuilderLine(properties)) continue;
+    const legs = legsFromLineProperties(properties);
+    if (!legs.length) continue;
+    const gauge =
+      properties?.find((p) => /^gauge$/i.test(p.name.trim()))?.value ?? null;
+    const color =
+      properties?.find((p) => /^(color|colour)$/i.test(p.name.trim()))?.value ??
+      null;
+    const girthRaw = properties?.find((p) => /^girth$/i.test(p.name.trim()))
+      ?.value;
+    const girth = girthRaw ? Number(girthRaw) : undefined;
+    try {
+      await publishShapeLibraryEntry({ shop, legs, gauge, color, girth });
+    } catch {
+      /* library publish must not fail the save */
+    }
+  }
+}
+
 function prismaErrorMessage(e: unknown): string | null {
   if (isDeliverySchemaError(e)) {
     return "The app database needs a delivery update (migration). Please try again shortly or contact support.";
@@ -456,6 +486,9 @@ async function saveJobAction(request: Request) {
     return Response.json({ error: "Invalid save request." }, { status: 400 });
   }
   const items = normalizeItems(payload.items);
+  if (items.length) {
+    void publishSavedCustomShapes(shop, items);
+  }
   const { name: saveJobName, purchaseOrderNumber: saveJobPurchaseOrderNumber } =
     normalizeJobNameAndPo(payload.jobName, payload.purchaseOrderNumber);
   const poNumber = (payload.poNumber || "").trim();

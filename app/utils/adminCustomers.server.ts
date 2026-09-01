@@ -206,12 +206,104 @@ export const findCustomerIdByEmail = async (
   return id ? String(id) : null;
 };
 
+/**
+ * A single storefront render asks for the same people several times over (project owner, members,
+ * approvers, timeline actors, the viewer themselves), and each ask was a separate Admin GraphQL
+ * round-trip. Profiles change rarely relative to page views, so rows are memoized per (shop,
+ * requested id) and only genuine misses reach the API.
+ */
+const CUSTOMER_INFO_TTL_MS = 60 * 1000;
+const CUSTOMER_INFO_MISS_TTL_MS = 30 * 1000;
+const CUSTOMER_INFO_CACHE_MAX_ENTRIES = 2000;
+
+const customerInfoCache = new Map<
+  string,
+  { info: CustomerInfo | null; expiresAt: number }
+>();
+
+function customerInfoCacheKey(shop: string, customerId: string) {
+  return `${shopHost(shop)}::${String(customerId).trim()}`;
+}
+
+function readCustomerInfoCache(
+  shop: string,
+  customerId: string,
+): { info: CustomerInfo | null } | undefined {
+  const key = customerInfoCacheKey(shop, customerId);
+  const hit = customerInfoCache.get(key);
+  if (!hit) return undefined;
+  if (hit.expiresAt <= Date.now()) {
+    customerInfoCache.delete(key);
+    return undefined;
+  }
+  return hit;
+}
+
+function writeCustomerInfoCache(
+  shop: string,
+  customerId: string,
+  info: CustomerInfo | null,
+): void {
+  const key = customerInfoCacheKey(shop, customerId);
+  /* Re-insert so Map iteration order stays least-recently-written first for eviction. */
+  customerInfoCache.delete(key);
+  customerInfoCache.set(key, {
+    info,
+    expiresAt:
+      Date.now() + (info ? CUSTOMER_INFO_TTL_MS : CUSTOMER_INFO_MISS_TTL_MS),
+  });
+  while (customerInfoCache.size > CUSTOMER_INFO_CACHE_MAX_ENTRIES) {
+    const oldest = customerInfoCache.keys().next();
+    if (oldest.done) break;
+    customerInfoCache.delete(oldest.value);
+  }
+}
+
+/** Drop memoized profiles for specific customers (or the whole shop when none are given). */
+export function invalidateCustomerInfoCache(
+  shop: string,
+  customerIds?: string[],
+): void {
+  if (customerIds?.length) {
+    for (const id of customerIds) {
+      customerInfoCache.delete(customerInfoCacheKey(shop, id));
+    }
+    return;
+  }
+  const prefix = `${shopHost(shop)}::`;
+  for (const key of customerInfoCache.keys()) {
+    if (key.startsWith(prefix)) {
+      customerInfoCache.delete(key);
+    }
+  }
+}
+
 export const getCustomersByIds = async (
   shop: string,
   customerIds: string[],
 ): Promise<Record<string, CustomerInfo>> => {
   if (customerIds.length === 0) {
     return {};
+  }
+
+  const uniqueIds = Array.from(new Set(customerIds));
+  const results: Record<string, CustomerInfo> = {};
+  const missingIds: string[] = [];
+  for (const id of uniqueIds) {
+    const cached = readCustomerInfoCache(shop, id);
+    if (!cached) {
+      missingIds.push(id);
+      continue;
+    }
+    if (cached.info) {
+      results[id] = cached.info;
+      results[cached.info.id] = cached.info;
+    }
+  }
+
+  if (missingIds.length === 0) {
+    addCustomerInfoKeyAliases(results);
+    return results;
   }
 
   const shopDomain = shopHost(shop);
@@ -222,9 +314,9 @@ export const getCustomersByIds = async (
     );
   }
 
-  const uniqueIds = Array.from(new Set(customerIds));
-  const gids = uniqueIds.map((id) => `gid://shopify/Customer/${id}`);
-  const results: Record<string, CustomerInfo> = {};
+  const gids = missingIds.map((id) => `gid://shopify/Customer/${id}`);
+  const fetched: Record<string, CustomerInfo> = {};
+  let batchFailed = false;
   const endpoint = `https://${shopDomain}/admin/api/${CUSTOMER_API_VERSION}/graphql.json`;
 
   for (const group of chunk(gids, 50)) {
@@ -263,6 +355,7 @@ export const getCustomersByIds = async (
     }
 
     if (!response.ok) {
+      batchFailed = true;
       continue;
     }
 
@@ -290,7 +383,7 @@ export const getCustomersByIds = async (
       if (!node?.id) return;
       const parts = node.id.split("/");
       const id = parts[parts.length - 1];
-      results[id] = {
+      fetched[id] = {
         id,
         email: node.email ?? null,
         firstName: node.firstName ?? null,
@@ -301,6 +394,24 @@ export const getCustomersByIds = async (
     });
   }
 
+  /* Requested ids can be formatted differently from the ids Shopify echoes back (leading zeros,
+     GID form), so resolve each request against the aliased map before caching it. */
+  const fetchedWithAliases: Record<string, CustomerInfo> = { ...fetched };
+  addCustomerInfoKeyAliases(fetchedWithAliases);
+  for (const id of missingIds) {
+    const row =
+      fetchedWithAliases[id] ??
+      getCustomerRowFromFetchedMap(id, fetchedWithAliases);
+    if (row) {
+      results[id] = row;
+    }
+    /* A failed batch says nothing about whether the customer exists, so nothing is cached. */
+    if (!batchFailed) {
+      writeCustomerInfoCache(shop, id, row ?? null);
+    }
+  }
+
+  Object.assign(results, fetched);
   addCustomerInfoKeyAliases(results);
   return results;
 };

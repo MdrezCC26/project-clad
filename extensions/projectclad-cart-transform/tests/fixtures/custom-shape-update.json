@@ -1,0 +1,40 @@
+{
+  "payload": {
+    "export": "cart_transform_run",
+    "target": "cart.transform.run",
+    "input": {
+      "cart": {
+        "lines": [
+          {
+            "id": "gid://shopify/CartLine/2",
+            "quantity": 1,
+            "l1": { "value": "12" },
+            "l2": { "value": "8" },
+            "l3": null,
+            "gauge": { "value": "24" },
+            "shapeType": { "value": "custom" },
+            "girth": { "value": "20" },
+            "bends": { "value": "2" },
+            "length": { "value": "120" }
+          }
+        ]
+      }
+    },
+    "output": {
+      "operations": [
+        {
+          "lineUpdate": {
+            "cartLineId": "gid://shopify/CartLine/2",
+            "price": {
+              "adjustment": {
+                "fixedPricePerUnit": {
+                  "amount": "42.50"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

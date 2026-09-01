@@ -34,11 +34,12 @@ import {
   fetchCustomerTagsRest,
   findCustomerIdByEmail,
   getCustomersByIds,
-  resolvePlacerNotifyEmail,
 } from "../utils/adminCustomers.server";
+import { buildOrderConfirmedNotifyContext } from "../utils/orderCustomerNotify.server";
 import {
   customerEmailInConfiguredList,
   getViewerCompanyContext,
+  getViewerTagsCached,
   hasStaffStorefrontTag,
   hasTag,
   normalizeStorefrontCustomerId,
@@ -117,6 +118,13 @@ import {
   jobNameForOrderSummary,
   jobPurchaseOrderDisplay,
 } from "../utils/jobNameDisplay";
+import {
+  confirmBatchDelivery,
+  fulfillmentPhotoExtFromName,
+  summarizeBatchDelivery,
+  MAX_FULFILLMENT_PHOTO_BYTES,
+} from "../utils/batchDelivery.server";
+import { formatPhoneNumber, phoneTelHref } from "../utils/phoneFormat";
 import { resolveColourCatalogueLine } from "../utils/colourCatalogue";
 import { duplicateUploadPartMirrorsForCopiedJobItem } from "../utils/uploadPartMirror.server";
 import { upsertProjectShareInvite } from "../utils/projectShareInvite.server";
@@ -176,6 +184,12 @@ import {
   orderLineDisplayNameWithGauge,
   titleCaseWords,
 } from "../utils/orderLineSpecs";
+import {
+  isShapeBuilderLine,
+  legsFromLineProperties,
+  profileSvgDataUri,
+  shapeBuilderEditPath,
+} from "../utils/shapeProfile";
 
 declare global {
   interface Window {
@@ -781,7 +795,7 @@ function buildStructuredOrderLineSpecGrid(
   const girth = map.get("girth");
 
   const lengthParts: string[] = [];
-  for (let i = 1; i <= 12; i++) {
+  for (let i = 1; i <= 24; i++) {
     const key = `l${i}`;
     if (!map.has(key)) break;
     lengthParts.push(map.get(key)!);
@@ -789,7 +803,7 @@ function buildStructuredOrderLineSpecGrid(
   }
 
   const angleParts: string[] = [];
-  for (let i = 1; i <= 12; i++) {
+  for (let i = 1; i <= 24; i++) {
     const key = `a${i}`;
     if (!map.has(key)) break;
     const raw = map.get(key)!;
@@ -1056,10 +1070,13 @@ function OrderLinePropertyChips({ item }: { item: JobItemView }) {
 function OrderLineDetailsColumn({
   item,
   reorderOpen,
+  editPartHref,
 }: {
   item: JobItemView;
   /** When set, show Reorder control (opens modal → creates new ordered job). */
   reorderOpen?: { itemId: string; defaultQty: number; lineLabel: string } | null;
+  /** Opens the shape builder prefilled; saving creates a new copy. */
+  editPartHref?: string | null;
 }) {
   const isUploadPart = item.displayName.toLowerCase().includes("upload part");
   const href = isUploadPart
@@ -1129,6 +1146,17 @@ function OrderLineDetailsColumn({
         </p>
       ) : null}
       <OrderLinePropertyChips item={item} />
+      {editPartHref ? (
+        <div className="project-clad-order-line-reorder-wrap">
+          <a
+            href={editPartHref}
+            className="project-clad-button project-clad-order-line-reorder-btn"
+            onClick={(event) => event.stopPropagation()}
+          >
+            Edit part
+          </a>
+        </div>
+      ) : null}
       {reorderOpen ? (
         <div className="project-clad-order-line-reorder-wrap">
           <button
@@ -1573,7 +1601,9 @@ function OrderFinancePanel({
   const showAddressRow = isDelivery;
   const deliveryLabel = showAddressRow ? "Delivery Address" : "Delivery Method";
   const trimmedContactName = siteContactName?.trim() || "";
-  const trimmedContactPhone = siteContactPhone?.trim() || "";
+  /* Formatted here rather than only in the browser so numbers saved before the mask existed
+     still read as `(123) 456-7890`. */
+  const trimmedContactPhone = formatPhoneNumber(siteContactPhone);
   const hasContactName = trimmedContactName.length > 0;
   const hasContactPhone = trimmedContactPhone.length > 0;
   const pickupValue = preferredDeliveryLine?.trim() || "In store pickup";
@@ -1770,9 +1800,10 @@ function OrderFinancePanel({
                   inputMode="tel"
                   defaultValue={trimmedContactPhone}
                   data-projectclad-site-contact-phone-input
+                  data-projectclad-phone-format
                   data-job-id={jobId}
                   data-original-site-contact-phone={trimmedContactPhone}
-                  placeholder="Required"
+                  placeholder="(123) 456-7890"
                   aria-label="Site contact phone"
                   autoComplete="tel"
                   required
@@ -1793,7 +1824,7 @@ function OrderFinancePanel({
                   {hasContactPhone ? (
                     <a
                       className="project-clad-order-finance__phone"
-                      href={`tel:${trimmedContactPhone.replace(/\s+/g, "")}`}
+                      href={phoneTelHref(trimmedContactPhone)}
                     >
                       {trimmedContactPhone}
                     </a>
@@ -1980,6 +2011,198 @@ function deliveredQtyForItem(
   return sum;
 }
 
+/**
+ * Units delivered against units ordered. Deliberately the same arithmetic as
+ * `computeDeliveredPercent` (over-delivery on one line is clamped to what was ordered) so the
+ * count and the percentage beside it can never tell two different stories.
+ */
+function deliveryUnitTotals(job: JobView): { delivered: number; total: number } {
+  let delivered = 0;
+  let total = 0;
+  for (const item of job.items) {
+    const ordered = Math.max(0, item.quantity);
+    total += ordered;
+    delivered += Math.min(
+      ordered,
+      deliveredQtyForItem(job.deliveryPhases, item.id),
+    );
+  }
+  return { delivered, total };
+}
+
+/** Units this order still owes on its open drop. Zero means there is nothing to batch. */
+function outstandingUnitsOnOpenPhase(job: JobView, openPhaseId: string): number {
+  let sum = 0;
+  for (const item of job.items) {
+    sum += Math.max(
+      0,
+      item.quantity -
+        deliveredQtyForItem(job.deliveryPhases, item.id, openPhaseId),
+    );
+  }
+  return sum;
+}
+
+type BatchDeliveryRow = {
+  jobId: string;
+  label: string;
+  /** Address, or "In store pickup" — the thing that tells staff it was on the same truck. */
+  where: string;
+  contact: string;
+  phaseSequence: number;
+  outstandingUnits: number;
+};
+
+/**
+ * One photo, several orders.
+ *
+ * A truckload routinely covers more than one order on a site, and the per-order Fulfillment tab
+ * gave staff nowhere to say so — they attached the photo to whichever order they had open and
+ * the rest of the load sat looking undelivered. Selecting here confirms each order's open drop
+ * in full; a partial drop still belongs in the single-order tab.
+ */
+function BatchDeliveryPanel({
+  rows,
+  projectId,
+}: {
+  rows: BatchDeliveryRow[];
+  projectId: string;
+}) {
+  const actionUrl = `/apps/project-clad/project?id=${encodeURIComponent(projectId)}`;
+  return (
+    <form
+      method="post"
+      action={actionUrl}
+      encType="multipart/form-data"
+      className="project-clad-fulfil-form"
+      data-projectclad-batch-delivery-form
+    >
+      <input type="hidden" name="intent" value="batch-confirm-delivery" />
+      <section className="project-clad-fulfil-block">
+        <h3 className="project-clad-fulfil-block__title">
+          Orders on this delivery
+        </h3>
+        <div className="project-clad-batch-toolbar">
+          <button
+            type="button"
+            className="project-clad-fulfil-reset__btn"
+            data-projectclad-batch-toggle-all
+          >
+            Select all
+          </button>
+          <span
+            className="project-clad-fulfil-hint"
+            data-projectclad-batch-count
+            role="status"
+          >
+            0 of {rows.length} selected
+          </span>
+        </div>
+        <ul className="project-clad-batch-list">
+          {rows.map((row) => (
+            <li key={row.jobId} className="project-clad-batch-row">
+              <label className="project-clad-batch-row__label">
+                <input
+                  type="checkbox"
+                  name="jobIds"
+                  value={row.jobId}
+                  className="project-clad-batch-row__check"
+                  data-projectclad-batch-job
+                />
+                <span className="project-clad-batch-row__text">
+                  <span className="project-clad-batch-row__title">
+                    {row.label}
+                  </span>
+                  <span className="project-clad-batch-row__meta">
+                    {row.where}
+                    {row.contact ? ` · ${row.contact}` : ""}
+                  </span>
+                  <span className="project-clad-batch-row__meta">
+                    Delivery {row.phaseSequence} · {row.outstandingUnits}{" "}
+                    {row.outstandingUnits === 1 ? "unit" : "units"} outstanding
+                  </span>
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="project-clad-fulfil-block">
+        <div className="project-clad-fulfil-photo">
+          <label
+            className="project-clad-fulfil-photo__label"
+            htmlFor="project-clad-batch-photo"
+          >
+            Delivery photo
+            <span className="project-clad-fulfil-photo__required">Required</span>
+          </label>
+          <input
+            id="project-clad-batch-photo"
+            type="file"
+            name="photo"
+            accept="image/*"
+            required
+            className="project-clad-fulfil-photo__input"
+          />
+        </div>
+        <p className="project-clad-fulfil-hint">
+          Every selected order is marked delivered in full and sends its own
+          customer and finance email. Deliver part of an order from its
+          Fulfillment tab instead.
+        </p>
+        <div className="project-clad-fulfil-actions">
+          <button
+            type="submit"
+            className="project-clad-button"
+            data-projectclad-batch-submit
+            disabled
+          >
+            Confirm delivery
+          </button>
+        </div>
+      </section>
+    </form>
+  );
+}
+
+/** Reads at a glance, which "37% delivered" on its own does not. */
+function DeliveryProgressMeter({ job }: { job: JobView }) {
+  const { delivered, total } = deliveryUnitTotals(job);
+  const percent = job.deliveredPercent;
+  const confirmedCount = job.deliveryPhases.filter((p) => p.hasPhoto).length;
+  return (
+    <div className="project-clad-fulfil-progress">
+      <div className="project-clad-fulfil-progress__head">
+        <span className="project-clad-fulfil-progress__pct">
+          {percent}% delivered
+        </span>
+        <span className="project-clad-fulfil-progress__units">
+          {delivered} of {total} {total === 1 ? "unit" : "units"}
+        </span>
+      </div>
+      <div
+        className="project-clad-fulfil-progress__track"
+        role="progressbar"
+        aria-valuenow={percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Order delivery progress"
+      >
+        <span
+          className="project-clad-fulfil-progress__fill"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <p className="project-clad-fulfil-progress__note">
+        {confirmedCount > 0
+          ? `${confirmedCount} deliver${confirmedCount === 1 ? "y" : "ies"} confirmed`
+          : "No deliveries confirmed yet"}
+      </p>
+    </div>
+  );
+}
+
 function StaffOrderLifecycleForm({
   job,
   projectId,
@@ -2008,8 +2231,10 @@ function StaffOrderLifecycleForm({
       <input type="hidden" name="intent" value="staff-set-order-lifecycle" />
       <input type="hidden" name="jobId" value={job.id} />
       <div className="project-clad-staff-fulfillment-status-row">
+        {/* The block heading above already reads "Order status"; repeating it beside the
+            select only crowds the row, but the control still needs a name. */}
         <label
-          className="project-clad-staff-fulfillment__label--tile"
+          className="project-clad-sr-only"
           htmlFor={`project-clad-staff-status-${idPrefix}`}
         >
           Order status
@@ -2034,86 +2259,83 @@ function StaffOrderLifecycleForm({
         </button>
       </div>
       <p className="project-clad-muted project-clad-staff-fulfillment-status-hint">
-        Setting status to <strong>Order now</strong> (or earlier) clears recorded
-        deliveries so you can start over. Or use <strong>Reset delivery progress</strong>{" "}
-        below.
+        Rolling the status back to <strong>Order now</strong> or earlier clears
+        recorded deliveries.
       </p>
     </Form>
   );
 }
 
+/*
+ * One card per confirmed drop. This was a four-column table, which spent most of its width on
+ * headings ("Qty this drop", "Photo") that said more than the single value beneath them, and
+ * left the photo as a default blue browser link.
+ */
 function OrderDeliveryDocumentsPanel({ job }: { job: JobView }) {
   const documentPhases = job.deliveryPhases.filter((p) =>
     deliveryPhaseHasProgress(p),
   );
   if (documentPhases.length === 0) {
     return (
-      <p className="project-clad-muted" style={{ margin: 0 }}>
-        No deliveries recorded yet.
+      <p className="project-clad-fulfil-empty">
+        No deliveries recorded yet. Each confirmed drop and its photo will appear
+        here.
       </p>
     );
   }
   return (
-    <div className="project-clad-delivery-docs">
-      <p className="project-clad-muted project-clad-delivery-docs__intro">
-        Each row is one confirmed delivery drop. View the delivery photo for
-        quantities delivered on that drop ({job.deliveredPercent}% of order
-        delivered so far).
-      </p>
-    <table className="project-clad-table project-clad-delivery-docs-table">
-      <thead>
-        <tr>
-          <th>Delivery</th>
-          <th>Confirmed</th>
-          <th>Qty this drop</th>
-          <th>Photo</th>
-        </tr>
-      </thead>
-      <tbody>
-        {documentPhases.map((p) => {
-          const confirmedDate = p.deliveredAt
-            ? p.deliveredAt.slice(0, 10)
-            : "—";
-          const unitsLabel = formatPhaseDeliveredUnitsLabel(p);
-          const isConfirmed = p.hasPhoto;
-          return (
-            <tr key={p.id}>
-              <td>
+    <ul className="project-clad-delivery-docs">
+      {documentPhases.map((p) => {
+        const isConfirmed = p.hasPhoto;
+        const when = p.deliveredAt
+          ? formatProjectDisplayDateTime(p.deliveredAt, {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })
+          : "";
+        const unitsLabel = formatPhaseDeliveredUnitsLabel(p);
+        const meta = [when, unitsLabel !== "—" ? unitsLabel : ""]
+          .filter(Boolean)
+          .join(" · ");
+        return (
+          <li key={p.id} className="project-clad-delivery-doc">
+            <div className="project-clad-delivery-doc__head">
+              <span className="project-clad-delivery-doc__title">
                 Delivery {p.sequence}
-                {!isConfirmed ? (
-                  <span className="project-clad-muted"> · awaiting photo</span>
-                ) : null}
-              </td>
-              <td>{confirmedDate}</td>
-              <td className="project-clad-delivery-docs-table__qty">
-                {unitsLabel !== "—" ? (
-                  <span>{unitsLabel}</span>
-                ) : (
-                  <span className="project-clad-muted">—</span>
-                )}
-              </td>
-              <td className="project-clad-delivery-docs-table__links">
-                {p.photoUrl ? (
-                  <a
-                    href={p.photoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-projectclad-view-delivery-photo=""
-                    data-job-id={job.id}
-                    data-phase-id={p.id}
-                  >
-                    View photo
-                  </a>
-                ) : (
-                  <span className="project-clad-muted">—</span>
-                )}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-    </div>
+              </span>
+              <span
+                className={`project-clad-delivery-doc__status${
+                  isConfirmed ? " is-confirmed" : ""
+                }`}
+              >
+                {isConfirmed ? "Confirmed" : "Awaiting photo"}
+              </span>
+            </div>
+            <p className="project-clad-delivery-doc__meta">
+              {meta || "No quantities recorded"}
+            </p>
+            {p.photoUrl ? (
+              <a
+                href={p.photoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="project-clad-delivery-doc__photo"
+                data-projectclad-view-delivery-photo=""
+                data-job-id={job.id}
+                data-phase-id={p.id}
+              >
+                View delivery photo
+              </a>
+            ) : (
+              <span className="project-clad-fulfil-hint">
+                Photo not uploaded yet.
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -2143,46 +2365,26 @@ function StaffPhaseDeliveryPanel({
 
   /** Any open phase without a photo must be confirmed with photo + qty (not qty-only). */
   const confirmDeliveryWithPhoto = canSubmitFulfillment;
+  const photoInputId = `project-clad-phase-photo-${job.id}`;
+  /* One drop is the norm. Anything else is the plan saying so, or the user typing over it. */
+  const isPartialPlan = phases.length > 1;
 
   return (
     <div className="project-clad-staff-phase-delivery">
-      {canResetDelivery && hasRecordedDelivery ? (
-        <Form
-          method="post"
-          action={actionUrl}
-          className="project-clad-staff-delivery-reset-form"
-          data-projectclad-confirm="Reset all delivery progress for this order? Delivered quantities, photos, and documents will be cleared so you can record deliveries again."
-        >
-          <input type="hidden" name="intent" value="reset-order-delivery" />
-          <input type="hidden" name="jobId" value={job.id} />
-          <button type="submit" className="project-clad-button project-clad-button--danger">
-            Reset delivery progress
-          </button>
-        </Form>
-      ) : null}
-      <p className="project-clad-delivery-fulfillment-progress" role="status">
-        {job.deliveredPercent}% delivered
-        {confirmedCount > 0
-          ? ` · ${confirmedCount} deliver${confirmedCount === 1 ? "y" : "ies"} confirmed`
-          : null}
-      </p>
-      <div className="project-clad-delivery-drop-card">
-        <p className="project-clad-staff-fulfillment__label--tile">
-          Mark what arrived
-        </p>
+      <section className="project-clad-fulfil-block">
+        <h3 className="project-clad-fulfil-block__title">
+          {!canSubmitFulfillment
+            ? "Record a delivery"
+            : isPartialPlan
+              ? `Record delivery ${openPhase?.sequence ?? 1} of ${phases.length}`
+              : "Record this delivery"}
+        </h3>
         {canSubmitFulfillment ? (
           <form
             method="post"
             action={actionUrl}
             encType={confirmDeliveryWithPhoto ? "multipart/form-data" : undefined}
-            className={[
-              "project-clad-stack",
-              confirmDeliveryWithPhoto
-                ? "project-clad-staff-fulfillment-photo-form"
-                : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
+            className="project-clad-fulfil-form"
           >
             <input
               type="hidden"
@@ -2195,12 +2397,16 @@ function StaffPhaseDeliveryPanel({
             />
             <input type="hidden" name="jobId" value={job.id} />
             <input type="hidden" name="phaseId" value={openPhase?.id ?? ""} />
-            <table className="project-clad-table" style={{ fontSize: "0.9rem" }}>
+            <table className="project-clad-fulfil-table">
               <thead>
                 <tr>
-                  <th>Line</th>
-                  <th>Remaining</th>
-                  <th>Qty this delivery</th>
+                  <th scope="col">Line</th>
+                  <th scope="col" className="project-clad-fulfil-table__num">
+                    Remaining
+                  </th>
+                  <th scope="col" className="project-clad-fulfil-table__num">
+                    Delivered
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -2212,31 +2418,41 @@ function StaffPhaseDeliveryPanel({
                     openPhase?.id,
                   );
                   const remaining = Math.max(0, item.quantity - alreadyElsewhere);
-                  const maxQty = remaining;
+                  /*
+                   * Pre-filled so the common case — one truck, whole order — is a single
+                   * click. Falls back to what the plan reserved for this drop when the order
+                   * was deliberately split, and never offers more than is still outstanding.
+                   */
+                  const recorded = phaseLine?.quantityDelivered ?? 0;
+                  const planned = phaseLine?.quantityPlanned ?? 0;
+                  const suggested =
+                    recorded > 0
+                      ? Math.min(recorded, remaining)
+                      : planned > 0
+                        ? Math.min(planned, remaining)
+                        : remaining;
                   return (
                     <tr key={item.id}>
-                      <td>{item.displayName}</td>
-                      <td>{remaining}</td>
-                      <td>
-                        {maxQty > 0 ? (
+                      <th scope="row" className="project-clad-fulfil-table__line">
+                        {item.displayName}
+                      </th>
+                      <td className="project-clad-fulfil-table__num">
+                        {remaining}
+                      </td>
+                      <td className="project-clad-fulfil-table__num">
+                        {remaining > 0 ? (
                           <input
                             type="number"
                             name={`qty_${item.id}`}
                             min={0}
-                            max={maxQty}
+                            max={remaining}
                             step={1}
-                            defaultValue={
-                              phaseLine?.quantityDelivered &&
-                              phaseLine.quantityDelivered > 0
-                                ? phaseLine.quantityDelivered
-                                : 0
-                            }
-                            className="project-clad-preferred-delivery-input"
-                            style={{ width: "4.5rem" }}
-                            aria-label={`Qty delivered this trip for ${item.displayName}`}
+                            defaultValue={suggested}
+                            className="project-clad-fulfil-qty"
+                            aria-label={`Quantity delivered now for ${item.displayName}`}
                           />
                         ) : (
-                          <span className="project-clad-muted">—</span>
+                          <span className="project-clad-muted">Complete</span>
                         )}
                       </td>
                     </tr>
@@ -2245,38 +2461,73 @@ function StaffPhaseDeliveryPanel({
               </tbody>
             </table>
             {confirmDeliveryWithPhoto ? (
-              <>
-                <p className="project-clad-muted" style={{ marginBottom: 6 }}>
-                  Upload a delivery photo to confirm this delivery (sends
-                  invoice email).
-                </p>
+              <div className="project-clad-fulfil-photo">
+                <label
+                  className="project-clad-fulfil-photo__label"
+                  htmlFor={photoInputId}
+                >
+                  Delivery photo
+                  <span className="project-clad-fulfil-photo__required">
+                    Required
+                  </span>
+                </label>
                 <input
+                  id={photoInputId}
                   type="file"
                   name="photo"
                   accept="image/*"
                   required
-                  className="project-clad-staff-fulfillment__file-input"
+                  className="project-clad-fulfil-photo__input"
                 />
-              </>
+                <p className="project-clad-fulfil-hint">
+                  Confirming records the quantities above and emails the customer
+                  their invoice.
+                </p>
+              </div>
             ) : null}
             {/* Plain submit: the enclosing form posts multipart natively, which is the
                 path that actually runs in production and the only one where the required
                 photo input is validated. A click handler calling preventDefault would run
                 before that validation and could submit the delivery with no photo. */}
-            <button type="submit" className="project-clad-button">
-              {confirmDeliveryWithPhoto
-                ? "Confirm delivery"
-                : "Save delivered qty"}
-            </button>
+            <div className="project-clad-fulfil-actions">
+              <button type="submit" className="project-clad-button">
+                {confirmDeliveryWithPhoto
+                  ? "Confirm delivery"
+                  : "Save delivered qty"}
+              </button>
+            </div>
           </form>
         ) : (
-          <p className="project-clad-muted" style={{ margin: 0 }}>
+          <p className="project-clad-fulfil-empty">
             {job.deliveredPercent >= 100
-              ? "All items have been delivered."
+              ? "Every line on this order has been delivered."
               : "No open delivery to record. Reload the page and try again."}
           </p>
         )}
-      </div>
+      </section>
+      {canResetDelivery && hasRecordedDelivery ? (
+        <Form
+          method="post"
+          action={actionUrl}
+          className="project-clad-fulfil-reset"
+          data-projectclad-confirm="Reset all delivery progress for this order? Delivered quantities, photos, and documents will be cleared so you can record deliveries again."
+        >
+          <input type="hidden" name="intent" value="reset-order-delivery" />
+          <input type="hidden" name="jobId" value={job.id} />
+          {/* Destructive and rarely wanted, so it sits last and stays quiet rather than
+              competing with Confirm delivery for the same glance. */}
+          <button type="submit" className="project-clad-fulfil-reset__btn">
+            Reset delivery progress
+          </button>
+          <span className="project-clad-fulfil-hint">
+            Clears recorded quantities, photos and documents for
+            {confirmedCount > 0
+              ? ` all ${confirmedCount} confirmed deliver${confirmedCount === 1 ? "y" : "ies"}`
+              : " this order"}
+            .
+          </span>
+        </Form>
+      ) : null}
     </div>
   );
 }
@@ -2293,28 +2544,35 @@ function OrderDeliveryFulfillmentSection({
   viewerCanFulfill: boolean;
 }) {
   if (!viewerCanFulfill) {
-    const confirmedCount = job.deliveryPhases.filter((p) => p.hasPhoto).length;
     return (
       <div className="project-clad-delivery-fulfillment-section">
-        <p className="project-clad-delivery-fulfillment-progress" role="status">
-          {job.deliveredPercent}% delivered
-          {confirmedCount > 0
-            ? ` · ${confirmedCount} deliver${confirmedCount === 1 ? "y" : "ies"} confirmed`
-            : null}
-        </p>
-        <OrderDeliveryDocumentsPanel job={job} />
+        <section className="project-clad-fulfil-block">
+          <h3 className="project-clad-fulfil-block__title">Progress</h3>
+          <DeliveryProgressMeter job={job} />
+        </section>
+        <section className="project-clad-fulfil-block">
+          <h3 className="project-clad-fulfil-block__title">Deliveries</h3>
+          <OrderDeliveryDocumentsPanel job={job} />
+        </section>
       </div>
     );
   }
 
   return (
     <div className="project-clad-delivery-fulfillment-section">
-      <StaffOrderLifecycleForm
-        job={job}
-        projectId={projectId}
-        idPrefix={`delivery-modal-${job.id}`}
-        allowDeliveredWithoutPhoto={viewerIsAdmin}
-      />
+      <section className="project-clad-fulfil-block">
+        <h3 className="project-clad-fulfil-block__title">Order status</h3>
+        <StaffOrderLifecycleForm
+          job={job}
+          projectId={projectId}
+          idPrefix={`delivery-modal-${job.id}`}
+          allowDeliveredWithoutPhoto={viewerIsAdmin}
+        />
+      </section>
+      <section className="project-clad-fulfil-block">
+        <h3 className="project-clad-fulfil-block__title">Progress</h3>
+        <DeliveryProgressMeter job={job} />
+      </section>
       {job.deliveryPhases.length > 0 ? (
         <StaffPhaseDeliveryPanel
           job={job}
@@ -2325,19 +2583,31 @@ function OrderDeliveryFulfillmentSection({
       {job.orderLifecycleStatus === "ordered" &&
       !viewerIsAdmin &&
       job.deliveryPhases.length <= 1 ? (
-        <StaffFulfillmentPhotoUpload job={job} projectId={projectId} />
+        <section className="project-clad-fulfil-block">
+          <h3 className="project-clad-fulfil-block__title">
+            Confirmation photo
+          </h3>
+          <StaffFulfillmentPhotoUpload job={job} projectId={projectId} />
+        </section>
       ) : null}
       {job.orderLifecycleStatus === "delivered" ? (
-        <Form
-          method="post"
-          action={`/apps/project-clad/project?id=${projectId}`}
-        >
-          <input type="hidden" name="intent" value="staff-mark-order-paid" />
-          <input type="hidden" name="jobId" value={job.id} />
-          <button type="submit" className="project-clad-button">
-            Mark paid
-          </button>
-        </Form>
+        <section className="project-clad-fulfil-block">
+          <h3 className="project-clad-fulfil-block__title">Payment</h3>
+          <Form
+            method="post"
+            action={`/apps/project-clad/project?id=${projectId}`}
+            className="project-clad-fulfil-actions"
+          >
+            <input type="hidden" name="intent" value="staff-mark-order-paid" />
+            <input type="hidden" name="jobId" value={job.id} />
+            <button type="submit" className="project-clad-button">
+              Mark paid
+            </button>
+          </Form>
+          <p className="project-clad-fulfil-hint">
+            Marks the order complete once the invoice has been settled.
+          </p>
+        </section>
       ) : null}
     </div>
   );
@@ -2519,7 +2789,7 @@ function StaffFulfillmentPhotoUpload({
           name="photo"
           accept="image/*"
           required
-          className="project-clad-staff-fulfillment__file-input"
+          className="project-clad-staff-fulfillment__file-input project-clad-fulfil-photo__input"
           onChange={(e) => {
             const f = e.currentTarget.files?.[0];
             setPickedName(f?.name ?? "");
@@ -2953,6 +3223,7 @@ function MemberRoleSelect({
 }) {
   const editId = `${idPrefix}-role-edit`;
   const viewId = `${idPrefix}-role-view`;
+  const requireExplicitRole = Boolean(rolePrompt?.trim());
   const summaryLabel = defaultValue === "edit" ? "Edit" : "View only";
   return (
     <details
@@ -2977,7 +3248,7 @@ function MemberRoleSelect({
               type="radio"
               name="role"
               value="edit"
-              defaultChecked={defaultValue === "edit"}
+              defaultChecked={!requireExplicitRole && defaultValue === "edit"}
               className="project-clad-member-role-select__input"
             />
             <span className="project-clad-member-role-select__option-text">Edit</span>
@@ -2988,7 +3259,7 @@ function MemberRoleSelect({
               type="radio"
               name="role"
               value="view"
-              defaultChecked={defaultValue === "view"}
+              defaultChecked={!requireExplicitRole && defaultValue === "view"}
               className="project-clad-member-role-select__input"
             />
             <span className="project-clad-member-role-select__option-text">View only</span>
@@ -3047,36 +3318,34 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     );
   }
 
-  const viewerIsAppAdmin = await viewerHasAdminTag(
-    shop,
-    customerId,
-    customerEmail,
-    settings,
-  );
-
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, shop: shopStringFilter(shop) },
-    include: {
-      jobs: {
-        orderBy: { sortOrder: "asc" },
-        include: {
-          items: { orderBy: { sortOrder: "asc" } },
-          orderLink: true,
-          deliveryPhases: {
-            orderBy: { sequence: "asc" },
-            include: { lines: true },
+  /* None of these gate each other: the staff check and the delivery fee only read shop settings,
+     and the project query is keyed by id + shop. Running them serially cost three round-trips. */
+  const [viewerIsAppAdmin, project, shopDeliveryFee] = await Promise.all([
+    viewerHasAdminTag(shop, customerId, customerEmail, settings),
+    prisma.project.findFirst({
+      where: { id: projectId, shop: shopStringFilter(shop) },
+      include: {
+        jobs: {
+          orderBy: { sortOrder: "asc" },
+          include: {
+            items: { orderBy: { sortOrder: "asc" } },
+            orderLink: true,
+            deliveryPhases: {
+              orderBy: { sequence: "asc" },
+              include: { lines: true },
+            },
           },
         },
+        members: true,
       },
-      members: true,
-    },
-  });
+    }),
+    getShopDeliveryFee(shop, settings),
+  ]);
 
   if (!project) {
     throw projectMissingHtmlResponse(request, shop, projectId);
   }
 
-  const shopDeliveryFee = await getShopDeliveryFee(shop, settings);
   const projectDeliveryCtxForEnsure = {
     receiveMode: project.receiveMode,
     shipAddress1: project.shipAddress1,
@@ -3159,28 +3428,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const viewerNumericId = normalizeStorefrontCustomerId(customerId);
-  const memberIds = Array.from(
-    new Set([
-      project.ownerCustomerId,
-      ...project.members.map((member) => member.customerId),
-      viewerNumericId,
-    ]),
-  );
-  let customerInfo: Awaited<ReturnType<typeof getCustomersByIds>> = {};
-  let memberLookupError: string | null = null;
-  try {
-    customerInfo = await getCustomersByIds(shop, memberIds);
-  } catch (error) {
-    memberLookupError =
-      error instanceof Error ? error.message : "Member lookup failed.";
-  }
 
-  /** REST read of this customer only — matches Shopify Admin tags (avoids GraphQL batch map quirks). */
-  const viewerTags = await fetchCustomerTagsRest(
-    shop,
-    normalizeStorefrontCustomerId(customerId),
-  );
-
+  /* Authorization runs before the bulk reads below so an unauthorized viewer costs at most the
+     company-context lookup. */
   const isMember = isProjectMember(project, customerId, viewerIsAppAdmin);
 
   const viewerCompanyCtx = isMember
@@ -3200,9 +3450,100 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const isOwner = isProjectOwner(project, customerId);
   /* Company-only viewers are read-only — explicit membership is required for edit. */
   const canEdit = isMember && canEditProject(project, customerId, viewerIsAppAdmin);
-  const ownerCompanyForShare = canEdit
-    ? await getViewerCompanyContext(shop, project.ownerCustomerId)
-    : { tags: [] as string[], displayNames: [] as string[], keys: [] as string[] };
+  const viewerIsAdmin = viewerIsAppAdmin;
+
+  const memberIds = Array.from(
+    new Set([
+      project.ownerCustomerId,
+      ...project.members.map((member) => member.customerId),
+      viewerNumericId,
+    ]),
+  );
+  const variantIds = project.jobs.flatMap((job) =>
+    job.items.map((item) => item.variantId),
+  );
+  const activityWhere = viewerIsAdmin
+    ? {
+        projectId,
+        OR: [{ visibility: "member" }, { visibility: "admin" }],
+      }
+    : { projectId, visibility: "member" };
+
+  /* Everything the page still needs is independent of everything else here, so it goes out in one
+     wave instead of seven sequential round-trips. */
+  const [
+    memberLookup,
+    viewerTags,
+    ownerCompanyForShare,
+    otherProjects,
+    variantLookup,
+    approvalRequests,
+    activityRows,
+    commentRows,
+  ] = await Promise.all([
+    getCustomersByIds(shop, memberIds).then(
+      (info) => ({ info, error: null as string | null }),
+      (error: unknown) => ({
+        info: {} as Awaited<ReturnType<typeof getCustomersByIds>>,
+        error: error instanceof Error ? error.message : "Member lookup failed.",
+      }),
+    ),
+    getViewerTagsCached(shop, viewerNumericId),
+    canEdit
+      ? getViewerCompanyContext(shop, project.ownerCustomerId)
+      : Promise.resolve({
+          tags: [] as string[],
+          displayNames: [] as string[],
+          keys: [] as string[],
+        }),
+    prisma.project.findMany({
+      where: viewerIsAppAdmin
+        ? { shop: shopStringFilter(shop), id: { not: projectId } }
+        : {
+            shop: shopStringFilter(shop),
+            id: { not: projectId },
+            OR: [
+              { ownerCustomerId: customerId },
+              { members: { some: { customerId } } },
+            ],
+          },
+      /* Only the switcher label is rendered; full rows include card image data URLs. */
+      select: { id: true, name: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    resolveVariantDisplayInfo(shop, variantIds),
+    prisma.approvalRequest.findMany({ where: { projectId } }),
+    prisma.projectActivityEvent.findMany({
+      where: activityWhere,
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    prisma.projectComment.findMany({
+      where: { projectId },
+      /* Most recent first so take(200) is the latest 200 — asc+take would drop new comments after 200 older rows. */
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    }),
+  ]);
+
+  const customerInfo = memberLookup.info;
+  const memberLookupError = memberLookup.error;
+  const { info: variantInfo, error: variantLookupError } = variantLookup;
+
+  /* Refreshing stored snapshots is a write nothing on this page reads back, so the response no
+     longer waits on it. */
+  void persistVariantSnapshotsFromLive({
+    items: project.jobs.flatMap((job) =>
+      job.items.map((item) => ({
+        id: item.id,
+        variantId: item.variantId,
+        variantSnapshot: item.variantSnapshot,
+        catalogProductId: item.catalogProductId,
+        catalogSku: item.catalogSku,
+      })),
+    ),
+    liveByVariantId: variantInfo,
+  }).catch(() => {});
 
   const unitPriceEditorAllowlist =
     process.env.PROJECTCLAD_UNIT_PRICE_EDITOR_EMAILS?.trim();
@@ -3226,42 +3567,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     Boolean(csvExportEmailAllowlist) &&
     customerEmailInConfiguredList(viewerEmailResolved, csvExportEmailAllowlist);
 
-  const shopQ = shopStringFilter(shop);
-  const otherProjects = await prisma.project.findMany({
-    where: viewerIsAppAdmin
-      ? { shop: shopQ, id: { not: projectId } }
-      : {
-          shop: shopQ,
-          id: { not: projectId },
-          OR: [
-            { ownerCustomerId: customerId },
-            { members: { some: { customerId } } },
-          ],
-        },
-    /* Only the switcher label is rendered; full rows include card image data URLs. */
-    select: { id: true, name: true },
-    orderBy: { createdAt: "desc" },
-  });
-
-  const variantIds = project.jobs.flatMap((job) =>
-    job.items.map((item) => item.variantId),
-  );
-  const { info: variantInfo, error: variantLookupError } =
-    await resolveVariantDisplayInfo(shop, variantIds);
-
-  await persistVariantSnapshotsFromLive({
-    items: project.jobs.flatMap((job) =>
-      job.items.map((item) => ({
-        id: item.id,
-        variantId: item.variantId,
-        variantSnapshot: item.variantSnapshot,
-        catalogProductId: item.catalogProductId,
-        catalogSku: item.catalogSku,
-      })),
-    ),
-    liveByVariantId: variantInfo,
-  });
-
   const hideAddToCart = hasTag(viewerTags, "NA") && !viewerIsAppAdmin;
   const hasNATag = hasTag(viewerTags, "NA");
   const canAdminMembers = canAdminProjectMembers(
@@ -3270,32 +3575,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     viewerIsAppAdmin,
     hasNATag,
   );
-  const viewerIsAdmin = viewerIsAppAdmin;
-
-  const approvalRequests = await prisma.approvalRequest.findMany({
-    where: { projectId },
-  });
-
-  const activityWhere = viewerIsAdmin
-    ? {
-        projectId,
-        OR: [{ visibility: "member" }, { visibility: "admin" }],
-      }
-    : { projectId, visibility: "member" };
-
-  const [activityRows, commentRows] = await Promise.all([
-    prisma.projectActivityEvent.findMany({
-      where: activityWhere,
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    }),
-    prisma.projectComment.findMany({
-      where: { projectId },
-      /* Most recent first so take(200) is the latest 200 — asc+take would drop new comments after 200 older rows. */
-      orderBy: { createdAt: "desc" },
-      take: 200,
-    }),
-  ]);
 
   const actorIds = new Set<string>();
   for (const ev of activityRows) {
@@ -3489,10 +3768,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           }
 
           const referenceImageUrl = extractReferenceImageFromProperties(properties);
+          const shapeLegs = legsFromLineProperties(properties);
+          const shapeThumb =
+            isShapeBuilderLine(properties) && shapeLegs.length
+              ? profileSvgDataUri(shapeLegs)
+              : null;
 
           const imageUrl =
             customImageUrl ||
             referenceImageUrl ||
+            shapeThumb ||
             (isUploadPartLine && uploadPartFileUrl && isLikelyPdfUrl(uploadPartFileUrl)
               ? null
               : pres.imageUrl || null);
@@ -4002,9 +4287,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         typeof payload.siteContactName === "string"
           ? payload.siteContactName.trim()
           : null;
+      /* Normalised on the way in so the stored value matches what the mask renders — otherwise
+         a number typed before the mask existed would keep re-flagging the field as changed. */
       const siteContactPhoneRaw =
         typeof payload.siteContactPhone === "string"
-          ? payload.siteContactPhone.trim()
+          ? formatPhoneNumber(payload.siteContactPhone)
           : null;
       const removeItemIds = Array.isArray(payload.removeItemIds)
         ? payload.removeItemIds.filter((id): id is string => typeof id === "string")
@@ -4474,18 +4761,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return Response.json({ error: detail }, { status: 500 });
       }
 
-      const notifyEmail = await resolvePlacerNotifyEmail(
+      const orderNotify = await buildOrderConfirmedNotifyContext({
         shop,
-        customerId,
-        customerEmail,
-      );
+        ownerCustomerId: project.ownerCustomerId,
+        actorCustomerId: customerId,
+        actorProxyEmail: customerEmail,
+        viewerIsAppAdmin,
+        actorTags: viewerTagsForOrder,
+      });
       await logProjectActivity({
         projectId,
         jobId,
         type: STOREFRONT_ORDER_CONFIRMED_ACTIVITY,
         visibility: "member",
         actorCustomerId: customerId,
-        payload: notifyEmail ? { notifyEmail } : undefined,
+        payload: orderNotify.payload,
       }).catch((err: unknown) => {
         /* The order is placed; a missing timeline row must not fail it. Logged because a
            lost `storefront_order_confirmed` row is what later suppresses the delivered
@@ -4557,6 +4847,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               jobId,
               fulfillmentMethod,
               actorCustomerId: customerId,
+              customerCustomerId: orderNotify.customerCustomerId,
             });
             if (mail.customerFailed) {
               return ORDER_PLACED_CUSTOMER_MAIL_WARNING;
@@ -5199,6 +5490,64 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     return redirectToProject(request, projectId, shop, {
       ...(notifyWarning ? { notifyWarning } : {}),
+    });
+  }
+
+  /*
+   * One photo, several orders. A truckload routinely covers more than one order on the same
+   * site, and staff were attaching the photo to whichever order they happened to open, leaving
+   * the rest of the load looking undelivered.
+   */
+  if (intent === "batch-confirm-delivery") {
+    if (!viewerCanFulfill) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+    const jobIds = formData
+      .getAll("jobIds")
+      .map((v) => String(v).trim())
+      .filter(Boolean);
+    if (jobIds.length === 0) {
+      return redirectToProject(request, projectId, shop, {
+        fulfillmentError: "Select at least one order to confirm.",
+      });
+    }
+    const uploaded = await readFormUploadedImage(formData, "photo");
+    if (!uploaded) {
+      return redirectToProject(request, projectId, shop, {
+        fulfillmentError: "Photo file is required.",
+      });
+    }
+    if (uploaded.size > MAX_FULFILLMENT_PHOTO_BYTES) {
+      return redirectToProject(request, projectId, shop, {
+        fulfillmentError: "Photo must be 8MB or smaller.",
+      });
+    }
+    const batch = await confirmBatchDelivery({
+      shop,
+      jobIds,
+      photo: {
+        buffer: uploaded.buffer,
+        ext: fulfillmentPhotoExtFromName(uploaded.name),
+      },
+      projectId,
+      source: "storefront",
+      actorCustomerId: customerId,
+    });
+    const summary = summarizeBatchDelivery(batch);
+    if (batch.confirmed.length === 0) {
+      return redirectToProject(request, projectId, shop, {
+        fulfillmentError: summary,
+      });
+    }
+    /* A partial batch is still progress, so it reports amber rather than red — but it has to
+       name what did not go through, because those orders look untouched afterwards. */
+    if (batch.failed.length > 0 || batch.notifyFailed) {
+      return redirectToProject(request, projectId, shop, {
+        notifyWarning: summary,
+      });
+    }
+    return redirectToProject(request, projectId, shop, {
+      batchDelivered: summary,
     });
   }
 
@@ -6038,6 +6387,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     let targetProjectId = projectId;
     let targetProjectNameForEmail = project.name;
+    let targetOwnerCustomerId = project.ownerCustomerId;
     if (reorderTargetMode === "existing") {
       if (!reorderTargetProjectIdRaw) {
         throw new Response("Select a destination project.", { status: 400 });
@@ -6062,6 +6412,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
       targetProjectId = targetProject.id;
       targetProjectNameForEmail = targetProject.name;
+      targetOwnerCustomerId = targetProject.ownerCustomerId;
     } else if (reorderTargetMode === "new") {
       if (!reorderNewProjectName) {
         throw new Response("New project name is required.", { status: 400 });
@@ -6082,7 +6433,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
       targetProjectId = createdProject.id;
       targetProjectNameForEmail = createdProject.name;
+      targetOwnerCustomerId = createdProject.ownerCustomerId;
     }
+
+    const viewerTagsForReorder = await fetchCustomerTagsRest(
+      shop,
+      normalizeStorefrontCustomerId(customerId),
+    );
+    const reorderNotify = await buildOrderConfirmedNotifyContext({
+      shop,
+      ownerCustomerId: targetOwnerCustomerId,
+      actorCustomerId: customerId,
+      actorProxyEmail: customerEmail,
+      viewerIsAppAdmin,
+      actorTags: viewerTagsForReorder,
+    });
 
     const snap = parseOrderLineCapture(sourceItem.orderLineCapture);
     const vs = parseVariantSnapshot(sourceItem.variantSnapshot);
@@ -6204,18 +6569,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       },
     });
 
-    const reorderNotifyEmail = await resolvePlacerNotifyEmail(
-      shop,
-      customerId,
-      customerEmail,
-    );
     await logProjectActivity({
       projectId: targetProjectId,
       jobId: newJobId,
       type: STOREFRONT_ORDER_CONFIRMED_ACTIVITY,
       visibility: "member",
       actorCustomerId: customerId,
-      payload: reorderNotifyEmail ? { notifyEmail: reorderNotifyEmail } : undefined,
+      payload: reorderNotify.payload,
     }).catch((err: unknown) => {
       console.error(
         `[project] reorder order-confirmed activity log failed (project=${targetProjectId} job=${newJobId}):`,
@@ -6260,6 +6620,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             jobId: newJobId,
             fulfillmentMethod,
             actorCustomerId: customerId,
+            customerCustomerId: reorderNotify.customerCustomerId,
           });
           return mail.customerFailed || mail.shopFailed
             ? REORDER_MAIL_WARNING
@@ -6511,7 +6872,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const defaultSiteContactName =
       String(formData.get("defaultSiteContactName") || "").trim() || null;
     const defaultSiteContactPhone =
-      String(formData.get("defaultSiteContactPhone") || "").trim() || null;
+      formatPhoneNumber(String(formData.get("defaultSiteContactPhone") || "")) ||
+      null;
     /* Checkbox presence pattern: the form posts a companion `visibleToCompanyRendered=1`
        hidden input whenever the toggle was on-screen. Without that flag we skip writing
        this column (older/legacy project pages without the toggle remain untouched). */
@@ -6643,7 +7005,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const defaultSiteContactName =
       String(formData.get("defaultSiteContactName") || "").trim() || null;
     const defaultSiteContactPhone =
-      String(formData.get("defaultSiteContactPhone") || "").trim() || null;
+      formatPhoneNumber(String(formData.get("defaultSiteContactPhone") || "")) ||
+      null;
     const visibleToCompanyRendered =
       formData.get("visibleToCompanyRendered") === "1";
     const visibleToCompany = visibleToCompanyRendered
@@ -6979,6 +7342,45 @@ export default function ProjectDetailPage() {
       shopDeliveryFee,
     );
   };
+
+  /*
+   * Orders in this project whose open drop could be confirmed off a shared photo. Built here
+   * rather than inside the modal because it also decides whether the Batch tab exists at all —
+   * with one eligible order there is nothing to batch and the tab would only be noise.
+   */
+  const batchDeliveryRows: BatchDeliveryRow[] = viewerCanFulfill
+    ? project.jobs.flatMap((job) => {
+        if (job.paidAt) return [];
+        if (isPrePlacedOrderLifecycle(job.orderLifecycleStatus)) return [];
+        const openPhaseId = findActiveDeliveryPhaseId(job.deliveryPhases);
+        const openPhase = job.deliveryPhases.find((p) => p.id === openPhaseId);
+        if (!openPhase || openPhase.hasPhoto) return [];
+        const outstandingUnits = outstandingUnitsOnOpenPhase(job, openPhase.id);
+        if (outstandingUnits <= 0) return [];
+        const resolved = resolveJobDelivery(job, projectDeliveryCtx);
+        return [
+          {
+            jobId: job.id,
+            label:
+              job.orderNumber != null
+                ? `#${job.orderNumber} · ${jobNameForOrderSummary(job.name, job.orderName)}`
+                : jobNameForOrderSummary(job.name, job.orderName),
+            where:
+              resolved.method === "pickup"
+                ? "In store pickup"
+                : resolved.addressLine || "No delivery address",
+            contact: [
+              job.siteContactName?.trim() || "",
+              formatPhoneNumber(job.siteContactPhone),
+            ]
+              .filter(Boolean)
+              .join(" "),
+            phaseSequence: openPhase.sequence,
+            outstandingUnits,
+          },
+        ];
+      })
+    : [];
 
   const [orderNowSubmittingJobId, setOrderNowSubmittingJobId] = useState<
     string | null
@@ -7882,8 +8284,9 @@ export default function ProjectDetailPage() {
                     name="defaultSiteContactPhone"
                     type="tel"
                     inputMode="tel"
-                    defaultValue={project.defaultSiteContactPhone || ""}
-                    placeholder="Phone (optional)"
+                    data-projectclad-phone-format
+                    defaultValue={formatPhoneNumber(project.defaultSiteContactPhone)}
+                    placeholder="(123) 456-7890"
                     className="project-clad-pricing-password-input"
                     autoComplete="tel"
                   />
@@ -8428,6 +8831,15 @@ export default function ProjectDetailPage() {
             >
               Fulfillment
             </button>
+            {batchDeliveryRows.length > 1 ? (
+              <button
+                type="button"
+                className="project-clad-delivery-modal-tabs__btn"
+                data-projectclad-delivery-tab="batch"
+              >
+                Batch
+              </button>
+            ) : null}
             <button
               type="button"
               className="project-clad-delivery-modal-tabs__btn"
@@ -8733,6 +9145,27 @@ export default function ProjectDetailPage() {
               </button>
             </div>
           </div>
+          {batchDeliveryRows.length > 1 ? (
+            <div
+              className="project-clad-delivery-modal-tab-panel"
+              data-projectclad-delivery-tab-panel="batch"
+              hidden
+            >
+              <BatchDeliveryPanel
+                rows={batchDeliveryRows}
+                projectId={project.id}
+              />
+              <div className="project-clad-actions project-clad-reject-modal-actions">
+                <button
+                  type="button"
+                  className="project-clad-button project-clad-reject-modal-btn"
+                  data-projectclad-order-delivery-cancel
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : null}
           <div
             className="project-clad-delivery-modal-tab-panel"
             data-projectclad-delivery-tab-panel="documents"
@@ -8744,7 +9177,12 @@ export default function ProjectDetailPage() {
                 data-projectclad-delivery-documents-job={job.id}
                 hidden
               >
-                <OrderDeliveryDocumentsPanel job={job} />
+                <section className="project-clad-fulfil-block">
+                  <h3 className="project-clad-fulfil-block__title">
+                    Delivery records
+                  </h3>
+                  <OrderDeliveryDocumentsPanel job={job} />
+                </section>
               </div>
             ))}
             <div className="project-clad-actions project-clad-reject-modal-actions">
@@ -8945,6 +9383,35 @@ export default function ProjectDetailPage() {
                 className="project-clad-button project-clad-reject-modal-btn"
                 style={{ marginTop: "0.65rem" }}
                 data-pc-dismiss-banner="notifyWarning"
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+          {/*
+            A batch confirm touches orders the person is not looking at, so unlike a
+            single-order confirm the page alone does not show what happened. Green because
+            nothing failed — the partial case is routed to the amber banner above.
+          */}
+          {searchParams.get("batchDelivered") ? (
+            <div
+              role="status"
+              className="project-clad-card"
+              style={{
+                marginBottom: "1rem",
+                padding: "0.85rem 1rem",
+                borderColor: "#15803d",
+                background: "rgba(21, 128, 61, 0.08)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.45 }}>
+                {searchParams.get("batchDelivered")}
+              </p>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                style={{ marginTop: "0.65rem" }}
+                data-pc-dismiss-banner="batchDelivered"
               >
                 Dismiss
               </button>
@@ -9951,6 +10418,9 @@ export default function ProjectDetailPage() {
                                       <div className="project-clad-order-line-tile__col project-clad-order-line-tile__col--details">
                                         <OrderLineDetailsColumn
                                           item={item}
+                                          editPartHref={shapeBuilderEditPath(
+                                            item.properties,
+                                          )}
                                           reorderOpen={
                                             canEdit &&
                                             isReorderEligibleOrderLifecycle(
@@ -10360,12 +10830,17 @@ export default function ProjectDetailPage() {
                                 Delete order
                               </button>
                             ) : null}
+                            {/* Label flips to "Save" in project-main.js as soon as a field the
+                                save-order-edit request carries differs from what was rendered. */}
                             <button
                               type="button"
                               className="project-clad-button"
                               data-projectclad-edit-order
+                              data-projectclad-edit-order-exit
                               data-job-id={job.id}
                               data-project-id={project.id}
+                              title="Close the editor"
+                              aria-label="Close the editor"
                             >
                               Back
                             </button>

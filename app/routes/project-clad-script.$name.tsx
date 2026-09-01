@@ -4,6 +4,7 @@ import {
   getProjectCladScript,
   isProjectCladScriptName,
 } from "../utils/projectCladProxyScripts.server";
+import { getShapeBuilderIsland } from "../utils/shapeBuilderIsland.server";
 
 /**
  * Serves the vanilla browser scripts that drive app-proxy pages, which used to be inlined into
@@ -16,11 +17,17 @@ import {
  */
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const name = params.name;
-  if (!isProjectCladScriptName(name)) {
+  const payload =
+    name === "shape-builder-island.js"
+      ? getShapeBuilderIsland()
+      : isProjectCladScriptName(name)
+        ? getProjectCladScript(name)
+        : null;
+  if (!payload) {
     return new Response("Not found", { status: 404 });
   }
 
-  const { js, hash } = getProjectCladScript(name);
+  const { js, hash } = payload;
   const etag = `W/"${hash}"`;
 
   const headers = new Headers({

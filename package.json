@@ -2,7 +2,7 @@
   "name": "project-clad",
   "private": true,
   "scripts": {
-    "build": "prisma generate && react-router build",
+    "build": "prisma generate && node scripts/build-shape-builder-island.mjs && react-router build",
     "dev": "shopify app dev",
     "config:link": "shopify app config link",
     "generate": "shopify app generate",
@@ -21,7 +21,9 @@
     "init-part-registry": "node part-registry/init-db.mjs",
     "mc:backfill": "npx tsx scripts/backfill-mission-control.ts",
     "export-orders": "npx tsx scripts/export-all-orders.ts",
-    "export-orders-company": "npx tsx scripts/export-orders-by-company.ts"
+    "export-orders-company": "npx tsx scripts/export-orders-by-company.ts",
+    "preview:finance-email": "npx tsx scripts/preview-finance-email.ts",
+    "preview:customer-email": "npx tsx scripts/preview-customer-email.ts"
   },
   "type": "module",
   "engines": {
@@ -41,6 +43,7 @@
     "@shopify/shopify-app-session-storage-prisma": "^8.0.0",
     "dotenv": "^17.2.4",
     "isbot": "^5.1.31",
+    "lucide-react": "^1.32.0",
     "nodemailer": "^8.0.1",
     "pdfkit": "^0.17.2",
     "prisma": "^6.16.3",

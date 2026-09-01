@@ -4,8 +4,8 @@
  */
 
 import type { StorefrontAppNavLink } from "../types/storefrontAppNav";
+import { filterShapeLinksFromNav } from "./shapeFeature";
 export type { StorefrontAppNavLink };
-
 export type ShopSettingsNavSlice = {
   navButton1Label: string | null;
   navButton1Url: string | null;
@@ -92,7 +92,9 @@ export function getStorefrontAppNav(settings: ShopSettingsNavSlice | null): {
     storefrontNavLinksJson: null,
   };
   const parsed = parseStorefrontNavLinksJson(slice.storefrontNavLinksJson);
-  const links = parsed ?? defaultStorefrontAppNavLinks(slice);
+  const links = filterShapeLinksFromNav(
+    parsed ?? defaultStorefrontAppNavLinks(slice),
+  );
   const cartUrl = slice.navButton3Url?.trim() || "/cart";
   return {
     links,

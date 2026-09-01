@@ -13,6 +13,7 @@ import {
   CANADIAN_CLADDING_PRIMARY_NAV,
   CANADIAN_CLADDING_TOPBAR_LINKS,
   matchCanadianCladdingPrimaryNavActive,
+  type CanadianCladdingShapeNavKey,
 } from "../utils/canadianCladdingPrimaryNav";
 import {
   buildCanadianCladdingLogoSrcSet,
@@ -227,6 +228,13 @@ export function ProjectCladStorefrontNav({
    * list where the top bar already links to account & cart).
    */
   hideTrailingIcons = false,
+  /**
+   * Forces which shape destination is active (Templates / Builder / Profiles / Parts cart).
+   * Prefer this on app-proxy shape pages where the pathname can be rewritten.
+   */
+  shapeNavActive = null,
+  /** Staged custom-parts count — badge on the Parts cart nav item. */
+  shapeCartCount = 0,
 }: {
   logoSrc: string | null;
   logoAlt?: string;
@@ -251,6 +259,8 @@ export function ProjectCladStorefrontNav({
   htmlTemplateHeader?: boolean;
   htmlTemplateNavActive?: "shop" | "projects" | null;
   hideTrailingIcons?: boolean;
+  shapeNavActive?: CanadianCladdingShapeNavKey | null;
+  shapeCartCount?: number;
 }) {
   const initial = accountInitial?.trim().charAt(0).toUpperCase() ?? "";
   const accountMenuLabel = accountFirstName?.trim() || "Account";
@@ -445,26 +455,56 @@ export function ProjectCladStorefrontNav({
   const storefrontLogoSrc = CANADIAN_CLADDING_STOREFRONT_LOGO_URL;
   const storefrontLogoSrcSet = buildCanadianCladdingLogoSrcSet(storefrontLogoSrc);
 
+  const shapeCartBadgeCount = Math.max(0, Math.floor(Number(shapeCartCount) || 0));
+
   const ccAppHeaderMainNav = (
     <nav className="cc-app-header__nav" aria-label="Primary">
       {CANADIAN_CLADDING_PRIMARY_NAV.map((item) => {
+        const isShapeItem =
+          item.key === "templates" ||
+          item.key === "builder" ||
+          item.key === "profiles" ||
+          item.key === "shapeCart";
         const active =
+          (shapeNavActive != null && isShapeItem && item.key === shapeNavActive) ||
           (htmlTemplateNavActive === "projects" && item.key === "projects") ||
           (htmlTemplateNavActive === "shop" && item.key === "siding") ||
-          (htmlTemplateNavActive == null &&
+          (shapeNavActive == null &&
+            htmlTemplateNavActive == null &&
             matchCanadianCladdingPrimaryNavActive(
               htmlPrimaryNavPath,
               item.key,
               item.url,
             ));
+        const classes = [
+          isShapeItem ? "cc-app-header__nav-shape" : null,
+          item.key === "templates" ? "cc-app-header__nav-shape--start" : null,
+          item.key === "shapeCart" ? "cc-app-header__nav-shape--end" : null,
+          item.key === "shapeCart" && shapeCartBadgeCount > 0
+            ? "cc-app-header__nav-shape--has-badge"
+            : null,
+          active ? "is-active" : null,
+        ]
+          .filter(Boolean)
+          .join(" ");
         return (
           <a
             key={item.key}
             href={item.url}
-            className={active ? "is-active" : undefined}
+            className={classes || undefined}
             aria-current={active ? "page" : undefined}
+            aria-label={
+              item.key === "shapeCart" && shapeCartBadgeCount > 0
+                ? `Parts cart, ${shapeCartBadgeCount} items`
+                : undefined
+            }
           >
             {item.label}
+            {item.key === "shapeCart" && shapeCartBadgeCount > 0 ? (
+              <span className="cc-app-header__nav-shape-badge" aria-hidden="true">
+                {shapeCartBadgeCount > 99 ? "99+" : String(shapeCartBadgeCount)}
+              </span>
+            ) : null}
           </a>
         );
       })}

@@ -128,14 +128,17 @@
        before anything else or the document comes back invisible. */
     document.body.classList.remove('project-clad-leaving');
     if (!ev.persisted) return;
-    /* bfcache hands back the document with the user's typed values intact. Refreshing is
-       only about staleness, so when there is unsaved work the values win and the refresh
-       is skipped — the next action reloads the page anyway. */
-    if (typeof window.pcReload === 'function') {
-      window.pcReload({ skipIfDirty: true });
-      return;
-    }
-    window.location.reload();
+    /* Refreshing a restored page is only ever about staleness, and a restore is otherwise
+       free — instant, with scroll position intact — so spend it only when the session has
+       actually mutated something since this document was drawn. Without pc-dirty-guard.js
+       there is no stamp to compare against and no snapshot machinery to protect what is
+       typed here, so keep the restore rather than reloading blind on every back press. */
+    if (typeof window.pcDataChangedSince !== 'function') return;
+    if (!window.pcDataChangedSince()) return;
+    /* bfcache hands back the document with the user's typed values intact, so when there
+       is unsaved work the values win and the refresh is skipped — the next action reloads
+       the page anyway. */
+    window.pcReload({ skipIfDirty: true, mutation: false });
   });
 })();
           

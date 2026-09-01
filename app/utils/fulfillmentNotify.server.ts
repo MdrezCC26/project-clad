@@ -12,14 +12,22 @@ import {
   getCustomersByIds,
   type CustomerInfo,
 } from "./adminCustomers.server";
-import { customerFacingPropertiesIndentedBlock } from "./customerFacingEmailLines.server";
+import { customerFacingPropertiesIndentedBlock, filterCustomerFacingProperties } from "./customerFacingEmailLines.server";
 import {
   getEmailNotificationPrefs,
   isEmailNotificationEnabled,
 } from "./emailNotificationPrefs.server";
 import { dedupeEmailAddresses, isEmailConfigured } from "./email.server";
-import { sendTransactionalEmailToRecipients } from "./transactionalEmail.server";
-import { formatPreferredDeliveryDisplay } from "./preferredDeliveryFormat";
+import {
+  buildCustomerDeliveredEmailHtml,
+  buildFinanceDeliveredEmailHtml,
+} from "./financeDeliveredEmailHtml.server";
+import { resolveFinanceDeliveryRecipients } from "./financeEmailRecipients.server";
+import { buildSignedFulfillmentPhotoUrl } from "./fulfillmentPhotoSignedUrl.server";
+import {
+  getShopLogoDataUrlForEmail,
+  sendTransactionalEmailToRecipients,
+} from "./transactionalEmail.server";
 import {
   buildVariantPresentation,
   parseVariantSnapshot,
@@ -30,7 +38,7 @@ import {
   customerNumericIdsForAdminApi,
   shopStringFilter,
 } from "./projectAccess.server";
-import { STOREFRONT_ORDER_CONFIRMED_ACTIVITY } from "./projectActivity.server";
+import { resolveOrderLifecycleCustomerRecipients } from "./orderCustomerNotify.server";
 import { orderTaxFromSubtotal } from "./orderDisplayTax";
 import { getShopDeliveryFee } from "./shopDeliveryFee.server";
 import {
@@ -43,82 +51,32 @@ function formatMoney(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
-const DEFAULT_FINANCE_EMAIL = "michaeldrezin@canadiancladding.ca";
-
 /** Same flat fee as storefront `PROJECT_DELIVERY_FEE` / order-placed email. */
 const ORDER_DELIVERY_FEE = 15;
 
-function dedupeCustomerIds(ids: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const raw of ids) {
-    const t = raw.trim();
-    if (!t) continue;
-    const key = t.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(t);
-  }
-  return out;
+/** All finance mailboxes from PROJECTCLAD_FINANCE_EMAIL, minus shop mutes. */
+async function financeDeliveryInvoiceRecipients(
+  shop: string,
+): Promise<string[]> {
+  return resolveFinanceDeliveryRecipients(shop);
 }
 
-function notifyEmailFromActivityPayload(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    return null;
-  }
-  const raw = (payload as Record<string, unknown>).notifyEmail;
-  if (typeof raw !== "string") {
-    return null;
-  }
-  const t = raw.trim();
-  return t || null;
-}
-
-/**
- * Who gets the customer-facing delivered email: project owner plus whoever confirmed Order now /
- * reorder (`STOREFRONT_ORDER_CONFIRMED_ACTIVITY`). Payload may carry `notifyEmail` when Shopify’s
- * customer record has no email but the storefront session supplies one.
- */
-async function resolveDeliveredCustomerNotifyContext(args: {
-  projectId: string;
-  jobId: string;
-  ownerCustomerId: string;
-}): Promise<{
-  customerIds: string[];
-  placerCustomerId: string | null;
-  placerNotifyEmail: string | null;
-}> {
-  const placerRow = await prisma.projectActivityEvent.findFirst({
-    where: {
-      projectId: args.projectId,
-      jobId: args.jobId,
-      type: STOREFRONT_ORDER_CONFIRMED_ACTIVITY,
-    },
-    orderBy: { createdAt: "desc" },
-    select: { actorCustomerId: true, payload: true },
-  });
-  const placerCustomerId = placerRow?.actorCustomerId?.trim() || null;
-  return {
-    customerIds: dedupeCustomerIds(
-      placerCustomerId
-        ? [args.ownerCustomerId, placerCustomerId]
-        : [args.ownerCustomerId],
-    ),
-    placerCustomerId,
-    placerNotifyEmail: notifyEmailFromActivityPayload(placerRow?.payload),
-  };
-}
-
-/** All finance mailboxes from PROJECTCLAD_FINANCE_EMAIL (`a@x;b@y`). Fallback when unset. */
-function financeDeliveryInvoiceRecipients(): string[] {
-  const raw = process.env.PROJECTCLAD_FINANCE_EMAIL?.trim();
-  if (raw) {
-    const list = dedupeEmailAddresses(
-      raw.split(/[,;]+/).map((s) => s.trim()).filter(Boolean),
-    );
-    if (list.length > 0) return list;
-  }
-  return [DEFAULT_FINANCE_EMAIL];
+function shippingLines(project: {
+  shipAddress1: string | null;
+  shipCity: string | null;
+  shipProvince: string | null;
+  shipPostal: string | null;
+  shipCountry: string | null;
+}): string[] {
+  return [
+    project.shipAddress1,
+    [project.shipCity, project.shipProvince, project.shipPostal]
+      .filter(Boolean)
+      .join(", "),
+    project.shipCountry,
+  ]
+    .filter((l) => l && String(l).trim())
+    .map((l) => String(l).trim());
 }
 
 function shippingBlock(project: {
@@ -128,20 +86,10 @@ function shippingBlock(project: {
   shipPostal: string | null;
   shipCountry: string | null;
 }): string {
-  const lines = [
-    project.shipAddress1,
-    [
-      project.shipCity,
-      project.shipProvince,
-      project.shipPostal,
-    ]
-      .filter(Boolean)
-      .join(", "),
-    project.shipCountry,
-  ]
-    .filter((l) => l && String(l).trim())
-    .map((l) => String(l).trim());
-  return lines.length ? ["Ship to:", ...lines.map((l) => `  ${l}`)].join("\n") : "Ship to: (not on file)";
+  const lines = shippingLines(project);
+  return lines.length
+    ? ["Ship to:", ...lines.map((l) => `  ${l}`)].join("\n")
+    : "Ship to: (not on file)";
 }
 
 function buildDeliveredLineItemsAndSubtotal(args: {
@@ -157,9 +105,26 @@ function buildDeliveredLineItemsAndSubtotal(args: {
   live: Record<string, VariantDisplayInfo>;
   /** When set, only these delivered quantities are invoiced (phased partial delivery). */
   quantityByItemId?: Map<string, number>;
-}): { blocks: string[]; subtotal: number } {
+}): {
+  blocks: string[];
+  lines: Array<{
+    displayName: string;
+    qty: number;
+    unit: number;
+    lineTotal: number;
+    properties: { name: string; value: string }[];
+  }>;
+  subtotal: number;
+} {
   let subtotal = 0;
   const blocks: string[] = [];
+  const lines: Array<{
+    displayName: string;
+    qty: number;
+    unit: number;
+    lineTotal: number;
+    properties: { name: string; value: string }[];
+  }> = [];
   let lineIndex = 0;
   args.items.forEach((row) => {
     const qty =
@@ -180,8 +145,16 @@ function buildDeliveredLineItemsAndSubtotal(args: {
       live: args.live[row.variantId],
       snapshot: snap,
     });
+    const properties = filterCustomerFacingProperties(props);
     const propBlock = customerFacingPropertiesIndentedBlock(props);
     lineIndex += 1;
+    lines.push({
+      displayName: pres.displayName,
+      qty,
+      unit,
+      lineTotal,
+      properties,
+    });
     blocks.push(
       [
         `${lineIndex}. ${pres.displayName}`,
@@ -192,7 +165,7 @@ function buildDeliveredLineItemsAndSubtotal(args: {
         .join("\n"),
     );
   });
-  return { blocks, subtotal };
+  return { blocks, lines, subtotal };
 }
 
 function formatProjectNumberLine(poNumber?: string | null): string {
@@ -332,16 +305,26 @@ export async function sendFulfillmentPackageEmails(args: {
     }
   }
 
-  const { blocks: lineBlocks, subtotal } = buildDeliveredLineItemsAndSubtotal({
-    shop: args.shop,
-    items: job.items,
-    live,
-    quantityByItemId,
-  });
+  const { subtotal } = buildDeliveredLineItemsAndSubtotal({
+      shop: args.shop,
+      items: job.items,
+      live,
+      quantityByItemId,
+    });
 
   const projectUrl = `https://${args.shop}/apps/project-clad/project?id=${encodeURIComponent(args.projectId)}`;
   const projectOrderUrl = `${projectUrl}&job=${encodeURIComponent(args.jobId)}`;
-  const documentsUrl = `${projectOrderUrl}&deliveryTab=documents`;
+  const packingSlipUrl = `https://${args.shop}/apps/project-clad/shop-slip?id=${encodeURIComponent(args.projectId)}&jobId=${encodeURIComponent(args.jobId)}`;
+  const photoStorageKey =
+    phase?.fulfillmentPhotoStorageKey ?? job.fulfillmentPhotoStorageKey;
+  const deliveryPhotoUrl = photoStorageKey
+    ? buildSignedFulfillmentPhotoUrl({
+        jobId: args.jobId,
+        shop: args.shop,
+        phaseId: phase?.id,
+        mode: "view",
+      })
+    : null;
 
   const orderDeliveredPercent = phase
     ? computeDeliveredPercent(job.items, mapPhasesToViews(job.deliveryPhases))
@@ -357,79 +340,32 @@ export async function sendFulfillmentPackageEmails(args: {
         : shopDeliveryFee
       : ORDER_DELIVERY_FEE
     : 0;
-  const deliveryLabel = phase
-    ? `Delivery (drop ${phase.sequence})`
-    : "Delivery";
+  const deliveryLabel =
+    phase && job.deliveryPhases.length > 1
+      ? `Delivery (drop ${phase.sequence})`
+      : "Delivery";
   const taxableBase = subtotal + deliveryFee;
   const tax = orderTaxFromSubtotal(taxableBase, { pricesIncludeTax: false });
   const total = Math.round((subtotal + tax + deliveryFee) * 100) / 100;
 
-  const prefLine = formatPreferredDeliveryDisplay(
-    job.scheduledDeliveryDate,
-    job.scheduledDeliveryWindow,
-  );
-  const scheduleParts = prefLine ? [prefLine, ``] : [];
-
-  const locationBlock = isDelivery
-    ? [shippingBlock(project), ``]
-    : [`Fulfillment: Store pickup`, ``];
-
-  const deliveredHeadline = phase
-    ? `Delivery ${phase.sequence} has been confirmed for your order.`
-    : `Your order has been delivered!`;
-
-  const progressLine =
-    orderDeliveredPercent != null
-      ? `Order progress: ${orderDeliveredPercent}% delivered overall.`
-      : null;
-
-  const documentsLines = phase
-    ? [
-        `View delivery photo for this drop:`,
-        documentsUrl,
-        ``,
-      ]
-    : [];
-
-  const headerBlock = [
-    deliveredHeadline,
-    ``,
-    ...(progressLine ? [progressLine, ``] : []),
-    `Project: ${project.name}`,
-    `Order: ${job.name}`,
-    formatProjectNumberLine(project.poNumber),
-    formatJobPoLine(job.purchaseOrderNumber),
-    `Company: ${(project.companyName ?? "").trim() || "—"}`,
-    ``,
-    ...scheduleParts,
-    ...locationBlock,
-    ...(phase
-      ? [`Line items (this delivery only):`, ``]
-      : [`Line items:`, ``]),
-    lineBlocks.join("\n\n") || "(none)",
-    ``,
-    `Subtotal: ${formatMoney(subtotal)}`,
-    `${deliveryLabel}: ${formatMoney(deliveryFee)}`,
-    `Tax: ${formatMoney(tax)}`,
-    `Total: ${formatMoney(total)}`,
-    ``,
-    `View in Projects: ${projectUrl}`,
-    ``,
-    ...documentsLines,
-  ];
-
-  const ownerBody = headerBlock.join("\n");
+  /** Progress only when more than one drop has actually been delivered (legacy multi-drop). */
+  const deliveredPhaseCount = job.deliveryPhases.filter(
+    (p) =>
+      p.id === phase?.id ||
+      Boolean(p.deliveredAt) ||
+      Boolean(p.fulfillmentNotifiedAt),
+  ).length;
+  const showOrderProgress =
+    deliveredPhaseCount > 1 && orderDeliveredPercent != null;
 
   const ownerId = project.ownerCustomerId;
-  const {
-    customerIds: deliveredNotifyIds,
-    placerCustomerId,
-    placerNotifyEmail,
-  } = await resolveDeliveredCustomerNotifyContext({
-    projectId: args.projectId,
-    jobId: args.jobId,
-    ownerCustomerId: ownerId,
-  });
+  const { customerIds: deliveredNotifyIds, extraNotifyEmails } =
+    await resolveOrderLifecycleCustomerRecipients({
+      shop: args.shop,
+      projectId: args.projectId,
+      jobId: args.jobId,
+      ownerCustomerId: ownerId,
+    });
 
   const fetchKeys = Array.from(
     new Set(
@@ -448,33 +384,18 @@ export async function sendFulfillmentPackageEmails(args: {
       fetchKeys.length > 0 ? fetchKeys : deliveredNotifyIds,
     );
     ownerCustomerRow = getCustomerRowFromFetchedMap(ownerId, customerInfoMap);
-    customerDeliveryEmails = dedupeEmailAddresses(
-      deliveredNotifyIds
+    customerDeliveryEmails = dedupeEmailAddresses([
+      ...deliveredNotifyIds
         .map((id) =>
           getCustomerRowFromFetchedMap(id, customerInfoMap)?.email?.trim(),
         )
         .filter((e): e is string => Boolean(e)),
-    );
+      ...extraNotifyEmails,
+    ]);
   } catch {
     ownerCustomerRow = undefined;
     customerDeliveryEmails = [];
     customerInfoMap = {};
-  }
-
-  if (
-    placerCustomerId &&
-    placerNotifyEmail &&
-    placerNotifyEmail.includes("@")
-  ) {
-    const placerHadProfileEmail = Boolean(
-      getCustomerRowFromFetchedMap(placerCustomerId, customerInfoMap)?.email?.trim(),
-    );
-    if (!placerHadProfileEmail) {
-      customerDeliveryEmails = dedupeEmailAddresses([
-        ...customerDeliveryEmails,
-        placerNotifyEmail,
-      ]);
-    }
   }
 
   const ownerName =
@@ -485,8 +406,36 @@ export async function sendFulfillmentPackageEmails(args: {
   const ownerCustEmail = ownerCustomerRow?.email?.trim() || "—";
   const ownerPhone = (ownerCustomerRow?.phone ?? "").trim() || "—";
 
-  const financeIntro =
-    "Delivery has been confirmed. Please invoice for the quantities delivered on this shipment.";
+  const customerIntro = `${job.name} has been delivered. An invoice will be sent shortly. Click Open order to view your order details. Thank you for using Canadian Cladding!`;
+  const financeIntro = `${job.name} has been delivered. Click Open order to view your order details. Thank you for using Canadian Cladding!`;
+
+  const ownerBody = [
+    customerIntro,
+    ``,
+    `Customer details`,
+    `Customer name: ${ownerName}`,
+    `Email: ${ownerCustEmail}`,
+    `Phone: ${ownerPhone}`,
+    `Company on project: ${(project.companyName ?? "").trim() || "—"}`,
+    ``,
+    `Project / order`,
+    `Project: ${project.name}`,
+    formatProjectNumberLine(project.poNumber),
+    formatJobPoLine(job.purchaseOrderNumber),
+    `Order: ${job.name}`,
+    formatOrderNumberLine(job.orderNumber),
+    ``,
+    isDelivery ? `${shippingBlock(project)}` : `Fulfillment: Store pickup`,
+    ``,
+    ...(showOrderProgress
+      ? [`Order progress: ${orderDeliveredPercent}% delivered overall.`, ``]
+      : []),
+    `Open order: ${projectOrderUrl}`,
+    ...(deliveryPhotoUrl
+      ? [`View delivery photo: ${deliveryPhotoUrl}`]
+      : []),
+    `View packing slip: ${packingSlipUrl}`,
+  ].join("\n");
 
   const financeBody = [
     financeIntro,
@@ -506,10 +455,7 @@ export async function sendFulfillmentPackageEmails(args: {
     ``,
     isDelivery ? `${shippingBlock(project)}` : `Fulfillment: Store pickup`,
     ``,
-    ...(phase ? [`Line items (this delivery only):`, ``] : [`Line items:`, ``]),
-    lineBlocks.join("\n\n") || "(none)",
-    ``,
-    ...(orderDeliveredPercent != null
+    ...(showOrderProgress
       ? [`Order progress: ${orderDeliveredPercent}% delivered overall.`, ``]
       : []),
     `Subtotal: ${formatMoney(subtotal)}`,
@@ -517,20 +463,53 @@ export async function sendFulfillmentPackageEmails(args: {
     `Tax: ${formatMoney(tax)}`,
     `Total: ${formatMoney(total)}`,
     ``,
-    `Open order in app: ${projectOrderUrl}`,
-    ...(phase
-      ? [`Delivery photo: ${documentsUrl}`, ``]
+    `Open order: ${projectOrderUrl}`,
+    ...(deliveryPhotoUrl
+      ? [`View delivery photo: ${deliveryPhotoUrl}`]
       : []),
+    `View packing slip: ${packingSlipUrl}`,
   ].join("\n");
+
+  const logoDataUrl = await getShopLogoDataUrlForEmail(args.shop);
+  const hasLogo = Boolean(logoDataUrl?.trim());
+  const completedAt = phase?.deliveredAt ?? job.completedAt ?? new Date();
+  const sharedDeliveredHtmlArgs = {
+    hasLogo,
+    isDelivery,
+    completedAt,
+    customerName: ownerName,
+    customerEmail: ownerCustEmail,
+    customerPhone: ownerPhone,
+    companyName: (project.companyName ?? "").trim() || "—",
+    projectName: project.name,
+    orderName: job.name,
+    orderNumber: job.orderNumber,
+    projectNumber: (project.poNumber ?? "").trim() || "—",
+    poNumber: (job.purchaseOrderNumber ?? "").trim() || "—",
+    shipToLines: shippingLines(project),
+    orderDeliveredPercent,
+    showOrderProgress,
+    projectOrderUrl,
+    deliveryPhotoUrl,
+    packingSlipUrl,
+  };
+
+  const customerHtml = buildCustomerDeliveredEmailHtml(sharedDeliveredHtmlArgs);
+  const financeHtml = buildFinanceDeliveredEmailHtml({
+    ...sharedDeliveredHtmlArgs,
+    subtotal,
+    deliveryLabel,
+    deliveryFee,
+    tax,
+    total,
+  });
 
   const subject = phase
     ? `ProjectClad: Delivery ${phase.sequence} confirmed — ${project.name} · ${job.name}`
     : `ProjectClad: Order delivered — ${project.name} · ${job.name}`;
 
-  const financeRecipients = financeDeliveryInvoiceRecipients();
-  const photoStorageKey =
-    phase?.fulfillmentPhotoStorageKey ?? job.fulfillmentPhotoStorageKey;
-  const financePhotoAttachment = await buildFinanceFulfillmentPhotoAttachment(
+  const financeRecipients = await financeDeliveryInvoiceRecipients(args.shop);
+  const deliveryPhotoAttachment = await buildFinanceFulfillmentPhotoAttachment(
     photoStorageKey,
   );
   const financePoPdfAttachment = await buildFinancePurchaseOrderPdfAttachment(
@@ -538,16 +517,16 @@ export async function sendFulfillmentPackageEmails(args: {
     job.purchaseOrderPdfFileName,
   );
 
-  const extraAttachments: {
+  const financeAttachments: {
     filename: string;
     content: Buffer;
     contentType: string;
   }[] = [];
-  if (financePhotoAttachment) {
-    extraAttachments.push(financePhotoAttachment);
+  if (deliveryPhotoAttachment) {
+    financeAttachments.push(deliveryPhotoAttachment);
   }
   if (financePoPdfAttachment) {
-    extraAttachments.push(financePoPdfAttachment);
+    financeAttachments.push(financePoPdfAttachment);
   }
 
   if (sendOwner && customerDeliveryEmails.length > 0) {
@@ -557,6 +536,10 @@ export async function sendFulfillmentPackageEmails(args: {
         recipients: customerDeliveryEmails,
         subject,
         text: ownerBody,
+        html: customerHtml,
+        ...(deliveryPhotoAttachment
+          ? { extraAttachments: [deliveryPhotoAttachment] }
+          : {}),
       });
       if (ok === 0) {
         throw new Error(
@@ -592,7 +575,10 @@ export async function sendFulfillmentPackageEmails(args: {
         recipients: financeRecipients,
         subject: financeSubject,
         text: financeBody,
-        ...(extraAttachments.length > 0 ? { extraAttachments } : {}),
+        html: financeHtml,
+        ...(financeAttachments.length > 0
+          ? { extraAttachments: financeAttachments }
+          : {}),
       });
       if (ok === 0) {
         throw new Error(

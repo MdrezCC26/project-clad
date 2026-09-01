@@ -123,18 +123,18 @@ export function isCustomDimensionLineSpec(map: Map<string, string>): boolean {
   );
 }
 
-/** L1..L12 then A1..A12 then Additional Details, skipping unset keys. */
+/** L1..L24 then A1..A24 then Additional Details, skipping unset keys. */
 export function collectOrderLineDimensionRows(
   map: Map<string, string>,
 ): OrderLineDimensionRow[] {
   const rows: OrderLineDimensionRow[] = [];
 
-  for (let i = 1; i <= 12; i += 1) {
+  for (let i = 1; i <= 24; i += 1) {
     const value = map.get(`l${i}`);
     if (!value) continue;
     rows.push({ label: `L${i}`, value });
   }
-  for (let i = 1; i <= 12; i += 1) {
+  for (let i = 1; i <= 24; i += 1) {
     const value = map.get(`a${i}`);
     if (!value) continue;
     rows.push({ label: `A${i}`, value });

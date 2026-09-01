@@ -219,6 +219,17 @@
   color: var(--cc-nav-link);
 }
 
+.cc-nav--primary a.cc-nav-shape--start {
+  margin-left: 4px;
+  padding-left: 18px;
+  border-left: 1px solid rgba(60, 66, 78, 0.22);
+}
+.cc-nav--primary a.cc-nav-shape--end {
+  margin-right: 4px;
+  padding-right: 18px;
+  border-right: 1px solid rgba(60, 66, 78, 0.22);
+}
+
 /* Primary nav: same hover/active as app proxy (red text + bottom rule). */
 .cc-nav--primary a::before {
   left: 0;

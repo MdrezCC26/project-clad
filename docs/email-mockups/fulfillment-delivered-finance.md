@@ -6,7 +6,7 @@
 
 **Today:** `sendFulfillmentPackageEmails` in `fulfillmentNotify.server.ts` sends finance the **same body** as the owner, with subject suffix **`[finance]`**. **Target:** Replace finance body with a template like below (customer + order context for accounting).
 
-**Branding:** **Canadian Cladding PROJECTS** logo at top (match other mails unless finance asks for plain internal only).
+**Branding:** HTML uses the Canadian Cladding branded shell (`brandedEmailHtml.server.ts` / `financeDeliveredEmailHtml.server.ts`) — cream canvas, logo, red accent bar, detail card, line items + totals, dark footer. Plain-text multipart fallback keeps the invoice copy below. Logo from Admin shop settings (CID), not base64.
 
 ## Subject (suggested)
 

@@ -21,10 +21,12 @@ import {
 import {
   DEFAULT_EMAIL_NOTIFICATION_PREFS,
   EMAIL_NOTIFICATION_KINDS,
-  parseEmailNotificationPrefsJson,
-  serializeEmailNotificationPrefs,
+  financeMutedFromSendAllowList,
+  parseEmailNotificationSettingsJson,
+  serializeEmailNotificationSettings,
   type EmailNotificationPrefs,
 } from "../utils/emailNotificationPrefs";
+import { listConfiguredFinanceEmails } from "../utils/financeEmailRecipients.server";
 import {
   parseStorefrontNavLinksJson,
   STOREFRONT_APP_NAV_JSON_PLACEHOLDER,
@@ -129,12 +131,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
   ];
 
-  const emailNotificationPrefs = parseEmailNotificationPrefsJson(
+  const emailNotificationSettings = parseEmailNotificationSettingsJson(
     settings?.emailNotificationPrefsJson,
   );
+  const financeRecipients = listConfiguredFinanceEmails();
+  const financeMutedEmails = emailNotificationSettings.financeMutedEmails;
+  const emailNotificationPrefs = emailNotificationSettings.prefs;
 
   return {
     emailNotificationPrefs,
+    financeRecipients,
+    financeMutedEmails,
     hasPricingPassword: Boolean(settings?.pricingPasswordHash),
     hasLogo: Boolean(settings?.logoDataUrl),
     hasBackgroundLogo: Boolean(settings?.backgroundLogoDataUrl),
@@ -637,14 +644,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     for (const k of EMAIL_NOTIFICATION_KINDS) {
       prefs[k] = formData.get(`notify_${k}`) === "on";
     }
+    const configured = listConfiguredFinanceEmails();
+    const sendAllowList = formData
+      .getAll("finance_send")
+      .map((v) => String(v).trim())
+      .filter(Boolean);
+    const financeMutedEmails = financeMutedFromSendAllowList({
+      configured,
+      sendAllowList,
+    });
     await prisma.shopSettings.upsert({
       where: { shop: session.shop },
       update: {
-        emailNotificationPrefsJson: serializeEmailNotificationPrefs(prefs),
+        emailNotificationPrefsJson: serializeEmailNotificationSettings({
+          prefs,
+          financeMutedEmails,
+        }),
       },
       create: {
         shop: session.shop,
-        emailNotificationPrefsJson: serializeEmailNotificationPrefs(prefs),
+        emailNotificationPrefsJson: serializeEmailNotificationSettings({
+          prefs,
+          financeMutedEmails,
+        }),
       },
     });
     return { ok: true, emailNotificationPrefsSaved: true };
@@ -765,7 +787,7 @@ const EMAIL_NOTIFICATION_LABELS: Record<
   },
   orderPlacedCustomer: {
     title: "Order placed — customer",
-    hint: "Thank-you email to the customer who placed the order.",
+    hint: "Thank-you to the project customer (owner when staff places Order now on their behalf).",
   },
   orderPlacedShop: {
     title: "Order placed — shop",
@@ -773,11 +795,11 @@ const EMAIL_NOTIFICATION_LABELS: Record<
   },
   fulfillmentOwner: {
     title: "Delivered — customer",
-    hint: "Project owner plus whoever confirmed Order now / reorder (after fulfillment photo).",
+    hint: "Project owner (and the member who placed the order, when they are not staff). After fulfillment photo.",
   },
   fulfillmentFinance: {
     title: "Delivered — finance",
-    hint: "Invoice-oriented copy (PROJECTCLAD_FINANCE_EMAIL).",
+    hint: "Invoice-oriented copy (PROJECTCLAD_FINANCE_EMAIL) with order totals.",
   },
   approvalRequest: {
     title: "Submit for review",
@@ -800,6 +822,8 @@ const EMAIL_NOTIFICATION_LABELS: Record<
 export default function Settings() {
   const {
     emailNotificationPrefs,
+    financeRecipients,
+    financeMutedEmails,
     hasPricingPassword,
     hasLogo,
     hasBackgroundLogo,
@@ -1099,6 +1123,57 @@ export default function Settings() {
                 </label>
               );
             })}
+            <div style={{ marginTop: 8, maxWidth: 640 }}>
+              <s-paragraph>
+                <strong>Finance recipients</strong> — uncheck to mute that
+                address for delivered finance mail. List comes from{" "}
+                <code>PROJECTCLAD_FINANCE_EMAIL</code> (restart the app after
+                changing the env). Category toggle above must stay on for any
+                finance mail to send.
+              </s-paragraph>
+              {financeRecipients.length === 0 ? (
+                <s-paragraph>No finance recipients configured.</s-paragraph>
+              ) : (
+                <s-stack direction="block" gap="base">
+                  {financeRecipients.map((email) => {
+                    const muted = financeMutedEmails.includes(
+                      email.trim().toLowerCase(),
+                    );
+                    return (
+                      <label
+                        key={email}
+                        style={{
+                          display: "flex",
+                          gap: "0.5rem",
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          name="finance_send"
+                          value={email}
+                          defaultChecked={!muted}
+                          style={{ marginTop: 4 }}
+                        />
+                        <span>
+                          <code>{email}</code>
+                          {muted ? (
+                            <span
+                              style={{
+                                color: "var(--p-color-text-secondary)",
+                                marginLeft: 6,
+                              }}
+                            >
+                              (currently muted)
+                            </span>
+                          ) : null}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </s-stack>
+              )}
+            </div>
             <button type="submit">Save notification settings</button>
           </s-stack>
         </Form>

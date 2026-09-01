@@ -1,9 +1,10 @@
 import prisma from "../db.server";
+import { BRANDED_EMAIL_LOGO_CID } from "./brandedEmailHtml.server";
 import { sendEmail, type SendEmailOptions } from "./email.server";
 import { shopStringFilter } from "./projectAccess.server";
 
 /** CID referenced from HTML `<img src="cid:…">` (nodemailer inline attachment). */
-const LOGO_CID = "projectclad-logo@transactional";
+const LOGO_CID = BRANDED_EMAIL_LOGO_CID;
 
 function escapeHtml(text: string): string {
   return text
@@ -132,17 +133,42 @@ ${logoBlock}
 
 /**
  * Sends multipart HTML + plain text, with shop logo from Admin settings when configured.
+ * Pass `html` to use a full branded document; logo is still inlined via CID when present
+ * and the HTML references `cid:${BRANDED_EMAIL_LOGO_CID}`.
  */
 export async function sendTransactionalEmail(args: {
   shop: string;
   to: string;
   subject: string;
   text: string;
+  /** Full HTML document override (e.g. branded finance template). */
+  html?: string;
   extraAttachments?: SendEmailOptions["attachments"];
 }): Promise<void> {
   const logoDataUrl = await getShopLogoDataUrlForEmail(args.shop);
-  const { html, attachments: logoAttachments } =
-    buildTransactionalHtmlAndAttachments(args.text, logoDataUrl);
+  let html: string;
+  let logoAttachments: NonNullable<SendEmailOptions["attachments"]> | undefined;
+
+  if (args.html?.trim()) {
+    html = args.html;
+    const parsed = logoDataUrl ? parseDataUrlToInlineImage(logoDataUrl) : null;
+    if (parsed && html.includes(`cid:${LOGO_CID}`)) {
+      logoAttachments = [
+        {
+          filename: `logo.${parsed.ext}`,
+          content: parsed.buffer,
+          cid: LOGO_CID,
+          contentDisposition: "inline" as const,
+          contentType: parsed.mime,
+        },
+      ];
+    }
+  } else {
+    const built = buildTransactionalHtmlAndAttachments(args.text, logoDataUrl);
+    html = built.html;
+    logoAttachments = built.attachments;
+  }
+
   const merged = [...(logoAttachments ?? []), ...(args.extraAttachments ?? [])];
   const attachmentPayload = merged.length ? { attachments: merged } : {};
 
@@ -179,6 +205,7 @@ export async function sendTransactionalEmailToRecipients(args: {
   recipients: string[];
   subject: string;
   text: string;
+  html?: string;
   extraAttachments?: SendEmailOptions["attachments"];
 }): Promise<number> {
   const seen = new Set<string>();
@@ -195,6 +222,7 @@ export async function sendTransactionalEmailToRecipients(args: {
         to,
         subject: args.subject,
         text: args.text,
+        html: args.html,
         extraAttachments: args.extraAttachments,
       });
       ok += 1;

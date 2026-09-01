@@ -703,6 +703,21 @@
         }
       }
     });
+    el.querySelectorAll('.project-clad-member-role-select__option').forEach(function (label) {
+      label.addEventListener('click', function () {
+        window.setTimeout(function () {
+          var checked = el.querySelector('input[name="role"]:checked');
+          if (!checked) return;
+          el.setAttribute('data-projectclad-role-touched', '1');
+          syncMemberRoleSelect(el);
+          if (el.open) {
+            pcAnimateMemberRoleClose(el, function () {
+              el.open = false;
+            });
+          }
+        }, 0);
+      });
+    });
   });
 
   document.addEventListener(
@@ -752,6 +767,67 @@
   let editPendingDeleteJobId = null;
   let editSnapshotItems = {};
 
+  /*
+   * Exactly the fields the `save-order-edit` request carries. Anything else in the card
+   * (line reordering, the PO PDF picker) saves through its own path, so counting it here
+   * would offer to save something this request would not send. Line removal shows up as a
+   * quantity of 0, which is already a changed value.
+   */
+  const PC_ORDER_EDIT_FIELDS = [
+    '[data-projectclad-qty-input]',
+    '[data-projectclad-unit-price-input]',
+    '[data-projectclad-job-name-input]',
+    '[data-projectclad-purchase-order-input]',
+    '[data-projectclad-site-contact-name-input]',
+    '[data-projectclad-site-contact-phone-input]',
+  ].join(',');
+
+  /** Edited means "differs from what the server rendered", never "was focused". */
+  function pcOrderCardHasEdits(jobId, details) {
+    if (editPendingDeleteJobId === jobId) return true;
+    const card = details || pcOrderCard(jobId);
+    if (!(card instanceof HTMLElement)) return false;
+    const fields = card.querySelectorAll(PC_ORDER_EDIT_FIELDS);
+    for (let i = 0; i < fields.length; i++) {
+      const el = fields[i];
+      if (el.disabled || el.readOnly) continue;
+      /* The save trims before sending, so trailing whitespace is not a change. */
+      if (String(el.value).trim() !== String(el.defaultValue).trim()) return true;
+    }
+    return false;
+  }
+
+  /*
+   * The editor's one exit control does double duty: with nothing changed it just closes the
+   * panel, so it should not read as — or behave like — a save.
+   */
+  function pcSyncOrderEditLabel(jobId, details) {
+    const card = details || pcOrderCard(jobId);
+    if (!(card instanceof HTMLElement)) return;
+    const exit = card.querySelector('[data-projectclad-edit-order-exit]');
+    if (!(exit instanceof HTMLElement)) return;
+    const dirty = editingJobId === jobId && pcOrderCardHasEdits(jobId, card);
+    const label = dirty ? 'Save' : 'Back';
+    const hint = dirty ? 'Save changes' : 'Close the editor';
+    if (exit.textContent !== label) exit.textContent = label;
+    exit.setAttribute('title', hint);
+    exit.setAttribute('aria-label', hint);
+  }
+
+  function pcExitOrderEditMode(jobId, details) {
+    const card = details || pcOrderCard(jobId);
+    if (editingJobId === jobId) editingJobId = null;
+    editPendingDeleteJobId = null;
+    editRemovedItemIds[jobId] = [];
+    if (card instanceof HTMLElement) {
+      card.classList.remove('project-clad-edit-mode');
+      /* Nothing here differs from the server render, so the unsaved-work guard must not
+         keep this card armed and prompt on the next navigation. */
+      pcForgetDirtyWithin(card);
+    }
+    pcSyncOrderEditLabel(jobId, card);
+  }
+
   function pcEnterOrderEditMode(jobId, details) {
     const card = details || pcOrderCard(jobId);
     if (!(card instanceof HTMLElement)) return;
@@ -763,6 +839,7 @@
       .map((r) => r.getAttribute('data-item-id'))
       .filter(Boolean);
     card.classList.add('project-clad-edit-mode');
+    pcSyncOrderEditLabel(jobId, card);
   }
 
   /*
@@ -793,23 +870,115 @@
   });
   syncReorderDestination();
 
+  function pcQtyInputMeta(qtyInput) {
+    const itemId = qtyInput.getAttribute('data-item-id') || '';
+    const jobId = qtyInput.getAttribute('data-job-id') || '';
+    const row = document.querySelector(
+      '[data-projectclad-item-row][data-item-id="' + itemId + '"]',
+    );
+    const nameSpan = row?.querySelector('[data-projectclad-item-name]');
+    const displayName = nameSpan?.getAttribute('data-display-name') || '';
+    return { itemId: itemId, jobId: jobId, nameSpan: nameSpan, displayName: displayName };
+  }
+
+  function pcSetQtyRemovedState(jobId, itemId, nameSpan, displayName, removed) {
+    if (!editRemovedItemIds[jobId]) editRemovedItemIds[jobId] = [];
+    if (removed) {
+      if (!editRemovedItemIds[jobId].includes(itemId)) {
+        editRemovedItemIds[jobId].push(itemId);
+      }
+      if (nameSpan) nameSpan.textContent = displayName + ' (Removed)';
+    } else {
+      editRemovedItemIds[jobId] = editRemovedItemIds[jobId].filter(function (id) {
+        return id !== itemId;
+      });
+      if (nameSpan) nameSpan.textContent = displayName;
+    }
+  }
+
+  /** Commit quantity on blur/save — empty or zero means removed. */
+  function pcCommitQtyInput(qtyInput) {
+    if (!(qtyInput instanceof HTMLInputElement) || !editingJobId) return;
+    const meta = pcQtyInputMeta(qtyInput);
+    const raw = qtyInput.value.trim();
+    if (raw === '') {
+      qtyInput.value = '0';
+      pcSetQtyRemovedState(
+        meta.jobId,
+        meta.itemId,
+        meta.nameSpan,
+        meta.displayName,
+        true,
+      );
+      return;
+    }
+    const val = parseInt(raw, 10);
+    if (isNaN(val) || val <= 0) {
+      qtyInput.value = '0';
+      pcSetQtyRemovedState(
+        meta.jobId,
+        meta.itemId,
+        meta.nameSpan,
+        meta.displayName,
+        true,
+      );
+      return;
+    }
+    qtyInput.value = String(val);
+    pcSetQtyRemovedState(
+      meta.jobId,
+      meta.itemId,
+      meta.nameSpan,
+      meta.displayName,
+      false,
+    );
+  }
+
+  function pcCommitQtyInputsIn(host) {
+    const root = host instanceof HTMLElement ? host : document;
+    root.querySelectorAll('[data-projectclad-qty-input]').forEach(function (inp) {
+      if (inp instanceof HTMLInputElement && !inp.disabled && !inp.readOnly) {
+        pcCommitQtyInput(inp);
+      }
+    });
+  }
+
   document.addEventListener('input', (event) => {
     const qtyInput = event.target?.closest?.('[data-projectclad-qty-input]');
     if (qtyInput instanceof HTMLInputElement && editingJobId) {
-      const itemId = qtyInput.getAttribute('data-item-id') || '';
-      const jobId = qtyInput.getAttribute('data-job-id') || '';
-      const val = parseInt(qtyInput.value, 10);
-      const row = document.querySelector('[data-projectclad-item-row][data-item-id="' + itemId + '"]');
-      const nameSpan = row?.querySelector('[data-projectclad-item-name]');
-      const displayName = nameSpan?.getAttribute('data-display-name') || '';
-      if (isNaN(val) || val <= 0) {
-        if (!editRemovedItemIds[jobId]) editRemovedItemIds[jobId] = [];
-        if (!editRemovedItemIds[jobId].includes(itemId)) editRemovedItemIds[jobId].push(itemId);
-        if (nameSpan) nameSpan.textContent = displayName + ' (Removed)';
-        qtyInput.value = '0';
-      } else {
-        editRemovedItemIds[jobId] = (editRemovedItemIds[jobId] || []).filter(id => id !== itemId);
-        if (nameSpan) nameSpan.textContent = displayName;
+      const meta = pcQtyInputMeta(qtyInput);
+      const raw = qtyInput.value.trim();
+      /* Let the user clear the field to retype — don't mark removed until blur/save. */
+      if (raw === '') {
+        pcSetQtyRemovedState(
+          meta.jobId,
+          meta.itemId,
+          meta.nameSpan,
+          meta.displayName,
+          false,
+        );
+        return;
+      }
+      const val = parseInt(raw, 10);
+      if (isNaN(val)) return;
+      if (val === 0) {
+        pcSetQtyRemovedState(
+          meta.jobId,
+          meta.itemId,
+          meta.nameSpan,
+          meta.displayName,
+          true,
+        );
+        return;
+      }
+      if (val > 0) {
+        pcSetQtyRemovedState(
+          meta.jobId,
+          meta.itemId,
+          meta.nameSpan,
+          meta.displayName,
+          false,
+        );
       }
     }
   });
@@ -817,10 +986,123 @@
   document.addEventListener('change', (event) => {
     const qtyInput = event.target?.closest?.('[data-projectclad-qty-input]');
     if (qtyInput instanceof HTMLInputElement && editingJobId) {
-      const val = parseInt(qtyInput.value, 10);
-      if (isNaN(val) || val < 0) qtyInput.value = '0';
+      pcCommitQtyInput(qtyInput);
     }
   });
+
+  document.addEventListener(
+    'blur',
+    (event) => {
+      const qtyInput = event.target?.closest?.('[data-projectclad-qty-input]');
+      if (qtyInput instanceof HTMLInputElement && editingJobId) {
+        pcCommitQtyInput(qtyInput);
+      }
+    },
+    true,
+  );
+
+  /* ------------------------------------------------------------------- phone mask */
+
+  /*
+   * As-you-type `(123) 456-7890`. Mirrors formatPhoneNumber in app/utils/phoneFormat.ts, which
+   * normalises the same value on save and renders it back; if the two drifted, a field nobody
+   * touched would reformat itself the first time it was edited and read as an unsaved change.
+   */
+  const PC_PHONE_SELECTOR = '[data-projectclad-phone-format]';
+
+  /**
+   * The ten significant digits, or null to leave the value alone. A leading `+` is the one
+   * unambiguous "not a North American number" signal, so an international number survives
+   * being pasted and then edited rather than being sliced down to fit ten slots. `+1` is ours.
+   */
+  function pcPhoneLocalDigits(value) {
+    const text = String(value).trim();
+    const digits = text.replace(/\D/g, '');
+    const hasCountryCode = digits.length === 11 && digits.charAt(0) === '1';
+    if (text.charAt(0) === '+' && !hasCountryCode) return null;
+    if (hasCountryCode) return digits.slice(1);
+    /* Truncating rather than bailing is what makes an 11th keystroke a no-op instead of
+       quietly dropping out of the mask. */
+    return digits.slice(0, 10);
+  }
+
+  function pcFormatPhoneDigits(digits) {
+    if (!digits) return '';
+    if (digits.length <= 3) return '(' + digits;
+    if (digits.length <= 6) return '(' + digits.slice(0, 3) + ') ' + digits.slice(3);
+    return '(' + digits.slice(0, 3) + ') ' + digits.slice(3, 6) + '-' + digits.slice(6);
+  }
+
+  function pcCountDigits(text) {
+    let n = 0;
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      if (c >= 48 && c <= 57) n += 1;
+    }
+    return n;
+  }
+
+  /** Offset just past the nth digit, so the caret holds its place as punctuation moves around it. */
+  function pcCaretAfterDigits(text, n) {
+    if (n <= 0) return 0;
+    let seen = 0;
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      if (c >= 48 && c <= 57) {
+        seen += 1;
+        if (seen === n) return i + 1;
+      }
+    }
+    return text.length;
+  }
+
+  document.addEventListener('input', (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    if (typeof input.matches !== 'function' || !input.matches(PC_PHONE_SELECTOR)) return;
+    const before = input.value;
+    const caret = input.selectionStart == null ? before.length : input.selectionStart;
+    let digitsBeforeCaret = pcCountDigits(before.slice(0, caret));
+    let digits = pcPhoneLocalDigits(before);
+    if (digits === null) return;
+    /*
+     * Backspacing a separator ("(613) " -> "(613)") formats straight back to what was already
+     * there, so the key reads as dead. Take the digit the user was reaching for instead.
+     */
+    if (
+      event.inputType === 'deleteContentBackward' &&
+      digitsBeforeCaret > 0 &&
+      pcFormatPhoneDigits(digits).length > before.length
+    ) {
+      digits = digits.slice(0, digitsBeforeCaret - 1) + digits.slice(digitsBeforeCaret);
+      digitsBeforeCaret -= 1;
+    }
+    const next = pcFormatPhoneDigits(digits);
+    if (next === before) return;
+    input.value = next;
+    const pos = pcCaretAfterDigits(next, digitsBeforeCaret);
+    try {
+      input.setSelectionRange(pos, pos);
+    } catch (err) {
+      /* Not a text-selectable input in this browser; the value is still masked. */
+    }
+  });
+
+  /* Registered after the phone mask and the quantity handlers above so the label reflects any
+     value they normalised (an out-of-range quantity is rewritten to 0 before this runs). */
+  function pcOnOrderEditFieldInput(event) {
+    if (!editingJobId) return;
+    const el = event.target;
+    if (!el || typeof el.closest !== 'function') return;
+    if (!el.closest(PC_ORDER_EDIT_FIELDS)) return;
+    const card = el.closest('details[data-job-id]');
+    if (!(card instanceof HTMLElement)) return;
+    const jobId = card.getAttribute('data-job-id') || '';
+    if (jobId !== editingJobId) return;
+    pcSyncOrderEditLabel(jobId, card);
+  }
+  document.addEventListener('input', pcOnOrderEditFieldInput);
+  document.addEventListener('change', pcOnOrderEditFieldInput);
 
   document.addEventListener('focus', (event) => {
     const qtyInput = event.target?.closest?.('[data-projectclad-qty-input]');
@@ -848,6 +1130,8 @@
           deleteOrderBtn.textContent = 'Deleting';
           deleteOrderBtn.disabled = true;
         }
+        /* A pending delete is the one edit that lives outside the inputs. */
+        pcSyncOrderEditLabel(jobId, details);
       }
     }
   }, true);
@@ -1068,6 +1352,12 @@
       const details = document.querySelector('details[data-job-id="' + jobId + '"]');
       if (!details) return;
       if (editingJobId === jobId) {
+        /* Closing an editor nothing was typed into is just hiding a panel. Asking "Save
+           changes?" when there are none to save trains people to dismiss the dialog. */
+        if (!pcOrderCardHasEdits(jobId, details)) {
+          pcExitOrderEditMode(jobId, details);
+          return;
+        }
         const saveModal = document.querySelector('[data-projectclad-edit-save-modal]');
         if (saveModal instanceof HTMLElement) {
           saveModal.dataset.pendingJobId = jobId;
@@ -1211,6 +1501,9 @@
       editSaveYes.setAttribute('aria-busy', 'true');
       const details = document.querySelector('details[data-job-id="' + jobId + '"]');
       const deleteJob = editPendingDeleteJobId === jobId;
+      if (details instanceof HTMLElement) {
+        pcCommitQtyInputsIn(details);
+      }
       const itemUpdates = [];
       const qtyInputs = details?.querySelectorAll?.('[data-projectclad-qty-input]') || [];
       qtyInputs.forEach(function(inp) {
@@ -2076,6 +2369,9 @@
     var openTab = btn.getAttribute('data-delivery-open-tab') || '';
     pcSetDeliveryModalTab(openTab || pcDefaultDeliveryModalTab(btn));
     pcSyncOrderDeliveryModalUi();
+    /* Browsers restore checkbox state across a back/forward, so the count and the submit
+       button have to be recomputed rather than trusted to start empty. */
+    pcSyncBatchDeliveryUi();
     orderDeliveryModal.style.display = 'flex';
   }
 
@@ -2167,6 +2463,71 @@
       saveBtn.hidden = tab !== 'plan' || planLocked;
     }
   }
+
+  /*
+   * Batch tab: one photo confirming several orders. Nothing here submits — the form posts
+   * natively so the file input's `required` still works — this only keeps the count honest and
+   * stops a submit that would name no orders.
+   */
+  function pcSyncBatchDeliveryUi() {
+    if (!(orderDeliveryModal instanceof HTMLElement)) return;
+    var form = orderDeliveryModal.querySelector(
+      '[data-projectclad-batch-delivery-form]',
+    );
+    if (!(form instanceof HTMLElement)) return;
+    var boxes = form.querySelectorAll('[data-projectclad-batch-job]');
+    var total = boxes.length;
+    var chosen = 0;
+    boxes.forEach(function (box) {
+      if (box instanceof HTMLInputElement && box.checked) chosen += 1;
+    });
+
+    var count = form.querySelector('[data-projectclad-batch-count]');
+    if (count instanceof HTMLElement) {
+      count.textContent = chosen + ' of ' + total + ' selected';
+    }
+    var toggle = form.querySelector('[data-projectclad-batch-toggle-all]');
+    if (toggle instanceof HTMLElement) {
+      toggle.textContent =
+        chosen === total && total > 0 ? 'Clear selection' : 'Select all';
+    }
+    var submit = form.querySelector('[data-projectclad-batch-submit]');
+    if (submit instanceof HTMLButtonElement) {
+      submit.disabled = chosen === 0;
+      submit.textContent =
+        chosen === 0
+          ? 'Confirm delivery'
+          : chosen === 1
+            ? 'Confirm delivery for 1 order'
+            : 'Confirm delivery for ' + chosen + ' orders';
+    }
+  }
+
+  document.addEventListener('change', function (event) {
+    var target = event.target;
+    if (!target || typeof target.closest !== 'function') return;
+    if (!target.closest('[data-projectclad-batch-delivery-form]')) return;
+    pcSyncBatchDeliveryUi();
+  });
+
+  document.addEventListener('click', function (event) {
+    var target = event.target;
+    if (!target || typeof target.closest !== 'function') return;
+    var toggle = target.closest('[data-projectclad-batch-toggle-all]');
+    if (!toggle) return;
+    event.preventDefault();
+    var form = toggle.closest('[data-projectclad-batch-delivery-form]');
+    if (!form) return;
+    var boxes = form.querySelectorAll('[data-projectclad-batch-job]');
+    var allChecked = true;
+    boxes.forEach(function (box) {
+      if (box instanceof HTMLInputElement && !box.checked) allChecked = false;
+    });
+    boxes.forEach(function (box) {
+      if (box instanceof HTMLInputElement) box.checked = !allChecked;
+    });
+    pcSyncBatchDeliveryUi();
+  });
 
   function pcDefaultDeliveryModalTab(btn) {
     var staff = btn.getAttribute('data-staff-fulfillment') === '1';
@@ -2834,6 +3195,14 @@
     }
     if (intent === 'delete-item' && !confirm('Are you sure you want to remove this item?')) {
       return;
+    }
+    if (intent === 'add-member') {
+      var rolePromptWidget = form.querySelector('[data-projectclad-role-prompt]');
+      var roleChosen = form.querySelector('input[name="role"]:checked');
+      if (rolePromptWidget && !roleChosen) {
+        setFormMessage('Select a role.');
+        return;
+      }
     }
     const memberCustomerId =
       form.getAttribute('data-projectclad-member-id') || '';

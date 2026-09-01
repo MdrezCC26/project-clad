@@ -10,16 +10,23 @@
     return true;
   }
 
+  /* Every card is rendered server-side; this is how many stay visible at once so a long list
+     does not dump 40+ tiles on screen. Filtering still runs across the whole set. */
+  var PAGE_SIZE = 20;
+
   var root = document.querySelector('.project-clad-page--projects');
   var controlsRoot = root && root.querySelector('.project-clad-projects-controls-grid');
   var grid = root && root.querySelector('.project-clad-grid');
   if (controlsRoot && grid) {
     var searchInput = controlsRoot.querySelector('[data-pc-search]');
     var summary = root && root.querySelector('.project-clad-projects-summary');
+    var showMoreWrap = root && root.querySelector('[data-pc-show-more-wrap]');
+    var showMoreBtn = root && root.querySelector('[data-pc-show-more]');
     var ui = {
       status: 'all',
       view: 'all',
       sort: 'recent',
+      visibleLimit: PAGE_SIZE,
       q:
         searchInput && 'value' in searchInput
           ? String(searchInput.value || '').trim().toLowerCase()
@@ -97,13 +104,37 @@
         else apprEl.classList.remove('project-clad-projects-summary__stat--dim');
       }
     }
+    /* Changing what is being filtered restarts the window — otherwise a search that widens the
+       result set would silently keep showing only the previously revealed count. */
+    function resetVisibleLimit() {
+      ui.visibleLimit = PAGE_SIZE;
+    }
+    function updateShowMore(matchedCount) {
+      if (!(showMoreWrap instanceof HTMLElement)) return;
+      var remaining = matchedCount - ui.visibleLimit;
+      if (remaining > 0) {
+        showMoreWrap.style.display = '';
+        if (showMoreBtn) {
+          showMoreBtn.textContent = 'Show more (' + remaining + ' remaining)';
+        }
+      } else {
+        showMoreWrap.style.display = 'none';
+      }
+    }
     function apply() {
       var cards = getCards();
       var ordered = cards.slice().sort(comparator);
+      var matchedCount = 0;
       ordered.forEach(function(card) {
-        card.style.display = matches(card) ? '' : 'none';
+        var visible = matches(card);
+        if (visible) {
+          matchedCount += 1;
+          if (matchedCount > ui.visibleLimit) visible = false;
+        }
+        card.style.display = visible ? '' : 'none';
         grid.appendChild(card);
       });
+      updateShowMore(matchedCount);
       setActive('data-pc-status', ui.status);
       setActive('data-pc-view', ui.view);
       setActive('data-pc-sort', ui.sort);
@@ -127,6 +158,7 @@
       if (statusBtn) {
         ev.preventDefault();
         ui.status = statusBtn.getAttribute('data-pc-status') || 'all';
+        resetVisibleLimit();
         apply();
         return;
       }
@@ -134,6 +166,7 @@
       if (viewBtn) {
         ev.preventDefault();
         ui.view = viewBtn.getAttribute('data-pc-view') || 'all';
+        resetVisibleLimit();
         apply();
         return;
       }
@@ -141,6 +174,7 @@
       if (sortBtn) {
         ev.preventDefault();
         ui.sort = sortBtn.getAttribute('data-pc-sort') || 'recent';
+        resetVisibleLimit();
         apply();
         return;
       }
@@ -152,12 +186,21 @@
         ui.sort = 'recent';
         ui.q = '';
         if (searchInput && 'value' in searchInput) searchInput.value = '';
+        resetVisibleLimit();
         apply();
       }
     }, true);
     if (searchInput) {
       searchInput.addEventListener('input', function() {
         ui.q = String(searchInput.value || '').trim().toLowerCase();
+        resetVisibleLimit();
+        apply();
+      });
+    }
+    if (showMoreBtn) {
+      showMoreBtn.addEventListener('click', function(ev) {
+        ev.preventDefault();
+        ui.visibleLimit += PAGE_SIZE;
         apply();
       });
     }

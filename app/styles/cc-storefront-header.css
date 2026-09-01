@@ -6,7 +6,7 @@
 body.cc-store-neu .cc-app-header {
   --cc-header-topbar-height: 28px;
   --cc-header-topbar-below-gap: 12px;
-  --cc-header-nav-gap: 32px;
+  --cc-header-nav-gap: 1.35rem;
   /* Single accent for nav hover/active label + underline (literal hex — no var(--color-1) chain) */
   --cc-header-active: #c41e1e;
   --cc-header-nav-accent: #c41e1e;
@@ -294,6 +294,48 @@ body.cc-store-neu .cc-app-header {
   transition:
     color 0.15s ease,
     text-shadow 0.15s ease;
+}
+
+/* Soft separators so Templates → Parts cart read as one group without pill chrome. */
+.cc-app-header__nav > a.cc-app-header__nav-shape--start {
+  margin-left: 0.1rem;
+  padding-left: 0.85rem;
+  border-left: 1px solid color-mix(in srgb, var(--cc-header-ink) 22%, transparent);
+}
+.cc-app-header__nav > a.cc-app-header__nav-shape--end {
+  margin-right: 0.1rem;
+  padding-right: 0.85rem;
+  border-right: 1px solid color-mix(in srgb, var(--cc-header-ink) 22%, transparent);
+}
+.cc-app-header__nav > a.cc-app-header__nav-shape--has-badge {
+  gap: 0.35rem;
+}
+.cc-app-header__nav-shape-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.32rem;
+  border-radius: 999px;
+  background: var(--cc-header-nav-accent, #c41e1e);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+@media screen and (max-width: 989px) {
+  .cc-app-header__nav > a.cc-app-header__nav-shape--start,
+  .cc-app-header__nav > a.cc-app-header__nav-shape--end {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+    border-left: none;
+    border-right: none;
+  }
 }
 
 .cc-app-header__nav > a::after {

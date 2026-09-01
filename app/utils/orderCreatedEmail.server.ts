@@ -1,5 +1,9 @@
 import prisma from "../db.server";
-import { getCustomersByIds } from "./adminCustomers.server";
+import {
+  getCustomerRowFromFetchedMap,
+  getCustomersByIds,
+  resolvePlacerNotifyEmail,
+} from "./adminCustomers.server";
 import { customerFacingPropertiesIndentedBlock } from "./customerFacingEmailLines.server";
 import {
   getEmailNotificationPrefs,
@@ -476,7 +480,8 @@ const ORDER_PLACED_EMAILS_OK: OrderPlacedEmailOutcome = {
 };
 
 /**
- * After **Order now**: thank-you to the placing customer (when email on file) + shop operations mail.
+ * After **Order now**: thank-you to the project customer (owner when staff
+ * placed on their behalf) + shop operations mail.
  * Does not throw on SMTP failure (logs, and reports it in the returned outcome); the order is
  * already persisted and must not be rolled back because a notification failed.
  */
@@ -486,6 +491,8 @@ export async function sendOrderPlacedEmails(args: {
   jobId: string;
   fulfillmentMethod: "pickup" | "delivery";
   actorCustomerId: string;
+  /** Who receives the customer thank-you; defaults to the actor. */
+  customerCustomerId?: string;
 }): Promise<OrderPlacedEmailOutcome> {
   if (!isEmailConfigured()) return ORDER_PLACED_EMAILS_OK;
   const notifyPrefs = await getEmailNotificationPrefs(args.shop);
@@ -589,10 +596,19 @@ export async function sendOrderPlacedEmails(args: {
   ].join("\n");
 
   const placedAt = formatOrderPlacedTimestamp(new Date());
-  const actorInfo = await getCustomersByIds(args.shop, [args.actorCustomerId]).catch(
+  const customerCustomerId =
+    args.customerCustomerId?.trim() || args.actorCustomerId;
+  const lookupIds = Array.from(
+    new Set([customerCustomerId, args.actorCustomerId]),
+  );
+  const customerInfo = await getCustomersByIds(args.shop, lookupIds).catch(
     () => ({} as Awaited<ReturnType<typeof getCustomersByIds>>),
   );
-  const ac = actorInfo[args.actorCustomerId];
+  const customerRow = getCustomerRowFromFetchedMap(
+    customerCustomerId,
+    customerInfo,
+  );
+  const ac = getCustomerRowFromFetchedMap(args.actorCustomerId, customerInfo);
   const actorName =
     [ac?.firstName, ac?.lastName].filter(Boolean).join(" ").trim() || "—";
   const actorEmail = ac?.email?.trim() || "—";
@@ -643,7 +659,12 @@ export async function sendOrderPlacedEmails(args: {
   let customerFailed = false;
   let shopFailed = false;
 
-  const customerTo = ac?.email?.trim();
+  let customerTo = customerRow?.email?.trim();
+  if (!customerTo && customerCustomerId !== args.actorCustomerId) {
+    customerTo =
+      (await resolvePlacerNotifyEmail(args.shop, customerCustomerId, null)) ||
+      undefined;
+  }
   if (sendCustomer && customerTo) {
     try {
       await sendTransactionalEmail({
