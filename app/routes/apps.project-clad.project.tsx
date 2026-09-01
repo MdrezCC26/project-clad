@@ -182,6 +182,7 @@ import {
   formatValuesUsedDisplay,
   isCustomDimensionLineSpec,
   orderLineDisplayNameWithGauge,
+  resolveOrderLineImageUrl,
   titleCaseWords,
 } from "../utils/orderLineSpecs";
 import {
@@ -189,6 +190,7 @@ import {
   legsFromLineProperties,
   profileSvgDataUri,
   shapeBuilderEditPath,
+  shouldUseShapeBuilderDiagramThumb,
 } from "../utils/shapeProfile";
 
 declare global {
@@ -3744,7 +3746,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           const productUrl = pres.productUrl;
 
           let properties: { name: string; value: string }[] | null = null;
-          let customImageUrl: string | null = null;
           let uploadPartFileUrl: string | null = null;
           const isUploadPartLine = displayName.toLowerCase().includes("upload part");
 
@@ -3758,29 +3759,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
                 return Boolean(href);
               });
               if (uploadProp) {
-                const raw = normalizeHttpUrl(uploadProp.value.trim())!;
-                uploadPartFileUrl = raw;
-                if (!isLikelyPdfUrl(raw)) {
-                  customImageUrl = raw;
-                }
+                uploadPartFileUrl = normalizeHttpUrl(uploadProp.value.trim())!;
               }
             }
           }
 
-          const referenceImageUrl = extractReferenceImageFromProperties(properties);
           const shapeLegs = legsFromLineProperties(properties);
           const shapeThumb =
-            isShapeBuilderLine(properties) && shapeLegs.length
+            shouldUseShapeBuilderDiagramThumb(properties) && shapeLegs.length
               ? profileSvgDataUri(shapeLegs)
               : null;
 
-          const imageUrl =
-            customImageUrl ||
-            referenceImageUrl ||
-            shapeThumb ||
-            (isUploadPartLine && uploadPartFileUrl && isLikelyPdfUrl(uploadPartFileUrl)
-              ? null
-              : pres.imageUrl || null);
+          const imageUrl = resolveOrderLineImageUrl({
+            displayName,
+            properties,
+            storefrontImageUrl: pres.imageUrl,
+            snapshotImageUrl: snap?.imageUrl ?? null,
+            shapeBuilderThumbUrl: shapeThumb,
+          });
 
           return {
             id: item.id,

@@ -423,6 +423,20 @@ export function isShapeBuilderLine(properties: LineProperty[] | null | undefined
   return legsFromLineProperties(properties).length >= 2;
 }
 
+/** Only the in-app shape builder emits `shape_type: custom` (not OPC / custompart). */
+export function shouldUseShapeBuilderDiagramThumb(
+  properties: LineProperty[] | null | undefined,
+): boolean {
+  if (!SHAPE_CALCULATOR_ENABLED || !properties?.length) return false;
+  const map = new Map(
+    properties.map((p) => [
+      p.name.trim().toLowerCase().replace(/[\s_-]+/g, "_"),
+      (p.value || "").trim(),
+    ]),
+  );
+  return (map.get("shape_type") || "").toLowerCase() === "custom";
+}
+
 /** Builder URL that reopens an ordered custom line, or null when the line is not a custom shape. */
 export function shapeBuilderEditPath(
   properties: LineProperty[] | null | undefined,

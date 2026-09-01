@@ -11,6 +11,7 @@ import {
   formatGaugeLabel,
   formatJobCreatedMmDdYyyy,
   orderLineDisplayNameWithGauge,
+  resolveOrderLineImageUrl,
   titleCaseWords,
 } from "./orderLineSpecs";
 import { getShopSlipStyles } from "./shopSlipStyles.server";
@@ -92,42 +93,19 @@ function lineProperties(item: JobItem): { name: string; value: string }[] {
   });
 }
 
-/** Prefer customer uploads / calculator reference art over the catalog photo. */
+/** Prefer OPC reference art, then live storefront product image, then snapshot. */
 function resolveItemImage(
   displayName: string,
   properties: { name: string; value: string }[],
   snapshotImageUrl: string | null,
+  storefrontImageUrl?: string | null,
 ): string | null {
-  const isUploadPart = displayName.toLowerCase().includes("upload part");
-
-  // Upload Part: any http(s) property is the customer file (same rule as the project page).
-  if (isUploadPart) {
-    for (const p of properties) {
-      const href = normalizeHttpUrl(p.value || "");
-      if (href && !isLikelyPdfUrl(href)) return href;
-    }
-    // PDFs can't render in <img>; leave the panel empty rather than showing the how-to art.
-    return null;
-  }
-
-  for (const p of properties) {
-    if (!isReferenceImagePropertyName(p.name)) continue;
-    const href = normalizeHttpUrl(p.value);
-    if (href && !isLikelyPdfUrl(href)) return href;
-  }
-
-  // Also accept a generic File / Image / Upload URL property when present.
-  for (const p of properties) {
-    const name = p.name.trim().toLowerCase().replace(/[\s_-]+/g, " ");
-    if (name !== "file" && name !== "image" && name !== "upload" && name !== "uploaded file") {
-      continue;
-    }
-    const href = normalizeHttpUrl(p.value || "");
-    if (href && !isLikelyPdfUrl(href)) return href;
-  }
-
-  const snap = snapshotImageUrl ? normalizeHttpUrl(snapshotImageUrl) : null;
-  return snap && !isLikelyPdfUrl(snap) ? snap : null;
+  return resolveOrderLineImageUrl({
+    displayName,
+    properties,
+    storefrontImageUrl: storefrontImageUrl ?? null,
+    snapshotImageUrl,
+  });
 }
 
 /** Keys already shown elsewhere on the slip (title, colour tag, sku line, dims). */

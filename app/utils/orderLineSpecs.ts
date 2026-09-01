@@ -123,6 +123,95 @@ export function isCustomDimensionLineSpec(map: Map<string, string>): boolean {
   );
 }
 
+export function isReferenceImagePropertyName(name: string): boolean {
+  const n = name.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+  return (
+    (n.includes("reference") && n.includes("image")) ||
+    n === "referenceimage" ||
+    n === "ref image"
+  );
+}
+
+export function normalizeOrderImageUrl(
+  url: string | null | undefined,
+): string | null {
+  const t = (url || "").trim();
+  if (!t) return null;
+  if (t.startsWith("//")) return `https:${t}`;
+  if (/^https?:\/\//i.test(t)) return t;
+  return null;
+}
+
+function isLikelyPdfUrl(url: string): boolean {
+  try {
+    return /\.pdf(\?|$)/i.test(new URL(url).pathname);
+  } catch {
+    return /\.pdf(\?|$)/i.test(url);
+  }
+}
+
+/** OPC / sheet-custom calculator lines (custompart storefront profiles). */
+export function isOpcCalculatorLine(
+  properties: OrderLineProperty[] | null | undefined,
+): boolean {
+  if (!properties?.length) return false;
+  if (properties.some((p) => p.name === "__ooCalcPayload")) return true;
+  const { map } = collectOrderLineSpecMap(properties);
+  return map.has("profile") || map.has("reference_image");
+}
+
+export function extractReferenceImageFromLineProperties(
+  properties: OrderLineProperty[] | null | undefined,
+): string | null {
+  if (!properties?.length) return null;
+  for (const p of properties) {
+    if (!isReferenceImagePropertyName(p.name)) continue;
+    const href = normalizeOrderImageUrl(p.value);
+    if (href && !isLikelyPdfUrl(href)) return href;
+  }
+  return null;
+}
+
+/**
+ * Order-line diagram priority: OPC reference art → live Shopify product image
+ * (same as /pages/custompart tiles) → optional shape-builder thumb → snapshot.
+ */
+export function resolveOrderLineImageUrl(args: {
+  displayName: string;
+  properties: OrderLineProperty[] | null | undefined;
+  /** Current storefront catalog image for this variant on the active shop. */
+  storefrontImageUrl: string | null;
+  snapshotImageUrl?: string | null;
+  shapeBuilderThumbUrl?: string | null;
+}): string | null {
+  const properties = args.properties ?? [];
+  const isUploadPart = args.displayName.toLowerCase().includes("upload part");
+
+  if (isUploadPart) {
+    for (const p of properties) {
+      const href = normalizeOrderImageUrl(p.value);
+      if (href && !isLikelyPdfUrl(href)) return href;
+    }
+    return null;
+  }
+
+  const reference = extractReferenceImageFromLineProperties(properties);
+  if (reference) return reference;
+
+  const storefront = normalizeOrderImageUrl(args.storefrontImageUrl);
+  if (storefront) return storefront;
+
+  const shapeThumb = normalizeOrderImageUrl(args.shapeBuilderThumbUrl);
+  if (shapeThumb) return shapeThumb;
+
+  const snap = normalizeOrderImageUrl(args.snapshotImageUrl);
+  if (snap && !isLikelyPdfUrl(snap) && !snap.startsWith("data:image/")) {
+    return snap;
+  }
+
+  return null;
+}
+
 /** L1..L24 then A1..A24 then Additional Details, skipping unset keys. */
 export function collectOrderLineDimensionRows(
   map: Map<string, string>,
