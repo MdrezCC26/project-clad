@@ -185,6 +185,7 @@ import {
   resolveOrderLineImageUrl,
   titleCaseWords,
 } from "../utils/orderLineSpecs";
+import { buildOpcPrefillHref } from "../utils/opcPrefill";
 import {
   isShapeBuilderLine,
   legsFromLineProperties,
@@ -1073,12 +1074,15 @@ function OrderLineDetailsColumn({
   item,
   reorderOpen,
   editPartHref,
+  opcPrefillHref,
 }: {
   item: JobItemView;
   /** When set, show Reorder control (opens modal → creates new ordered job). */
   reorderOpen?: { itemId: string; defaultQty: number; lineLabel: string } | null;
   /** Opens the shape builder prefilled; saving creates a new copy. */
   editPartHref?: string | null;
+  /** Opens the live OPC product page with this line's dimensions prefilled. */
+  opcPrefillHref?: string | null;
 }) {
   const isUploadPart = item.displayName.toLowerCase().includes("upload part");
   const href = isUploadPart
@@ -1148,30 +1152,38 @@ function OrderLineDetailsColumn({
         </p>
       ) : null}
       <OrderLinePropertyChips item={item} />
-      {editPartHref ? (
+      {editPartHref || opcPrefillHref || reorderOpen ? (
         <div className="project-clad-order-line-reorder-wrap">
-          <a
-            href={editPartHref}
-            className="project-clad-button project-clad-order-line-reorder-btn"
-            onClick={(event) => event.stopPropagation()}
-          >
-            Edit part
-          </a>
-        </div>
-      ) : null}
-      {reorderOpen ? (
-        <div className="project-clad-order-line-reorder-wrap">
-          <button
-            type="button"
-            className="project-clad-button project-clad-order-line-reorder-btn"
-            data-projectclad-reorder-open
-            data-item-id={reorderOpen.itemId}
-            data-default-qty={String(reorderOpen.defaultQty)}
-            data-line-label={reorderOpen.lineLabel}
-            onClick={(event) => event.stopPropagation()}
-          >
-            Reorder
-          </button>
+          {editPartHref ? (
+            <a
+              href={editPartHref}
+              className="project-clad-button project-clad-order-line-reorder-btn"
+              onClick={(event) => event.stopPropagation()}
+            >
+              Edit part
+            </a>
+          ) : null}
+          {opcPrefillHref ? (
+            <a
+              href={opcPrefillHref}
+              className="project-clad-button project-clad-order-line-reorder-btn"
+              onClick={(event) => event.stopPropagation()}
+            >
+              Edit part
+            </a>
+          ) : reorderOpen ? (
+            <button
+              type="button"
+              className="project-clad-button project-clad-order-line-reorder-btn"
+              data-projectclad-reorder-open
+              data-item-id={reorderOpen.itemId}
+              data-default-qty={String(reorderOpen.defaultQty)}
+              data-line-label={reorderOpen.lineLabel}
+              onClick={(event) => event.stopPropagation()}
+            >
+              Reorder
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -1873,12 +1885,6 @@ function OrderFinancePanel({
               <span className="project-clad-order-finance__k">Total Order Quantity</span>
               <span className="project-clad-order-finance__v">
                 {totalQty} {totalQty === 1 ? "unit" : "units"}
-                <span className="project-clad-order-finance__v-sep" aria-hidden="true">
-                  ·
-                </span>
-                <span className="project-clad-order-finance__v-secondary">
-                  {totalQty * 10} linear ft
-                </span>
               </span>
             </span>
           </div>
@@ -9922,8 +9928,9 @@ export default function ProjectDetailPage() {
                         buttonProps: {
                           "data-projectclad-save-fields-btn": "",
                           "data-job-id": job.id,
-                          title: "Save details",
-                          "aria-label": "Save details",
+                          title: "Change PO, site contact, or phone to enable Save",
+                          "aria-label": "Save details (disabled until those fields change)",
+                          disabled: true,
                         },
                       });
                     }
@@ -10416,6 +10423,12 @@ export default function ProjectDetailPage() {
                                           item={item}
                                           editPartHref={shapeBuilderEditPath(
                                             item.properties,
+                                          )}
+                                          opcPrefillHref={buildOpcPrefillHref(
+                                            item.productUrl,
+                                            item.properties,
+                                            item.quantity,
+                                            item.displayName,
                                           )}
                                           reorderOpen={
                                             canEdit &&

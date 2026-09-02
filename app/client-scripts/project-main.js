@@ -814,6 +814,69 @@
     exit.setAttribute('aria-label', hint);
   }
 
+  const PC_SAVE_FIELDS_ONLY = [
+    '[data-projectclad-job-name-input]',
+    '[data-projectclad-purchase-order-input]',
+    '[data-projectclad-site-contact-name-input]',
+    '[data-projectclad-site-contact-phone-input]',
+  ].join(',');
+
+  function pcOrderCardHasSaveFieldEdits(jobId, details) {
+    const card = details || pcOrderCard(jobId);
+    if (!(card instanceof HTMLElement)) return false;
+    const fields = card.querySelectorAll(PC_SAVE_FIELDS_ONLY);
+    for (let i = 0; i < fields.length; i++) {
+      const el = fields[i];
+      if (el.disabled || el.readOnly) continue;
+      if (String(el.value).trim() !== String(el.defaultValue).trim()) return true;
+    }
+    return false;
+  }
+
+  /* Finance-row Save only writes PO / site contact / phone. Stay grey until those
+     fields actually change, and stay locked while the line-item editor is open. */
+  function pcSyncSaveFieldsBtn(jobId, details) {
+    const card = details || pcOrderCard(jobId);
+    if (!(card instanceof HTMLElement)) return;
+    const btn = card.querySelector('[data-projectclad-save-fields-btn]');
+    if (!(btn instanceof HTMLButtonElement)) return;
+    const editing = editingJobId === jobId;
+    const dirty = pcOrderCardHasSaveFieldEdits(jobId, card);
+    btn.disabled = editing || !dirty;
+    if (editing) {
+      btn.setAttribute('title', 'Use Save or Back in the editor — this button is off while editing the order');
+      btn.setAttribute('aria-label', 'Save details unavailable while editing the order');
+    } else if (!dirty) {
+      btn.setAttribute('title', 'Change PO, site contact, or phone to enable Save');
+      btn.setAttribute('aria-label', 'Save details (disabled until those fields change)');
+    } else {
+      btn.setAttribute('title', 'Save details');
+      btn.setAttribute('aria-label', 'Save details');
+    }
+  }
+
+  const PC_FINANCE_CONTACT_FIELDS =
+    '[data-projectclad-purchase-order-input], [data-projectclad-site-contact-name-input], [data-projectclad-site-contact-phone-input]';
+
+  /* Contact & Delivery (PO / contact / phone) stay view-only while line items are edited. */
+  function pcSetFinanceContactLocked(card, locked) {
+    if (!(card instanceof HTMLElement)) return;
+    const fields = card.querySelectorAll(PC_FINANCE_CONTACT_FIELDS);
+    for (let i = 0; i < fields.length; i++) {
+      const el = fields[i];
+      if (!(el instanceof HTMLInputElement)) continue;
+      el.readOnly = locked;
+      if (locked) {
+        el.setAttribute('tabindex', '-1');
+        el.setAttribute('aria-readonly', 'true');
+        if (document.activeElement === el) el.blur();
+      } else {
+        el.removeAttribute('tabindex');
+        el.removeAttribute('aria-readonly');
+      }
+    }
+  }
+
   function pcExitOrderEditMode(jobId, details) {
     const card = details || pcOrderCard(jobId);
     if (editingJobId === jobId) editingJobId = null;
@@ -821,11 +884,13 @@
     editRemovedItemIds[jobId] = [];
     if (card instanceof HTMLElement) {
       card.classList.remove('project-clad-edit-mode');
+      pcSetFinanceContactLocked(card, false);
       /* Nothing here differs from the server render, so the unsaved-work guard must not
          keep this card armed and prompt on the next navigation. */
       pcForgetDirtyWithin(card);
     }
     pcSyncOrderEditLabel(jobId, card);
+    pcSyncSaveFieldsBtn(jobId, card);
   }
 
   function pcEnterOrderEditMode(jobId, details) {
@@ -839,7 +904,9 @@
       .map((r) => r.getAttribute('data-item-id'))
       .filter(Boolean);
     card.classList.add('project-clad-edit-mode');
+    pcSetFinanceContactLocked(card, true);
     pcSyncOrderEditLabel(jobId, card);
+    pcSyncSaveFieldsBtn(jobId, card);
   }
 
   /*
@@ -1091,13 +1158,16 @@
   /* Registered after the phone mask and the quantity handlers above so the label reflects any
      value they normalised (an out-of-range quantity is rewritten to 0 before this runs). */
   function pcOnOrderEditFieldInput(event) {
-    if (!editingJobId) return;
     const el = event.target;
     if (!el || typeof el.closest !== 'function') return;
-    if (!el.closest(PC_ORDER_EDIT_FIELDS)) return;
     const card = el.closest('details[data-job-id]');
     if (!(card instanceof HTMLElement)) return;
     const jobId = card.getAttribute('data-job-id') || '';
+    if (el.closest(PC_SAVE_FIELDS_ONLY)) {
+      pcSyncSaveFieldsBtn(jobId, card);
+    }
+    if (!editingJobId) return;
+    if (!el.closest(PC_ORDER_EDIT_FIELDS)) return;
     if (jobId !== editingJobId) return;
     pcSyncOrderEditLabel(jobId, card);
   }
@@ -1226,6 +1296,8 @@
     }
     const saveFieldsBtn = event.target?.closest?.('[data-projectclad-save-fields-btn]');
     if (saveFieldsBtn instanceof HTMLButtonElement) {
+      if (saveFieldsBtn.disabled) return;
+      if (saveFieldsBtn.closest('details.project-clad-edit-mode')) return;
       if (saveFieldsBtn.dataset.projectcladSaving === '1') return;
       event.preventDefault();
       event.stopPropagation();

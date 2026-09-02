@@ -47,10 +47,33 @@ export type BuildBrandedEmailHtmlArgs = {
   hasLogo: boolean;
 };
 
+const CREAM_BG = "#EEECE7";
+const CREAM_FILL = `background-color:${CREAM_BG}; background-image:linear-gradient(${CREAM_BG},${CREAM_BG});`;
+const BTN_BG = "#1E2124";
+const BTN_FG = "#EEECE7";
+const BTN_FILL = `background-color:${BTN_BG}; background-image:linear-gradient(${BTN_BG},${BTN_BG});`;
+
+function ctaButtonHtml(href: string, label: string, padLeft: boolean): string {
+  const safeHref = escapeEmailHtml(href);
+  const safeLabel = escapeEmailHtml(label);
+  return `
+                <td class="stack" style="${padLeft ? "padding-left:12px;" : ""}">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td class="email-btn" bgcolor="${BTN_BG}" style="border-radius:3px; ${BTN_FILL}">
+                        <a class="email-cta" href="${safeHref}" target="_blank" style="display:inline-block; padding:13px 18px; font-family:Arial, Helvetica, sans-serif; font-size:13px; font-weight:600; line-height:16px; letter-spacing:0.3px; white-space:nowrap; color:${BTN_FG}; ${BTN_FILL} border:1px solid ${BTN_BG}; border-radius:3px; text-decoration:none;">
+                          <font color="${BTN_FG}" style="color:${BTN_FG}; text-decoration:none;"><span style="color:${BTN_FG}; text-decoration:none;">${safeLabel}</span></font>
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>`;
+}
+
 function corrugatedDividerHtml(): string {
   return `
         <tr>
-          <td style="padding:0;margin:0;font-size:0;line-height:0;height:6px;background-color:#B3272C;">
+          <td style="padding:0;margin:0;font-size:0;line-height:0;height:6px;background-color:#B3272C; background-image:linear-gradient(#B3272C,#B3272C);">
             &nbsp;
           </td>
         </tr>`;
@@ -92,24 +115,7 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
     ? `
             <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
               <tr>
-                ${ctaList
-                  .map((c, i) => {
-                    const href = escapeEmailHtml(c.href);
-                    const label = escapeEmailHtml(c.label);
-                    return `
-                <td class="stack" style="${i > 0 ? "padding-left:12px;" : ""}">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                      <td class="email-btn" bgcolor="#000000" style="border-radius:3px; background-color:#000000; mso-padding-alt:13px 18px;">
-                        <a href="${href}" target="_blank" style="display:inline-block; padding:13px 18px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; font-weight:600; color:#FFFFFF !important; text-decoration:none; letter-spacing:0.3px; white-space:nowrap;">
-                          <span style="color:#FFFFFF !important;">${label}</span>
-                        </a>
-                      </td>
-                    </tr>
-                  </table>
-                </td>`;
-                  })
-                  .join("")}
+                ${ctaList.map((c, i) => ctaButtonHtml(c.href, c.label, i > 0)).join("")}
               </tr>
             </table>`
     : "";
@@ -117,7 +123,7 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
   const ctaBlock = ctaButtonsHtml
     ? `
         <tr>
-          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 0 40px 16px 40px; background-color:#EEECE7;">
+          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 0 40px 16px 40px; ${CREAM_FILL}">
             ${ctaButtonsHtml}
             ${args.secondaryLinksHtml ?? ""}
           </td>
@@ -169,16 +175,27 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
   body { margin:0; padding:0; width:100% !important; background-color:#FFFFFF; }
   img { border:0; line-height:100%; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; }
   table { border-collapse:collapse !important; }
-  a { color:#B3272C; }
 
   .email-root { background-color:#FFFFFF; }
-  .email-container { background-color:#EEECE7; }
-  .email-card-bg { background-color:#EEECE7; }
+  .email-container { background-color:#EEECE7; background-image:linear-gradient(#EEECE7,#EEECE7); }
+  .email-card-bg { background-color:#EEECE7; background-image:linear-gradient(#EEECE7,#EEECE7); }
   .email-text { color:#1E2124; }
   .email-muted { color:#5A5F66; }
   .email-label { color:#9A968D; }
-  .email-btn { background-color:#000000; }
-  .email-btn a { color:#FFFFFF !important; }
+  .email-btn { background-color:#1E2124; }
+  .email-btn a,
+  a.email-cta,
+  a.email-cta:link,
+  a.email-cta:visited,
+  a.email-cta:hover,
+  a.email-cta:active {
+    color:#EEECE7 !important;
+    text-decoration:none !important;
+    background-color:#1E2124 !important;
+    background-image:linear-gradient(#1E2124,#1E2124) !important;
+    border-color:#1E2124 !important;
+  }
+  u + #body a.email-cta { color:#EEECE7 !important; text-decoration:none !important; }
 
   /*
    * Keep the cream card + dark text even when the OS/client is in dark mode.
@@ -189,15 +206,21 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
     .email-root { background-color:#FFFFFF !important; }
     .email-container,
     .email-card-bg,
-    .email-line-card { background-color:#EEECE7 !important; }
+    .email-line-card {
+      background-color:#EEECE7 !important;
+      background-image:linear-gradient(#EEECE7,#EEECE7) !important;
+    }
     .email-text,
     .hero-headline { color:#1E2124 !important; }
     .email-muted { color:#5A5F66 !important; }
     .email-label,
     .detail-label { color:#9A968D !important; }
-    .email-btn { background-color:#000000 !important; }
+    .email-btn { background-color:#1E2124 !important; }
     .email-btn a,
-    .email-btn span { color:#FFFFFF !important; }
+    .email-btn span,
+    a.email-cta,
+    a.email-cta span,
+    a.email-cta font { color:#EEECE7 !important; text-decoration:none !important; }
   }
 
   /* Outlook.com dark mode */
@@ -210,7 +233,10 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
   [data-ogsc] .email-line-card,
   [data-ogsb] .email-container,
   [data-ogsb] .email-card-bg,
-  [data-ogsb] .email-line-card { background-color:#EEECE7 !important; }
+  [data-ogsb] .email-line-card {
+    background-color:#EEECE7 !important;
+    background-image:linear-gradient(#EEECE7,#EEECE7) !important;
+  }
   [data-ogsc] .email-text,
   [data-ogsc] .hero-headline,
   [data-ogsb] .email-text,
@@ -222,11 +248,13 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
   [data-ogsb] .email-label,
   [data-ogsb] .detail-label { color:#9A968D !important; }
   [data-ogsc] .email-btn,
-  [data-ogsb] .email-btn { background-color:#000000 !important; }
+  [data-ogsb] .email-btn { background-color:#1E2124 !important; }
   [data-ogsc] .email-btn a,
   [data-ogsc] .email-btn span,
+  [data-ogsc] a.email-cta,
   [data-ogsb] .email-btn a,
-  [data-ogsb] .email-btn span { color:#FFFFFF !important; }
+  [data-ogsb] .email-btn span,
+  [data-ogsb] a.email-cta { color:#EEECE7 !important; text-decoration:none !important; }
 
   @media screen and (max-width: 600px) {
     .email-container { width:100% !important; }
@@ -238,7 +266,7 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
   }
 </style>
 </head>
-<body bgcolor="#FFFFFF" style="margin:0;padding:0;background-color:#FFFFFF;">
+<body id="body" bgcolor="#FFFFFF" style="margin:0;padding:0;background-color:#FFFFFF;">
 <div style="display:none; max-height:0; overflow:hidden; opacity:0; mso-hide:all;">
   ${escapeEmailHtml(args.preheader)}
 </div>
@@ -247,7 +275,7 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
   <tr>
     <td align="center" style="padding: 32px 16px;">
 
-      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" bgcolor="#EEECE7" style="width:600px; max-width:600px; background-color:#EEECE7; border-radius:4px; overflow:hidden;">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" bgcolor="#EEECE7" style="width:600px; max-width:600px; ${CREAM_FILL} border-radius:4px; overflow:hidden;">
 
         <tr>
           <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 36px 40px 26px 40px; background-color:#EEECE7;">

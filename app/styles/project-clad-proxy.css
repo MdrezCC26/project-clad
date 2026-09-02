@@ -8148,7 +8148,7 @@ html:has(.project-clad-page--projects) body {
 .project-clad-projects-show-more {
   display: flex;
   justify-content: center;
-  margin-top: 1.5rem;
+  margin-top: 1.15rem;
 }
 
 .project-clad-projects-show-more__count {
@@ -11206,6 +11206,56 @@ button.project-clad-order-line-thumb-preview .project-clad-order-card-thumb-badg
   min-width: 0;
 }
 
+.project-clad-order-line-reorder-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.project-clad-order-line-reorder-wrap .project-clad-button,
+.project-clad-projects-show-more .project-clad-button {
+  min-height: 1.65rem !important;
+  height: auto !important;
+  padding: 0.16rem 0.72rem !important;
+  font-size: 0.68rem !important;
+  letter-spacing: 0.05em !important;
+  line-height: 1.2 !important;
+  width: max-content !important;
+  max-width: 100%;
+  border-radius: 8px !important;
+  font-family: "Inter", system-ui, sans-serif !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  background: #fff !important;
+  color: #0e1a26 !important;
+  border: 1px solid rgba(15, 23, 42, 0.16) !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.project-clad-order-line-reorder-wrap .project-clad-button:hover,
+.project-clad-order-line-reorder-wrap .project-clad-button:active,
+.project-clad-projects-show-more .project-clad-button:hover,
+.project-clad-projects-show-more .project-clad-button:active {
+  background: #f8fafc !important;
+  color: #0e1a26 !important;
+  border-color: rgba(15, 23, 42, 0.22) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.project-clad-order-line-reorder-wrap .project-clad-button:focus-visible,
+.project-clad-projects-show-more .project-clad-button:focus-visible {
+  outline: 2px solid rgba(15, 23, 42, 0.35) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95) !important;
+}
+
 .project-clad-order-card-name-row {
   display: flex;
   flex-wrap: wrap;
@@ -12498,9 +12548,14 @@ input[data-projectclad-unit-price-input] {
   box-shadow: none;
 }
 
-.project-clad-order-action:disabled {
-  opacity: 0.55;
-  cursor: default;
+.project-clad-order-action:disabled,
+details.project-clad-edit-mode [data-projectclad-save-fields-btn] {
+  background: #e8ecf1 !important;
+  color: #94a3b8 !important;
+  border-color: rgba(148, 163, 184, 0.45) !important;
+  opacity: 1;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .project-clad-order-action[aria-busy="true"] {
@@ -14129,6 +14184,18 @@ details.project-clad-edit-mode .project-clad-normal-view {
 }
 details.project-clad-edit-mode .project-clad-edit-view {
   display: flex !important;
+}
+
+/* Contact & Delivery: PO / contact / phone + PO upload stay frozen while editing lines. */
+details.project-clad-edit-mode .project-clad-order-finance__left .project-clad-order-finance__input {
+  pointer-events: none;
+  cursor: default;
+  caret-color: transparent;
+}
+details.project-clad-edit-mode .project-clad-order-po-pdf__upload-form,
+details.project-clad-edit-mode .project-clad-order-po-pdf__remove-form,
+details.project-clad-edit-mode .project-clad-order-po-pdf__empty {
+  display: none !important;
 }
 
 /* Stacked/narrow line tiles: qty + price inputs stay under centered labels. */

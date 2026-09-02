@@ -101,3 +101,6 @@
     </div>
   </div>
 </header>
+{% if request.page_type == 'product' %}
+  <script src="{{ 'project-clad-opc-prefill.js' | asset_url }}" defer></script>
+{% endif %}

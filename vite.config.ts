@@ -18,7 +18,7 @@ let hmrConfig;
 if (host === "localhost") {
   hmrConfig = {
     protocol: "ws",
-    host: "localhost",
+    host: "127.0.0.1",
     port: 64999,
     clientPort: 64999,
   };
@@ -33,6 +33,9 @@ if (host === "localhost") {
 
 export default defineConfig({
   server: {
+    // Shopify CLI's proxy dials 127.0.0.1. On Windows, Vite's default
+    // "localhost" often binds ::1 only, which shows up as ECONNREFUSED.
+    host: "127.0.0.1",
     origin: appUrl,
     allowedHosts: [host],
     cors: {
