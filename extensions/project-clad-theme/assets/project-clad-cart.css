@@ -987,6 +987,15 @@
   margin-top: 0.75rem;
 }
 
+/* Script host only — no visible Save to Project control, no layout gap. */
+.projectclad-product-actions--prefill-only {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
 .projectclad-product-save__row {
   display: flex;
   align-items: center;

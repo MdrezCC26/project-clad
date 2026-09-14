@@ -406,19 +406,14 @@ export async function sendFulfillmentPackageEmails(args: {
   const ownerCustEmail = ownerCustomerRow?.email?.trim() || "—";
   const ownerPhone = (ownerCustomerRow?.phone ?? "").trim() || "—";
 
-  const customerIntro = `${job.name} has been delivered. An invoice will be sent shortly. Click Open order to view your order details. Thank you for using Canadian Cladding!`;
-  const financeIntro = `${job.name} has been delivered. Click Open order to view your order details. Thank you for using Canadian Cladding!`;
+  const customerIntro = `An invoice will be sent shortly. Click Open order to view your order details.`;
+  const financeIntro = `Click Open order to view your order details.`;
 
   const ownerBody = [
     customerIntro,
     ``,
-    `Customer details`,
-    `Customer name: ${ownerName}`,
-    `Email: ${ownerCustEmail}`,
-    `Phone: ${ownerPhone}`,
-    `Company on project: ${(project.companyName ?? "").trim() || "—"}`,
-    ``,
     `Project / order`,
+    `Company on project: ${(project.companyName ?? "").trim() || "—"}`,
     `Project: ${project.name}`,
     formatProjectNumberLine(project.poNumber),
     formatJobPoLine(job.purchaseOrderNumber),
@@ -430,23 +425,25 @@ export async function sendFulfillmentPackageEmails(args: {
     ...(showOrderProgress
       ? [`Order progress: ${orderDeliveredPercent}% delivered overall.`, ``]
       : []),
+    `Customer details`,
+    `Customer name: ${ownerName}`,
+    `Email: ${ownerCustEmail}`,
+    `Phone: ${ownerPhone}`,
+    ``,
     `Open order: ${projectOrderUrl}`,
     ...(deliveryPhotoUrl
       ? [`View delivery photo: ${deliveryPhotoUrl}`]
       : []),
     `View packing slip: ${packingSlipUrl}`,
+    ``,
+    `Thank you for choosing Canadian Cladding.`,
   ].join("\n");
 
   const financeBody = [
     financeIntro,
     ``,
-    `Customer details`,
-    `Customer name: ${ownerName}`,
-    `Email: ${ownerCustEmail}`,
-    `Phone: ${ownerPhone}`,
-    `Company on project: ${(project.companyName ?? "").trim() || "—"}`,
-    ``,
     `Project / order`,
+    `Company on project: ${(project.companyName ?? "").trim() || "—"}`,
     `Project: ${project.name}`,
     formatProjectNumberLine(project.poNumber),
     formatJobPoLine(job.purchaseOrderNumber),
@@ -463,11 +460,18 @@ export async function sendFulfillmentPackageEmails(args: {
     `Tax: ${formatMoney(tax)}`,
     `Total: ${formatMoney(total)}`,
     ``,
+    `Customer details`,
+    `Customer name: ${ownerName}`,
+    `Email: ${ownerCustEmail}`,
+    `Phone: ${ownerPhone}`,
+    ``,
     `Open order: ${projectOrderUrl}`,
     ...(deliveryPhotoUrl
       ? [`View delivery photo: ${deliveryPhotoUrl}`]
       : []),
     `View packing slip: ${packingSlipUrl}`,
+    ``,
+    `Thank you for choosing Canadian Cladding.`,
   ].join("\n");
 
   const logoDataUrl = await getShopLogoDataUrlForEmail(args.shop);
@@ -505,8 +509,8 @@ export async function sendFulfillmentPackageEmails(args: {
   });
 
   const subject = phase
-    ? `ProjectClad: Delivery ${phase.sequence} confirmed — ${project.name} · ${job.name}`
-    : `ProjectClad: Order delivered — ${project.name} · ${job.name}`;
+    ? `Delivery ${phase.sequence} confirmed — ${project.name} · ${job.name}`
+    : `Order delivered — ${project.name} · ${job.name}`;
 
   const financeRecipients = await financeDeliveryInvoiceRecipients(args.shop);
   const deliveryPhotoAttachment = await buildFinanceFulfillmentPhotoAttachment(
@@ -568,8 +572,8 @@ export async function sendFulfillmentPackageEmails(args: {
   if (sendFinance && financeRecipients.length > 0) {
     try {
       const financeSubject = phase
-        ? `ProjectClad: Finance — Delivery ${phase.sequence} — ${project.name} · ${job.name}`
-        : `ProjectClad: Finance — Order delivered — ${project.name} · ${job.name}`;
+        ? `Finance — Delivery ${phase.sequence} — ${project.name} · ${job.name}`
+        : `Finance — Order delivered — ${project.name} · ${job.name}`;
       const ok = await sendTransactionalEmailToRecipients({
         shop: args.shop,
         recipients: financeRecipients,

@@ -1,18 +1,21 @@
 {% comment %}
-  Renders a "Save to Project" pill button on a product detail page.
+  Product-page host for Project Clad.
 
-  Mirrors the cart "Save Order" flow by reusing:
-    - the shared modal snippet (snippets/projectclad-save-modal.liquid)
-    - the shared JS module (assets/project-clad-save-modal.js)
-
-  Block-specific glue (validation against the theme's variant/qty inputs,
-  one-item payload assembly, success toast, sessionStorage state preservation
-  across the login round-trip) lives in project-clad-product-save.js.
-
-  Add this block to the Product information section of the merchant's theme;
-  place it directly under "Buy buttons" so it visually follows Add to Cart.
+  The visible "Save to Project" pill copies the Shopify product into a project
+  and skips Options Price Calculator pricing. Keep this block on calculator
+  product templates so `project-clad-opc-prefill.js` loads (Edit part
+  autopopulate). Hide the button (default) so customers save from the cart
+  instead, where OPC prices are included.
 {% endcomment %}
 
+{% comment %}
+  Default hidden. A new checkbox on an existing app block can read as blank,
+  so opt-in "show" is safer than opt-out "hide".
+{% endcomment %}
+{% assign hide_button = true %}
+{% if block.settings.show_button %}
+  {% assign hide_button = false %}
+{% endif %}
 {% assign default_variant_id = product.selected_or_first_available_variant.id %}
 {% assign default_variant_price = product.selected_or_first_available_variant.price %}
 {% assign view_projects_url = "https://" | append: request.host | append: "/apps/project-clad/projects" %}
@@ -21,12 +24,16 @@
 {% assign login_url = login_url | strip %}
 {% assign product_image_url = product.featured_image | image_url: width: 600 %}
 
-{{ 'project-clad-save-modal.js' | asset_url | script_tag }}
-{{ 'project-clad-product-save.js' | asset_url | script_tag }}
 <script src="{{ 'project-clad-opc-prefill.js' | asset_url }}" defer></script>
+{% unless hide_button %}
+  {{ 'project-clad-save-modal.js' | asset_url | script_tag }}
+  {{ 'project-clad-product-save.js' | asset_url | script_tag }}
+{% endunless %}
 
 <div
-  class="projectclad-cart-actions projectclad-product-actions"
+  class="projectclad-cart-actions projectclad-product-actions{% if hide_button %} projectclad-product-actions--prefill-only{% endif %}"
+  {{ block.shopify_attributes }}
+  {% if hide_button %}hidden aria-hidden="true"{% endif %}
   data-projectclad
   data-projectclad-product
   data-projectclad-customer-signed-in="{% if customer %}true{% else %}false{% endif %}"
@@ -42,49 +49,51 @@
   data-projectclad-default-variant-price="{{ default_variant_price }}"
   data-projectclad-product-url="{{ shop.url }}{{ product.url }}"
 >
-  <div class="projectclad-product-save__row">
-    <button
-      class="projectclad-button projectclad-button--secondary"
-      type="button"
-      data-projectclad-save
-      data-projectclad-product-save
-    >
-      Save to Project
-    </button>
-    <span
-      class="projectclad-product-save__saved"
-      data-projectclad-saved
-      role="status"
-      aria-live="polite"
-      hidden
-    >
-      <svg
-        class="projectclad-product-save__saved-check"
-        viewBox="0 0 16 16"
-        aria-hidden="true"
-        focusable="false"
+  {% unless hide_button %}
+    <div class="projectclad-product-save__row">
+      <button
+        class="projectclad-button projectclad-button--secondary"
+        type="button"
+        data-projectclad-save
+        data-projectclad-product-save
       >
-        <path
-          d="M3 8.5l3 3 7-7"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-      <span class="projectclad-product-save__saved-text" data-projectclad-saved-text>Order saved</span>
-    </span>
-    <p
-      class="projectclad-product-save__error"
-      data-projectclad-error
-      role="alert"
-      aria-live="polite"
-      hidden
-    ></p>
-  </div>
+        Save to Project
+      </button>
+      <span
+        class="projectclad-product-save__saved"
+        data-projectclad-saved
+        role="status"
+        aria-live="polite"
+        hidden
+      >
+        <svg
+          class="projectclad-product-save__saved-check"
+          viewBox="0 0 16 16"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M3 8.5l3 3 7-7"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <span class="projectclad-product-save__saved-text" data-projectclad-saved-text>Order saved</span>
+      </span>
+      <p
+        class="projectclad-product-save__error"
+        data-projectclad-error
+        role="alert"
+        aria-live="polite"
+        hidden
+      ></p>
+    </div>
 
-  {% render 'projectclad-save-modal', intent: 'product' %}
+    {% render 'projectclad-save-modal', intent: 'product' %}
+  {% endunless %}
 </div>
 
 {% schema %}
@@ -95,6 +104,14 @@
   "enabled_on": {
     "templates": ["product"]
   },
-  "settings": []
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "show_button",
+      "label": "Show Save to Project button",
+      "info": "Leave off. This save path skips calculator pricing; customers should save from the cart. The block still loads Edit-part autofill.",
+      "default": false
+    }
+  ]
 }
 {% endschema %}

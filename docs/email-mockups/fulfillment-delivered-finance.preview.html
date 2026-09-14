@@ -22,16 +22,27 @@
   body { margin:0; padding:0; width:100% !important; background-color:#FFFFFF; }
   img { border:0; line-height:100%; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; }
   table { border-collapse:collapse !important; }
-  a { color:#B3272C; }
 
   .email-root { background-color:#FFFFFF; }
-  .email-container { background-color:#EEECE7; }
-  .email-card-bg { background-color:#EEECE7; }
+  .email-container { background-color:#EEECE7; background-image:linear-gradient(#EEECE7,#EEECE7); }
+  .email-card-bg { background-color:#EEECE7; background-image:linear-gradient(#EEECE7,#EEECE7); }
   .email-text { color:#1E2124; }
   .email-muted { color:#5A5F66; }
   .email-label { color:#9A968D; }
-  .email-btn { background-color:#000000; }
-  .email-btn a { color:#FFFFFF !important; }
+  .email-btn { background-color:#1E2124; }
+  .email-btn a,
+  a.email-cta,
+  a.email-cta:link,
+  a.email-cta:visited,
+  a.email-cta:hover,
+  a.email-cta:active {
+    color:#EEECE7 !important;
+    text-decoration:none !important;
+    background-color:#1E2124 !important;
+    background-image:linear-gradient(#1E2124,#1E2124) !important;
+    border-color:#1E2124 !important;
+  }
+  u + #body a.email-cta { color:#EEECE7 !important; text-decoration:none !important; }
 
   /*
    * Keep the cream card + dark text even when the OS/client is in dark mode.
@@ -41,15 +52,22 @@
     body,
     .email-root { background-color:#FFFFFF !important; }
     .email-container,
-    .email-card-bg { background-color:#EEECE7 !important; }
+    .email-card-bg,
+    .email-line-card {
+      background-color:#EEECE7 !important;
+      background-image:linear-gradient(#EEECE7,#EEECE7) !important;
+    }
     .email-text,
     .hero-headline { color:#1E2124 !important; }
     .email-muted { color:#5A5F66 !important; }
     .email-label,
     .detail-label { color:#9A968D !important; }
-    .email-btn { background-color:#000000 !important; }
+    .email-btn { background-color:#1E2124 !important; }
     .email-btn a,
-    .email-btn span { color:#FFFFFF !important; }
+    .email-btn span,
+    a.email-cta,
+    a.email-cta span,
+    a.email-cta font { color:#EEECE7 !important; text-decoration:none !important; }
   }
 
   /* Outlook.com dark mode */
@@ -59,8 +77,13 @@
   [data-ogsb] .email-root { background-color:#FFFFFF !important; }
   [data-ogsc] .email-container,
   [data-ogsc] .email-card-bg,
+  [data-ogsc] .email-line-card,
   [data-ogsb] .email-container,
-  [data-ogsb] .email-card-bg { background-color:#EEECE7 !important; }
+  [data-ogsb] .email-card-bg,
+  [data-ogsb] .email-line-card {
+    background-color:#EEECE7 !important;
+    background-image:linear-gradient(#EEECE7,#EEECE7) !important;
+  }
   [data-ogsc] .email-text,
   [data-ogsc] .hero-headline,
   [data-ogsb] .email-text,
@@ -72,11 +95,13 @@
   [data-ogsb] .email-label,
   [data-ogsb] .detail-label { color:#9A968D !important; }
   [data-ogsc] .email-btn,
-  [data-ogsb] .email-btn { background-color:#000000 !important; }
+  [data-ogsb] .email-btn { background-color:#1E2124 !important; }
   [data-ogsc] .email-btn a,
   [data-ogsc] .email-btn span,
+  [data-ogsc] a.email-cta,
   [data-ogsb] .email-btn a,
-  [data-ogsb] .email-btn span { color:#FFFFFF !important; }
+  [data-ogsb] .email-btn span,
+  [data-ogsb] a.email-cta { color:#EEECE7 !important; text-decoration:none !important; }
 
   @media screen and (max-width: 600px) {
     .email-container { width:100% !important; }
@@ -88,7 +113,7 @@
   }
 </style>
 </head>
-<body bgcolor="#FFFFFF" style="margin:0;padding:0;background-color:#FFFFFF;">
+<body id="body" bgcolor="#FFFFFF" style="margin:0;padding:0;background-color:#FFFFFF;">
 <div style="display:none; max-height:0; overflow:hidden; opacity:0; mso-hide:all;">
   Invoice for Test Newdell · Email Test Order
 </div>
@@ -97,34 +122,34 @@
   <tr>
     <td align="center" style="padding: 32px 16px;">
 
-      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" bgcolor="#EEECE7" style="width:600px; max-width:600px; background-color:#EEECE7; border-radius:4px; overflow:hidden;">
+      <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" bgcolor="#EEECE7" style="width:600px; max-width:600px; background-color:#EEECE7; background-image:linear-gradient(#EEECE7,#EEECE7); border-radius:4px; overflow:hidden;">
 
         <tr>
-          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 36px 40px 26px 40px; background-color:#EEECE7;">
+          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 16px 40px 10px 40px; background-color:#EEECE7;">
             <p style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:18px; font-weight:700; color:#1E2124; letter-spacing:0.02em;">Canadian Cladding</p>
           </td>
         </tr>
 
         
         <tr>
-          <td style="padding:0;margin:0;font-size:0;line-height:0;height:6px;background-color:#B3272C;">
+          <td style="padding:0;margin:0;font-size:0;line-height:0;height:6px;background-color:#B3272C; background-image:linear-gradient(#B3272C,#B3272C);">
             &nbsp;
           </td>
         </tr>
 
         <tr>
-          <td class="px-fluid email-card-bg" bgcolor="#EEECE7" style="padding: 40px 40px 8px 40px; background-color:#EEECE7;">
+          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 40px 40px 8px 40px; background-color:#EEECE7; text-align:center;">
             
-            <h1 class="hero-headline email-text" style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:30px; line-height:36px; color:#1E2124; font-weight:800;">
+            <h1 class="hero-headline email-text" style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:30px; line-height:36px; color:#1E2124; font-weight:800; text-align:center;">
               Email Test Order has been delivered!
             </h1>
           </td>
         </tr>
 
         <tr>
-          <td class="px-fluid email-card-bg" bgcolor="#EEECE7" style="padding: 4px 40px 28px 40px; background-color:#EEECE7;">
-            <p class="email-muted" style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; line-height:24px; color:#5A5F66;">
-              Email Test Order has been delivered. Click Open order to view your order details. Thank you for using Canadian Cladding!
+          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 4px 40px 28px 40px; background-color:#EEECE7; text-align:center;">
+            <p class="email-muted" style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; line-height:24px; color:#5A5F66; text-align:center;">
+              Click Open order to view your order details.
             </p>
           </td>
         </tr>
@@ -134,44 +159,9 @@
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#EEECE7" style="border:1px solid #E4E1DA; border-radius:4px; background-color:#EEECE7;">
               <tr>
                 <td bgcolor="#EEECE7" style="padding:24px 24px 20px 24px; background-color:#EEECE7;">
+                  <p class="email-text" style="margin:0 0 20px 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:24px; line-height:30px; color:#1E2124; font-weight:800;">Canadian Cladding</p>
                   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                     
-                    <tr>
-                      <td class="detail-label email-label" style="font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; color:#9A968D; padding-bottom:4px;">Customer</td>
-                    </tr>
-                    <tr>
-                      <td class="email-text" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; color:#1E2124; font-weight:600; padding-bottom:16px;">
-                        Mike Drezin
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td class="detail-label email-label" style="font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; color:#9A968D; padding-bottom:4px;">Email</td>
-                    </tr>
-                    <tr>
-                      <td class="email-text" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; color:#1E2124; font-weight:600; padding-bottom:16px;">
-                        mike@example.com
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td class="detail-label email-label" style="font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; color:#9A968D; padding-bottom:4px;">Phone</td>
-                    </tr>
-                    <tr>
-                      <td class="email-text" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; color:#1E2124; font-weight:600; padding-bottom:16px;">
-                        (613) 555-0142
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td class="detail-label email-label" style="font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; color:#9A968D; padding-bottom:4px;">Company</td>
-                    </tr>
-                    <tr>
-                      <td class="email-text" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; color:#1E2124; font-weight:600; padding-bottom:16px;">
-                        Canadian Cladding
-                      </td>
-                    </tr>
-
                     <tr>
                       <td class="detail-label email-label" style="font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; color:#9A968D; padding-bottom:4px;">Project</td>
                     </tr>
@@ -209,7 +199,7 @@
                     </tr>
 
                     <tr>
-                      <td class="detail-label email-label" style="font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; color:#9A968D; padding-bottom:4px;">Ship to</td>
+                      <td class="detail-label email-label" style="font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; color:#9A968D; padding-bottom:4px;">Fulfillment</td>
                     </tr>
                     <tr>
                       <td class="email-text" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; color:#1E2124; font-weight:600; padding-bottom:16px;">
@@ -221,8 +211,35 @@
                       <td class="detail-label email-label" style="font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; color:#9A968D; padding-bottom:4px;">Delivered</td>
                     </tr>
                     <tr>
-                      <td class="email-text" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; color:#1E2124; font-weight:600;">
+                      <td class="email-text" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; color:#1E2124; font-weight:600; padding-bottom:16px;">
                         Thursday, August 13, 2026 at 3:40 p.m.
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td class="detail-label email-label" style="font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; color:#9A968D; padding-bottom:4px;">Customer</td>
+                    </tr>
+                    <tr>
+                      <td class="email-text" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; color:#1E2124; font-weight:600; padding-bottom:16px;">
+                        Mike Drezin
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td class="detail-label email-label" style="font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; color:#9A968D; padding-bottom:4px;">Email</td>
+                    </tr>
+                    <tr>
+                      <td class="email-text" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; color:#1E2124; font-weight:600; padding-bottom:16px;">
+                        mike@example.com
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td class="detail-label email-label" style="font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size:11px; letter-spacing:0.5px; text-transform:uppercase; color:#9A968D; padding-bottom:4px;">Phone</td>
+                    </tr>
+                    <tr>
+                      <td class="email-text" style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; color:#1E2124; font-weight:600;">
+                        (613) 555-0142
                       </td>
                     </tr>
                   </table>
@@ -283,7 +300,7 @@
         </tr>
         
         <tr>
-          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 0 40px 16px 40px; background-color:#EEECE7;">
+          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 0 40px 8px 40px; background-color:#EEECE7; background-image:linear-gradient(#EEECE7,#EEECE7);">
             
             <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
               <tr>
@@ -291,9 +308,9 @@
                 <td class="stack" style="">
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                     <tr>
-                      <td class="email-btn" bgcolor="#000000" style="border-radius:3px; background-color:#000000; mso-padding-alt:13px 18px;">
-                        <a href="https://example.myshopify.com/apps/project-clad/project?id=demo&amp;job=demo" target="_blank" style="display:inline-block; padding:13px 18px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; font-weight:600; color:#FFFFFF !important; text-decoration:none; letter-spacing:0.3px; white-space:nowrap;">
-                          <span style="color:#FFFFFF !important;">Open order</span>
+                      <td class="email-btn" bgcolor="#1E2124" style="border-radius:3px; background-color:#1E2124; background-image:linear-gradient(#1E2124,#1E2124);">
+                        <a class="email-cta" href="https://example.myshopify.com/apps/project-clad/project?id=demo&amp;job=demo" target="_blank" style="display:inline-block; padding:13px 18px; font-family:Arial, Helvetica, sans-serif; font-size:13px; font-weight:600; line-height:16px; letter-spacing:0.3px; white-space:nowrap; color:#EEECE7; background-color:#1E2124; background-image:linear-gradient(#1E2124,#1E2124); border:1px solid #1E2124; border-radius:3px; text-decoration:none;">
+                          <font color="#EEECE7" style="color:#EEECE7; text-decoration:none;"><span style="color:#EEECE7; text-decoration:none;">Open order</span></font>
                         </a>
                       </td>
                     </tr>
@@ -302,9 +319,9 @@
                 <td class="stack" style="padding-left:12px;">
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                     <tr>
-                      <td class="email-btn" bgcolor="#000000" style="border-radius:3px; background-color:#000000; mso-padding-alt:13px 18px;">
-                        <a href="https://example.com/public/fulfillment-photo?jobId=demo" target="_blank" style="display:inline-block; padding:13px 18px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; font-weight:600; color:#FFFFFF !important; text-decoration:none; letter-spacing:0.3px; white-space:nowrap;">
-                          <span style="color:#FFFFFF !important;">View delivery photo</span>
+                      <td class="email-btn" bgcolor="#1E2124" style="border-radius:3px; background-color:#1E2124; background-image:linear-gradient(#1E2124,#1E2124);">
+                        <a class="email-cta" href="https://example.com/public/fulfillment-photo?jobId=demo" target="_blank" style="display:inline-block; padding:13px 18px; font-family:Arial, Helvetica, sans-serif; font-size:13px; font-weight:600; line-height:16px; letter-spacing:0.3px; white-space:nowrap; color:#EEECE7; background-color:#1E2124; background-image:linear-gradient(#1E2124,#1E2124); border:1px solid #1E2124; border-radius:3px; text-decoration:none;">
+                          <font color="#EEECE7" style="color:#EEECE7; text-decoration:none;"><span style="color:#EEECE7; text-decoration:none;">View delivery photo</span></font>
                         </a>
                       </td>
                     </tr>
@@ -313,9 +330,9 @@
                 <td class="stack" style="padding-left:12px;">
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                     <tr>
-                      <td class="email-btn" bgcolor="#000000" style="border-radius:3px; background-color:#000000; mso-padding-alt:13px 18px;">
-                        <a href="https://example.myshopify.com/apps/project-clad/shop-slip?id=demo&amp;jobId=demo" target="_blank" style="display:inline-block; padding:13px 18px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; font-weight:600; color:#FFFFFF !important; text-decoration:none; letter-spacing:0.3px; white-space:nowrap;">
-                          <span style="color:#FFFFFF !important;">View packing slip</span>
+                      <td class="email-btn" bgcolor="#1E2124" style="border-radius:3px; background-color:#1E2124; background-image:linear-gradient(#1E2124,#1E2124);">
+                        <a class="email-cta" href="https://example.myshopify.com/apps/project-clad/shop-slip?id=demo&amp;jobId=demo" target="_blank" style="display:inline-block; padding:13px 18px; font-family:Arial, Helvetica, sans-serif; font-size:13px; font-weight:600; line-height:16px; letter-spacing:0.3px; white-space:nowrap; color:#EEECE7; background-color:#1E2124; background-image:linear-gradient(#1E2124,#1E2124); border:1px solid #1E2124; border-radius:3px; text-decoration:none;">
+                          <font color="#EEECE7" style="color:#EEECE7; text-decoration:none;"><span style="color:#EEECE7; text-decoration:none;">View packing slip</span></font>
                         </a>
                       </td>
                     </tr>
@@ -328,18 +345,15 @@
         </tr>
 
         <tr>
-          <td class="px-fluid email-card-bg" bgcolor="#EEECE7" style="padding: 0 40px; background-color:#EEECE7;">
-            <div style="border-top:1px solid #EDEBE5; font-size:0; line-height:0;">&nbsp;</div>
-          </td>
-        </tr>
-
-        <tr>
-          <td class="px-fluid email-card-bg" bgcolor="#EEECE7" style="padding: 12px 40px 36px 40px; background-color:#EEECE7;">
-            <p class="email-label" style="margin:0 0 16px 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; line-height:20px; color:#9A968D;">
+          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 20px 40px 36px 40px; background-color:#EEECE7; text-align:center;">
+            <p class="email-muted" style="margin:0 0 16px 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; line-height:24px; color:#5A5F66; text-align:center;">
+              Thank you for choosing Canadian Cladding
+            </p>
+            <p class="email-label" style="margin:0 0 16px 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; line-height:20px; color:#9A968D; text-align:center;">
               Questions about this order? Reach us at
               <a href="mailto:info@canadiancladding.ca" style="color:#B3272C; text-decoration:none;">info@canadiancladding.ca</a>.
             </p>
-            <p class="email-label" style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:11px; line-height:18px; color:#9A968D;">
+            <p class="email-label" style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:11px; line-height:18px; color:#9A968D; text-align:center;">
               Canadian Cladding &nbsp;·&nbsp; 11158325 Canada Inc. &nbsp;·&nbsp; Ottawa, ON
             </p>
           </td>

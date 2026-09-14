@@ -233,7 +233,7 @@ export async function sendProjectStatusNotificationEmail(args: {
     await sendTransactionalEmailToRecipients({
       shop: args.shop,
       recipients,
-      subject: `ProjectClad: ${args.headline} — ${args.projectName}`,
+      subject: `${args.headline} — ${args.projectName}`,
       text,
     });
   } catch (err) {
@@ -349,7 +349,7 @@ export async function sendOrderCreatedNotificationEmail(args: {
     await sendTransactionalEmailToRecipients({
       shop: args.shop,
       recipients,
-      subject: `ProjectClad: ${headline} — ${args.projectName}`,
+      subject: `${headline} — ${args.projectName}`,
       text,
     });
   } catch (err) {
@@ -574,11 +574,11 @@ export async function sendOrderPlacedEmails(args: {
   const isDelivery = args.fulfillmentMethod === "delivery";
 
   const headerLines = [
+    `Company: ${(project.companyName ?? "").trim() || "—"}`,
     `Project: ${project.name}`,
     `Order: ${job.name}`,
     formatProjectNumberLine(project.poNumber),
     formatJobPoLine(job.purchaseOrderNumber),
-    `Company: ${(project.companyName ?? "").trim() || "—"}`,
   ];
 
   const addressBlock = isDelivery
@@ -636,13 +636,9 @@ export async function sendOrderPlacedEmails(args: {
 
   const shopLines = buildShopOrderLinesNoPricingBlock(args.shop, freshItems, live);
 
-  const customerIntro = `${job.name} has been placed. Click Open order to view your order details. Thank you for using Canadian Cladding!`;
+  const customerIntro = `Click Open order to view your order details.`;
   const customerBody = [
     customerIntro,
-    ``,
-    `Customer: ${customerName}`,
-    `Email: ${customerEmailDisplay}`,
-    `Phone: ${customerPhone}`,
     ``,
     ...headerLines,
     ``,
@@ -656,11 +652,27 @@ export async function sendOrderPlacedEmails(args: {
     `Tax: ${formatMoney(tax)}`,
     `Total: ${formatMoney(total)}`,
     ``,
+    `Customer: ${customerName}`,
+    `Email: ${customerEmailDisplay}`,
+    `Phone: ${customerPhone}`,
+    ``,
     `Open order: ${projectOrderUrl}`,
+    ``,
+    `Thank you for choosing Canadian Cladding.`,
   ].join("\n");
 
   const shopBody = [
     `Order placed on ${placedAt}.`,
+    ``,
+    `Project / order`,
+    ...headerLines,
+    `Fulfillment: ${isDelivery ? "Delivery" : "Pickup"}`,
+    ``,
+    ...requestedBlock,
+    ...(isDelivery ? [`${shippingBlockForProject(project)}`, ``] : []),
+    `Line items:`,
+    ``,
+    shopLines,
     ``,
     `Customer`,
     `Customer name: ${ownerName}`,
@@ -676,17 +688,9 @@ export async function sendOrderPlacedEmails(args: {
         ]
       : []),
     ``,
-    `Project / order`,
-    ...headerLines,
-    `Fulfillment: ${isDelivery ? "Delivery" : "Pickup"}`,
-    ``,
-    ...requestedBlock,
-    ...(isDelivery ? [`${shippingBlockForProject(project)}`, ``] : []),
-    `Line items:`,
-    ``,
-    shopLines,
-    ``,
     `Open order: ${projectOrderUrl}`,
+    ``,
+    `Thank you for choosing Canadian Cladding.`,
   ].join("\n");
 
   const logoDataUrl = await getShopLogoDataUrlForEmail(args.shop);
@@ -782,7 +786,7 @@ export async function sendOrderPlacedEmails(args: {
       await sendTransactionalEmail({
         shop: args.shop,
         to: customerTo,
-        subject: `ProjectClad: Order placed — ${project.name} · ${job.name}`,
+        subject: `Order placed — ${project.name} · ${job.name}`,
         text: customerBody,
         html: customerHtml,
       });
@@ -809,7 +813,7 @@ export async function sendOrderPlacedEmails(args: {
     const accepted = await sendTransactionalEmailToRecipients({
       shop: args.shop,
       recipients: shopRecipients,
-      subject: `ProjectClad [Shop]: Order placed — ${project.name} · ${job.name}`,
+      subject: `Shop: Order placed — ${project.name} · ${job.name}`,
       text: shopBody,
       html: shopHtml,
     });

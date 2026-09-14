@@ -78,31 +78,19 @@ export function buildDeliveredConfirmationEmailHtml(
     : "Store pickup";
 
   const detailRows: BrandedEmailDetailRow[] = [
-    { label: "Customer", value: args.customerName },
-    { label: "Email", value: args.customerEmail },
-    { label: "Phone", value: args.customerPhone },
-  ];
-
-  const company = args.companyName.trim();
-  if (company && company !== "—") {
-    detailRows.push({ label: "Company", value: company });
-  }
-
-  detailRows.push(
     { label: "Project", value: args.projectName },
     { label: "Order", value: orderValue, html: true },
     { label: "Project #", value: args.projectNumber || "—" },
     { label: "PO Number", value: args.poNumber || "—" },
-    {
-      label: args.isDelivery ? "Ship to" : "Fulfillment",
-      value: shipValue,
-      html: true,
-    },
+    { label: "Fulfillment", value: shipValue, html: true },
     {
       label: args.isDelivery ? "Delivered" : "Picked up",
       value: completed,
     },
-  );
+    { label: "Customer", value: args.customerName },
+    { label: "Email", value: args.customerEmail },
+    { label: "Phone", value: args.customerPhone },
+  ];
 
   const showProgress =
     Boolean(args.showOrderProgress) &&
@@ -147,8 +135,8 @@ export function buildDeliveredConfirmationEmailHtml(
 
   const headline = `${args.orderName} has been delivered!`;
   const subcopy = args.includePriceBox
-    ? `${args.orderName} has been delivered. Click Open order to view your order details. Thank you for using Canadian Cladding!`
-    : `${args.orderName} has been delivered. An invoice will be sent shortly. Click Open order to view your order details. Thank you for using Canadian Cladding!`;
+    ? `Click Open order to view your order details.`
+    : `An invoice will be sent shortly. Click Open order to view your order details.`;
 
   return buildBrandedEmailHtml({
     title: args.title ?? "Order complete",
@@ -157,6 +145,7 @@ export function buildDeliveredConfirmationEmailHtml(
       `${args.orderName} has been delivered — ${args.projectName}`,
     headline,
     subcopy,
+    companyHeading: args.companyName.trim() || undefined,
     detailRows,
     bodyHtml,
     ctas,
@@ -369,15 +358,24 @@ export function buildOrderPlacedEmailHtml(
     : "Store pickup";
 
   const detailRows: BrandedEmailDetailRow[] = [
+    { label: "Project", value: args.projectName },
+    { label: "Order", value: orderValue, html: true },
+    { label: "Project #", value: args.projectNumber || "—" },
+    { label: "PO Number", value: args.poNumber || "—" },
+    { label: "Fulfillment", value: shipValue, html: true },
+    { label: "Placed", value: placed },
+  ];
+
+  const requested = (args.requestedDelivery ?? "").trim();
+  if (requested) {
+    detailRows.push({ label: "Requested", value: requested });
+  }
+
+  detailRows.push(
     { label: "Customer", value: args.customerName },
     { label: "Email", value: args.customerEmail },
     { label: "Phone", value: args.customerPhone },
-  ];
-
-  const company = args.companyName.trim();
-  if (company && company !== "—") {
-    detailRows.push({ label: "Company", value: company });
-  }
+  );
 
   const placerName = (args.placedByName ?? "").trim();
   if (placerName && placerName !== args.customerName.trim()) {
@@ -391,24 +389,6 @@ export function buildOrderPlacedEmailHtml(
       value: placerBits.map((v) => escapeEmailHtml(v)).join("<br>"),
       html: true,
     });
-  }
-
-  detailRows.push(
-    { label: "Project", value: args.projectName },
-    { label: "Order", value: orderValue, html: true },
-    { label: "Project #", value: args.projectNumber || "—" },
-    { label: "PO Number", value: args.poNumber || "—" },
-    {
-      label: args.isDelivery ? "Ship to" : "Fulfillment",
-      value: shipValue,
-      html: true,
-    },
-    { label: "Placed", value: placed },
-  );
-
-  const requested = (args.requestedDelivery ?? "").trim();
-  if (requested) {
-    detailRows.push({ label: "Requested", value: requested });
   }
 
   const priceBoxHtml = args.includePriceBox
@@ -438,8 +418,7 @@ export function buildOrderPlacedEmailHtml(
 
   const headline = args.headline ?? `${args.orderName} has been placed!`;
   const subcopy =
-    args.subcopy ??
-    `${args.orderName} has been placed. Click Open order to view your order details. Thank you for using Canadian Cladding!`;
+    args.subcopy ?? `Click Open order to view your order details.`;
 
   return buildBrandedEmailHtml({
     title: args.title ?? "Order placed",
@@ -447,6 +426,7 @@ export function buildOrderPlacedEmailHtml(
       args.preheader ?? `${args.orderName} has been placed — ${args.projectName}`,
     headline,
     subcopy,
+    companyHeading: args.companyName.trim() || undefined,
     detailRows,
     bodyHtml,
     ctas: [{ href: args.projectOrderUrl, label: "Open order" }],

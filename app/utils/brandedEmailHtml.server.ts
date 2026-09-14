@@ -34,6 +34,8 @@ export type BuildBrandedEmailHtmlArgs = {
   headline: string;
   subcopy: string;
   detailRows: BrandedEmailDetailRow[];
+  /** Company name shown large/bold above the detail list (no "Company" label). */
+  companyHeading?: string;
   /** Extra sections between detail card and CTA (line items, totals, etc.). */
   bodyHtml?: string;
   /** Primary dark buttons (stacked). Prefer over single `cta`. */
@@ -103,7 +105,7 @@ function detailRowsHtml(rows: BrandedEmailDetailRow[]): string {
  */
 export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
   const logoBlock = args.hasLogo
-    ? `<img src="cid:${BRANDED_EMAIL_LOGO_CID}" width="196" height="64" alt="Canadian Cladding" style="display:block; width:196px; height:64px; max-width:100%; border:0;">`
+    ? `<img src="cid:${BRANDED_EMAIL_LOGO_CID}" width="280" height="91" alt="Canadian Cladding" style="display:block; width:280px; height:91px; max-width:100%; border:0;">`
     : `<p style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:18px; font-weight:700; color:#1E2124; letter-spacing:0.02em;">Canadian Cladding</p>`;
 
   const ctaList: BrandedEmailCta[] = [
@@ -123,7 +125,7 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
   const ctaBlock = ctaButtonsHtml
     ? `
         <tr>
-          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 0 40px 16px 40px; ${CREAM_FILL}">
+          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 0 40px 8px 40px; ${CREAM_FILL}">
             ${ctaButtonsHtml}
             ${args.secondaryLinksHtml ?? ""}
           </td>
@@ -278,7 +280,7 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
       <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" bgcolor="#EEECE7" style="width:600px; max-width:600px; ${CREAM_FILL} border-radius:4px; overflow:hidden;">
 
         <tr>
-          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 36px 40px 26px 40px; background-color:#EEECE7;">
+          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 16px 40px 10px 40px; background-color:#EEECE7;">
             ${logoBlock}
           </td>
         </tr>
@@ -286,23 +288,23 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
         ${corrugatedDividerHtml()}
 
         <tr>
-          <td class="px-fluid email-card-bg" bgcolor="#EEECE7" style="padding: 40px 40px 8px 40px; background-color:#EEECE7;">
+          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 40px 40px 8px 40px; background-color:#EEECE7; text-align:center;">
             ${
               args.eyebrow?.trim()
-                ? `<p style="margin:0 0 10px 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:#B3272C; font-weight:700;">
+                ? `<p style="margin:0 0 10px 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:#B3272C; font-weight:700; text-align:center;">
               ${escapeEmailHtml(args.eyebrow.trim())}
             </p>`
                 : ""
             }
-            <h1 class="hero-headline email-text" style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:30px; line-height:36px; color:#1E2124; font-weight:800;">
+            <h1 class="hero-headline email-text" style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:30px; line-height:36px; color:#1E2124; font-weight:800; text-align:center;">
               ${escapeEmailHtml(args.headline)}
             </h1>
           </td>
         </tr>
 
         <tr>
-          <td class="px-fluid email-card-bg" bgcolor="#EEECE7" style="padding: 4px 40px 28px 40px; background-color:#EEECE7;">
-            <p class="email-muted" style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; line-height:24px; color:#5A5F66;">
+          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 4px 40px 28px 40px; background-color:#EEECE7; text-align:center;">
+            <p class="email-muted" style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; line-height:24px; color:#5A5F66; text-align:center;">
               ${escapeEmailHtml(args.subcopy)}
             </p>
           </td>
@@ -313,6 +315,11 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#EEECE7" style="border:1px solid #E4E1DA; border-radius:4px; background-color:#EEECE7;">
               <tr>
                 <td bgcolor="#EEECE7" style="padding:24px 24px 20px 24px; background-color:#EEECE7;">
+                  ${
+                    args.companyHeading?.trim() && args.companyHeading.trim() !== "—"
+                      ? `<p class="email-text" style="margin:0 0 20px 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:24px; line-height:30px; color:#1E2124; font-weight:800;">${escapeEmailHtml(args.companyHeading.trim())}</p>`
+                      : ""
+                  }
                   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                     ${detailRowsHtml(args.detailRows)}
                   </table>
@@ -326,18 +333,15 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
         ${ctaBlock}
 
         <tr>
-          <td class="px-fluid email-card-bg" bgcolor="#EEECE7" style="padding: 0 40px; background-color:#EEECE7;">
-            <div style="border-top:1px solid #EDEBE5; font-size:0; line-height:0;">&nbsp;</div>
-          </td>
-        </tr>
-
-        <tr>
-          <td class="px-fluid email-card-bg" bgcolor="#EEECE7" style="padding: 12px 40px 36px 40px; background-color:#EEECE7;">
-            <p class="email-label" style="margin:0 0 16px 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; line-height:20px; color:#9A968D;">
+          <td class="px-fluid email-card-bg" align="center" bgcolor="#EEECE7" style="padding: 20px 40px 36px 40px; background-color:#EEECE7; text-align:center;">
+            <p class="email-muted" style="margin:0 0 16px 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15px; line-height:24px; color:#5A5F66; text-align:center;">
+              Thank you for choosing Canadian Cladding
+            </p>
+            <p class="email-label" style="margin:0 0 16px 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; line-height:20px; color:#9A968D; text-align:center;">
               Questions about this order? Reach us at
               <a href="mailto:info@canadiancladding.ca" style="color:#B3272C; text-decoration:none;">info@canadiancladding.ca</a>.
             </p>
-            <p class="email-label" style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:11px; line-height:18px; color:#9A968D;">
+            <p class="email-label" style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:11px; line-height:18px; color:#9A968D; text-align:center;">
               Canadian Cladding &nbsp;·&nbsp; 11158325 Canada Inc. &nbsp;·&nbsp; Ottawa, ON${footerSecondLine}
             </p>
           </td>

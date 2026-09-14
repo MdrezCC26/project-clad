@@ -575,7 +575,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         await sendTransactionalEmail({
           shop,
           to: backupEmail,
-          subject: `ProjectClad project export: ${project.name}`,
+          subject: `Project export: ${project.name}`,
           text: `Your project "${project.name}" has been deleted.`,
           extraAttachments: [
             {

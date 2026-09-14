@@ -730,7 +730,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const csv = await getCsvForProjectIds(session.shop, [projectId]);
       await sendEmail({
         to: toEmail,
-        subject: "ProjectClad project export",
+        subject: "Project export",
         text: "Project export CSV is attached.",
         attachments: [
           {
