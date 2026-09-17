@@ -21,9 +21,6 @@ import {
   parseVariantSnapshot,
 } from "./variantInfo.server";
 
-/** Every custom part is bent from a fixed 120" run, so 1 unit = 10 linear ft. */
-const LINEAR_FT_PER_UNIT = 10;
-
 /** Three part blocks per letter sheet. */
 const BLOCKS_PER_SHEET = 3;
 
@@ -50,7 +47,6 @@ type ShopSlipItem = {
   title: string;
   colourDisplay: string | null;
   quantity: number;
-  linearFeet: number;
   dimensionRows: Array<{ label: string; value: string; extra?: boolean }>;
   partNumber: string | null;
   gaugeLabel: string | null;
@@ -218,7 +214,6 @@ function toShopSlipItem(item: JobItem, index: number): ShopSlipItem {
     title: orderLineDisplayNameWithGauge({ displayName, properties }),
     colourDisplay: resolveColourDisplay(map),
     quantity: item.quantity,
-    linearFeet: item.quantity * LINEAR_FT_PER_UNIT,
     dimensionRows: buildSlipDimensionRows(map),
     partNumber: capture?.sku?.trim() || item.catalogSku?.trim() || null,
     gaugeLabel: gaugeLabel || null,
@@ -278,7 +273,6 @@ function renderPartBlock(item: ShopSlipItem): string {
       <div class="info-panel">
         <div class="qty-strip">
           <div class="qty-box"><div class="qlabel">Qty</div><div class="qval">${escapeHtml(formatCount(item.quantity))}</div></div>
-          <div class="qty-box"><div class="qlabel">Linear ft</div><div class="qval">${escapeHtml(formatCount(item.linearFeet))}</div></div>
         </div>
         ${renderDimsTable(item)}
         ${colourTag}
@@ -322,7 +316,6 @@ function renderMetaRow(
 function renderFooter(args: {
   addressLine: string;
   totalQuantity: number;
-  totalLinearFeet: number;
 }): string {
   return `
   <div class="doc-footer">
@@ -334,7 +327,7 @@ function renderFooter(args: {
     </div>
     <div class="col col--right">
       <div class="label">Total order qty</div>
-      <div class="value">${escapeHtml(formatCount(args.totalQuantity))} units — ${escapeHtml(formatCount(args.totalLinearFeet))} linear ft</div>
+      <div class="value">${escapeHtml(formatCount(args.totalQuantity))} units</div>
       <div class="label">Operator</div>
       <div class="value signature-line">________________________</div>
     </div>
@@ -370,7 +363,6 @@ export function buildShopSlipHtml(args: {
     : project.name;
 
   const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
-  const totalLinearFeet = totalQuantity * LINEAR_FT_PER_UNIT;
 
   const sheets = chunk(items, BLOCKS_PER_SHEET);
   const sheetCount = sheets.length;
@@ -391,7 +383,6 @@ export function buildShopSlipHtml(args: {
                 ? (delivery.addressLine ?? "Delivery address not set")
                 : "Store pickup",
             totalQuantity,
-            totalLinearFeet,
           })
         : "";
 
