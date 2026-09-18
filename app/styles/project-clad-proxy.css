@@ -18373,6 +18373,15 @@ html:has(.project-clad-page--projects.project-clad-page--detail.project-clad-pag
     radial-gradient(ellipse 80% 60% at 50% 100%, rgba(200, 215, 230, 0.45) 0%, rgba(200, 215, 230, 0) 70%);
 }
 
+/*
+ * The orders page can be several viewports tall. Keeping its four-gradient
+ * backdrop fixed forces Chromium to composite that large layer during every
+ * scroll frame, which is especially visible on 120 Hz displays.
+ */
+.project-clad-page--projects.project-clad-page--detail.project-clad-page--cc-v2::before {
+  position: absolute;
+}
+
 .project-clad-page--cc-v2 .page-width.project-clad-container,
 .project-clad-page--cc-v2 .project-clad-storefront-footer--fullbleed {
   position: relative;
