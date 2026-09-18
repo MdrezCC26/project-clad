@@ -27,6 +27,7 @@ export const APP_PROXY_QUERY_KEYS = [
 ] as const;
 
 const APP_PROXY_SIGNATURE_PARAM = "signature";
+const APP_PROXY_NONCE_PARAM = "pc_nonce";
 const APP_PROXY_MAX_AGE_SECONDS = 5 * 60;
 const APP_PROXY_MAX_FUTURE_SKEW_SECONDS = 60;
 const replayCache = new Map<string, number>();
@@ -79,11 +80,20 @@ function enforceNoUnsafeReplay(request: Request, signature: string): void {
   const method = request.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") return;
 
+  /*
+   * Shopify's timestamp has one-second precision, so two legitimate POSTs to
+   * the same proxy URL in one second can have the same signature. Only apply
+   * one-time replay enforcement when our client supplies a unique query nonce;
+   * Shopify includes that nonce in the signed parameter set.
+   */
+  const nonce = new URL(request.url).searchParams.get(APP_PROXY_NONCE_PARAM);
+  if (!nonce || !/^[A-Za-z0-9_-]{16,128}$/.test(nonce)) return;
+
   const now = Date.now();
   for (const [key, expiresAt] of replayCache) {
     if (expiresAt <= now) replayCache.delete(key);
   }
-  const key = `${method}:${new URL(request.url).pathname}:${signature}`;
+  const key = `${method}:${new URL(request.url).pathname}:${signature}:${nonce}`;
   if (replayCache.has(key)) {
     throw new Response("Replayed app proxy request", { status: 409 });
   }
@@ -139,6 +149,7 @@ export const getAppProxyContext = (request: Request): AppProxyContext => {
   for (const key of APP_PROXY_QUERY_KEYS) {
     returnParams.delete(key);
   }
+  returnParams.delete(APP_PROXY_NONCE_PARAM);
   // Use storefront proxy path (/apps/project-clad/...) so redirects and forms hit the proxy
   const storefrontProxyPath = "/apps/project-clad";
   const storefrontPath = `${storefrontProxyPath}${url.pathname}`;

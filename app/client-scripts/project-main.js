@@ -372,6 +372,27 @@
   if (window.__pcShareCopyInitialized) return;
   window.__pcShareCopyInitialized = true;
   const actionsEndpoint = '/apps/project-clad/api/project-actions';
+  const appProxyTransportParams = [
+    'shop',
+    'signature',
+    'path_prefix',
+    'timestamp',
+    'logged_in_customer_id',
+    'logged_in_customer_email',
+    'pc_nonce',
+  ];
+  function pcProxyPostUrl(input) {
+    const url = new URL(input || window.location.href, window.location.origin);
+    appProxyTransportParams.forEach(function (key) {
+      url.searchParams.delete(key);
+    });
+    const nonce =
+      window.crypto && typeof window.crypto.randomUUID === 'function'
+        ? window.crypto.randomUUID().replace(/-/g, '')
+        : Date.now().toString(36) + Math.random().toString(36).slice(2);
+    url.searchParams.set('pc_nonce', nonce);
+    return url.pathname + url.search;
+  }
 
   /*
    * Every scripted reload/redirect on this page routes through here so pc-dirty-guard.js
@@ -1254,7 +1275,7 @@
               "Couldn't save the new line order, so the lines have been put back. Try again.",
           );
         };
-        void fetch(window.location.pathname + window.location.search, {
+        void fetch(pcProxyPostUrl(), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1322,7 +1343,7 @@
         try {
           var saveUrl = new URL(window.location.href);
           saveUrl.searchParams.set('pcJson', '1');
-          const res = await fetch(saveUrl.pathname + saveUrl.search, {
+          const res = await fetch(pcProxyPostUrl(saveUrl.href), {
             method: 'POST',
             redirect: 'manual',
             headers: {
@@ -1616,10 +1637,10 @@
         siteContactPhone = sitePhoneInput.value.trim();
       }
       try {
-        const res = await fetch(window.location.pathname + window.location.search, {
+        const res = await fetch(pcProxyPostUrl(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ intent: 'save-order-edit', jobId, jobName: jobName, purchaseOrderNumber: purchaseOrderNumber, siteContactName: siteContactName, siteContactPhone: siteContactPhone, removeItemIds: [], itemUpdates: itemUpdates, deleteJob: deleteJob }),
+          body: JSON.stringify({ intent: 'save-order-edit', responseMode: 'json', jobId, jobName: jobName, purchaseOrderNumber: purchaseOrderNumber, siteContactName: siteContactName, siteContactPhone: siteContactPhone, removeItemIds: [], itemUpdates: itemUpdates, deleteJob: deleteJob }),
           credentials: 'include',
         });
         const payload = await res.json().catch(() => ({}));
@@ -1673,7 +1694,7 @@
         return;
       }
       try {
-        const res = await fetch(actionsEndpoint, {
+        const res = await fetch(pcProxyPostUrl(actionsEndpoint), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2795,7 +2816,7 @@
       if (!onowJobId) return;
       var onowHasDel = onowBtn.getAttribute('data-has-delivery') === '1';
       var onowMethod = onowHasDel ? 'delivery' : 'pickup';
-      var onowPath = window.location.pathname + window.location.search;
+      var onowPath = pcProxyPostUrl();
       var onowContact = pcReadSiteContactForJob(onowJobId);
       onowBtn.disabled = true;
       fetch(onowPath, {
@@ -3016,7 +3037,7 @@
         batchHidden.value = pcCollectDeliveryBatchJson();
       }
       var fdDel = new FormData(orderDeliveryForm);
-      fetch(saveUrlDel.pathname + saveUrlDel.search, {
+      fetch(pcProxyPostUrl(saveUrlDel.href), {
         method: 'POST',
         credentials: 'include',
         body: fdDel,

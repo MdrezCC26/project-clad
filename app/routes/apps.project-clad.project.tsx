@@ -3556,8 +3556,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   );
   const canEditLineUnitPrices =
     viewerIsAppAdmin &&
-    Boolean(unitPriceEditorAllowlist) &&
-    customerEmailInConfiguredList(viewerEmailResolved, unitPriceEditorAllowlist);
+    (!unitPriceEditorAllowlist ||
+      customerEmailInConfiguredList(
+        viewerEmailResolved,
+        unitPriceEditorAllowlist,
+      ));
 
   /* Per-order CSV export (finance allowlist). Set PROJECTCLAD_CSV_EXPORT_EMAILS
      to one address or a comma-list. Legacy PROJECTCLAD_ACOMBA_EXPORT_EMAILS
@@ -4346,18 +4349,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
       const allowUnitPricePersistence =
         viewerIsAppAdmin &&
-        Boolean(unitPriceEditorAllowlist) &&
-        customerEmailInConfiguredList(viewerEmailResolved, unitPriceEditorAllowlist);
+        (!unitPriceEditorAllowlist ||
+          customerEmailInConfiguredList(
+            viewerEmailResolved,
+            unitPriceEditorAllowlist,
+          ));
       if (wantsUnitPriceChange) {
-        if (!unitPriceEditorAllowlist) {
-          return Response.json(
-            {
-              error:
-                "Line unit price edits require PROJECTCLAD_UNIT_PRICE_EDITOR_EMAILS on the app server.",
-            },
-            { status: 403 },
-          );
-        }
         if (!allowUnitPricePersistence) {
           return Response.json(
             { error: "You are not allowed to change line unit prices." },

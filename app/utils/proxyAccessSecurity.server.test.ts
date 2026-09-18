@@ -13,6 +13,7 @@ function signedProxyRequest(args: {
   timestamp: number;
   method?: string;
   path?: string;
+  nonce?: string;
 }): Request {
   const params = new URLSearchParams({
     logged_in_customer_id: "123",
@@ -20,6 +21,7 @@ function signedProxyRequest(args: {
     shop: "example-shop.myshopify.com",
     timestamp: String(args.timestamp),
   });
+  if (args.nonce) params.set("pc_nonce", args.nonce);
   const message = Array.from(params.entries())
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([key, value]) => `${key}=${value}`)
@@ -59,12 +61,23 @@ test("rejects a repeated unsafe app-proxy request", () => {
     timestamp: Math.floor(Date.now() / 1000),
     method: "POST",
     path: "/api/replay",
+    nonce: "1234567890abcdef",
   });
   getAppProxyContext(request);
   assert.throws(
     () => getAppProxyContext(request.clone()),
     (error) => error instanceof Response && error.status === 409,
   );
+});
+
+test("does not mistake nonce-free same-second proxy posts for replays", () => {
+  const request = signedProxyRequest({
+    timestamp: Math.floor(Date.now() / 1000),
+    method: "POST",
+    path: "/api/legacy-post",
+  });
+  getAppProxyContext(request);
+  assert.doesNotThrow(() => getAppProxyContext(request.clone()));
 });
 
 test("pricing cookie is signed, HttpOnly, and identity-bound", () => {
