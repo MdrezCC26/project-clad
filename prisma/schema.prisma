@@ -302,7 +302,10 @@ model ProjectShareToken {
   token     String      @unique
   role      ProjectRole
   createdAt DateTime    @default(now())
+  expiresAt DateTime
   project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }
 
 model JobOrderLink {

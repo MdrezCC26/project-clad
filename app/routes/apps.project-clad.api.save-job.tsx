@@ -36,6 +36,7 @@ import {
   isShapeBuilderLine,
   legsFromLineProperties,
 } from "../utils/shapeProfile";
+import { getAuthoritativeSavedCartPrices } from "../utils/savedCartPricing.server";
 
 type SaveJobPayload = {
   mode: "newProject" | "existingProject" | "existingJob";
@@ -78,15 +79,31 @@ type NormalizedCartItem = {
   lineMeta?: CartLineMetaInput;
 };
 
-const normalizeItems = (items: SaveJobPayload["items"] = []): NormalizedCartItem[] =>
+const normalizeItems = (
+  items: SaveJobPayload["items"] = [],
+): NormalizedCartItem[] =>
   items
-    .filter((raw) => raw && raw.variantId && raw.quantity > 0)
+    .filter(
+      (raw) =>
+        raw &&
+        /^\d+$/.test(String(raw.variantId)) &&
+        Number.isSafeInteger(Number(raw.quantity)) &&
+        Number(raw.quantity) > 0,
+    )
     .map((raw) => ({
       variantId: String(raw.variantId),
       quantity: Number(raw.quantity),
-      priceSnapshot: new Prisma.Decimal(raw.priceSnapshot ?? 0),
+      // Browser prices are deliberately ignored and replaced by Shopify below.
+      priceSnapshot: new Prisma.Decimal(0),
       properties:
-        raw.properties && raw.properties.length ? raw.properties : undefined,
+        raw.properties && raw.properties.length
+          ? raw.properties.filter(
+              (property) =>
+                typeof property?.name === "string" &&
+                typeof property?.value === "string" &&
+                property.name.length > 0,
+            )
+          : undefined,
       lineMeta:
         raw.lineMeta && typeof raw.lineMeta === "object"
           ? raw.lineMeta
@@ -239,7 +256,8 @@ async function mirrorLineFilesOrResponse(
   try {
     await mirrorShopifyStagedUploadsForJobItem({ shop, jobItemId, properties });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Could not save uploaded files.";
+    const msg =
+      e instanceof Error ? e.message : "Could not save uploaded files.";
     return Response.json({ error: msg }, { status: 422 });
   }
   return null;
@@ -277,8 +295,9 @@ function parseJobShipFromPayload(payload: SaveJobPayload): ShipToFields & {
 function projectReceiveModeFromPayload(
   payload: SaveJobPayload,
 ): "pickup" | "delivery" {
-  return String(payload.projectReceiveMode || "").trim().toLowerCase() ===
-    "delivery"
+  return String(payload.projectReceiveMode || "")
+    .trim()
+    .toLowerCase() === "delivery"
     ? "delivery"
     : "pickup";
 }
@@ -345,8 +364,9 @@ async function publishSavedCustomShapes(
     const color =
       properties?.find((p) => /^(color|colour)$/i.test(p.name.trim()))?.value ??
       null;
-    const girthRaw = properties?.find((p) => /^girth$/i.test(p.name.trim()))
-      ?.value;
+    const girthRaw = properties?.find((p) =>
+      /^girth$/i.test(p.name.trim()),
+    )?.value;
     const girth = girthRaw ? Number(girthRaw) : undefined;
     try {
       await publishShapeLibraryEntry({ shop, legs, gauge, color, girth });
@@ -419,7 +439,8 @@ async function createProjectWithFirstJob(args: {
       shipAddress1:
         args.receiveMode === "delivery" ? args.projectShip.shipAddress1 : null,
       shipAddress2: null,
-      shipCity: args.receiveMode === "delivery" ? args.projectShip.shipCity : null,
+      shipCity:
+        args.receiveMode === "delivery" ? args.projectShip.shipCity : null,
       shipProvince:
         args.receiveMode === "delivery" ? args.projectShip.shipProvince : null,
       shipPostal:
@@ -485,10 +506,7 @@ async function saveJobAction(request: Request) {
   } catch {
     return Response.json({ error: "Invalid save request." }, { status: 400 });
   }
-  const items = normalizeItems(payload.items);
-  if (items.length) {
-    void publishSavedCustomShapes(shop, items);
-  }
+  let items = normalizeItems(payload.items);
   const { name: saveJobName, purchaseOrderNumber: saveJobPurchaseOrderNumber } =
     normalizeJobNameAndPo(payload.jobName, payload.purchaseOrderNumber);
   const poNumber = (payload.poNumber || "").trim();
@@ -502,6 +520,31 @@ async function saveJobAction(request: Request) {
   if (!items.length) {
     return Response.json({ error: "Cart has no items." }, { status: 400 });
   }
+  if (items.length !== payload.items?.length || items.length > 250) {
+    return Response.json(
+      { error: "Cart contains an invalid item or too many items." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const verifiedPrices = await getAuthoritativeSavedCartPrices(shop, items);
+    items = items.map((item, index) => ({
+      ...item,
+      priceSnapshot: new Prisma.Decimal(verifiedPrices[index]),
+    }));
+  } catch (error) {
+    console.error("[save-job] Shopify price verification failed:", error);
+    return Response.json(
+      {
+        error:
+          "Shopify could not verify the cart prices. Refresh the cart and try again.",
+      },
+      { status: 503 },
+    );
+  }
+
+  void publishSavedCustomShapes(shop, items);
 
   if (payload.mode === "newProject") {
     if (!payload.projectName || !saveJobName) {
@@ -549,7 +592,10 @@ async function saveJobAction(request: Request) {
     const companyNameForRecord =
       companyName || viewerCompanyCtx.displayNames[0] || "";
 
-    const deliveryValidationError = validateSaveJobDelivery("newProject", payload);
+    const deliveryValidationError = validateSaveJobDelivery(
+      "newProject",
+      payload,
+    );
     if (deliveryValidationError) {
       return Response.json({ error: deliveryValidationError }, { status: 400 });
     }
@@ -625,11 +671,7 @@ async function saveJobAction(request: Request) {
         items[i]?.properties,
       );
       if (mirrorErr) return mirrorErr;
-      await enqueueDrawingJob(
-        jobItems[i].id,
-        shop,
-        items[i]?.properties,
-      );
+      await enqueueDrawingJob(jobItems[i].id, shop, items[i]?.properties);
     }
 
     const firstJob = project.jobs[0];
@@ -859,9 +901,7 @@ async function saveJobAction(request: Request) {
         name: `${job.name} (Copy)`,
         purchaseOrderNumber: job.purchaseOrderNumber ?? undefined,
         siteContactName:
-          job.siteContactName?.trim() ||
-          project.defaultSiteContactName ||
-          null,
+          job.siteContactName?.trim() || project.defaultSiteContactName || null,
         siteContactPhone:
           job.siteContactPhone?.trim() ||
           project.defaultSiteContactPhone ||
@@ -916,7 +956,9 @@ async function saveJobAction(request: Request) {
         payload: { jobName: copy.name, copiedFrom: job.name },
       });
 
-      const sourceItems = [...job.items].sort((a, b) => a.sortOrder - b.sortOrder);
+      const sourceItems = [...job.items].sort(
+        (a, b) => a.sortOrder - b.sortOrder,
+      );
       const copyWithItems = await prisma.job.findFirst({
         where: { id: copy.id },
         include: { items: true },
@@ -969,11 +1011,7 @@ async function saveJobAction(request: Request) {
           items[i]?.properties,
         );
         if (mirrorErr) return mirrorErr;
-        await enqueueDrawingJob(
-          createdItems[i].id,
-          shop,
-          items[i]?.properties,
-        );
+        await enqueueDrawingJob(createdItems[i].id, shop, items[i]?.properties);
       }
     } else {
       // In "add" mode, always create a new JobItem per cart line,
@@ -1043,4 +1081,4 @@ async function saveJobAction(request: Request) {
   }
 
   return Response.json({ error: "Unsupported mode." }, { status: 400 });
-};
+}

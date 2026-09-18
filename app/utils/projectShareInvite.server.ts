@@ -2,22 +2,28 @@ import crypto from "node:crypto";
 import type { ProjectRole } from "@prisma/client";
 import prisma from "../db.server";
 
-/**
- * One stable magic link per project: the token is created on first share and kept;
- * later calls only update the role granted by that link (view vs edit).
- */
+const SHARE_LINK_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** Creates a fresh three-day share link, invalidating the project's prior link. */
 export async function upsertProjectShareInvite(
   projectId: string,
   role: ProjectRole,
-): Promise<{ shareLinkPath: string }> {
+): Promise<{ shareLinkPath: string; expiresAt: Date }> {
+  const token = crypto.randomBytes(32).toString("hex");
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + SHARE_LINK_TTL_MS);
   const row = await prisma.projectShareToken.upsert({
     where: { projectId },
     create: {
       projectId,
-      token: crypto.randomBytes(16).toString("hex"),
+      token,
       role,
+      expiresAt,
     },
-    update: { role },
+    update: { token, role, createdAt: now, expiresAt },
   });
-  return { shareLinkPath: `/apps/project-clad/share/${row.token}` };
+  return {
+    shareLinkPath: `/apps/project-clad/share/${row.token}`,
+    expiresAt: row.expiresAt,
+  };
 }

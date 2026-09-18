@@ -1,8 +1,6 @@
 import crypto from "node:crypto";
 import { resolvePublicAppOrigin } from "./publicAppOrigin";
 
-const DEFAULT_TTL_SEC = 60 * 60 * 24 * 90; // 90 days
-
 function normalizeShop(shop: string) {
   return shop.trim().toLowerCase();
 }
@@ -33,10 +31,9 @@ export function buildSignedUploadPartFileUrl(args: {
     return null;
   }
 
-  const exp = Math.floor(Date.now() / 1000) + DEFAULT_TTL_SEC;
   const shopNorm = normalizeShop(args.shop);
   const propKey = String(args.propIndex);
-  const message = `${shopNorm}:${args.jobItemId}:${propKey}:${exp}`;
+  const message = `${shopNorm}:${args.jobItemId}:${propKey}`;
   const sig = crypto.createHmac("sha256", secret).update(message).digest("hex");
 
   let base: URL;
@@ -47,7 +44,6 @@ export function buildSignedUploadPartFileUrl(args: {
   }
   base.searchParams.set("jobItemId", args.jobItemId);
   base.searchParams.set("propIndex", propKey);
-  base.searchParams.set("exp", String(exp));
   base.searchParams.set("sig", sig);
   return base.toString();
 }
@@ -56,20 +52,24 @@ export function verifySignedUploadPartFileParams(args: {
   jobItemId: string;
   shop: string;
   propIndexRaw: string;
-  expRaw: string;
+  expRaw?: string;
   sig: string;
 }): boolean {
   const secret = process.env.SHOPIFY_API_SECRET?.trim();
   if (!secret) return false;
 
-  const exp = parseInt(args.expRaw, 10);
-  if (!Number.isFinite(exp) || Date.now() / 1000 > exp) {
+  if (args.expRaw && !/^\d{10}$/.test(args.expRaw)) {
     return false;
   }
 
   const shopNorm = normalizeShop(args.shop);
   const propKey = String(args.propIndexRaw);
-  const message = `${shopNorm}:${args.jobItemId}:${propKey}:${args.expRaw}`;
-  const expected = crypto.createHmac("sha256", secret).update(message).digest("hex");
+  const message = args.expRaw
+    ? `${shopNorm}:${args.jobItemId}:${propKey}:${args.expRaw}`
+    : `${shopNorm}:${args.jobItemId}:${propKey}`;
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(message)
+    .digest("hex");
   return timingSafeEqualHex(expected, args.sig);
 }

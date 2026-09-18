@@ -10,15 +10,19 @@ type VariantInfo = {
   catalogProductId: string | null;
 };
 
-const STOREFRONT_API_VERSION = "2024-10";
+const STOREFRONT_API_VERSION = "2026-04";
 
-const chunk = <T,>(items: T[], size: number) => {
+const chunk = <T>(items: T[], size: number) => {
   const result: T[][] = [];
   for (let index = 0; index < items.length; index += size) {
     result.push(items.slice(index, index + size));
   }
   return result;
 };
+
+function storefrontEndpoint(shop: string): string {
+  return `https://${shop}/api/${STOREFRONT_API_VERSION}/graphql.json`;
+}
 
 export const getVariantInfo = async (
   shop: string,
@@ -38,7 +42,7 @@ export const getVariantInfo = async (
   });
 
   const results: Record<string, VariantInfo> = {};
-  const endpoint = `https://${shop}/api/${STOREFRONT_API_VERSION}/graphql.json`;
+  const endpoint = storefrontEndpoint(shop);
 
   for (const group of chunk(gids, 50)) {
     const response = await fetch(endpoint, {

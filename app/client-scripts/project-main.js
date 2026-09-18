@@ -3383,7 +3383,6 @@
         return;
       }
       if (payload?.pricingUnlocked) {
-        document.cookie = (window.__PROJECT_CLAD__ || {}).pricingCookie + '; Path=/; Max-Age=3600; SameSite=Lax';
         closePricingModal();
         navigating = pcGuardedReload({ except: form });
         return;

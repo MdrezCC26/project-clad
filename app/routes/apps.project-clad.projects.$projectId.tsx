@@ -1,8 +1,9 @@
-
-
-
 import { useEffect, useRef, useState } from "react";
-import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "react-router";
+import type {
+  ActionFunctionArgs,
+  LinksFunction,
+  LoaderFunctionArgs,
+} from "react-router";
 import {
   Form,
   redirect,
@@ -35,6 +36,10 @@ import { getStorefrontAppNav } from "../utils/storefrontAppNav";
 import type { ProjectStorefrontStatus } from "@prisma/client";
 import { upsertProjectShareInvite } from "../utils/projectShareInvite.server";
 import { notifyMissionControlRemove } from "../utils/missionControl.server";
+import {
+  createPricingAccessCookie,
+  hasPricingAccess,
+} from "../utils/pricingAccess.server";
 
 type JobItemView = {
   id: string;
@@ -61,21 +66,11 @@ type ProjectView = {
   jobs: JobView[];
 };
 
-const PRICING_COOKIE = "projectclad_pricing=1";
-
 const formatPrice = (value: string | number) => {
   const num = Number(value || 0);
   if (Number.isNaN(num)) return "$0.00";
   return `$${num.toFixed(2)}`;
 };
-
-const hasPricingAccess = (request: Request) => {
-  const cookie = request.headers.get("Cookie") || "";
-  return cookie.split(";").some((value) => value.trim().startsWith(PRICING_COOKIE));
-};
-
-const createPricingCookie = () =>
-  `${PRICING_COOKIE}; Path=/; Max-Age=3600; SameSite=Lax`;
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const proxyStylesHref = projectCladProxyStylesHref(request);
@@ -96,7 +91,10 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       include: {
         jobs: {
           orderBy: { sortOrder: "asc" },
-          include: { items: { orderBy: { sortOrder: "asc" } }, orderLink: true },
+          include: {
+            items: { orderBy: { sortOrder: "asc" } },
+            orderLink: true,
+          },
         },
         members: true,
       },
@@ -162,9 +160,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   let hideAddToCart = false;
   try {
     hideAddToCart =
-      viewerTags.some(
-        (t: string) => String(t).trim().toUpperCase() === "NA",
-      ) && !viewerIsAppAdmin;
+      viewerTags.some((t: string) => String(t).trim().toUpperCase() === "NA") &&
+      !viewerIsAppAdmin;
   } catch {
     // If customer lookup fails, show add-to-cart (no NA restriction)
   }
@@ -199,7 +196,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       id: other.id,
       name: other.name,
     })),
-    canViewPricing: !hideAddToCart || hasPricingAccess(request),
+    canViewPricing:
+      !hideAddToCart || hasPricingAccess(request, { shop, customerId }),
     canEdit,
     isOwner,
     themeStyles,
@@ -304,7 +302,6 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 
       return new Response(null, { status: 204 });
     }
-
   }
 
   const formData = await request.formData();
@@ -443,7 +440,10 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       if (job) {
         const targetDefaults = await prisma.project.findFirst({
           where: { id: targetProjectId, shop: shopStringFilter(shop) },
-          select: { defaultSiteContactName: true, defaultSiteContactPhone: true },
+          select: {
+            defaultSiteContactName: true,
+            defaultSiteContactPhone: true,
+          },
         });
         await prisma.job.create({
           data: {
@@ -513,7 +513,6 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     return redirect(request.url);
   }
 
-
   if (intent === "share-project") {
     if (!isProjectOwner(project, customerId)) {
       throw new Response("Forbidden", { status: 403 });
@@ -548,7 +547,9 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       )
     ) {
       return redirect(request.url, {
-        headers: { "Set-Cookie": createPricingCookie() },
+        headers: {
+          "Set-Cookie": createPricingAccessCookie({ shop, customerId }),
+        },
       });
     }
 
@@ -589,9 +590,7 @@ export default function ProjectDetailPage() {
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const shareLink =
-    actionData &&
-    typeof actionData === "object" &&
-    "shareLink" in actionData
+    actionData && typeof actionData === "object" && "shareLink" in actionData
       ? (actionData.shareLink as string)
       : null;
 
@@ -736,7 +735,6 @@ export default function ProjectDetailPage() {
     }
   };
 
-
   const inlineStyles = themeStyles?.styles || [];
 
   return (
@@ -758,7 +756,10 @@ export default function ProjectDetailPage() {
           onMouseDown={(e) => e.stopPropagation()}
         >
           <h2 id="pricing-modal-title">Show price</h2>
-          <Form method="post" className="project-clad-inline-form project-clad-pricing-form">
+          <Form
+            method="post"
+            className="project-clad-inline-form project-clad-pricing-form"
+          >
             <input type="hidden" name="intent" value="unlock-pricing" />
             <input
               type="password"
@@ -773,7 +774,10 @@ export default function ProjectDetailPage() {
                 }
               }}
             />
-            <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
+            <button
+              type="submit"
+              className="project-clad-button project-clad-reject-modal-btn"
+            >
               Show price
             </button>
             <button
@@ -825,7 +829,9 @@ export default function ProjectDetailPage() {
               </span>{" "}
               {project.poNumber || "—"}
             </span>
-            <span>Created: {new Date(project.createdAt).toLocaleDateString()}</span>
+            <span>
+              Created: {new Date(project.createdAt).toLocaleDateString()}
+            </span>
             <span>Company name: {project.companyName || "—"}</span>
           </div>
 
@@ -842,7 +848,11 @@ export default function ProjectDetailPage() {
                   required
                 />
                 <label htmlFor="new-job-po">Purchase order # (optional)</label>
-                <input id="new-job-po" name="purchaseOrderNumber" placeholder="PO / ref" />
+                <input
+                  id="new-job-po"
+                  name="purchaseOrderNumber"
+                  placeholder="PO / ref"
+                />
                 <button type="submit" className="project-clad-button">
                   Add order
                 </button>
@@ -858,7 +868,9 @@ export default function ProjectDetailPage() {
                     id={`job-${job.id}`}
                     open={selectedJobId === job.id}
                     className={
-                      canEdit ? "project-clad-card project-clad-details project-clad-draggable" : "project-clad-card project-clad-details"
+                      canEdit
+                        ? "project-clad-card project-clad-details project-clad-draggable"
+                        : "project-clad-card project-clad-details"
                     }
                     draggable={canEdit}
                     onDragStart={(event) => {
@@ -881,7 +893,8 @@ export default function ProjectDetailPage() {
                         <div>
                           <h3 className="project-clad-title">{job.name}</h3>
                           <p className="project-clad-muted">
-                            Created: {new Date(job.createdAt).toLocaleDateString()} •{" "}
+                            Created:{" "}
+                            {new Date(job.createdAt).toLocaleDateString()} •{" "}
                             {job.isLocked ? "Locked" : "Editable"}
                           </p>
                         </div>
@@ -900,7 +913,11 @@ export default function ProjectDetailPage() {
                           method="post"
                           data-projectclad-confirm="Are you sure you want to delete this order?"
                         >
-                          <input type="hidden" name="intent" value="delete-job" />
+                          <input
+                            type="hidden"
+                            name="intent"
+                            value="delete-job"
+                          />
                           <input type="hidden" name="jobId" value={job.id} />
                           <button type="submit" className="project-clad-button">
                             Delete order
@@ -911,7 +928,10 @@ export default function ProjectDetailPage() {
                     <div className="project-clad-stack">
                       <div>
                         <strong>Total quantity:</strong>{" "}
-                        {job.items.reduce((sum, item) => sum + item.quantity, 0)}
+                        {job.items.reduce(
+                          (sum, item) => sum + item.quantity,
+                          0,
+                        )}
                       </div>
                       {job.items.length === 0 ? (
                         <p className="project-clad-muted">No items saved.</p>
@@ -920,10 +940,16 @@ export default function ProjectDetailPage() {
                           <thead>
                             <tr>
                               <th>Variant</th>
-                              <th className="project-clad-table-right">Quantity</th>
-                              <th className="project-clad-table-right">Price</th>
+                              <th className="project-clad-table-right">
+                                Quantity
+                              </th>
+                              <th className="project-clad-table-right">
+                                Price
+                              </th>
                               {canEdit && !job.isLocked && (
-                                <th className="project-clad-table-right">Actions</th>
+                                <th className="project-clad-table-right">
+                                  Actions
+                                </th>
                               )}
                             </tr>
                           </thead>
@@ -946,7 +972,9 @@ export default function ProjectDetailPage() {
                                   reorderItems(job.id, item.id);
                                 }}
                                 className={
-                                  canEdit && !job.isLocked ? "project-clad-draggable" : undefined
+                                  canEdit && !job.isLocked
+                                    ? "project-clad-draggable"
+                                    : undefined
                                 }
                               >
                                 <td>{item.variantId}</td>
@@ -972,8 +1000,16 @@ export default function ProjectDetailPage() {
                                       method="post"
                                       data-projectclad-confirm="Are you sure you want to remove this item?"
                                     >
-                                      <input type="hidden" name="intent" value="delete-item" />
-                                      <input type="hidden" name="itemId" value={item.id} />
+                                      <input
+                                        type="hidden"
+                                        name="intent"
+                                        value="delete-item"
+                                      />
+                                      <input
+                                        type="hidden"
+                                        name="itemId"
+                                        value={item.id}
+                                      />
                                       <button type="submit" className="link">
                                         Remove
                                       </button>
@@ -988,11 +1024,18 @@ export default function ProjectDetailPage() {
                     </div>
                     {canEdit && otherProjects.length > 0 && (
                       <div className="project-clad-stack">
-                        <Form method="post" className="project-clad-inline-form">
+                        <Form
+                          method="post"
+                          className="project-clad-inline-form"
+                        >
                           <input type="hidden" name="intent" value="move-job" />
                           <input type="hidden" name="jobId" value={job.id} />
                           <label htmlFor={`move-job-${job.id}`}>Move to</label>
-                          <select id={`move-job-${job.id}`} name="targetProjectId" required>
+                          <select
+                            id={`move-job-${job.id}`}
+                            name="targetProjectId"
+                            required
+                          >
                             <option value="">Select project</option>
                             {otherProjects.map((projectOption) => (
                               <option
@@ -1003,15 +1046,25 @@ export default function ProjectDetailPage() {
                               </option>
                             ))}
                           </select>
-                          <button type="submit" className="button button--secondary">
+                          <button
+                            type="submit"
+                            className="button button--secondary"
+                          >
                             Move order
                           </button>
                         </Form>
-                        <Form method="post" className="project-clad-inline-form">
+                        <Form
+                          method="post"
+                          className="project-clad-inline-form"
+                        >
                           <input type="hidden" name="intent" value="copy-job" />
                           <input type="hidden" name="jobId" value={job.id} />
                           <label htmlFor={`copy-job-${job.id}`}>Copy to</label>
-                          <select id={`copy-job-${job.id}`} name="targetProjectId" required>
+                          <select
+                            id={`copy-job-${job.id}`}
+                            name="targetProjectId"
+                            required
+                          >
                             <option value="">Select project</option>
                             {otherProjects.map((projectOption) => (
                               <option
@@ -1022,7 +1075,10 @@ export default function ProjectDetailPage() {
                               </option>
                             ))}
                           </select>
-                          <button type="submit" className="button button--secondary">
+                          <button
+                            type="submit"
+                            className="button button--secondary"
+                          >
                             Copy order
                           </button>
                         </Form>

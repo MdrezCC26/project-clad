@@ -44,7 +44,6 @@ The app is exposed on the storefront under **`/apps/project-clad/*`** (see `shop
 - **`/apps/project-clad/api/project-actions`** — Query-string and JSON-driven actions: e.g. **unlock pricing**, **create/delete job**, **delete item**, **share project**, **add/remove member**, **submit/cancel approval**, **approve** (with email hooks respecting **email notification prefs**).
 - **`/apps/project-clad/api/save-job`** — **Save cart lines into a project**: new project, existing project, or existing job; merges quantities; captures **variant snapshots** and **immutable order-line audit** JSON; can send **order-created** notification email; **enqueues `DrawingJob`** rows for configured custom-part lines for downstream CAD.
 - **`/apps/project-clad/api/price`** — **Live price quote** from `GaugeConfig` for L/Z/U given dimensions and gauge (used by theme custom-part UI).
-- **`/apps/project-clad/api/draft-order`** — Builds **draft orders** in Shopify from custom-part payloads (uses offline session + Admin API).
 - **`/apps/project-clad/api/work-orders`** — **Staff-only** JSON API to mirror admin work-order updates from the storefront when the viewer has admin/staff privileges.
 - **`/apps/project-clad/api/members`**, **`api/drawing-jobs`**, and parallel **`/api/*`** routes — Same handlers where duplicated for URL layout.
 
@@ -110,6 +109,10 @@ The app uses **PostgreSQL** (`DATABASE_URL`). Core entities include:
 - **`.env`** — Copy from `.env.example`. Set **`DATABASE_URL`**, Shopify vars from CLI or hosting, **`SMTP_*`** for mail, optional **`DRAWING_WORKER_API_KEY`**, optional **`PROJECTCLAD_*_EMAIL`** overrides.
 - **Mission Control** (optional LAN ops dashboard) — set **`MISSION_CONTROL_INGEST_KEY`** on the Project Clad host (must match Mission Control’s **`INGEST_API_KEY`**). **Production (Render):** this key is required so MC can **pull** order snapshots from **`GET /api/mission-control-sync`** (LAN autosync; Render cannot push to `localhost`). Optional **`MISSION_CONTROL_URL`** still enables instant push when the PC host can reach the MC API on your LAN. Order lifecycle changes, fulfillment photos, and the **`orders/paid`** webhook call `notifyMissionControl(jobId)` when push is configured. Backfill with **`npm run mc:backfill`** when needed.
 
+### Calculator price changes
+
+OPC calculator totals are recomputed by the server before a cart is saved, so the browser's `__ooCustomPrice` cannot set an order price. For a permanent calculator pricing change, update OPC and mirror the exported formula/rate in `app/utils/calculatorPricing.server.ts`, run `npm run test:security`, and deploy. Existing saved orders keep their original snapshots. A configured app admin whose email is in `PROJECTCLAD_UNIT_PRICE_EDITOR_EMAILS` can still make a one-off line-price adjustment on a saved order.
+
 ---
 
 ## Scripts
@@ -121,6 +124,7 @@ The app uses **PostgreSQL** (`DATABASE_URL`). Core entities include:
 | `npm run start` | Serve built app |
 | `npm run setup` | `prisma migrate deploy` + generate (e.g. Docker) |
 | `npm run typecheck` | TypeScript check |
+| `npm run test:security` | Calculator-price and staged-upload security tests |
 | `npm run init-part-registry` | Local part registry DB helper |
 | `npm run mc:backfill` | Push existing jobs to Mission Control (see Configuration) |
 

@@ -55,6 +55,10 @@ import {
   shopStringFilter,
 } from "../utils/projectAccess.server";
 import { verifyPassword } from "../utils/passwords.server";
+import {
+  createPricingAccessCookie,
+  hasPricingAccess,
+} from "../utils/pricingAccess.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { projectCladProxyStylesHref } from "../utils/projectCladProxyStyles.server";
@@ -1459,8 +1463,6 @@ type ProjectView = {
   }[];
   subtotal: number;
 };
-
-const PRICING_COOKIE = "projectclad_pricing=1";
 
 const formatPrice = (value: string | number) => {
   const num = Number(value || 0);
@@ -2912,14 +2914,6 @@ function EditProjectDeliveryAddressFields({
   );
 }
 
-const hasPricingAccess = (request: Request) => {
-  const cookie = request.headers.get("Cookie") || "";
-  return cookie.split(";").some((value) => value.trim().startsWith(PRICING_COOKIE));
-};
-
-const createPricingCookie = () =>
-  `${PRICING_COOKIE}; Path=/; Max-Age=3600; SameSite=Lax`;
-
 const getProjectId = (request: Request) => {
   const url = new URL(request.url);
   return url.searchParams.get("id") || "";
@@ -3304,7 +3298,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   /* The only two values `project-main.js` cannot have baked in at build time. */
   const proxyScriptConfig = projectCladInlineConfigScript({
     shop,
-    pricingCookie: PRICING_COOKIE,
   });
   const customerId = viewerCustomerId as string;
   const [themeStyles, settings] = await Promise.all([
@@ -3562,6 +3555,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     customerInfo,
   );
   const canEditLineUnitPrices =
+    viewerIsAppAdmin &&
     Boolean(unitPriceEditorAllowlist) &&
     customerEmailInConfiguredList(viewerEmailResolved, unitPriceEditorAllowlist);
 
@@ -3863,7 +3857,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       id: other.id,
       name: other.name,
     })),
-    canViewPricing: !hideAddToCart || hasPricingAccess(request),
+    canViewPricing:
+      !hideAddToCart || hasPricingAccess(request, { shop, customerId }),
     canEdit,
     canEditLineUnitPrices,
     canExportOrderCsv,
@@ -4350,6 +4345,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }
       }
       const allowUnitPricePersistence =
+        viewerIsAppAdmin &&
         Boolean(unitPriceEditorAllowlist) &&
         customerEmailInConfiguredList(viewerEmailResolved, unitPriceEditorAllowlist);
       if (wantsUnitPriceChange) {
@@ -7167,7 +7163,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     ) {
       return Response.json(
         { pricingUnlocked: true },
-        { headers: { "Set-Cookie": createPricingCookie() } },
+        {
+          headers: {
+            "Set-Cookie": createPricingAccessCookie({ shop, customerId }),
+          },
+        },
       );
     }
 
@@ -7658,13 +7658,6 @@ export default function ProjectDetailPage() {
     }
     return null;
   };
-
-  useEffect(() => {
-    if (!actionData || typeof actionData !== "object") return;
-    if ("pricingUnlocked" in actionData && actionData.pricingUnlocked) {
-      document.cookie = createPricingCookie();
-    }
-  }, [actionData]);
 
   /**
    * Order now lives in <summary>; use capture on document + stopImmediatePropagation so the

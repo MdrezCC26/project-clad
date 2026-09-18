@@ -6,31 +6,41 @@ import { buildSignedUploadPartFileUrl } from "./uploadPartFileSignedUrl.server";
 
 const UPLOAD_PART_SUBDIR = "upload-part-files";
 const MAX_BYTES = 30 * 1024 * 1024;
-const FETCH_TIMEOUT_MS = 120_000;
+const FETCH_TIMEOUT_MS = 30_000;
+const MAX_REDIRECTS = 3;
+const SHOPIFY_STAGED_UPLOAD_HOST =
+  "shopify-staged-uploads.storage.googleapis.com";
+
+type DetectedUpload = {
+  buf: Buffer;
+  extension: ".pdf" | ".png" | ".jpg" | ".gif" | ".webp";
+};
+
+function validatedShopifyStagedUrl(value: string): URL | null {
+  try {
+    const url = new URL(value.trim());
+    if (
+      url.protocol !== "https:" ||
+      url.hostname.toLowerCase() !== SHOPIFY_STAGED_UPLOAD_HOST ||
+      url.username ||
+      url.password ||
+      (url.port && url.port !== "443")
+    ) {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
 
 /** Shopify line-item uploads land in a temporary bucket; URLs must not be stored as-is. */
 export function isShopifyStagedLineItemFileUrl(value: string): boolean {
-  const v = value.trim();
-  if (!v.startsWith("http://") && !v.startsWith("https://")) return false;
-  return v.toLowerCase().includes("shopify-staged-uploads");
+  return validatedShopifyStagedUrl(value) !== null;
 }
 
 function shopDirFromShop(shop: string) {
   return shop.replace(/[^a-zA-Z0-9._-]+/g, "_");
-}
-
-function extFromUrlOrName(url: URL, fallbackName: string): string {
-  const fromPath = path.extname(url.pathname);
-  if (fromPath && fromPath.length <= 8) return fromPath.toLowerCase();
-  const fromName = path.extname(fallbackName);
-  if (fromName && fromName.length <= 8) return fromName.toLowerCase();
-  return ".bin";
-}
-
-function sanitizeBaseName(name: string): string {
-  const base = path.basename(name || "upload").replace(/[^a-zA-Z0-9._-]+/g, "_");
-  const trimmed = base.slice(0, 120);
-  return trimmed || "upload";
 }
 
 export function uploadPartFilesRoot(): string {
@@ -56,29 +66,103 @@ export function parseUploadPartMirrorKeysJson(
   }
 }
 
-async function fetchStagedFile(url: string): Promise<{ buf: Buffer }> {
+function detectUpload(buf: Buffer): DetectedUpload {
+  if (buf.subarray(0, 5).toString("ascii") === "%PDF-") {
+    return { buf, extension: ".pdf" };
+  }
+  if (
+    buf.length >= 8 &&
+    buf
+      .subarray(0, 8)
+      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  ) {
+    return { buf, extension: ".png" };
+  }
+  if (
+    buf.length >= 3 &&
+    buf[0] === 0xff &&
+    buf[1] === 0xd8 &&
+    buf[2] === 0xff
+  ) {
+    return { buf, extension: ".jpg" };
+  }
+  const gifHeader = buf.subarray(0, 6).toString("ascii");
+  if (gifHeader === "GIF87a" || gifHeader === "GIF89a") {
+    return { buf, extension: ".gif" };
+  }
+  if (
+    buf.length >= 12 &&
+    buf.subarray(0, 4).toString("ascii") === "RIFF" &&
+    buf.subarray(8, 12).toString("ascii") === "WEBP"
+  ) {
+    return { buf, extension: ".webp" };
+  }
+  throw new Error("Unsupported file type");
+}
+
+export async function fetchValidatedShopifyStagedFile(
+  value: string,
+): Promise<DetectedUpload> {
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
-      redirect: "follow",
-      signal: ac.signal,
-    });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-    const len = res.headers.get("content-length");
-    if (len) {
-      const n = parseInt(len, 10);
-      if (Number.isFinite(n) && n > MAX_BYTES) {
-        throw new Error("File too large");
+    const initialUrl = validatedShopifyStagedUrl(value);
+    if (!initialUrl) throw new Error("Invalid upload file URL");
+    let url: URL = initialUrl;
+
+    for (
+      let redirectCount = 0;
+      redirectCount <= MAX_REDIRECTS;
+      redirectCount++
+    ) {
+      const res: Response = await fetch(url, {
+        redirect: "manual",
+        signal: ac.signal,
+      });
+      if (res.status >= 300 && res.status < 400) {
+        if (redirectCount === MAX_REDIRECTS) {
+          throw new Error("Too many redirects");
+        }
+        const location: string | null = res.headers.get("location");
+        const nextUrl: URL | null = location
+          ? validatedShopifyStagedUrl(new URL(location, url).toString())
+          : null;
+        if (!nextUrl) throw new Error("Unsafe upload redirect");
+        url = nextUrl;
+        continue;
       }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const len = res.headers.get("content-length");
+      if (len) {
+        const n = parseInt(len, 10);
+        if (Number.isFinite(n) && n > MAX_BYTES) {
+          throw new Error("File too large");
+        }
+      }
+      if (!res.body) throw new Error("Empty upload response");
+
+      const reader = res.body.getReader();
+      const chunks: Buffer[] = [];
+      let received = 0;
+      let readDone = false;
+      while (!readDone) {
+        const read = await reader.read();
+        if (read.done) {
+          readDone = true;
+          break;
+        }
+        const chunk = read.value;
+        received += chunk.byteLength;
+        if (received > MAX_BYTES) {
+          await reader.cancel();
+          throw new Error("File too large");
+        }
+        chunks.push(Buffer.from(chunk));
+      }
+      return detectUpload(Buffer.concat(chunks, received));
     }
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > MAX_BYTES) {
-      throw new Error("File too large");
-    }
-    return { buf };
+    throw new Error("Could not fetch uploaded file");
   } finally {
     clearTimeout(t);
   }
@@ -117,20 +201,20 @@ export async function mirrorShopifyStagedUploadsForJobItem(args: {
     } catch {
       throw new Error("Invalid upload file URL.");
     }
-    if (fileUrl.protocol !== "http:" && fileUrl.protocol !== "https:") {
+    if (!validatedShopifyStagedUrl(fileUrl.toString())) {
       throw new Error("Invalid upload file URL.");
     }
 
-    const { buf } = await fetchStagedFile(urlStr).catch((e) => {
+    const { buf, extension } = await fetchValidatedShopifyStagedFile(
+      urlStr,
+    ).catch((e) => {
       const msg = e instanceof Error ? e.message : String(e);
       throw new Error(
         `Could not copy an uploaded file from Shopify (${msg}). The upload link may have expired — remove the line from your cart, re-upload the file, and save the order again.`,
       );
     });
 
-    const baseName = sanitizeBaseName(fileUrl.pathname.split("/").pop() || "file");
-    const ext = extFromUrlOrName(fileUrl, baseName);
-    const storageKey = `${shopDir}/${args.jobItemId}-${i}-${Date.now()}${ext}`;
+    const storageKey = `${shopDir}/${args.jobItemId}-${i}-${Date.now()}${extension}`;
     const abs = path.resolve(root, storageKey);
     if (!abs.startsWith(root + path.sep)) {
       throw new Error("Invalid storage path.");
@@ -166,10 +250,16 @@ export async function mirrorShopifyStagedUploadsForJobItem(args: {
  */
 export async function duplicateUploadPartMirrorsForCopiedJobItem(args: {
   shop: string;
-  oldItem: { id: string; customData: unknown; uploadPartMirrorKeysJson: string | null };
+  oldItem: {
+    id: string;
+    customData: unknown;
+    uploadPartMirrorKeysJson: string | null;
+  };
   newJobItemId: string;
 }): Promise<void> {
-  const keyMap = parseUploadPartMirrorKeysJson(args.oldItem.uploadPartMirrorKeysJson);
+  const keyMap = parseUploadPartMirrorKeysJson(
+    args.oldItem.uploadPartMirrorKeysJson,
+  );
   if (!keyMap) return;
 
   const root = uploadPartFilesRoot();
@@ -189,7 +279,11 @@ export async function duplicateUploadPartMirrorsForCopiedJobItem(args: {
 
   for (const [idxStr, oldKey] of Object.entries(keyMap)) {
     const propIndex = parseInt(idxStr, 10);
-    if (!Number.isFinite(propIndex) || propIndex < 0 || propIndex >= props.length) {
+    if (
+      !Number.isFinite(propIndex) ||
+      propIndex < 0 ||
+      propIndex >= props.length
+    ) {
       continue;
     }
 

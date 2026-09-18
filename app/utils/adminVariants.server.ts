@@ -9,9 +9,10 @@ export type AdminVariantInfo = {
   productHandle: string | null;
   sku: string | null;
   catalogProductId: string | null;
+  price: string;
 };
 
-const chunk = <T,>(items: T[], size: number) => {
+const chunk = <T>(items: T[], size: number) => {
   const result: T[][] = [];
   for (let index = 0; index < items.length; index += size) {
     result.push(items.slice(index, index + size));
@@ -51,7 +52,7 @@ export const getAdminVariantInfo = async (
   });
 
   const results: Record<string, AdminVariantInfo> = {};
-  const endpoint = `https://${shop}/admin/api/2024-10/graphql.json`;
+  const endpoint = `https://${shop}/admin/api/2026-04/graphql.json`;
 
   for (const group of chunk(gids, 50)) {
     const response = await fetch(endpoint, {
@@ -68,6 +69,7 @@ export const getAdminVariantInfo = async (
                 id
                 title
                 sku
+                price
                 image {
                   url
                   altText
@@ -101,6 +103,7 @@ export const getAdminVariantInfo = async (
           id: string;
           title: string;
           sku?: string | null;
+          price: string;
           image?: { url: string; altText?: string | null } | null;
           product?: {
             id: string;
@@ -115,7 +118,10 @@ export const getAdminVariantInfo = async (
 
     if (payload.errors?.length) {
       throw new Error(
-        payload.errors.map((error) => error.message).filter(Boolean).join(", "),
+        payload.errors
+          .map((error) => error.message)
+          .filter(Boolean)
+          .join(", "),
       );
     }
 
@@ -124,6 +130,7 @@ export const getAdminVariantInfo = async (
           id: string;
           title: string;
           sku?: string | null;
+          price: string;
           image?: { url: string; altText?: string | null } | null;
           product?: {
             id: string;
@@ -148,6 +155,7 @@ export const getAdminVariantInfo = async (
         productHandle: node.product?.handle || null,
         sku,
         catalogProductId: shopifyGidToLegacyNumericId(node.product?.id),
+        price: node.price,
       };
     });
   }

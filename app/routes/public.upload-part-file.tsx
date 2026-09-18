@@ -27,8 +27,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const expRaw = url.searchParams.get("exp") || "";
   const sig = url.searchParams.get("sig") || "";
 
-  if (!jobItemId || !propIndexRaw || !expRaw || !sig) {
-    return new Response("Missing jobItemId, propIndex, exp, or sig.", {
+  if (!jobItemId || !propIndexRaw || !sig) {
+    return new Response("Missing jobItemId, propIndex, or sig.", {
       status: 400,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
@@ -59,7 +59,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
   if (!ok) {
     return new Response(
-      "Invalid or expired link. Open the project from your account and download the file again.",
+      "Invalid link. Open the project from your account and download the file again.",
       {
         status: 403,
         headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -69,7 +69,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const keyMap = parseUploadPartMirrorKeysJson(item.uploadPartMirrorKeysJson);
   const storageKey = keyMap?.[propIndexRaw];
-  if (!storageKey || storageKey.includes("..") || storageKey.startsWith("/") || storageKey.startsWith("\\")) {
+  if (
+    !storageKey ||
+    storageKey.includes("..") ||
+    storageKey.startsWith("/") ||
+    storageKey.startsWith("\\")
+  ) {
     return new Response("No mirrored file for this property.", {
       status: 404,
       headers: { "Content-Type": "text/plain; charset=utf-8" },

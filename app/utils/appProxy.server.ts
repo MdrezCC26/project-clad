@@ -27,6 +27,9 @@ export const APP_PROXY_QUERY_KEYS = [
 ] as const;
 
 const APP_PROXY_SIGNATURE_PARAM = "signature";
+const APP_PROXY_MAX_AGE_SECONDS = 5 * 60;
+const APP_PROXY_MAX_FUTURE_SKEW_SECONDS = 60;
+const replayCache = new Map<string, number>();
 
 /**
  * Shopify sorts the signed params by code point, not by locale. `localeCompare` collates
@@ -56,6 +59,36 @@ const safeEqual = (a: string, b: string) => {
 };
 
 const VALID_SHOP_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/;
+
+function enforceFreshTimestamp(params: URLSearchParams): void {
+  const raw = params.get("timestamp") ?? "";
+  if (!/^\d{10}$/.test(raw)) {
+    throw new Response("Unauthorized", { status: 401 });
+  }
+  const timestamp = Number(raw);
+  const now = Math.floor(Date.now() / 1000);
+  if (
+    timestamp < now - APP_PROXY_MAX_AGE_SECONDS ||
+    timestamp > now + APP_PROXY_MAX_FUTURE_SKEW_SECONDS
+  ) {
+    throw new Response("Expired app proxy request", { status: 401 });
+  }
+}
+
+function enforceNoUnsafeReplay(request: Request, signature: string): void {
+  const method = request.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return;
+
+  const now = Date.now();
+  for (const [key, expiresAt] of replayCache) {
+    if (expiresAt <= now) replayCache.delete(key);
+  }
+  const key = `${method}:${new URL(request.url).pathname}:${signature}`;
+  if (replayCache.has(key)) {
+    throw new Response("Replayed app proxy request", { status: 409 });
+  }
+  replayCache.set(key, now + APP_PROXY_MAX_AGE_SECONDS * 1000);
+}
 
 /**
  * Login URL that returns to a storefront path after auth.
@@ -92,6 +125,8 @@ export const getAppProxyContext = (request: Request): AppProxyContext => {
   if (!safeEqual(digest, signature)) {
     throw new Response("Unauthorized", { status: 401 });
   }
+  enforceFreshTimestamp(params);
+  enforceNoUnsafeReplay(request, signature);
 
   const shop = shopRaw.trim().toLowerCase();
   if (!VALID_SHOP_REGEX.test(shop)) {
@@ -101,7 +136,9 @@ export const getAppProxyContext = (request: Request): AppProxyContext => {
   const customerId = params.get("logged_in_customer_id") || undefined;
   const customerEmail = params.get("logged_in_customer_email") || undefined;
   const returnParams = new URLSearchParams(url.search);
-  returnParams.delete(APP_PROXY_SIGNATURE_PARAM);
+  for (const key of APP_PROXY_QUERY_KEYS) {
+    returnParams.delete(key);
+  }
   // Use storefront proxy path (/apps/project-clad/...) so redirects and forms hit the proxy
   const storefrontProxyPath = "/apps/project-clad";
   const storefrontPath = `${storefrontProxyPath}${url.pathname}`;
@@ -113,27 +150,15 @@ export const getAppProxyContext = (request: Request): AppProxyContext => {
 };
 
 /**
- * Merge app-proxy query params from the incoming storefront request onto a proxy path.
- * Used for SSR hrefs (this route does not hydrate). Skips keys already on `path`.
- * Omits `signature` by default — reusing a signature from another proxy path breaks auth.
+ * Returns a storefront proxy path without copying Shopify's signed transport params.
+ * Shopify adds a fresh signature and timestamp when the browser requests the path.
  */
 export function mergeAppProxyParamsFromRequest(
   path: string,
   request: Request,
-  options: { includeSignature?: boolean } = {},
 ): string {
+  void request;
   const target = new URL(path, "https://storefront.local");
-  const current = new URL(request.url).searchParams;
-  for (const key of APP_PROXY_QUERY_KEYS) {
-    if (key === APP_PROXY_SIGNATURE_PARAM && !options.includeSignature) {
-      continue;
-    }
-    if (target.searchParams.has(key)) continue;
-    const value = current.get(key);
-    if (value !== null) {
-      target.searchParams.set(key, value);
-    }
-  }
   return `${target.pathname}${target.search}`;
 }
 
@@ -165,10 +190,7 @@ export const requireAppProxyCustomer = (
           { status: 400 },
         );
       }
-      throw Response.json(
-        { error: `Request failed (${status}).` },
-        { status },
-      );
+      throw Response.json({ error: `Request failed (${status}).` }, { status });
     }
     throw thrown;
   }

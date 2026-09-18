@@ -1,1 +1,1 @@
-export { loader } from "./apps.project-clad.share.$token";
+export { action, default, loader } from "./apps.project-clad.share.$token";

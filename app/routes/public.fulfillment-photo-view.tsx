@@ -13,7 +13,7 @@ function escapeHtmlAttr(text: string): string {
 /**
  * HTML wrapper around the signed fulfillment photo so email clients open a
  * normal page (not a raw image). Avoids Outlook’s ugly image-load chrome.
- * Query: same as /public/fulfillment-photo (jobId, exp, sig, optional phaseId).
+ * Query: same as /public/fulfillment-photo (jobId, sig, optional phaseId).
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -22,8 +22,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const expRaw = url.searchParams.get("exp") || "";
   const sig = url.searchParams.get("sig") || "";
 
-  if (!jobId || !expRaw || !sig) {
-    return new Response("Missing jobId, exp, or sig query parameters.", {
+  if (!jobId || !sig) {
+    return new Response("Missing jobId or sig query parameters.", {
       status: 400,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
@@ -49,7 +49,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     phaseId: phaseId || undefined,
   });
   if (!ok) {
-    return new Response("Invalid or expired photo link.", {
+    return new Response("Invalid photo link.", {
       status: 403,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
@@ -58,7 +58,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const imgUrl = new URL("/public/fulfillment-photo", url.origin);
   imgUrl.searchParams.set("jobId", jobId);
   if (phaseId) imgUrl.searchParams.set("phaseId", phaseId);
-  imgUrl.searchParams.set("exp", expRaw);
+  if (expRaw) imgUrl.searchParams.set("exp", expRaw);
   imgUrl.searchParams.set("sig", sig);
 
   const html = `<!DOCTYPE html>

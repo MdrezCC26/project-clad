@@ -1,9 +1,6 @@
 import crypto from "node:crypto";
 import { resolvePublicAppOrigin } from "./publicAppOrigin";
 
-/** Default validity for signed fulfillment photo links (seconds). */
-const DEFAULT_TTL_SEC = 60 * 60 * 24 * 90; // 90 days
-
 function normalizeShop(shop: string) {
   return shop.trim().toLowerCase();
 }
@@ -26,14 +23,18 @@ function timingSafeEqualHex(a: string, b: string): boolean {
 function signedPhotoMessage(args: {
   shop: string;
   jobId: string;
-  exp: string;
+  exp?: string;
   phaseId?: string;
 }): string {
   const shopNorm = normalizeShop(args.shop);
+  const resource = args.phaseId
+    ? `${shopNorm}:${args.jobId}:${args.phaseId}`
+    : `${shopNorm}:${args.jobId}`;
+  if (args.exp) return `${resource}:${args.exp}`;
   if (args.phaseId) {
-    return `${shopNorm}:${args.jobId}:${args.phaseId}:${args.exp}`;
+    return `${shopNorm}:${args.jobId}:${args.phaseId}`;
   }
-  return `${shopNorm}:${args.jobId}:${args.exp}`;
+  return `${shopNorm}:${args.jobId}`;
 }
 
 export function buildSignedFulfillmentPhotoUrl(args: {
@@ -53,12 +54,9 @@ export function buildSignedFulfillmentPhotoUrl(args: {
     return null;
   }
 
-  const exp = Math.floor(Date.now() / 1000) + DEFAULT_TTL_SEC;
-  const expRaw = String(exp);
   const message = signedPhotoMessage({
     shop: args.shop,
     jobId: args.jobId,
-    exp: expRaw,
     phaseId: args.phaseId,
   });
   const sig = crypto.createHmac("sha256", secret).update(message).digest("hex");
@@ -78,7 +76,6 @@ export function buildSignedFulfillmentPhotoUrl(args: {
   if (args.phaseId) {
     base.searchParams.set("phaseId", args.phaseId);
   }
-  base.searchParams.set("exp", expRaw);
   base.searchParams.set("sig", sig);
   return base.toString();
 }
@@ -86,24 +83,26 @@ export function buildSignedFulfillmentPhotoUrl(args: {
 export function verifySignedFulfillmentPhotoParams(args: {
   jobId: string;
   shop: string;
-  expRaw: string;
+  expRaw?: string;
   sig: string;
   phaseId?: string;
 }): boolean {
   const secret = process.env.SHOPIFY_API_SECRET?.trim();
   if (!secret) return false;
 
-  const exp = parseInt(args.expRaw, 10);
-  if (!Number.isFinite(exp) || Date.now() / 1000 > exp) {
+  if (args.expRaw && !/^\d{10}$/.test(args.expRaw)) {
     return false;
   }
 
   const message = signedPhotoMessage({
     shop: args.shop,
     jobId: args.jobId,
-    exp: args.expRaw,
+    exp: args.expRaw || undefined,
     phaseId: args.phaseId,
   });
-  const expected = crypto.createHmac("sha256", secret).update(message).digest("hex");
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(message)
+    .digest("hex");
   return timingSafeEqualHex(expected, args.sig);
 }

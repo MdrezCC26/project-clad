@@ -6,10 +6,7 @@ import {
   readFulfillmentPhoto,
 } from "../utils/fulfillmentPhotoStorage.server";
 
-/**
- * Time-limited signed image URL on the app origin (bypasses storefront password wall).
- * Query: jobId, exp (unix sec), sig (hex HMAC).
- */
+/** Signed image URL on the app origin (bypasses storefront password wall). */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const jobId = url.searchParams.get("jobId") || "";
@@ -17,8 +14,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const expRaw = url.searchParams.get("exp") || "";
   const sig = url.searchParams.get("sig") || "";
 
-  if (!jobId || !expRaw || !sig) {
-    return new Response("Missing jobId, exp, or sig query parameters.", {
+  if (!jobId || !sig) {
+    return new Response("Missing jobId or sig query parameters.", {
       status: 400,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
@@ -73,7 +70,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
   if (!ok) {
     return new Response(
-      "Invalid or expired photo link (wrong SHOPIFY_API_SECRET between environments, or link is older than 90 days). Reload the project page and click View delivery photo again.",
+      "Invalid photo link. Reload the project page and click View delivery photo again.",
       {
         status: 403,
         headers: {

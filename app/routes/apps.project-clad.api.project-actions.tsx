@@ -26,7 +26,10 @@ import {
 import { sendTransactionalEmailToRecipients } from "../utils/transactionalEmail.server";
 import { verifyPassword } from "../utils/passwords.server";
 import { logProjectActivity } from "../utils/projectActivity.server";
-import { notifyMissionControl, notifyMissionControlRemove } from "../utils/missionControl.server";
+import {
+  notifyMissionControl,
+  notifyMissionControlRemove,
+} from "../utils/missionControl.server";
 import {
   hasCompleteShipToDetails,
   jobDeliveryPrismaData,
@@ -39,11 +42,7 @@ import {
 } from "../utils/variantInfo.server";
 import { upsertProjectShareInvite } from "../utils/projectShareInvite.server";
 import { transferProjectOwner } from "../utils/transferProjectOwner.server";
-
-const PRICING_COOKIE = "projectclad_pricing=1";
-
-const createPricingCookie = () =>
-  `${PRICING_COOKIE}; Path=/; Max-Age=3600; SameSite=Lax`;
+import { createPricingAccessCookie } from "../utils/pricingAccess.server";
 
 const getNextJobSortOrder = async (projectId: string) => {
   const result = await prisma.job.aggregate({
@@ -103,7 +102,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       where: { shop: shopStringFilter(shop) },
     });
     if (!settings?.pricingPasswordHash || !settings.pricingPasswordSalt) {
-      return Response.json({ error: "Pricing is not configured." }, { status: 400 });
+      return Response.json(
+        { error: "Pricing is not configured." },
+        { status: 400 },
+      );
     }
     if (
       password &&
@@ -115,7 +117,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ) {
       return Response.json(
         { pricingUnlocked: true },
-        { headers: { "Set-Cookie": createPricingCookie() } },
+        {
+          headers: {
+            "Set-Cookie": createPricingAccessCookie({ shop, customerId }),
+          },
+        },
       );
     }
     return Response.json({ error: "Invalid password." }, { status: 400 });
@@ -127,7 +133,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
     const name = (url.searchParams.get("jobName") || "").trim();
     if (!name) {
-      return Response.json({ error: "Order name is required." }, { status: 400 });
+      return Response.json(
+        { error: "Order name is required." },
+        { status: 400 },
+      );
     }
     const existingNames = await prisma.job.findMany({
       where: { projectId },
@@ -138,7 +147,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       (job) => job.name.toLowerCase() === normalizedName,
     );
     if (hasDuplicate) {
-      return Response.json({ error: "This order already exists." }, { status: 400 });
+      return Response.json(
+        { error: "This order already exists." },
+        { status: 400 },
+      );
     }
     const nextSortOrder = await getNextJobSortOrder(projectId);
     const projectDefaults = await prisma.project.findUnique({
@@ -160,7 +172,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shipCity: (url.searchParams.get("shipCity") || "").trim() || null,
       shipProvince: (url.searchParams.get("shipProvince") || "").trim() || null,
       shipPostal: (url.searchParams.get("shipPostal") || "").trim() || null,
-      shipCountry: (url.searchParams.get("shipCountry") || "").trim() || "Canada",
+      shipCountry:
+        (url.searchParams.get("shipCountry") || "").trim() || "Canada",
     };
     if (deliveryMode === "delivery" && !hasCompleteShipToDetails(ship)) {
       const projectShip = await prisma.project.findUnique({
@@ -295,9 +308,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return Response.json(
         {
           error:
-            error instanceof Error
-              ? error.message
-              : "Customer lookup failed.",
+            error instanceof Error ? error.message : "Customer lookup failed.",
         },
         { status: 400 },
       );
@@ -427,10 +438,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       );
     }
     const requester = customerInfo[customerId];
-    const requesterName = [requester?.firstName, requester?.lastName]
-      .filter(Boolean)
-      .join(" ")
-      .trim() || "A team member";
+    const requesterName =
+      [requester?.firstName, requester?.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || "A team member";
     const jobId = url.searchParams.get("jobId") || "";
     const itemId = url.searchParams.get("itemId") || "";
 
@@ -447,7 +459,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           include: { job: { select: { name: true } } },
         });
         if (item?.job) {
-          const { info } = await resolveVariantDisplayInfo(shop, [item.variantId]);
+          const { info } = await resolveVariantDisplayInfo(shop, [
+            item.variantId,
+          ]);
           const pres = buildVariantPresentation({
             shop,
             variantId: item.variantId,
@@ -577,7 +591,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
     if (!viewerHasNATag && !viewerIsAppAdmin) {
       return Response.json(
-        { error: "Only the customer who requested review can cancel that request." },
+        {
+          error:
+            "Only the customer who requested review can cancel that request.",
+        },
         { status: 403 },
       );
     }
@@ -676,8 +693,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         { status: 403 },
       );
     }
-    const jobId = url.searchParams.get("approveJobId") || url.searchParams.get("jobId") || "";
-    const itemId = url.searchParams.get("approveItemId") || url.searchParams.get("itemId") || "";
+    const jobId =
+      url.searchParams.get("approveJobId") ||
+      url.searchParams.get("jobId") ||
+      "";
+    const itemId =
+      url.searchParams.get("approveItemId") ||
+      url.searchParams.get("itemId") ||
+      "";
 
     const existing = await prisma.approvalRequest.findUnique({
       where: {
@@ -823,12 +846,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           .trim() || "A team member";
 
       let contextLabel = project.name;
-      const itemsToInclude: { jobName: string; displayName: string; quantity: number }[] = [];
+      const itemsToInclude: {
+        jobName: string;
+        displayName: string;
+        quantity: number;
+      }[] = [];
 
       if (jobId) {
         const job = await prisma.job.findFirst({
           where: { id: jobId, projectId },
-          include: { items: { where: { quantity: { gt: 0 } }, orderBy: { sortOrder: "asc" } } },
+          include: {
+            items: {
+              where: { quantity: { gt: 0 } },
+              orderBy: { sortOrder: "asc" },
+            },
+          },
         });
         const jobName = job?.name || "an order";
         if (itemId) {
@@ -837,7 +869,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             include: { job: { select: { name: true } } },
           });
           if (item?.job) {
-            const { info } = await resolveVariantDisplayInfo(shop, [item.variantId]);
+            const { info } = await resolveVariantDisplayInfo(shop, [
+              item.variantId,
+            ]);
             const pres = buildVariantPresentation({
               shop,
               variantId: item.variantId,
@@ -871,15 +905,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               live: variantInfo[i.variantId],
               snapshot: parseVariantSnapshot(i.variantSnapshot),
             });
-            const label =
-              pres.source === "unknown" ? "Item" : pres.displayName;
-            itemsToInclude.push({ jobName: job.name, displayName: label, quantity: i.quantity });
+            const label = pres.source === "unknown" ? "Item" : pres.displayName;
+            itemsToInclude.push({
+              jobName: job.name,
+              displayName: label,
+              quantity: i.quantity,
+            });
           }
         }
       } else {
         const jobs = await prisma.job.findMany({
           where: { projectId },
-          include: { items: { where: { quantity: { gt: 0 } }, orderBy: { sortOrder: "asc" } } },
+          include: {
+            items: {
+              where: { quantity: { gt: 0 } },
+              orderBy: { sortOrder: "asc" },
+            },
+          },
           orderBy: { sortOrder: "asc" },
         });
         const variantIds = jobs.flatMap((j) => j.items.map((i) => i.variantId));
@@ -895,9 +937,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               live: variantInfo[i.variantId],
               snapshot: parseVariantSnapshot(i.variantSnapshot),
             });
-            const label =
-              pres.source === "unknown" ? "Item" : pres.displayName;
-            itemsToInclude.push({ jobName: j.name, displayName: label, quantity: i.quantity });
+            const label = pres.source === "unknown" ? "Item" : pres.displayName;
+            itemsToInclude.push({
+              jobName: j.name,
+              displayName: label,
+              quantity: i.quantity,
+            });
           }
         }
       }
@@ -1049,7 +1094,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         include: { job: { select: { name: true } } },
       });
       if (item?.job) {
-        const { info } = await resolveVariantDisplayInfo(shop, [item.variantId]);
+        const { info } = await resolveVariantDisplayInfo(shop, [
+          item.variantId,
+        ]);
         const pres = buildVariantPresentation({
           shop,
           variantId: item.variantId,
