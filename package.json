@@ -73,6 +73,7 @@
     "eslint-plugin-react-hooks": "^4.6.2",
     "exceljs": "^4.4.0",
     "graphql-config": "^5.1.1",
+    "picomatch": "^4.0.7",
     "prettier": "^3.6.2",
     "sql.js": "^1.14.1",
     "tsx": "^4.23.13",
@@ -86,6 +87,9 @@
     "@shopify/plugin-cloudflare"
   ],
   "overrides": {
+    "fdir": {
+      "picomatch": "^4.0.7"
+    },
     "p-map": "^4.0.0",
     "shell-quote": "^1.10.0"
   },
