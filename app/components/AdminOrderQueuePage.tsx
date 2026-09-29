@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFetcher } from "react-router";
 import type { AdminOrderQueueJobRow } from "../utils/adminOrderQueue.server";
+import { formatShopDisplayDateTime } from "../utils/preferredDeliveryFormat";
 
 type ActionData =
   | { ok: true; message?: string }
@@ -248,7 +249,7 @@ export function AdminOrderQueuePage({
                       opacity: 0.85,
                     }}
                   >
-                    {new Date(job.createdAt).toLocaleString()} · Status:{" "}
+                    {formatShopDisplayDateTime(job.createdAt)} · Status:{" "}
                     <strong>
                       {job.orderLifecycleStatus === "ordered"
                         ? "Ordered"

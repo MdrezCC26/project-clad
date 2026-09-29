@@ -35,6 +35,18 @@ export function formatYmdLocal(d: Date): string {
 /** IANA zone for “today” when enforcing preferred-delivery date rules (Ottawa / Eastern). */
 export const PREFERRED_DELIVERY_CALENDAR_TIMEZONE = "America/Toronto";
 
+/**
+ * SSR-safe timestamp for admin + storefront. `toLocaleString()` with no locale/zone
+ * hydrates differently on Render (UTC) vs the merchant's browser and throws React #418/#425.
+ */
+export function formatShopDisplayDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("en-US", {
+    timeZone: PREFERRED_DELIVERY_CALENDAR_TIMEZONE,
+  });
+}
+
 /** Civil calendar date `YYYY-MM-DD` for an instant in a specific IANA timezone. */
 export function getCalendarYmdInTimeZone(
   instant: Date,

@@ -12,6 +12,7 @@ import { logProjectActivity } from "../utils/projectActivity.server";
 import { fetchVariantPriceUsd } from "../utils/shopifyVariantPrice.server";
 import { getAdminVariantInfo } from "../utils/adminVariants.server";
 import { shopStringFilter } from "../utils/projectAccess.server";
+import { formatShopDisplayDateTime } from "../utils/preferredDeliveryFormat";
 import { sendFulfillmentPackageEmails } from "../utils/fulfillmentNotify.server";
 import {
   confirmAdminPhaseFulfillment,
@@ -641,7 +642,7 @@ export default function AdminWorkOrdersPage() {
                   </p>
                 </div>
                 <p style={{ margin: "0 0 8px", fontSize: "0.9em", opacity: 0.85 }}>
-                  {new Date(job.createdAt).toLocaleString()} ·{" "}
+                  {formatShopDisplayDateTime(job.createdAt)} ·{" "}
                   <a
                     href={`${storefrontProjectBase}?id=${encodeURIComponent(job.projectId)}&job=${encodeURIComponent(job.id)}`}
                     target="_blank"

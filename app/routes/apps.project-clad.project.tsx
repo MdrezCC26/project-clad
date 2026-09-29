@@ -40,6 +40,8 @@ import {
   customerEmailInConfiguredList,
   getViewerCompanyContext,
   getViewerTagsCached,
+  ACCOUNT_NOT_SET_UP_ORDER_MESSAGE,
+  canPlaceShopOrders,
   hasStaffStorefrontTag,
   hasTag,
   normalizeStorefrontCustomerId,
@@ -3295,10 +3297,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
   const { shop, customerId: viewerCustomerId, customerEmail } =
     requireAppProxyCustomer(request);
-  /* The only two values `project-main.js` cannot have baked in at build time. */
-  const proxyScriptConfig = projectCladInlineConfigScript({
-    shop,
-  });
   const customerId = viewerCustomerId as string;
   const [themeStyles, settings] = await Promise.all([
     getThemeStyles(shop),
@@ -3603,6 +3601,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const viewerCanFulfill =
     viewerIsAppAdmin || hasStaffStorefrontTag(viewerTags);
+  const viewerCanPlaceShopOrders = canPlaceShopOrders(
+    viewerTags,
+    viewerIsAppAdmin,
+  );
+  /* Per-request values `project-main.js` cannot bake in at build time. */
+  const proxyScriptConfig = projectCladInlineConfigScript({
+    shop,
+    canPlaceShopOrders: viewerCanPlaceShopOrders ? "1" : "0",
+    orderNowAccountBlockedMessage: ACCOUNT_NOT_SET_UP_ORDER_MESSAGE,
+  });
 
   const hasCompleteSavedAddress = hasCompleteShipToDetails({
     shipAddress1: project.shipAddress1,
@@ -3919,6 +3927,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shop,
     ...buildShopBrandingUrls({ request, shop, settings }),
     viewerCanFulfill,
+    viewerCanPlaceShopOrders,
+    orderNowAccountBlockedMessage: ACCOUNT_NOT_SET_UP_ORDER_MESSAGE,
     viewerHasNATag: hasNATag,
     shopDeliveryFee,
     storefrontAppNav: getStorefrontAppNav(settings),
@@ -4600,16 +4610,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         );
       }
 
+      const viewerTagsForOrder = await fetchCustomerTagsRest(
+        shop,
+        normalizeStorefrontCustomerId(customerId),
+      );
+      if (!canPlaceShopOrders(viewerTagsForOrder, viewerIsAppAdmin)) {
+        return Response.json(
+          { error: ACCOUNT_NOT_SET_UP_ORDER_MESSAGE },
+          { status: 403 },
+        );
+      }
+
       const job = await prisma.job.findFirst({
         where: { id: jobId, projectId },
       });
       if (!job) {
         return Response.json({ error: "Order not found." }, { status: 404 });
       }
-      const viewerTagsForOrder = await fetchCustomerTagsRest(
-        shop,
-        normalizeStorefrontCustomerId(customerId),
-      );
       const viewerHasNATagForOrder = hasTag(viewerTagsForOrder, "NA");
       const orderNowSkipsApprovalReview =
         !viewerHasNATagForOrder || viewerIsAppAdmin;
@@ -7257,6 +7274,8 @@ export default function ProjectDetailPage() {
     backgroundLogoUrl,
     themeStyles,
     viewerCanFulfill,
+    viewerCanPlaceShopOrders,
+    orderNowAccountBlockedMessage,
     viewerHasNATag,
     shopDeliveryFee,
     navAccountInitial,
@@ -7677,6 +7696,17 @@ export default function ProjectDetailPage() {
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
+      if (!viewerCanPlaceShopOrders) {
+        const modal = document.querySelector(
+          "[data-projectclad-account-not-setup-modal]",
+        );
+        if (modal instanceof HTMLElement) {
+          modal.style.display = "flex";
+        } else {
+          window.alert(orderNowAccountBlockedMessage);
+        }
+        return;
+      }
       const jobId = btn.getAttribute("data-job-id") ?? "";
       if (!jobId) return;
       if (
@@ -7766,7 +7796,12 @@ export default function ProjectDetailPage() {
     return () => {
       document.removeEventListener("click", onCaptureClick, true);
     };
-  }, [location.pathname, location.search]);
+  }, [
+    location.pathname,
+    location.search,
+    viewerCanPlaceShopOrders,
+    orderNowAccountBlockedMessage,
+  ]);
 
   const inlineStyles = themeStyles?.styles || [];
   const utilityAddMemberControl = canAdminMembers ? (
@@ -9242,6 +9277,53 @@ export default function ProjectDetailPage() {
           </Form>
         </div>
       </div>
+      <div
+        className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
+        data-projectclad-account-not-setup-modal
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="account-not-setup-modal-title"
+        style={{ display: "none" }}
+      >
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal card: stop mousedown so backdrop logic ignores inner surface */}
+        <div
+          className="project-clad-card project-clad-modal project-clad-reject-modal"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="project-clad-modal__header-row">
+            <h2 id="account-not-setup-modal-title">Account not set up</h2>
+            <button
+              type="button"
+              className="project-clad-modal-close"
+              data-projectclad-account-not-setup-dismiss
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+          <p className="project-clad-muted" style={{ marginTop: "0.5rem" }}>
+            {orderNowAccountBlockedMessage}
+          </p>
+          <div
+            className="project-clad-actions project-clad-reject-modal-actions"
+            style={{ marginTop: "1rem" }}
+          >
+            <a
+              className="project-clad-button project-clad-button--full project-clad-reject-modal-btn"
+              href="/pages/contact"
+            >
+              Contact us
+            </a>
+            <button
+              type="button"
+              className="project-clad-button project-clad-reject-modal-btn"
+              data-projectclad-account-not-setup-dismiss
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
       {inlineStyles.map((css, index) => (
         <style key={index} dangerouslySetInnerHTML={{ __html: css }} />
       ))}
@@ -9249,6 +9331,7 @@ export default function ProjectDetailPage() {
       <main
         className={`project-clad-page project-clad-page--detail project-clad-page--projects project-clad-page--cc-v2 cc-store-neu${backgroundLogoUrl ? " project-clad-page--card-bg-logo" : ""}`}
         data-pc-na-workflow={viewerHasNATag === true ? "1" : "0"}
+        data-pc-can-place-shop-orders={viewerCanPlaceShopOrders ? "1" : "0"}
         style={
           backgroundLogoUrl
             ? {

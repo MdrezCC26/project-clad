@@ -18,6 +18,7 @@ import {
 } from "./jobDeliveryPhases";
 import { resolveJobDelivery } from "./jobDelivery";
 import { orderTaxFromSubtotal } from "./orderDisplayTax";
+import { resolveOrderLineImageUrl } from "./orderLineSpecs";
 import { getShopDeliveryFee } from "./shopDeliveryFee.server";
 
 /**
@@ -406,6 +407,12 @@ async function buildIngestPayload(job: NonNullable<Awaited<ReturnType<typeof loa
       color: geo.color,
       girthIn: geo.girthIn,
       lengthIn: geo.lengthIn,
+      imageUrl: resolveOrderLineImageUrl({
+        displayName: title,
+        properties: customData,
+        storefrontImageUrl: pres.imageUrl,
+        snapshotImageUrl: snap?.imageUrl ?? null,
+      }),
     };
   });
 

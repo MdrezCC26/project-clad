@@ -39,6 +39,19 @@ export function companyKeyFromTag(tag: string): string | null {
 /** Shopify customer tag `admin` (any casing) — full app access for staff. */
 export const hasAdminTag = (tags: string[] | undefined) => hasTag(tags, "ADMIN");
 
+/**
+ * Shopify customer tag `APPROVED` — credit/account setup is complete.
+ * Required to submit **Order now**. Quoting, save, and edit stay available without it.
+ * Independent of the `NA` review-flow tag.
+ */
+export const CREDIT_APPROVED_TAG = "APPROVED";
+
+export const hasCreditApprovedTag = (tags: string[] | undefined) =>
+  hasTag(tags, CREDIT_APPROVED_TAG);
+
+export const ACCOUNT_NOT_SET_UP_ORDER_MESSAGE =
+  "Your account is not set up yet. Please contact us to complete setup before placing an order.";
+
 /** Also accepts `staff`, `projectclad_staff`, `projectclad-staff` (spacing/case flexible). */
 export function hasStaffStorefrontTag(tags: string[] | undefined): boolean {
   if (!tags?.length) return false;
@@ -54,6 +67,17 @@ export function hasStaffStorefrontTag(tags: string[] | undefined): boolean {
       u === "PROJECTCLADADMIN"
     );
   });
+}
+
+/**
+ * Who may submit Order now to the shop: staff/admins, or customers tagged APPROVED.
+ */
+export function canPlaceShopOrders(
+  tags: string[] | undefined,
+  viewerIsAppAdmin: boolean,
+): boolean {
+  if (viewerIsAppAdmin || hasStaffStorefrontTag(tags)) return true;
+  return hasCreditApprovedTag(tags);
 }
 
 export function normalizeStorefrontCustomerId(customerId: string): string {

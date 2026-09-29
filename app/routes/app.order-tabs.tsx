@@ -4,6 +4,7 @@ import { useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { shopStringFilter } from "../utils/projectAccess.server";
+import { formatShopDisplayDateTime } from "../utils/preferredDeliveryFormat";
 
 type StartedStatus = "draft" | "pending_review" | "ready_to_order";
 
@@ -113,7 +114,7 @@ function QueueSection({
                 </span>
               </p>
               <p style={{ margin: "4px 0 0", fontSize: "0.9em", opacity: 0.85 }}>
-                {new Date(row.createdAt).toLocaleString()} · Status:{" "}
+                {formatShopDisplayDateTime(row.createdAt)} · Status:{" "}
                 <strong>{row.status}</strong>
                 {" · "}
                 <a

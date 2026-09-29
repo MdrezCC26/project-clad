@@ -2794,6 +2794,37 @@
   });
   pcSyncAllOrderNowButtons();
 
+  function pcViewerCanPlaceShopOrders() {
+    var cfg = window.__PROJECT_CLAD__ || {};
+    if (cfg.canPlaceShopOrders === '0') return false;
+    if (cfg.canPlaceShopOrders === '1') return true;
+    var root = document.querySelector('[data-pc-can-place-shop-orders]');
+    if (root) return root.getAttribute('data-pc-can-place-shop-orders') === '1';
+    return true;
+  }
+
+  function pcAccountNotSetUpOrderMessage() {
+    var cfg = window.__PROJECT_CLAD__ || {};
+    if (typeof cfg.orderNowAccountBlockedMessage === 'string' && cfg.orderNowAccountBlockedMessage) {
+      return cfg.orderNowAccountBlockedMessage;
+    }
+    return 'Your account is not set up yet. Please contact us to complete setup before placing an order.';
+  }
+
+  function pcShowAccountNotSetupModal() {
+    var modal = document.querySelector('[data-projectclad-account-not-setup-modal]');
+    if (modal instanceof HTMLElement) {
+      modal.style.display = 'flex';
+      return;
+    }
+    window.alert(pcAccountNotSetUpOrderMessage());
+  }
+
+  function pcHideAccountNotSetupModal() {
+    var modal = document.querySelector('[data-projectclad-account-not-setup-modal]');
+    if (modal instanceof HTMLElement) modal.style.display = 'none';
+  }
+
   document.addEventListener('click', (event) => {
     var tOnow = event.target;
     if (tOnow && tOnow.nodeType === 3 && tOnow.parentElement) {
@@ -2805,6 +2836,10 @@
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
+      if (!pcViewerCanPlaceShopOrders()) {
+        pcShowAccountNotSetupModal();
+        return;
+      }
       if (
         !window.confirm(
           'Please ensure delivery details are correct. Use Delivery options on this order or Edit project for defaults before placing.',
@@ -3195,6 +3230,16 @@
       if (modal instanceof HTMLElement) modal.style.display = 'none';
     }
 
+    const accountNotSetupDismiss = event.target?.closest?.('[data-projectclad-account-not-setup-dismiss]');
+    if (accountNotSetupDismiss) {
+      event.preventDefault();
+      pcHideAccountNotSetupModal();
+    }
+    const accountNotSetupBackdrop = event.target?.closest?.('[data-projectclad-account-not-setup-modal]');
+    if (accountNotSetupBackdrop && accountNotSetupBackdrop === event.target) {
+      pcHideAccountNotSetupModal();
+    }
+
     const addMemberPopoverEl = document.querySelector('[data-projectclad-add-member-popover]');
     if (isAddMemberPopoverOpen(addMemberPopoverEl)) {
       if (!event.target?.closest?.('[data-projectclad-add-member-popover]') && !event.target?.closest?.('[data-projectclad-add-member-popover-toggle]')) {
@@ -3210,6 +3255,14 @@
     const tgl = document.querySelector('[data-projectclad-add-member-popover-toggle]');
     if (isAddMemberPopoverOpen(pop)) {
       closeAddMemberPopover(pop, tgl);
+      return;
+    }
+    var accountNotSetupModal = document.querySelector('[data-projectclad-account-not-setup-modal]');
+    if (
+      accountNotSetupModal instanceof HTMLElement &&
+      accountNotSetupModal.style.display === 'flex'
+    ) {
+      pcHideAccountNotSetupModal();
       return;
     }
     const editProjModal = document.querySelector('[data-projectclad-edit-project-modal]');
