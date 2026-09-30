@@ -180,13 +180,19 @@ function numericValue(map: Map<string, string>, name: string): number {
   return value;
 }
 
+/** Calculators whose price isn't girth × rate × length × 1.5 + labor. */
+const SPECIAL_FORMULA_KEYS = ["OMEGA_BAR", "FLAT_STOCK"];
+
 function calculatorKey(productTitle: string): string {
   const rawNormalized = normalizedCalculatorName(productTitle);
   const normalized = CALCULATOR_NAME_ALIASES[rawNormalized] ?? rawNormalized;
-  if (STANDARD_FORMULAS[normalized] || normalized === "OMEGA_BAR") {
+  if (
+    STANDARD_FORMULAS[normalized] ||
+    SPECIAL_FORMULA_KEYS.includes(normalized)
+  ) {
     return normalized;
   }
-  const keys = Object.keys(STANDARD_FORMULAS).concat("OMEGA_BAR");
+  const keys = Object.keys(STANDARD_FORMULAS).concat(SPECIAL_FORMULA_KEYS);
   /* "J TRIM JAMB 0.5" contains both J_TRIM and J_TRIM_JAMB — the longest key is the real profile. */
   const contained = keys
     .filter((key) => normalized.includes(key))
@@ -212,16 +218,24 @@ export function calculateOpcUnitPrice(args: {
     throw new CartPricingError("Calculator pricing metadata is missing.");
   }
 
+  const key = calculatorKey(args.productTitle);
+
   const gauge = Math.trunc(numericValue(values, "GAUGE"));
   const rate = GAUGE_RATES[gauge];
   if (!rate) throw new CartPricingError("Calculator gauge is not supported.");
+
+  if (key === "FLAT_STOCK") {
+    /* No Length dropdown: L1 × L2 is the sheet area in square inches. */
+    return finalPrice(
+      numericValue(values, "L1") * numericValue(values, "L2") * rate * 1.5 + 5,
+    );
+  }
 
   const length = numericValue(values, "LENGTH");
   if (!ALLOWED_LENGTHS.has(length)) {
     throw new CartPricingError("Calculator length is not supported.");
   }
 
-  const key = calculatorKey(args.productTitle);
   let price: number;
   if (key === "OMEGA_BAR") {
     const girth =
@@ -244,6 +258,10 @@ export function calculateOpcUnitPrice(args: {
     price = girth * rate * length * 1.5 + formula.labor;
   }
 
+  return finalPrice(price);
+}
+
+function finalPrice(price: number): string {
   if (!Number.isFinite(price) || price <= 0 || price > 99_999_999) {
     throw new CartPricingError("Calculator price is invalid.");
   }

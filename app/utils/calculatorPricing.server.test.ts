@@ -100,6 +100,20 @@ test("Drip Faced 3 uses its own five-leg formula, not Drip Faced", () => {
   );
 });
 
+test("Flat Stock prices by sheet area without a Length field", () => {
+  assert.equal(
+    calculateOpcUnitPrice({
+      productTitle: "Flat Stock",
+      properties: properties({
+        Gauge: "24 Gauge",
+        L1: "12",
+        L2: "120",
+      }),
+    }),
+    "27.50",
+  );
+});
+
 test("sized titles use the longest matching profile", () => {
   const dims = properties({
     Gauge: "24 Gauge",
@@ -133,6 +147,7 @@ test("covers every supplied OPC calculator export", () => {
     "Drip Jamb",
     "Drip Edge Jamb",
     "Flat Expansion",
+    "Flat Stock",
     "Garage Door Cap",
     "Inside Corner Edge",
     "J Trim",
