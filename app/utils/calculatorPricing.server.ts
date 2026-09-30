@@ -3,6 +3,14 @@ export type CalculatorPriceProperties = Array<{
   value: string;
 }>;
 
+/** Cart line that can't be priced server-side; the message is safe to show the customer. */
+export class CartPricingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CartPricingError";
+  }
+}
+
 type StandardFormula = {
   coefficients: Partial<Record<"L1" | "L2" | "L3" | "L4" | "L5", number>>;
   girthConstant?: number;
@@ -16,6 +24,7 @@ const STANDARD_FORMULAS: Record<string, StandardFormula> = {
     labor: 10,
   },
   CLIP: { coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 }, labor: 7.5 },
+  COLUMN_CAP: { coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 }, labor: 7.5 },
   CORNER_EDGE: {
     coefficients: { L1: 2, L2: 2, L3: 2, L4: 2 },
     labor: 17.5,
@@ -33,6 +42,10 @@ const STANDARD_FORMULAS: Record<string, StandardFormula> = {
   },
   DRIP_FACED_2: {
     coefficients: { L1: 1, L2: 1, L3: 1, L4: 2 },
+    labor: 10,
+  },
+  DRIP_FACED_3: {
+    coefficients: { L1: 1, L2: 1, L3: 1, L4: 1, L5: 1 },
     labor: 10,
   },
   DRIP_HEADER: {
@@ -104,6 +117,7 @@ const STANDARD_FORMULAS: Record<string, StandardFormula> = {
   U_BAR_TRIM: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 5 },
   Z_BAR: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 5 },
   Z_BAR_TRIM: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 5 },
+  Z_TAIL: { coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 }, labor: 7.5 },
 };
 
 const GAUGE_RATES: Record<number, number> = {
@@ -152,7 +166,7 @@ function propertyMap(
         }
       }
     } catch {
-      throw new Error("Calculator details are invalid.");
+      throw new CartPricingError("Calculator details are invalid.");
     }
   }
   return result;
@@ -161,7 +175,7 @@ function propertyMap(
 function numericValue(map: Map<string, string>, name: string): number {
   const value = Number.parseFloat(map.get(name) ?? "");
   if (!Number.isFinite(value) || value <= 0 || value > 1_000) {
-    throw new Error(`Calculator ${name} is invalid.`);
+    throw new CartPricingError(`Calculator ${name} is invalid.`);
   }
   return value;
 }
@@ -172,12 +186,19 @@ function calculatorKey(productTitle: string): string {
   if (STANDARD_FORMULAS[normalized] || normalized === "OMEGA_BAR") {
     return normalized;
   }
-  const candidates = Object.keys(STANDARD_FORMULAS)
-    .concat("OMEGA_BAR")
-    .filter((key) => normalized.includes(key) || key.includes(normalized));
-  if (candidates.length === 1) return candidates[0];
-  throw new Error(
-    "This calculator does not have server-side pricing configured.",
+  const keys = Object.keys(STANDARD_FORMULAS).concat("OMEGA_BAR");
+  /* "J TRIM JAMB 0.5" contains both J_TRIM and J_TRIM_JAMB — the longest key is the real profile. */
+  const contained = keys
+    .filter((key) => normalized.includes(key))
+    .sort((a, b) => b.length - a.length);
+  if (contained.length === 1) return contained[0];
+  if (contained.length > 1 && contained[0].length > contained[1].length) {
+    return contained[0];
+  }
+  const containing = keys.filter((key) => key.includes(normalized));
+  if (!contained.length && containing.length === 1) return containing[0];
+  throw new CartPricingError(
+    `"${productTitle.trim()}" does not have server-side pricing configured yet. Remove it from the cart or contact us for a quote.`,
   );
 }
 
@@ -188,16 +209,16 @@ export function calculateOpcUnitPrice(args: {
 }): string {
   const values = propertyMap(args.properties);
   if (!values.has("__OOCALCPAYLOAD") && !values.has("__OOCUSTOMPRICE")) {
-    throw new Error("Calculator pricing metadata is missing.");
+    throw new CartPricingError("Calculator pricing metadata is missing.");
   }
 
   const gauge = Math.trunc(numericValue(values, "GAUGE"));
   const rate = GAUGE_RATES[gauge];
-  if (!rate) throw new Error("Calculator gauge is not supported.");
+  if (!rate) throw new CartPricingError("Calculator gauge is not supported.");
 
   const length = numericValue(values, "LENGTH");
   if (!ALLOWED_LENGTHS.has(length)) {
-    throw new Error("Calculator length is not supported.");
+    throw new CartPricingError("Calculator length is not supported.");
   }
 
   const key = calculatorKey(args.productTitle);
@@ -208,7 +229,9 @@ export function calculateOpcUnitPrice(args: {
       numericValue(values, "L2") * 2 +
       numericValue(values, "L3") * 2;
     const piecesPerSheet = Math.floor(48 / girth);
-    if (piecesPerSheet < 1) throw new Error("Calculator girth is too large.");
+    if (piecesPerSheet < 1) {
+      throw new CartPricingError("Calculator girth is too large.");
+    }
     price = ((rate * 48 * length) / piecesPerSheet) * 1.35 + 6;
   } else {
     const formula = STANDARD_FORMULAS[key];
@@ -222,7 +245,7 @@ export function calculateOpcUnitPrice(args: {
   }
 
   if (!Number.isFinite(price) || price <= 0 || price > 99_999_999) {
-    throw new Error("Calculator price is invalid.");
+    throw new CartPricingError("Calculator price is invalid.");
   }
   return price.toFixed(2);
 }

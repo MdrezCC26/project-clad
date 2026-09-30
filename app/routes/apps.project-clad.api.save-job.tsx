@@ -37,6 +37,7 @@ import {
   legsFromLineProperties,
 } from "../utils/shapeProfile";
 import { getAuthoritativeSavedCartPrices } from "../utils/savedCartPricing.server";
+import { CartPricingError } from "../utils/calculatorPricing.server";
 
 type SaveJobPayload = {
   mode: "newProject" | "existingProject" | "existingJob";
@@ -488,6 +489,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     return await saveJobAction(request);
   } catch (e) {
+    if (e instanceof Response) return e;
     console.error("[save-job] unhandled:", e);
     const message =
       prismaErrorMessage(e) ||
@@ -535,6 +537,9 @@ async function saveJobAction(request: Request) {
     }));
   } catch (error) {
     console.error("[save-job] Shopify price verification failed:", error);
+    if (error instanceof CartPricingError) {
+      return Response.json({ error: error.message }, { status: 422 });
+    }
     return Response.json(
       {
         error:

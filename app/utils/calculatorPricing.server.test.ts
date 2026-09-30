@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateOpcUnitPrice } from "./calculatorPricing.server";
+import {
+  calculateOpcUnitPrice,
+  CartPricingError,
+} from "./calculatorPricing.server";
 
 const properties = (values: Record<string, string>) => [
   {
@@ -71,7 +74,44 @@ test("rejects products without a canonical formula", () => {
           L1: "2",
         }),
       }),
-    /server-side pricing configured/i,
+    (error: unknown) =>
+      error instanceof CartPricingError &&
+      /"Unknown Calculator" does not have server-side pricing configured/.test(
+        error.message,
+      ),
+  );
+});
+
+test("Drip Faced 3 uses its own five-leg formula, not Drip Faced", () => {
+  assert.equal(
+    calculateOpcUnitPrice({
+      productTitle: "Drip Faced 3",
+      properties: properties({
+        Gauge: "24 Gauge",
+        Length: '120"',
+        L1: "2",
+        L2: "2",
+        L3: "2",
+        L4: "2",
+        L5: "2",
+      }),
+    }),
+    "28.75",
+  );
+});
+
+test("sized titles use the longest matching profile", () => {
+  const dims = properties({
+    Gauge: "24 Gauge",
+    Length: '120"',
+    L1: "2",
+    L2: "2",
+    L3: "2",
+    L4: "2",
+  });
+  assert.equal(
+    calculateOpcUnitPrice({ productTitle: "J TRIM JAMB 0.5", properties: dims }),
+    calculateOpcUnitPrice({ productTitle: "J Trim Jamb", properties: dims }),
   );
 });
 
@@ -80,12 +120,14 @@ test("covers every supplied OPC calculator export", () => {
     "Architects Drip",
     "Architects Drip Edge",
     "Clip",
+    "Column Cap",
     "Corner Edge",
     "Drip Edge",
     "Drip Expansion",
     "Drip Faced",
     "Drip Edge Faced",
     "Drip Faced 2",
+    "Drip Faced 3",
     "Drip Header",
     "Drip Edge Header",
     "Drip Jamb",
@@ -115,6 +157,7 @@ test("covers every supplied OPC calculator export", () => {
     "U Bar Trim",
     "Z Bar",
     "Z Bar Trim",
+    "Z Tail",
   ];
   const commonProperties = properties({
     Gauge: "24 Gauge",

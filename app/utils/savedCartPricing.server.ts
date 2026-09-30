@@ -2,6 +2,7 @@ import prisma from "../db.server";
 import { getAdminVariantInfo } from "./adminVariants.server";
 import {
   calculateOpcUnitPrice,
+  CartPricingError,
   type CalculatorPriceProperties,
 } from "./calculatorPricing.server";
 
@@ -40,7 +41,7 @@ function positiveNumber(
   if (!raw && fallback !== undefined) return fallback;
   const value = Number.parseFloat(raw ?? "");
   if (!Number.isFinite(value) || value <= 0 || value > 10_000) {
-    throw new Error(`Cart ${name} is invalid.`);
+    throw new CartPricingError(`Cart ${name} is invalid.`);
   }
   return value;
 }
@@ -48,12 +49,12 @@ function positiveNumber(
 function calculateFreeformPrice(properties: Map<string, string>): string {
   const gauge = Math.trunc(positiveNumber(properties, "Gauge"));
   const rate = FREEFORM_GAUGE_RATES[gauge];
-  if (!rate) throw new Error("Cart gauge is not supported.");
+  if (!rate) throw new CartPricingError("Cart gauge is not supported.");
   const girth = positiveNumber(properties, "Girth");
   const length = positiveNumber(properties, "Length", 120);
   const bendsRaw = Number.parseFloat(properties.get("bends") ?? "0");
   if (!Number.isFinite(bendsRaw) || bendsRaw < 0 || bendsRaw > 100) {
-    throw new Error("Cart bends are invalid.");
+    throw new CartPricingError("Cart bends are invalid.");
   }
   return (rate * girth * length * 1.5 + bendsRaw * 2.5).toFixed(2);
 }
@@ -63,7 +64,7 @@ export async function getAuthoritativeSavedCartPrices(
   lines: SavedCartPricingLine[],
 ): Promise<string[]> {
   if (!lines.length || lines.length > 250) {
-    throw new Error("Cart pricing could not be verified.");
+    throw new CartPricingError("Cart pricing could not be verified.");
   }
 
   const variants = await getAdminVariantInfo(
@@ -74,7 +75,7 @@ export async function getAuthoritativeSavedCartPrices(
     Object.keys(variants).length !==
     new Set(lines.map((line) => line.variantId)).size
   ) {
-    throw new Error("One or more cart products no longer exist.");
+    throw new CartPricingError("One or more cart products no longer exist.");
   }
 
   const customGaugeValues = new Map(
@@ -107,7 +108,7 @@ export async function getAuthoritativeSavedCartPrices(
       const gauge = Math.trunc(positiveNumber(properties, "Gauge"));
       const rate = customGaugeValues.get(gauge);
       if (!rate || !Number.isFinite(rate) || rate <= 0) {
-        throw new Error("Cart gauge pricing is not configured.");
+        throw new CartPricingError("Cart gauge pricing is not configured.");
       }
       const girth =
         positiveNumber(properties, "L1") +
