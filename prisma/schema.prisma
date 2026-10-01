@@ -523,3 +523,90 @@ model ShapeLibraryEntry {
   @@unique([shop, geometryHash])
   @@index([shop, updatedAt])
 }
+
+enum QuoteRequestMode {
+  DRAWINGS
+  ITEMIZED
+}
+
+enum QuoteRequestFileKind {
+  /// Step 3 order-level drawings (shared by both modes).
+  DRAWING
+  /// Step 4 "Additional documents".
+  DOCUMENT
+  /// Part-specific drawing on a line item.
+  LINE_ITEM
+}
+
+/// Storefront "Request a Quote" submission (theme section `quote-request`).
+model QuoteRequest {
+  id           String           @id @default(cuid())
+  /// Short customer-facing reference, e.g. Q-7KX2PM.
+  reference    String           @unique
+  shop         String
+  mode         QuoteRequestMode
+  /// Set when the visitor was signed in to the storefront.
+  customerId   String?
+  contactName  String
+  company      String?
+  email        String
+  phone        String
+  projectName  String?
+  siteAddress  String?
+  siteCity     String?
+  siteProvince String?
+  sitePostal   String?
+  neededBy     DateTime?        @db.Date
+  fulfillment  String?
+  /// Order-level gauge; null = "Not sure".
+  gauge        String?
+  colours      String[]         @default([])
+  /// Step 3 notes (quantities, lengths, hems…).
+  notes        String?          @db.Text
+  /// Step 4 "Notes for the shop" (site conditions, access…).
+  siteNotes    String?          @db.Text
+  status       String           @default("new")
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  lineItems    QuoteRequestLineItem[]
+  files        QuoteRequestFile[]
+
+  @@index([shop, createdAt])
+}
+
+model QuoteRequestLineItem {
+  id               String       @id @default(cuid())
+  quoteRequestId   String
+  sortOrder        Int          @default(0)
+  description      String
+  quantity         Int
+  length           String?
+  /// null = use the order-level gauge.
+  gauge            String?
+  colour           String?
+  notes            String?      @db.Text
+  /// false when the customer attached part-specific files instead.
+  useOrderDrawings Boolean      @default(true)
+  quoteRequest     QuoteRequest @relation(fields: [quoteRequestId], references: [id], onDelete: Cascade)
+  files            QuoteRequestFile[]
+
+  @@index([quoteRequestId, sortOrder])
+}
+
+/// Uploaded bytes live in Postgres (same durability approach as `PurchaseOrderPdf`).
+model QuoteRequestFile {
+  id             String               @id @default(cuid())
+  quoteRequestId String
+  lineItemId     String?
+  kind           QuoteRequestFileKind
+  fileName       String
+  contentType    String
+  size           Int
+  data           Bytes
+  createdAt      DateTime             @default(now())
+  quoteRequest   QuoteRequest         @relation(fields: [quoteRequestId], references: [id], onDelete: Cascade)
+  lineItem       QuoteRequestLineItem? @relation(fields: [lineItemId], references: [id], onDelete: Cascade)
+
+  @@index([quoteRequestId])
+  @@index([lineItemId])
+}

@@ -25,7 +25,7 @@
     "preview:finance-email": "npx tsx scripts/preview-finance-email.ts",
     "preview:customer-email": "npx tsx scripts/preview-customer-email.ts",
     "preview:order-placed-email": "npx tsx scripts/preview-order-placed-email.ts",
-    "test:security": "tsx --test app/utils/calculatorPricing.server.test.ts app/utils/proxyAccessSecurity.server.test.ts app/utils/signedUrlExpiry.server.test.ts app/utils/uploadPartMirror.server.test.ts"
+    "test:security": "tsx --test app/utils/calculatorPricing.server.test.ts app/utils/proxyAccessSecurity.server.test.ts app/utils/signedUrlExpiry.server.test.ts app/utils/uploadPartMirror.server.test.ts app/utils/quoteRequest.server.test.ts"
   },
   "type": "module",
   "engines": {
