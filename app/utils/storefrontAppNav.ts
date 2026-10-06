@@ -18,10 +18,9 @@ export type ShopSettingsNavSlice = {
 
 /** Example for admin placeholder — Canadian Cladding storefront paths (same host as app proxy). */
 export const STOREFRONT_APP_NAV_JSON_PLACEHOLDER = `[
-  { "label": "SIDING", "url": "/collections/main-products" },
-  { "label": "ROOFING", "url": "/pages/roofing-shop" },
-  { "label": "GLAZING", "url": "/pages/glazing-shop" },
-  { "label": "CUSTOM", "url": "/pages/custompart" },
+  { "label": "SIDING", "url": "/pages/siding-calculators" },
+  { "label": "ROOFING", "url": "/pages/roofing-calculators" },
+  { "label": "GLAZING", "url": "/pages/glazing-calculators" },
   { "label": "PROJECTS", "url": "/apps/project-clad/projects" },
   { "label": "COLOURS", "url": "/pages/colours" },
   { "label": "CONTACT", "url": "/pages/contact" }
@@ -63,13 +62,12 @@ export function defaultStorefrontAppNavLinks(
     settings.navButton1Url?.trim() || "/apps/project-clad/projects";
   const sidingLabel = (settings.navButton2Label || "SIDING").trim();
   const sidingUrl =
-    settings.navButton2Url?.trim() || "/collections/main-products";
+    settings.navButton2Url?.trim() || "/pages/siding-calculators";
 
   return [
     { label: sidingLabel.toUpperCase(), url: sidingUrl },
-    { label: "ROOFING", url: "/pages/roofing-shop" },
-    { label: "GLAZING", url: "/pages/glazing-shop" },
-    { label: "CUSTOM", url: "/pages/custompart" },
+    { label: "ROOFING", url: "/pages/roofing-calculators" },
+    { label: "GLAZING", url: "/pages/glazing-calculators" },
     { label: projectsLabel.toUpperCase(), url: projectsUrl },
     { label: "COLOURS", url: "/pages/colours" },
     { label: "CONTACT", url: "/pages/contact" },
@@ -94,6 +92,10 @@ export function getStorefrontAppNav(settings: ShopSettingsNavSlice | null): {
   const parsed = parseStorefrontNavLinksJson(slice.storefrontNavLinksJson);
   const links = filterShapeLinksFromNav(
     parsed ?? defaultStorefrontAppNavLinks(slice),
+  ).filter(
+    (link) =>
+      link.label.trim().toUpperCase() !== "CUSTOM" &&
+      !/\/pages\/custompart(\/|$)/i.test(link.url.trim()),
   );
   const cartUrl = slice.navButton3Url?.trim() || "/cart";
   return {

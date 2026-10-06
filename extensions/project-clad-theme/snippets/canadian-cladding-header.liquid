@@ -10,17 +10,15 @@
     assign account_href = routes.storefront_login_url
   endif
   assign path = request.path
-  assign nav_siding_url = '/collections/main-products'
-  assign nav_roofing_url = '/pages/roofing-shop'
-  assign nav_glazing_url = '/pages/glazing-shop'
-  assign nav_custom_url = '/pages/custompart'
+  assign nav_siding_url = '/pages/siding-calculators'
+  assign nav_roofing_url = '/pages/roofing-calculators'
+  assign nav_glazing_url = '/pages/glazing-calculators'
   assign nav_projects_url = '/apps/project-clad/projects'
   assign nav_colours_url = '/pages/colours'
   assign nav_contact_url = '/pages/contact'
   assign nav_siding_active = false
   assign nav_roofing_active = false
   assign nav_glazing_active = false
-  assign nav_custom_active = false
   assign nav_projects_active = false
   if path == nav_siding_url or path contains nav_siding_url
     assign nav_siding_active = true
@@ -28,8 +26,6 @@
     assign nav_roofing_active = true
   elsif path == nav_glazing_url or path contains nav_glazing_url
     assign nav_glazing_active = true
-  elsif path == nav_custom_url or path contains nav_custom_url
-    assign nav_custom_active = true
   elsif path contains '/apps/project-clad/projects' or path contains '/apps/project-clad/project' or path contains '/apps/project-clad/work-orders'
     assign nav_projects_active = true
   endif
@@ -85,10 +81,6 @@
       <a href="{{ nav_glazing_url }}" class="{% if nav_glazing_active %}active{% endif %}">
         {% if nav_glazing_active %}<span class="active-tick"></span>{% endif %}
         Glazing
-      </a>
-      <a href="{{ nav_custom_url }}" class="{% if nav_custom_active %}active{% endif %}">
-        {% if nav_custom_active %}<span class="active-tick"></span>{% endif %}
-        Custom
       </a>
       <a href="{{ nav_projects_url }}" class="{% if nav_projects_active %}active{% endif %}">
         {% if nav_projects_active %}<span class="active-tick"></span>{% endif %}

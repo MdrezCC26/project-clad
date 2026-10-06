@@ -28,15 +28,12 @@ export type CanadianCladdingShapeNavKey =
   (typeof CANADIAN_CLADDING_SHAPE_NAV)[number]["key"];
 
 /**
- * Main bar order: catalogue destinations, then the custom-shape destinations, then Projects.
- * Shape items used to live in a second pill row under the header — that read as a different
- * product and fought the rest of the type. They sit here as peers of Siding / Roofing instead.
+ * Main bar order: calculator pages, optional shape destinations, then Projects.
  */
 export const CANADIAN_CLADDING_PRIMARY_NAV = [
-  { key: "siding", label: "Siding", url: "/collections/main-products" },
-  { key: "roofing", label: "Roofing", url: "/pages/roofing-shop" },
-  { key: "glazing", label: "Glazing", url: "/pages/glazing-shop" },
-  { key: "custom", label: "Custom", url: "/pages/custompart" },
+  { key: "siding", label: "Siding", url: "/pages/siding-calculators" },
+  { key: "roofing", label: "Roofing", url: "/pages/roofing-calculators" },
+  { key: "glazing", label: "Glazing", url: "/pages/glazing-calculators" },
   ...(SHAPE_CALCULATOR_ENABLED ? CANADIAN_CLADDING_SHAPE_NAV : []),
   { key: "projects", label: "Projects", url: "/apps/project-clad/projects" },
 ] as const;
@@ -85,18 +82,6 @@ export function matchCanadianCladdingPrimaryNavActive(
     key === "shapeCart"
   ) {
     return matchCanadianCladdingShapeNavActive(pathname, key);
-  }
-  /* Shape pages used to light up Custom as well — with their own nav items that would
-     double-underline Custom and the active shape destination. */
-  if (key === "custom") {
-    return (
-      path === url ||
-      path.startsWith(`${url}/`) ||
-      (/\/pages\/custom/.test(path) && !/\/project-clad\/shape-/.test(path))
-    );
-  }
-  if (key === "siding") {
-    return path === url || path.startsWith(`${url}/`) || path.startsWith("/products/");
   }
   return path === url || path.startsWith(`${url}/`);
 }
