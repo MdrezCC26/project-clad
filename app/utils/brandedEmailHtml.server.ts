@@ -38,7 +38,7 @@ export type BuildBrandedEmailHtmlArgs = {
   companyHeading?: string;
   /** Extra sections between detail card and CTA (line items, totals, etc.). */
   bodyHtml?: string;
-  /** Primary dark buttons (stacked). Prefer over single `cta`. */
+  /** Primary red buttons (stacked). Prefer over single `cta`. */
   ctas?: BrandedEmailCta[];
   /** @deprecated Use `ctas`. */
   cta?: BrandedEmailCta | null;
@@ -51,7 +51,9 @@ export type BuildBrandedEmailHtmlArgs = {
 
 const CREAM_BG = "#EEECE7";
 const CREAM_FILL = `background-color:${CREAM_BG}; background-image:linear-gradient(${CREAM_BG},${CREAM_BG});`;
-const BTN_BG = "#1E2124";
+/** Same red as the header divider / eyebrow. */
+const ACCENT_RED = "#B3272C";
+const BTN_BG = ACCENT_RED;
 const BTN_FG = "#EEECE7";
 const BTN_FILL = `background-color:${BTN_BG}; background-image:linear-gradient(${BTN_BG},${BTN_BG});`;
 
@@ -75,7 +77,7 @@ function ctaButtonHtml(href: string, label: string, padLeft: boolean): string {
 function corrugatedDividerHtml(): string {
   return `
         <tr>
-          <td style="padding:0;margin:0;font-size:0;line-height:0;height:6px;background-color:#B3272C; background-image:linear-gradient(#B3272C,#B3272C);">
+          <td style="padding:0;margin:0;font-size:0;line-height:0;height:6px;background-color:${ACCENT_RED}; background-image:linear-gradient(${ACCENT_RED},${ACCENT_RED});">
             &nbsp;
           </td>
         </tr>`;
@@ -184,18 +186,18 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
   .email-text { color:#1E2124; }
   .email-muted { color:#5A5F66; }
   .email-label { color:#9A968D; }
-  .email-btn { background-color:#1E2124; }
+  .email-btn { background-color:${BTN_BG}; }
   .email-btn a,
   a.email-cta,
   a.email-cta:link,
   a.email-cta:visited,
   a.email-cta:hover,
   a.email-cta:active {
-    color:#EEECE7 !important;
+    color:${BTN_FG} !important;
     text-decoration:none !important;
-    background-color:#1E2124 !important;
-    background-image:linear-gradient(#1E2124,#1E2124) !important;
-    border-color:#1E2124 !important;
+    background-color:${BTN_BG} !important;
+    background-image:linear-gradient(${BTN_BG},${BTN_BG}) !important;
+    border-color:${BTN_BG} !important;
   }
   u + #body a.email-cta { color:#EEECE7 !important; text-decoration:none !important; }
 
@@ -217,12 +219,17 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
     .email-muted { color:#5A5F66 !important; }
     .email-label,
     .detail-label { color:#9A968D !important; }
-    .email-btn { background-color:#1E2124 !important; }
+    .email-btn { background-color:${BTN_BG} !important; background-image:linear-gradient(${BTN_BG},${BTN_BG}) !important; }
     .email-btn a,
     .email-btn span,
     a.email-cta,
     a.email-cta span,
-    a.email-cta font { color:#EEECE7 !important; text-decoration:none !important; }
+    a.email-cta font {
+      color:${BTN_FG} !important;
+      text-decoration:none !important;
+      background-color:${BTN_BG} !important;
+      background-image:linear-gradient(${BTN_BG},${BTN_BG}) !important;
+    }
   }
 
   /* Outlook.com dark mode */
@@ -250,13 +257,18 @@ export function buildBrandedEmailHtml(args: BuildBrandedEmailHtmlArgs): string {
   [data-ogsb] .email-label,
   [data-ogsb] .detail-label { color:#9A968D !important; }
   [data-ogsc] .email-btn,
-  [data-ogsb] .email-btn { background-color:#1E2124 !important; }
+  [data-ogsb] .email-btn { background-color:${BTN_BG} !important; background-image:linear-gradient(${BTN_BG},${BTN_BG}) !important; }
   [data-ogsc] .email-btn a,
   [data-ogsc] .email-btn span,
   [data-ogsc] a.email-cta,
   [data-ogsb] .email-btn a,
   [data-ogsb] .email-btn span,
-  [data-ogsb] a.email-cta { color:#EEECE7 !important; text-decoration:none !important; }
+  [data-ogsb] a.email-cta {
+    color:${BTN_FG} !important;
+    text-decoration:none !important;
+    background-color:${BTN_BG} !important;
+    background-image:linear-gradient(${BTN_BG},${BTN_BG}) !important;
+  }
 
   @media screen and (max-width: 600px) {
     .email-container { width:100% !important; }
