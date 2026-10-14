@@ -12,131 +12,191 @@ export class CartPricingError extends Error {
 }
 
 type StandardFormula = {
-  coefficients: Partial<Record<"L1" | "L2" | "L3" | "L4" | "L5", number>>;
+  coefficients: Partial<
+    Record<"L1" | "L2" | "L3" | "L4" | "L5" | "L6", number>
+  >;
   girthConstant?: number;
   labor: number;
 };
 
 const STANDARD_FORMULAS: Record<string, StandardFormula> = {
   ARCHITECTS_DRIP: {
-    coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 },
-    girthConstant: 1.5,
-    labor: 10,
-  },
-  CLIP: { coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 }, labor: 7.5 },
-  COLUMN_CAP: { coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 }, labor: 7.5 },
-  CORNER_EDGE: {
-    coefficients: { L1: 2, L2: 2, L3: 2, L4: 2 },
-    labor: 17.5,
-  },
-  DRIP_EDGE: { coefficients: { L1: 1, L2: 1, L3: 2 }, labor: 7.5 },
-  DRIP_EXPANSION: {
-    coefficients: { L1: 1, L2: 1, L3: 1 },
-    girthConstant: 3.5,
+    coefficients: { L1: 1, L2: 1, L3: 1, L4: 1, L5: 1, L6: 1 },
     labor: 7.5,
+  },
+  CLIP: { coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 }, labor: 4.5 },
+  COLUMN_CAP: {
+    coefficients: { L1: 2, L2: 1, L3: 1, L4: 1 },
+    labor: 6,
+  },
+  CORNER_EDGE: {
+    coefficients: { L1: 2, L2: 2, L3: 2, L4: 1, L5: 1 },
+    labor: 10.5,
+  },
+  DRIP_EDGE: {
+    coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 },
+    labor: 4.5,
+  },
+  DRIP_EDGE_FLAT: {
+    coefficients: { L1: 1, L2: 1, L3: 1 },
+    labor: 3,
+  },
+  DRIP_EXPANSION: {
+    coefficients: {},
+    labor: 9,
   },
   DRIP_FACED: {
-    coefficients: { L1: 1, L2: 1, L3: 1 },
-    girthConstant: 1.5,
-    labor: 7.5,
+    coefficients: { L1: 1, L2: 1, L3: 1, L4: 1, L5: 1 },
+    labor: 6,
   },
   DRIP_FACED_2: {
     coefficients: { L1: 1, L2: 1, L3: 1, L4: 2 },
-    labor: 10,
+    labor: 6,
   },
   DRIP_FACED_3: {
     coefficients: { L1: 1, L2: 1, L3: 1, L4: 1, L5: 1 },
-    labor: 10,
+    labor: 6,
   },
   DRIP_HEADER: {
-    coefficients: { L1: 1, L2: 2, L3: 2, L4: 1 },
-    labor: 12.5,
-  },
-  DRIP_JAMB: {
-    coefficients: { L1: 1, L2: 1, L3: 1 },
-    girthConstant: 1.5,
+    coefficients: { L1: 1, L2: 1, L3: 2, L4: 1, L5: 1 },
     labor: 7.5,
   },
+  DRIP_JAMB: {
+    coefficients: { L1: 1, L2: 1, L3: 2, L4: 1 },
+    labor: 6,
+  },
   FLAT_EXPANSION: {
-    coefficients: { L1: 1, L2: 1 },
-    girthConstant: 2,
-    labor: 5,
+    coefficients: {},
+    labor: 4.5,
   },
   GARAGE_DOOR_CAP: {
     coefficients: { L1: 1, L2: 1, L3: 1, L4: 1, L5: 1 },
-    labor: 10,
+    labor: 6,
+  },
+  HALF_CORNER: {
+    coefficients: { L1: 1, L2: 1, L3: 1, L4: 1, L5: 1 },
+    labor: 6,
+  },
+  INDUSTRIAL_CORNER: {
+    coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 },
+    labor: 4.5,
   },
   INSIDE_CORNER_EDGE: {
-    coefficients: { L1: 2, L2: 2, L3: 2, L4: 2 },
-    labor: 17.5,
+    coefficients: { L1: 2, L2: 2, L3: 2, L4: 1, L5: 1 },
+    labor: 10.5,
   },
-  J_TRIM: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 5 },
+  J_TRIM: {
+    coefficients: { L1: 1, L2: 1, L3: 2 },
+    labor: 4.5,
+  },
   J_TRIM_FULL: {
     coefficients: { L1: 1, L2: 2, L3: 2, L4: 1 },
-    labor: 12.5,
+    labor: 7.5,
   },
   J_TRIM_JAMB: {
-    coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 },
-    labor: 7.5,
+    coefficients: { L1: 1, L2: 1, L3: 2, L4: 1 },
+    labor: 6,
   },
   L_ANGLE: { coefficients: { L1: 1, L2: 1 }, labor: 2.5 },
   L_EXPANSION: {
-    coefficients: { L1: 1, L2: 1, L3: 1 },
-    girthConstant: 2,
-    labor: 7.5,
+    coefficients: {},
+    labor: 6,
   },
   L_SHAPE: { coefficients: { L1: 1, L2: 1 }, labor: 2.5 },
   L_SHAPE_FASCIA: {
     coefficients: { L1: 1, L2: 1, L3: 1 },
-    labor: 5,
+    labor: 3,
   },
   L_SHAPE_FASCIA_DOUBLE_HEM: {
     coefficients: { L1: 1, L2: 1, L3: 2 },
-    labor: 7.5,
+    labor: 4.5,
+  },
+  L_TRIM_DOUBLE_OUTER_HEM: {
+    coefficients: { L1: 1, L2: 1, L3: 2 },
+    labor: 4.5,
+  },
+  L_TRIM_HEM_AND_DRIP: {
+    coefficients: { L1: 1, L2: 1, L3: 1, L4: 2 },
+    labor: 6,
+  },
+  L_TRIM_SINGLE_OUTER_HEM: {
+    coefficients: { L1: 1, L2: 1, L3: 1 },
+    labor: 3,
+  },
+  OMEGA_BAR: {
+    coefficients: { L1: 1, L2: 2.3094, L3: 2 },
+    labor: 6,
   },
   PARAPET_CAP: {
-    coefficients: { L1: 1, L2: 1, L3: 1 },
-    girthConstant: 3,
-    labor: 7.5,
+    coefficients: { L1: 1, L2: 1, L3: 1, L4: 2 },
+    labor: 9,
   },
-  SILL_CLIP: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 5 },
+  REVEAL: {
+    coefficients: { L1: 2, L2: 1, L3: 4, L4: 4 },
+    labor: 15,
+  },
+  SILL_CLIP: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 3 },
   SILL_FACED: {
-    coefficients: { L1: 1, L2: 1, L3: 2 },
-    labor: 7.5,
+    coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 },
+    labor: 4.5,
   },
-  SILL_FLAT: { coefficients: { L1: 1, L2: 2 }, labor: 5 },
+  SILL_FACED_DOUBLE_HEM: {
+    coefficients: { L1: 1, L2: 1, L3: 1, L4: 2 },
+    labor: 6,
+  },
+  SILL_FLAT: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 3 },
   SILL_FULL_FLAT: {
     coefficients: { L1: 1, L2: 2, L3: 1 },
-    labor: 7.5,
+    labor: 4.5,
   },
-  SNOW_GUARD_BASE: { coefficients: { L1: 1 }, labor: 0 },
-  SNOW_GUARD_COVER: { coefficients: { L1: 1 }, labor: 0 },
-  STARTER: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 5 },
-  T_JAMB: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 5 },
-  U_BAR: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 5 },
-  U_BAR_TRIM: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 5 },
-  Z_BAR: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 5 },
-  Z_BAR_TRIM: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 5 },
-  Z_TAIL: { coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 }, labor: 7.5 },
+  SNOW_GUARD_BASE: { coefficients: {}, labor: 4.5 },
+  SNOW_GUARD_COVER: { coefficients: {}, labor: 7.5 },
+  SNOW_GUARD_KIT: { coefficients: { L1: 1 }, labor: 0 },
+  STARTER: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 3 },
+  STARTER_SLIP: { coefficients: {}, labor: 4.5 },
+  T_CLIP: {
+    coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 },
+    labor: 4.5,
+  },
+  T_DRIP: {
+    coefficients: { L1: 1, L2: 1, L3: 1, L4: 1, L5: 1 },
+    labor: 6,
+  },
+  T_JAMB: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 3 },
+  U_BAR: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 3 },
+  U_BAR_TRIM: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 3 },
+  Z_BAR: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 3 },
+  Z_BAR_TRIM: { coefficients: { L1: 1, L2: 1, L3: 1 }, labor: 3 },
+  Z_TAIL: { coefficients: { L1: 1, L2: 1, L3: 1, L4: 1 }, labor: 4.5 },
 };
 
 const GAUGE_RATES: Record<number, number> = {
-  16: 0.0153819,
-  18: 0.0112875,
-  20: 0.0094479,
-  22: 0.0077833,
-  24: 0.0104167,
-  26: 0.0082458,
+  16: 0.0202674,
+  18: 0.0162813,
+  20: 0.0129688,
+  22: 0.0116441,
+  24: 0.0125868,
+  26: 0.0107969,
 };
 const ALLOWED_LENGTHS = new Set([36, 48, 60, 96, 120]);
 const CALCULATOR_NAME_ALIASES: Record<string, string> = {
   ARCHITECTS_DRIP_EDGE: "ARCHITECTS_DRIP",
+  DRIP_EDGE_EXPANSION: "DRIP_EXPANSION",
   DRIP_EDGE_FACED: "DRIP_FACED",
   DRIP_EDGE_HEADER: "DRIP_HEADER",
   DRIP_EDGE_JAMB: "DRIP_JAMB",
+  INSIDE_CORNER: "INSIDE_CORNER_EDGE",
+  L_TRIM: "L_SHAPE",
+  L_TRIM_DOUBLE_INNER_HEM: "L_SHAPE_FASCIA_DOUBLE_HEM",
+  L_TRIM_SINGLE_INNER_HEM: "L_SHAPE_FASCIA",
+  L_SHAPE_SINGLE_OUTER_HEM: "L_TRIM_SINGLE_OUTER_HEM",
   L_SHAPE_FASICA: "L_SHAPE_FASCIA",
+  OUTSIDE_CORNER: "CORNER_EDGE",
+  OUTSIDE_CORNER_EDGE: "CORNER_EDGE",
   U_BAR_CUSTOM: "U_BAR",
+  U_TRIM: "U_BAR_TRIM",
   Z_BAR_CUSTOM: "Z_BAR",
+  Z_TRIM: "Z_BAR_TRIM",
 };
 
 function normalizedCalculatorName(value: string): string {
@@ -180,8 +240,98 @@ function numericValue(map: Map<string, string>, name: string): number {
   return value;
 }
 
+function angleValue(
+  map: Map<string, string>,
+  name: string,
+  fallback: number,
+  upperBound = 180,
+): number {
+  const value = Number.parseFloat(map.get(name) ?? "");
+  return Number.isFinite(value) && value > 0 && value < upperBound
+    ? value
+    : fallback;
+}
+
+function angledFoldAllowance(length: number, angleDegrees: number): number {
+  const halfAngleRadians = (angleDegrees * Math.PI) / 360;
+  return (
+    2 *
+    length *
+    (1 / Math.cos(halfAngleRadians) - Math.tan(halfAngleRadians))
+  );
+}
+
+function calculateGirth(
+  key: string,
+  values: Map<string, string>,
+  formula: StandardFormula,
+): number {
+  if (key === "DRIP_EXPANSION") {
+    return (
+      numericValue(values, "L1") +
+      numericValue(values, "L2") +
+      numericValue(values, "L3") +
+      numericValue(values, "L4") +
+      angledFoldAllowance(
+        numericValue(values, "L6"),
+        angleValue(values, "A3", 90),
+      )
+    );
+  }
+  if (key === "FLAT_EXPANSION") {
+    return (
+      numericValue(values, "L1") +
+      angledFoldAllowance(
+        numericValue(values, "L3"),
+        angleValue(values, "A1", 90),
+      )
+    );
+  }
+  if (key === "L_EXPANSION") {
+    return (
+      numericValue(values, "L1") +
+      numericValue(values, "L2") +
+      angledFoldAllowance(
+        numericValue(values, "L4"),
+        angleValue(values, "A2", 90),
+      )
+    );
+  }
+  if (key === "SNOW_GUARD_BASE" || key === "SNOW_GUARD_COVER") {
+    const l1 = numericValue(values, "L1");
+    const l2 = numericValue(values, "L2");
+    const l3 = numericValue(values, "L3");
+    const angleRadians =
+      (angleValue(values, "A1", 45, 90) * Math.PI) / 180;
+    const sideMultiplier = key === "SNOW_GUARD_COVER" ? 2 : 1;
+    return (
+      l1 +
+      l1 / Math.cos(angleRadians) +
+      sideMultiplier * l2 +
+      sideMultiplier * l3
+    );
+  }
+  if (key === "STARTER_SLIP") {
+    const l1 = numericValue(values, "L1");
+    const l2 = numericValue(values, "L2");
+    const l3 = numericValue(values, "L3");
+    const l4 = numericValue(values, "L4");
+    const angleRadians =
+      ((180 - angleValue(values, "A1", 165)) * Math.PI) / 180;
+    return l2 + (l1 - l2 - l3) / Math.cos(angleRadians) + l3 + l4;
+  }
+
+  let girth = formula.girthConstant ?? 0;
+  for (const [dimension, coefficient] of Object.entries(
+    formula.coefficients,
+  )) {
+    girth += numericValue(values, dimension) * (coefficient as number);
+  }
+  return girth;
+}
+
 /** Calculators whose price isn't girth × rate × length × 1.5 + labor. */
-const SPECIAL_FORMULA_KEYS = ["OMEGA_BAR", "FLAT_STOCK"];
+const SPECIAL_FORMULA_KEYS = ["FLAT_STOCK"];
 
 function calculatorKey(productTitle: string): string {
   const rawNormalized = normalizedCalculatorName(productTitle);
@@ -227,7 +377,7 @@ export function calculateOpcUnitPrice(args: {
   if (key === "FLAT_STOCK") {
     /* No Length dropdown: L1 × L2 is the sheet area in square inches. */
     return finalPrice(
-      numericValue(values, "L1") * numericValue(values, "L2") * rate * 1.5 + 5,
+      numericValue(values, "L1") * numericValue(values, "L2") * rate * 1.5,
     );
   }
 
@@ -236,27 +386,9 @@ export function calculateOpcUnitPrice(args: {
     throw new CartPricingError("Calculator length is not supported.");
   }
 
-  let price: number;
-  if (key === "OMEGA_BAR") {
-    const girth =
-      numericValue(values, "L1") +
-      numericValue(values, "L2") * 2 +
-      numericValue(values, "L3") * 2;
-    const piecesPerSheet = Math.floor(48 / girth);
-    if (piecesPerSheet < 1) {
-      throw new CartPricingError("Calculator girth is too large.");
-    }
-    price = ((rate * 48 * length) / piecesPerSheet) * 1.35 + 6;
-  } else {
-    const formula = STANDARD_FORMULAS[key];
-    let girth = formula.girthConstant ?? 0;
-    for (const [dimension, coefficient] of Object.entries(
-      formula.coefficients,
-    )) {
-      girth += numericValue(values, dimension) * (coefficient as number);
-    }
-    price = girth * rate * length * 1.5 + formula.labor;
-  }
+  const formula = STANDARD_FORMULAS[key];
+  const girth = calculateGirth(key, values, formula);
+  const price = girth * rate * length * 1.5 + formula.labor;
 
   return finalPrice(price);
 }

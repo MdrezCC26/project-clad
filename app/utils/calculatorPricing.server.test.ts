@@ -27,11 +27,11 @@ test("recomputes a standard OPC formula and ignores submitted price", () => {
         L2: "3",
       }),
     }),
-    "11.88",
+    "13.83",
   );
 });
 
-test("recomputes the Omega Bar sheet-yield formula", () => {
+test("recomputes the revised Omega Bar developed-girth formula", () => {
   assert.equal(
     calculateOpcUnitPrice({
       productTitle: "Omega Bar",
@@ -43,7 +43,7 @@ test("recomputes the Omega Bar sheet-yield formula", () => {
         L3: "1",
       }),
     }),
-    "13.57",
+    "19.22",
   );
 });
 
@@ -96,7 +96,7 @@ test("Drip Faced 3 uses its own five-leg formula, not Drip Faced", () => {
         L5: "2",
       }),
     }),
-    "28.75",
+    "28.66",
   );
 });
 
@@ -110,7 +110,55 @@ test("Flat Stock prices by sheet area without a Length field", () => {
         L2: "120",
       }),
     }),
-    "27.50",
+    "27.19",
+  );
+});
+
+test("recomputes angle-dependent replacement calculator formulas", () => {
+  assert.equal(
+    calculateOpcUnitPrice({
+      productTitle: "Drip Edge Expansion",
+      properties: properties({
+        Gauge: "24 Gauge",
+        Length: '120"',
+        L1: "2",
+        L2: "2",
+        L3: "2",
+        L4: "2",
+        L6: "2",
+        A3: "90",
+      }),
+    }),
+    "30.88",
+  );
+  assert.equal(
+    calculateOpcUnitPrice({
+      productTitle: "Snow Guard Base",
+      properties: properties({
+        Gauge: "18 Gauge",
+        Length: '96"',
+        L1: "2",
+        L2: "2",
+        L3: "2",
+        A1: "45",
+      }),
+    }),
+    "25.20",
+  );
+  assert.equal(
+    calculateOpcUnitPrice({
+      productTitle: "Starter Slip",
+      properties: properties({
+        Gauge: "24 Gauge",
+        Length: '120"',
+        L1: "2",
+        L2: "2",
+        L3: "2",
+        L4: "2",
+        A1: "165",
+      }),
+    }),
+    "13.40",
   );
 });
 
@@ -136,8 +184,11 @@ test("covers every supplied OPC calculator export", () => {
     "Clip",
     "Column Cap",
     "Corner Edge",
+    "Outside Corner Edge",
     "Drip Edge",
+    "Drip Edge Flat",
     "Drip Expansion",
+    "Drip Edge Expansion",
     "Drip Faced",
     "Drip Edge Faced",
     "Drip Faced 2",
@@ -149,6 +200,8 @@ test("covers every supplied OPC calculator export", () => {
     "Flat Expansion",
     "Flat Stock",
     "Garage Door Cap",
+    "Half Corner",
+    "Industrial Corner",
     "Inside Corner Edge",
     "J Trim",
     "J Trim Full",
@@ -158,20 +211,35 @@ test("covers every supplied OPC calculator export", () => {
     "L Shape",
     "L Shape Fascia",
     "L Shape Fascia Double Hem",
+    "L Trim",
+    "L Trim Double Inner Hem",
+    "L Trim Double Outer Hem",
+    "L Trim Hem and Drip",
+    "L Trim Single Inner Hem",
+    "L Trim Single Outer Hem",
+    "L Shape Single Outer Hem",
     "Omega Bar",
     "Parapet Cap",
+    "Reveal",
     "Sill Clip",
     "Sill Faced",
+    "Sill Faced Double Hem",
     "Sill Flat",
     "Sill Full Flat",
     "Snow Guard Base",
     "Snow Guard Cover",
+    "Snow Guard Kit",
     "Starter",
+    "Starter Slip",
+    "T Clip",
+    "T Drip",
     "T Jamb",
     "U Bar",
     "U Bar Trim",
+    "U Trim",
     "Z Bar",
     "Z Bar Trim",
+    "Z Trim",
     "Z Tail",
   ];
   const commonProperties = properties({
@@ -182,6 +250,10 @@ test("covers every supplied OPC calculator export", () => {
     L3: "2",
     L4: "2",
     L5: "2",
+    L6: "2",
+    A1: "165",
+    A2: "90",
+    A3: "90",
   });
 
   for (const productTitle of calculatorNames) {
