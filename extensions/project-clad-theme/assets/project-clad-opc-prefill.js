@@ -439,18 +439,7 @@
       if (!wrapper) continue;
       if (triggerShowsWanted(wrapper, wanted) || clickOpcOption(wrapper, wanted)) {
         done[fieldKey] = true;
-        // OPC stores inch marks as a double-escaped data-label, so the closed
-        // dropdown can read 120&quot; even when the selected value is correct.
-        const textEl =
-          wrapper.querySelector(".calc-color-option-trigger-text") ||
-          wrapper.querySelector(".calc-custom-select-trigger-label");
-        if (textEl && textEl.textContent && textEl.textContent.includes("&")) {
-          textEl.textContent = textEl.textContent
-            .replace(/&quot;/g, '"')
-            .replace(/&#34;/g, '"')
-            .replace(/&#39;/g, "'")
-            .replace(/&amp;/g, "&");
-        }
+        repairSelectLabels(wrapper);
       }
     }
   }
@@ -520,6 +509,214 @@
     document.body.appendChild(toast);
     window.setTimeout(() => toast.remove(), TOAST_MS);
   }
+
+  function decodeEntities(value) {
+    return String(value || "")
+      .replace(/&quot;/g, '"')
+      .replace(/&#34;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, "&");
+  }
+
+  function repairSelectLabels(root) {
+    const scope = root && root.querySelectorAll ? root : document;
+    scope.querySelectorAll(".calc-custom-select-wrapper").forEach((wrapper) => {
+      const textEl =
+        wrapper.querySelector(".calc-color-option-trigger-text") ||
+        wrapper.querySelector(".calc-custom-select-trigger-label");
+      if (!textEl) return;
+      const raw = textEl.textContent || "";
+      if (!/&(?:quot|#34|apos|#39|amp);/.test(raw)) return;
+      const select = wrapper.querySelector("select");
+      const selected =
+        select && select.selectedIndex >= 0
+          ? select.options[select.selectedIndex]
+          : null;
+      const fromOption = selected ? (selected.textContent || "").trim() : "";
+      const clean =
+        fromOption && !/&(?:quot|#34);/.test(fromOption)
+          ? fromOption
+          : decodeEntities(raw);
+      if (clean && clean !== raw) textEl.textContent = clean;
+    });
+  }
+
+  function clearLiftStyles(list) {
+    list.style.position = "";
+    list.style.left = "";
+    list.style.width = "";
+    list.style.right = "";
+    list.style.top = "";
+    list.style.bottom = "";
+    list.style.maxHeight = "";
+    list.style.overflowY = "";
+    list.style.zIndex = "";
+  }
+
+  function liftList(list) {
+    if (list.parentElement === document.body && list.__pcParent) return;
+    const wrapper = list.closest(".calc-custom-select-wrapper");
+    if (!wrapper) return;
+    list.__pcWrapper = wrapper;
+    list.__pcParent = list.parentElement;
+    list.__pcNext = list.nextSibling;
+    document.body.appendChild(list);
+  }
+
+  function restoreList(list) {
+    const parent = list.__pcParent;
+    if (parent && list.parentElement !== parent && parent.isConnected) {
+      const next = list.__pcNext;
+      if (next && next.parentElement === parent) parent.insertBefore(list, next);
+      else parent.appendChild(list);
+    }
+    list.__pcParent = null;
+    list.__pcNext = null;
+    list.__pcWrapper = null;
+  }
+
+  // OPC closes menus with closest(".calc-custom-select-wrapper"). A list parked
+  // on document.body fails that lookup and the click handler throws. Put the
+  // node back before those bubble listeners run. Moving the node can scroll,
+  // and that scroll must not lift the list again until the click is finished.
+  let parkDepth = 0;
+  let holdLift = false;
+
+  function parkListsForClick() {
+    // Moving the list queues a mutation observer. Browsers flush that between
+    // click listeners, which would lift the menu again before OPC's closer runs.
+    holdLift = true;
+    window.setTimeout(() => {
+      holdLift = false;
+      placeOpenLists();
+    }, 0);
+    parkDepth += 1;
+    try {
+      document
+        .querySelectorAll(".calc-custom-select-list, .calc-font-color-list")
+        .forEach((list) => {
+          if (list.parentElement !== document.body) return;
+          const parent = list.__pcParent;
+          if (!parent || !parent.isConnected) {
+            list.classList.remove("is-open");
+            clearLiftStyles(list);
+            list.remove();
+            return;
+          }
+          const next = list.__pcNext;
+          if (next && next.parentElement === parent) parent.insertBefore(list, next);
+          else parent.appendChild(list);
+        });
+    } finally {
+      parkDepth -= 1;
+    }
+  }
+
+  function placeOpenLists() {
+    if (parkDepth > 0 || holdLift) return;
+    const open = document.querySelectorAll(
+      ".calc-custom-select-list.is-open, .calc-font-color-list.is-open",
+    );
+    open.forEach((list) => {
+      const wrapper =
+        list.__pcWrapper || list.closest(".calc-custom-select-wrapper");
+      const trigger =
+        wrapper &&
+        wrapper.querySelector(
+          ".calc-custom-select-trigger, .calc-font-color-trigger",
+        );
+      if (!trigger) return;
+      liftList(list);
+      const rect = trigger.getBoundingClientRect();
+      const gap = 4;
+      const edge = 8;
+      const desired = 240;
+      const spaceBelow = window.innerHeight - rect.bottom - gap - edge;
+      const spaceAbove = rect.top - gap - edge;
+      const openUp =
+        spaceBelow < Math.min(desired, 180) && spaceAbove > spaceBelow;
+      const room = Math.min(
+        desired,
+        Math.max(72, Math.floor(openUp ? spaceAbove : spaceBelow)),
+      );
+      list.style.position = "fixed";
+      list.style.left = `${Math.max(edge, rect.left)}px`;
+      list.style.width = `${rect.width}px`;
+      list.style.right = "auto";
+      list.style.zIndex = "10000";
+      list.style.maxHeight = `${room}px`;
+      list.style.overflowY = "auto";
+      if (openUp) {
+        list.style.top = "auto";
+        list.style.bottom = `${Math.max(edge, window.innerHeight - rect.top + gap)}px`;
+      } else {
+        list.style.bottom = "auto";
+        list.style.top = `${rect.bottom + gap}px`;
+      }
+    });
+    document
+      .querySelectorAll(
+        ".calc-custom-select-list:not(.is-open), .calc-font-color-list:not(.is-open)",
+      )
+      .forEach((list) => {
+        if (list.style.position === "fixed" || list.__pcParent) {
+          clearLiftStyles(list);
+          restoreList(list);
+        }
+      });
+  }
+
+  function startCalculatorChromeFix() {
+    const run = () => {
+      repairSelectLabels(document);
+      placeOpenLists();
+    };
+    run();
+    window.addEventListener("oo:calculator:rendered", run);
+    document.addEventListener("click", parkListsForClick, true);
+    document.addEventListener("click", () => {
+      window.requestAnimationFrame(run);
+    });
+    let scrollQueued = false;
+    const placeAfterScroll = () => {
+      if (scrollQueued) return;
+      scrollQueued = true;
+      window.requestAnimationFrame(() => {
+        scrollQueued = false;
+        if (
+          document.querySelector(
+            ".calc-custom-select-list.is-open, .calc-font-color-list.is-open",
+          )
+        ) {
+          placeOpenLists();
+        }
+      });
+    };
+    window.addEventListener("scroll", placeAfterScroll, true);
+    window.addEventListener("resize", placeAfterScroll);
+    const watchRoot = (node) => {
+      if (!node || node.dataset.projectcladCalcWatch === "1") return;
+      node.dataset.projectcladCalcWatch = "1";
+      const obs = new MutationObserver(run);
+      obs.observe(node, { childList: true, subtree: true, characterData: true });
+    };
+    const attach = () => {
+      watchRoot(
+        document.getElementById("calculator-form-container") ||
+          document.getElementById("calc-form-preview"),
+      );
+    };
+    attach();
+    const boot = new MutationObserver(() => {
+      attach();
+      run();
+    });
+    boot.observe(document.documentElement, { childList: true, subtree: true });
+    window.setTimeout(() => boot.disconnect(), 20000);
+  }
+
+  startCalculatorChromeFix();
 
   const payload = readPayload();
   if (!payload) return;
