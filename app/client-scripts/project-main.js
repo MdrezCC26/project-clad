@@ -1508,6 +1508,20 @@
       if (rejectModal instanceof HTMLElement) rejectModal.style.display = 'none';
       pcForgetDirtyWithin(rejectModal);
     }
+    const reorderOrderOpenBtn = event.target?.closest?.('[data-projectclad-reorder-order-open]');
+    if (reorderOrderOpenBtn instanceof HTMLElement) {
+      event.preventDefault();
+      event.stopPropagation();
+      openWholeOrderReorderModal(reorderOrderOpenBtn);
+    }
+    const reorderOrderModal = document.querySelector('[data-projectclad-reorder-order-modal]');
+    if (
+      event.target?.closest?.('[data-projectclad-reorder-order-cancel]') ||
+      event.target === reorderOrderModal
+    ) {
+      if (reorderOrderModal instanceof HTMLElement) reorderOrderModal.style.display = 'none';
+      pcForgetDirtyWithin(reorderOrderModal);
+    }
     const reorderOpenBtn = event.target?.closest?.('[data-projectclad-reorder-open]');
     if (reorderOpenBtn instanceof HTMLElement) {
       event.preventDefault();
@@ -3249,8 +3263,76 @@
     }
   }, true);
 
+  function openWholeOrderReorderModal(btn) {
+    var modal = document.querySelector('[data-projectclad-reorder-order-modal]');
+    if (!(modal instanceof HTMLElement)) return;
+    var jobId = btn.getAttribute('data-job-id') || '';
+    var jobName = btn.getAttribute('data-job-name') || 'order';
+    var raw = btn.getAttribute('data-reorder-lines') || '[]';
+    var lines = [];
+    try {
+      lines = JSON.parse(raw);
+    } catch (err) {
+      lines = [];
+    }
+    if (!Array.isArray(lines) || !lines.length) return;
+    var hid = document.getElementById('projectclad-reorder-order-job-id');
+    var nameInp = document.getElementById('projectclad-reorder-order-name');
+    var list = modal.querySelector('[data-projectclad-reorder-order-lines]');
+    if (hid instanceof HTMLInputElement) hid.value = jobId;
+    if (nameInp instanceof HTMLInputElement) {
+      var base = 'Reorder of ' + jobName;
+      nameInp.value = base.length > 180 ? base.slice(0, 177) + '…' : base;
+    }
+    if (list) {
+      list.replaceChildren();
+      lines.forEach(function (line) {
+        if (!line || typeof line.id !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(line.id)) return;
+        var li = document.createElement('li');
+        li.className = 'project-clad-reorder-order-line';
+        var label = document.createElement('span');
+        label.className = 'project-clad-reorder-order-line__label';
+        label.textContent =
+          typeof line.label === 'string' && line.label.trim() ? line.label.trim() : 'Line';
+        var input = document.createElement('input');
+        input.type = 'number';
+        input.name = 'qty_' + line.id;
+        input.min = '0';
+        input.max = '99999';
+        input.step = '1';
+        input.required = true;
+        input.inputMode = 'numeric';
+        input.className = 'project-clad-pricing-password-input project-clad-reorder-order-line__qty';
+        input.setAttribute('aria-label', 'Quantity for ' + label.textContent);
+        var q = parseInt(line.qty, 10);
+        var qStr = !isNaN(q) && q > 0 ? String(q) : '1';
+        input.defaultValue = qStr;
+        input.value = qStr;
+        li.appendChild(label);
+        li.appendChild(input);
+        list.appendChild(li);
+      });
+    }
+    modal.style.display = 'flex';
+    setTimeout(function () {
+      if (nameInp instanceof HTMLInputElement) {
+        nameInp.focus();
+        nameInp.select();
+      }
+    }, 50);
+  }
+
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
+    var wholeReorderModal = document.querySelector('[data-projectclad-reorder-order-modal]');
+    if (
+      wholeReorderModal instanceof HTMLElement &&
+      wholeReorderModal.style.display === 'flex'
+    ) {
+      wholeReorderModal.style.display = 'none';
+      pcForgetDirtyWithin(wholeReorderModal);
+      return;
+    }
     const pop = document.querySelector('[data-projectclad-add-member-popover]');
     const tgl = document.querySelector('[data-projectclad-add-member-popover-toggle]');
     if (isAddMemberPopoverOpen(pop)) {

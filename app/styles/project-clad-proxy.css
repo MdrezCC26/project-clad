@@ -12617,6 +12617,33 @@ details.project-clad-edit-mode [data-projectclad-save-fields-btn] {
   justify-content: center;
 }
 
+.project-clad-reorder-order-lines {
+  list-style: none;
+  margin: 0.85rem 0 0.35rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.project-clad-reorder-order-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5.75rem;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.project-clad-reorder-order-line__label {
+  font-size: 0.92rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.project-clad-reorder-order-line__qty {
+  width: 100%;
+  text-align: right;
+}
+
 .project-clad-delivery-mode-radios {
   display: flex;
   flex-direction: column;
