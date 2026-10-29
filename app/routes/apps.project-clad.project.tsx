@@ -133,6 +133,8 @@ import {
 import { formatPhoneNumber, phoneTelHref } from "../utils/phoneFormat";
 import { resolveColourCatalogueLine } from "../utils/colourCatalogue";
 import { duplicateUploadPartMirrorsForCopiedJobItem } from "../utils/uploadPartMirror.server";
+import { createDeliveredOrderReorder } from "../utils/reorderDeliveredOrder.server";
+import { parseReorderQuantityOverrides } from "../utils/reorderDeliveredOrder";
 import { upsertProjectShareInvite } from "../utils/projectShareInvite.server";
 import {
   JobDeliveryAddressFields,
@@ -444,6 +446,15 @@ const PC_DELIVERY_OPTIONS_ICON = (
     <path d="M14 10h4l3 3v2h-7V10z" />
     <circle cx="7" cy="17" r="2" />
     <circle cx="17" cy="17" r="2" />
+  </svg>
+);
+
+const PC_REORDER_ICON = (
+  <svg {...PC_ICON_SVG_PROPS}>
+    <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8" />
+    <path d="M21 3v5h-5" />
+    <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16" />
+    <path d="M3 21v-5h5" />
   </svg>
 );
 
@@ -3011,7 +3022,8 @@ function formatActivitySummary(ev: ActivityFeedItem): string {
       const jn = String(p.jobName || "Order");
       const reorderFrom = String(p.reorderedFromJobName || "").trim();
       if (reorderFrom) {
-        return `New order ${jn} (reorder from ${reorderFrom})`;
+        const kind = p.draft === true ? "Draft order" : "New order";
+        return `${kind} ${jn} (reorder from ${reorderFrom})`;
       }
       const from = String(p.copiedFrom || "").trim();
       return from ? `New order ${jn} (from ${from})` : `New order ${jn}`;
@@ -6678,6 +6690,53 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
+  if (intent === "reorder-delivered-order") {
+    if (!canEdit) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+
+    const sourceJobId = String(formData.get("jobId") || "").trim();
+    const requestedName = String(formData.get("orderName") || "");
+    const parsedQty = parseReorderQuantityOverrides(formData.entries());
+    if (!parsedQty.ok) {
+      return redirectToProject(request, projectId, shop, {
+        reorderError: parsedQty.error,
+        ...(sourceJobId ? { job: sourceJobId } : {}),
+      });
+    }
+
+    const reordered = await createDeliveredOrderReorder({
+      shop,
+      projectId,
+      sourceJobId,
+      requestedName,
+      quantityOverrides: parsedQty.overrides,
+      actorCustomerId: customerId,
+    });
+    if (!reordered.ok) {
+      return redirectToProject(request, projectId, shop, {
+        reorderError: reordered.error.slice(0, 240),
+        ...(sourceJobId ? { job: sourceJobId } : {}),
+      });
+    }
+
+    await emailProjectStatusSnapshot({
+      shop,
+      projectId,
+      actorCustomerId: customerId,
+      headline: "Reorder draft created",
+      introLines: [
+        `Draft order "${reordered.jobName}" was created from "${reordered.sourceJobName}" with ${reordered.lineCount} line(s).`,
+        "Open the project to review the draft, then use Order now. The delivered order stays as it is.",
+      ],
+    });
+
+    return redirectToProject(request, projectId, shop, {
+      job: reordered.jobId,
+      reorderCreated: reordered.jobName,
+    });
+  }
+
   if (intent === "delete-item") {
     if (!canEdit) {
       throw new Response("Forbidden", { status: 403 });
@@ -8160,6 +8219,78 @@ export default function ProjectDetailPage() {
       </div>
       <div
         className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
+        data-projectclad-reorder-order-modal
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reorder-order-modal-title"
+        style={{ display: "none" }}
+      >
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- modal card: stop mousedown so backdrop logic ignores inner surface */}
+        <div
+          className="project-clad-card project-clad-modal project-clad-reject-modal"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="project-clad-modal__header-row">
+            <h2 id="reorder-order-modal-title">Reorder</h2>
+            <button
+              type="button"
+              className="project-clad-modal-close"
+              data-projectclad-reorder-order-cancel
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+          <p className="project-clad-muted">
+            This creates a new draft order in this project with the same products,
+            colours, gauges, and dimensions. Adjust quantities if you need to
+            (0 leaves a line off). Prices use current rates. The delivered order
+            stays as it is. Review the draft, then use Order now — approval and
+            account rules still apply.
+          </p>
+          <Form
+            method="post"
+            action={`${storefrontProjectActionPath}?id=${encodeURIComponent(project.id)}`}
+            className="project-clad-reject-form"
+          >
+            <input type="hidden" name="id" value={project.id} />
+            <input type="hidden" name="intent" value="reorder-delivered-order" />
+            <input
+              type="hidden"
+              name="jobId"
+              id="projectclad-reorder-order-job-id"
+              defaultValue=""
+            />
+            <label htmlFor="projectclad-reorder-order-name">Order name</label>
+            <input
+              id="projectclad-reorder-order-name"
+              name="orderName"
+              type="text"
+              defaultValue=""
+              maxLength={180}
+              className="project-clad-pricing-password-input"
+            />
+            <ul
+              className="project-clad-reorder-order-lines"
+              data-projectclad-reorder-order-lines
+            />
+            <div className="project-clad-actions project-clad-reject-modal-actions">
+              <button type="submit" className="project-clad-button project-clad-reject-modal-btn">
+                Create draft order
+              </button>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                data-projectclad-reorder-order-cancel
+              >
+                Cancel
+              </button>
+            </div>
+          </Form>
+        </div>
+      </div>
+      <div
+        className="project-clad-modal-backdrop project-clad-reject-modal-backdrop"
         data-projectclad-edit-project-modal
         role="dialog"
         aria-modal="true"
@@ -9492,6 +9623,56 @@ export default function ProjectDetailPage() {
               </button>
             </div>
           ) : null}
+          {searchParams.get("reorderCreated") ? (
+            <div
+              role="status"
+              className="project-clad-card"
+              style={{
+                marginBottom: "1rem",
+                padding: "0.85rem 1rem",
+                borderColor: "#15803d",
+                background: "rgba(21, 128, 61, 0.08)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.45 }}>
+                Draft order <strong>{searchParams.get("reorderCreated")}</strong> is
+                open below. Review the lines, then use Order now when you are ready.
+                The delivered order stays as it is.
+              </p>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                style={{ marginTop: "0.65rem" }}
+                data-pc-dismiss-banner="reorderCreated"
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+          {searchParams.get("reorderError") ? (
+            <div
+              role="alert"
+              className="project-clad-card"
+              style={{
+                marginBottom: "1rem",
+                padding: "0.85rem 1rem",
+                borderColor: "#b71c1c",
+                background: "rgba(183, 28, 28, 0.06)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "0.92rem", lineHeight: 1.45 }}>
+                {searchParams.get("reorderError")}
+              </p>
+              <button
+                type="button"
+                className="project-clad-button project-clad-reject-modal-btn"
+                style={{ marginTop: "0.65rem" }}
+                data-pc-dismiss-banner="reorderError"
+              >
+                Dismiss
+              </button>
+            </div>
+          ) : null}
           {searchParams.get("pcNewOrderError") === "duplicate" ? (
             <div
               role="alert"
@@ -10077,6 +10258,44 @@ export default function ProjectDetailPage() {
                           "aria-label": "Delivery & status for this order",
                         },
                       });
+                    const showWholeOrderReorder =
+                      Boolean(canEdit) &&
+                      isReorderEligibleOrderLifecycle(job.orderLifecycleStatus) &&
+                      job.items.some(
+                        (item) =>
+                          item.quantity > 0 &&
+                          String(item.variantId || "").trim().length > 0,
+                      );
+                    if (showWholeOrderReorder) {
+                      const reorderLinesForModal = job.items
+                        .filter(
+                          (item) =>
+                            item.quantity > 0 &&
+                            String(item.variantId || "").trim().length > 0,
+                        )
+                        .map((item) => ({
+                          id: item.id,
+                          label: item.displayName,
+                          qty: item.quantity,
+                        }));
+                      orderFinanceActions.push({
+                        key: "reorder-order",
+                        kind: "button",
+                        icon: PC_REORDER_ICON,
+                        label: "Reorder",
+                        description:
+                          "Create a draft order in this project with the same items.",
+                        tone: "edit",
+                        buttonProps: {
+                          "data-projectclad-reorder-order-open": "",
+                          "data-job-id": job.id,
+                          "data-job-name": jobSummaryDisplayName,
+                          "data-reorder-lines": JSON.stringify(reorderLinesForModal),
+                          title: "Create a new draft order with these items",
+                          "aria-label": "Reorder this order",
+                        },
+                      });
+                    }
                     const orderFinanceActionsSlot =
                       orderFinanceActions.length > 0 ? (
                         <div className="project-clad-order-actions-stack">
