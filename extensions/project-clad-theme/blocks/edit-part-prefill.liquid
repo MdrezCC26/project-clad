@@ -1,0 +1,15 @@
+{% comment %}
+  Loads the Edit part prefill on calculator product pages.
+  Enable once in the theme editor: Theme settings → App embeds → Edit part.
+{% endcomment %}
+{% if request.page_type == 'product' %}
+  <script src="{{ 'project-clad-opc-prefill.js' | asset_url }}" defer></script>
+{% endif %}
+
+{% schema %}
+{
+  "name": "Edit part",
+  "target": "body",
+  "settings": []
+}
+{% endschema %}
