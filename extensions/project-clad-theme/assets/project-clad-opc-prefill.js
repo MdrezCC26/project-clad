@@ -332,15 +332,24 @@
 
   function headingKeyFromText(text) {
     const n = normalizeMatch(text);
-    if (!n || n.length > 40) return null;
+    if (!n || n.length > 80) return null;
     if (/^color picker\b|^colour picker\b/.test(n)) return "color";
     if (/^gauge\b/.test(n)) return "gauge";
-    if (/^length\b/.test(n)) return "length";
+    if (/^length\b/.test(n) && !/\b[la]\s*\d+\b/.test(n)) return "length";
     if (/^additional details\b/.test(n)) return "additional_details";
-    const dim = n.match(/^(l|a)\s*(\d+)\b/);
+    // OPC number inputs use placeholder "Angle" / "Length", so the collected
+    // label string is often "Angle A3 A3" rather than a bare "A3".
+    const dim = n.match(/\b([la])\s*(\d+)\b/);
     if (dim) return `${dim[1]}${dim[2]}`;
     if (/^color\b|^colour\b/.test(n)) return "color";
     return null;
+  }
+
+  function calcFieldLabelText(el) {
+    const field = el.closest && el.closest(".calc-field");
+    const label = field && field.querySelector("label");
+    if (!label) return "";
+    return ownText(label) || (label.textContent || "").trim();
   }
 
   const DROPDOWN_DATA_NAMES = {
@@ -430,6 +439,18 @@
       if (!wrapper) continue;
       if (triggerShowsWanted(wrapper, wanted) || clickOpcOption(wrapper, wanted)) {
         done[fieldKey] = true;
+        // OPC stores inch marks as a double-escaped data-label, so the closed
+        // dropdown can read 120&quot; even when the selected value is correct.
+        const textEl =
+          wrapper.querySelector(".calc-color-option-trigger-text") ||
+          wrapper.querySelector(".calc-custom-select-trigger-label");
+        if (textEl && textEl.textContent && textEl.textContent.includes("&")) {
+          textEl.textContent = textEl.textContent
+            .replace(/&quot;/g, '"')
+            .replace(/&#34;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&amp;/g, "&");
+        }
       }
     }
   }
@@ -441,10 +462,13 @@
       if (el instanceof HTMLSelectElement) continue;
       const nameKey = controlNameKey(el);
       const label = labelTextFor(el);
-      const heading = headingKeyFromText(
-        (el.labels && el.labels[0] ? ownText(el.labels[0]) : "") ||
-          (label.split(/\s{2,}|\n/)[0] || ""),
-      );
+      const fieldLabel = calcFieldLabelText(el);
+      const heading =
+        headingKeyFromText(fieldLabel) ||
+        headingKeyFromText(
+          (el.labels && el.labels[0] ? ownText(el.labels[0]) : "") ||
+            (label.split(/\s{2,}|\n/)[0] || ""),
+        );
       const wanted =
         valueForKey(fields, nameKey) ||
         (heading ? valueForKey(fields, heading) : null) ||
