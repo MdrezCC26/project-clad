@@ -24,6 +24,20 @@ export function normalizeOrderSpecKey(key: string): string {
   return key.trim().toLowerCase().replace(/[\s_-]+/g, "_");
 }
 
+/**
+ * Free-text shop notes. These stay on the line as written and wrap in the
+ * order column. Short specs (Gauge, Length, L1) stay single-line chips.
+ */
+export function isWrappingOrderLineNote(labelOrKey: string): boolean {
+  const normalized = labelOrKey.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+  return (
+    normalized === "note" ||
+    normalized === "notes" ||
+    normalized === "additional details" ||
+    normalized === "additional detail"
+  );
+}
+
 export function titleCaseWords(value: string): string {
   return value
     .trim()

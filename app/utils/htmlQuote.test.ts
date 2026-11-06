@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { decodeHtmlQuotes, decodePropertyValue } from "./htmlQuote";
-import { collectOrderLineSpecMap } from "./orderLineSpecs";
+import {
+  collectOrderLineSpecMap,
+  isWrappingOrderLineNote,
+} from "./orderLineSpecs";
 
 test("decodeHtmlQuotes turns OPC inch-mark entities into a quote", () => {
   assert.equal(decodeHtmlQuotes("120&quot;"), '120"');
@@ -23,6 +26,17 @@ test("decodePropertyValue fixes Length inside the OPC payload without breaking J
   assert.equal(parsed.Gauge, "26 Gauge");
   assert.equal(decodePropertyValue("120&quot;"), '120"');
   assert.equal(decodePropertyValue('120"'), '120"');
+});
+
+test("shop notes wrap and short specs stay compact chips", () => {
+  assert.equal(isWrappingOrderLineNote("Note"), true);
+  assert.equal(isWrappingOrderLineNote("notes"), true);
+  assert.equal(isWrappingOrderLineNote("additional_details"), true);
+  assert.equal(isWrappingOrderLineNote("Additional Details"), true);
+  assert.equal(isWrappingOrderLineNote("Gauge"), false);
+  assert.equal(isWrappingOrderLineNote("Length"), false);
+  assert.equal(isWrappingOrderLineNote("L1"), false);
+  assert.equal(isWrappingOrderLineNote("Color Picker"), false);
 });
 
 test("order line specs show a decoded Length for saved OPC lines", () => {

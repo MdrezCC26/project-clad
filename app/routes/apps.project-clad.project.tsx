@@ -189,6 +189,7 @@ import {
   formatJobCreatedMmDdYyyy,
   formatValuesUsedDisplay,
   isCustomDimensionLineSpec,
+  isWrappingOrderLineNote,
   orderLineDisplayNameWithGauge,
   resolveOrderLineImageUrl,
   titleCaseWords,
@@ -973,8 +974,16 @@ function pushOrderLinePropertyDisplay(
     }
   }
 
+  const note = isWrappingOrderLineNote(label);
   chips.push(
-    <span key={key} className="project-clad-order-card-chip">
+    <span
+      key={key}
+      className={
+        note
+          ? "project-clad-order-card-chip project-clad-order-card-chip--note"
+          : "project-clad-order-card-chip"
+      }
+    >
       <span className="project-clad-order-card-chip__k">{label}</span>
       <span className="project-clad-order-card-chip__v">{v}</span>
     </span>,

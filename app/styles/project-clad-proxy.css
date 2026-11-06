@@ -11482,6 +11482,35 @@ button.project-clad-order-line-thumb-preview .project-clad-order-card-thumb-badg
   text-shadow: none;
 }
 
+/*
+ * Shop notes are free text. Gauge / Length / L1 stay on one line above.
+ * A note takes the details column and wraps, including beside a tall upload.
+ */
+.project-clad-order-card-chip--note {
+  display: flex;
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  white-space: normal;
+  text-align: left;
+}
+
+.project-clad-order-card-chip--note .project-clad-order-card-chip__k {
+  flex: 0 0 auto;
+}
+
+.project-clad-order-card-chip--note .project-clad-order-card-chip__v {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .project-clad-order-card-prop-blocks {
   width: 100%;
   margin-top: 0.25rem;
@@ -18265,6 +18294,29 @@ details.project-clad-edit-mode
     overflow: visible !important;
     text-overflow: clip !important;
     white-space: nowrap !important;
+  }
+
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-card-chip--note,
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-card-chip--note
+    .project-clad-order-card-chip__v,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-card-chip--note,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-card-chip--note
+    .project-clad-order-card-chip__v {
+    white-space: normal !important;
+    max-width: none !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+    overflow-wrap: anywhere !important;
   }
 
   body.project-clad-print-order-only
