@@ -1,7 +1,9 @@
 import {
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type {
@@ -11,6 +13,7 @@ import type {
   ReactNode,
 } from "react";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "react-router";
+import { createPortal } from "react-dom";
 import {
   Form,
   redirect,
@@ -746,7 +749,11 @@ function CustomDimensionLineSpecs({ map }: { map: Map<string, string> }) {
             {row.label}
           </span>
           <span className="project-clad-order-custom-spec__value">
-            {row.value}
+            {row.extra && isWrappingOrderLineNote(row.label) ? (
+              <OrderLineNote label={row.label} value={row.value} />
+            ) : (
+              row.value
+            )}
           </span>
         </div>
       ))}
@@ -974,19 +981,126 @@ function pushOrderLinePropertyDisplay(
     }
   }
 
-  const note = isWrappingOrderLineNote(label);
+  if (isWrappingOrderLineNote(label)) {
+    chips.push(<OrderLineNote key={key} label={label} value={v} />);
+    return;
+  }
+
   chips.push(
-    <span
-      key={key}
-      className={
-        note
-          ? "project-clad-order-card-chip project-clad-order-card-chip--note"
-          : "project-clad-order-card-chip"
-      }
-    >
+    <span key={key} className="project-clad-order-card-chip">
       <span className="project-clad-order-card-chip__k">{label}</span>
       <span className="project-clad-order-card-chip__v">{v}</span>
     </span>,
+  );
+}
+
+function OrderLineNote({ label, value }: { label: string; value: string }) {
+  const text = value.trim();
+  const [open, setOpen] = useState(false);
+  const openerRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const heading = titleCaseWords(label.replace(/=$/, ""));
+
+  useEffect(() => {
+    if (!open) return;
+    const opener = openerRef.current;
+    const dialog = dialogRef.current;
+    closeRef.current?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab" || !dialog) return;
+      const focusable = [
+        ...dialog.querySelectorAll<HTMLElement>("button, [tabindex]:not([tabindex='-1'])"),
+      ].filter((el) => !el.hasAttribute("disabled"));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.body.style.overflow = previousOverflow;
+      opener?.focus();
+    };
+  }, [open]);
+
+  if (!text) return null;
+
+  const dialog =
+    open && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            className="project-clad-order-note-dialog"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setOpen(false);
+            }}
+          >
+            <div
+              ref={dialogRef}
+              className="project-clad-order-note-dialog__panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={titleId}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="project-clad-order-note-dialog__header">
+                <h2 id={titleId}>{heading}</h2>
+                <button
+                  ref={closeRef}
+                  type="button"
+                  className="project-clad-order-note-dialog__close"
+                  aria-label="Close"
+                  onClick={() => setOpen(false)}
+                >
+                  ×
+                </button>
+              </div>
+              <div className="project-clad-order-note-dialog__body" tabIndex={0}>
+                {text}
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <span className="project-clad-order-note">
+      <button
+        ref={openerRef}
+        type="button"
+        className="project-clad-order-note-open"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen(true);
+        }}
+      >
+        View comment
+      </button>
+      <p className="project-clad-order-note-print">
+        <span className="project-clad-order-note-print__label">{heading}</span>
+        {text}
+      </p>
+      {dialog}
+    </span>
   );
 }
 

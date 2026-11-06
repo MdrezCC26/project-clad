@@ -11483,38 +11483,141 @@ button.project-clad-order-line-thumb-preview .project-clad-order-card-thumb-badg
 }
 
 /*
- * Shop notes use the details column that is already beside the image.
- * Three lines, then an ellipsis. The thumb and tile size stay as they are.
- * Gauge / Length / L1 stay on one line.
+ * A populated note is a compact "View comment" control. The full text is in
+ * the dialog. Print uses the hidden paragraph instead of the button.
+ * Gauge / Length / L1 stay one-line chips. Thumb size is unchanged.
  */
-.project-clad-order-card-chip--note {
-  display: flex;
-  flex: 1 1 100%;
-  width: 100%;
+.project-clad-order-note {
+  display: inline-flex;
   max-width: 100%;
   min-width: 0;
-  box-sizing: border-box;
-  white-space: normal;
-  text-align: left;
-  align-items: flex-start;
 }
 
-.project-clad-order-card-chip--note .project-clad-order-card-chip__k {
-  flex: 0 0 auto;
+.project-clad-order-note-open {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  color: #0f172a;
+  text-decoration: underline;
+  text-transform: none;
+  text-underline-offset: 0.12em;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.project-clad-order-card-chip--note .project-clad-order-card-chip__v {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: none;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: normal;
+.project-clad-order-note-open:hover {
+  color: #b91c1c;
+}
+
+.project-clad-order-note-open:focus-visible {
+  outline: 2px solid rgba(15, 23, 42, 0.45);
+  outline-offset: 2px;
+}
+
+.project-clad-order-note-print {
+  display: none;
+  margin: 0.2rem 0 0;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
+  text-transform: none;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #0f172a;
+}
+
+.project-clad-order-note-print__label {
+  display: block;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.project-clad-order-note-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 2147482000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.75rem, 4vw, 1.5rem);
+  box-sizing: border-box;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.project-clad-order-note-dialog__panel {
+  width: min(32rem, 100%);
+  max-height: min(80vh, 36rem);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 0.9rem 1rem 1rem;
+  border-radius: 16px;
+  background: #f4f5f6;
+  color: #0f172a;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.28);
+  text-transform: none;
+}
+
+.project-clad-order-note-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.project-clad-order-note-dialog__header h2 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+}
+
+.project-clad-order-note-dialog__close {
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.project-clad-order-note-dialog__close:hover,
+.project-clad-order-note-dialog__close:focus-visible {
+  color: #0e1a26;
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.08);
+  outline: none;
+}
+
+.project-clad-order-note-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(60vh, 24rem);
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-transform: none;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  text-align: left;
 }
 
 .project-clad-order-card-prop-blocks {
@@ -18302,53 +18405,18 @@ details.project-clad-edit-mode
     white-space: nowrap !important;
   }
 
-  body.project-clad-print-order-only
-    #project-clad-orders-font-scope
-    .project-clad-print-page
-    .project-clad-order-card-chip--note,
-  body.project-clad-print-order-only
-    #project-clad-orders-font-scope
-    .project-clad-print-page
-    .project-clad-order-card-chip--note
-    .project-clad-order-card-chip__v,
-  body.project-clad-print-order-only
-    .project-clad-page--projects.project-clad-page--detail
-    .project-clad-order-card-chip--note,
-  body.project-clad-print-order-only
-    .project-clad-page--projects.project-clad-page--detail
-    .project-clad-order-card-chip--note
-    .project-clad-order-card-chip__v {
-    max-width: none !important;
+  body.project-clad-print-order-only .project-clad-order-note-open,
+  body.project-clad-print-order-only .project-clad-order-note-dialog {
+    display: none !important;
+  }
+
+  body.project-clad-print-order-only .project-clad-order-note-print {
+    display: block !important;
+    white-space: pre-wrap !important;
     overflow-wrap: anywhere !important;
-  }
-
-  body.project-clad-print-order-only
-    #project-clad-orders-font-scope
-    .project-clad-print-page
-    .project-clad-order-card-chip--note,
-  body.project-clad-print-order-only
-    .project-clad-page--projects.project-clad-page--detail
-    .project-clad-order-card-chip--note {
-    white-space: normal !important;
+    text-transform: none !important;
+    max-width: none !important;
     overflow: visible !important;
-  }
-
-  body.project-clad-print-order-only
-    #project-clad-orders-font-scope
-    .project-clad-print-page
-    .project-clad-order-card-chip--note
-    .project-clad-order-card-chip__v,
-  body.project-clad-print-order-only
-    .project-clad-page--projects.project-clad-page--detail
-    .project-clad-order-card-chip--note
-    .project-clad-order-card-chip__v {
-    display: -webkit-box !important;
-    -webkit-box-orient: vertical !important;
-    -webkit-line-clamp: 3 !important;
-    line-clamp: 3 !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: normal !important;
   }
 
   body.project-clad-print-order-only
