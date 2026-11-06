@@ -32,6 +32,7 @@ export const PROJECT_CLAD_SCRIPT_NAMES = [
   "project-customer-search.js",
   "project-page-transitions.js",
   "project-line-image-lightbox.js",
+  "project-order-note.js",
   "project-orders-sort.js",
   "project-po-pdf-upload.js",
   "project-projects-link-nav.js",
