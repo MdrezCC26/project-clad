@@ -25,8 +25,8 @@ export function normalizeOrderSpecKey(key: string): string {
 }
 
 /**
- * Free-text shop notes. These stay on the line as written and wrap in the
- * order column. Short specs (Gauge, Length, L1) stay single-line chips.
+ * Free-text shop notes. On screen these open in a comment dialog. Short specs
+ * (Gauge, Length, L1) stay single-line chips. Print still shows the full note.
  */
 export function isWrappingOrderLineNote(labelOrKey: string): boolean {
   const normalized = labelOrKey.trim().toLowerCase().replace(/[\s_-]+/g, " ");

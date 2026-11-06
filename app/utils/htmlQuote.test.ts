@@ -40,18 +40,27 @@ test("shop notes wrap and short specs stay compact chips", () => {
   assert.equal(isWrappingOrderLineNote("Color Picker"), false);
 });
 
-test("a note clamps to three lines and does not resize the tile", () => {
+test("a populated note opens in a dialog and print keeps the full text", () => {
   const css = readFileSync(
     new URL("./../styles/project-clad-proxy.css", import.meta.url),
     "utf8",
   );
-  const noteCss = css.slice(
-    css.indexOf(".project-clad-order-card-chip--note {"),
+  const screen = css.slice(
+    css.indexOf(".project-clad-order-note {"),
     css.indexOf(".project-clad-order-card-prop-blocks"),
   );
-  assert.match(noteCss, /-webkit-line-clamp:\s*3/);
-  assert.match(noteCss, /text-overflow:\s*ellipsis/);
-  assert.doesNotMatch(noteCss, /project-clad-thumb|min-height/);
+  assert.match(screen, /\.project-clad-order-note-print\s*\{[^}]*display:\s*none/);
+  assert.match(screen, /\.project-clad-order-note-dialog__body\s*\{[^}]*overflow:\s*auto/);
+  assert.match(screen, /white-space:\s*pre-wrap/);
+  assert.doesNotMatch(screen, /project-clad-thumb/);
+  assert.match(
+    css,
+    /project-clad-print-order-only \.project-clad-order-note-open[\s\S]*display:\s*none !important/,
+  );
+  assert.match(
+    css,
+    /project-clad-print-order-only \.project-clad-order-note-print\s*\{[^}]*display:\s*block !important/,
+  );
 });
 
 test("order line specs show a decoded Length for saved OPC lines", () => {
