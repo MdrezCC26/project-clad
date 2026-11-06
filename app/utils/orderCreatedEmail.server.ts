@@ -13,6 +13,7 @@ import {
   isEmailNotificationEnabled,
 } from "./emailNotificationPrefs.server";
 import { dedupeEmailAddresses, isEmailConfigured } from "./email.server";
+import { decodePropertyValue } from "./htmlQuote";
 import { buildOrderPlacedEmailHtml } from "./financeDeliveredEmailHtml.server";
 import {
   getShopLogoDataUrlForEmail,
@@ -79,7 +80,7 @@ function propertiesBlockStaff(
   if (!props?.length) return "";
   const lines = props
     .filter((p) => p.name && !String(p.name).startsWith("__"))
-    .map((p) => `      · ${p.name}: ${p.value}`);
+    .map((p) => `      · ${p.name}: ${decodePropertyValue(p.value)}`);
   return lines.length ? `\n      Properties:\n${lines.join("\n")}` : "";
 }
 

@@ -615,4 +615,101 @@
   });
 
   refreshCartState();
+
+  /*
+   * Lines already in the cart were stored with Length "120&quot;". Rewrite
+   * those properties once so the theme, checkout, and Save order all see 120".
+   * Same rules as app/utils/htmlQuote.ts.
+   */
+  const quoteEntity = /&(?:amp;)*quot;|&#0*34;|&#x0*22;/gi;
+  const decodeHtmlQuotes = (value) => {
+    let current = String(value);
+    for (let pass = 0; pass < 3; pass += 1) {
+      const next = current.replace(quoteEntity, '"');
+      if (next === current) return current;
+      current = next;
+    }
+    return current;
+  };
+  const decodePropertyValue = (value) => {
+    const raw = String(value);
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          let changed = false;
+          const next = {};
+          for (const [key, entry] of Object.entries(parsed)) {
+            if (typeof entry === "string") {
+              const decoded = decodeHtmlQuotes(entry);
+              next[key] = decoded;
+              if (decoded !== entry) changed = true;
+            } else {
+              next[key] = entry;
+            }
+          }
+          return changed ? JSON.stringify(next) : raw;
+        }
+      } catch {
+        /* ordinary text */
+      }
+    }
+    return decodeHtmlQuotes(raw);
+  };
+
+  const rewriteVisibleQuotes = () => {
+    document.querySelectorAll(".cart-items__property dd").forEach((el) => {
+      const text = el.textContent || "";
+      const next = decodeHtmlQuotes(text);
+      if (next !== text) el.textContent = next;
+    });
+  };
+
+  const repairStoredCartQuotes = async () => {
+    try {
+      const response = await fetch("/cart.js", { credentials: "same-origin" });
+      if (!response.ok) return;
+      const cart = await response.json();
+      let changed = false;
+      for (const item of cart.items || []) {
+        const props = item.properties || {};
+        const next = {};
+        let itemChanged = false;
+        for (const [name, value] of Object.entries(props)) {
+          const raw = value == null ? "" : String(value);
+          const decoded = decodePropertyValue(raw);
+          next[name] = decoded;
+          if (decoded !== raw) itemChanged = true;
+        }
+        if (!itemChanged || !item.key) continue;
+        const update = await fetch("/cart/change.js", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: item.key,
+            quantity: item.quantity,
+            properties: next,
+          }),
+        });
+        if (update.ok) changed = true;
+      }
+      if (!changed) return;
+      const check = await fetch("/cart.js", { credentials: "same-origin" });
+      if (!check.ok) return;
+      const fresh = await check.json();
+      const stillEncoded = (fresh.items || []).some((line) =>
+        Object.values(line.properties || {}).some(
+          (value) =>
+            typeof value === "string" && decodePropertyValue(value) !== value,
+        ),
+      );
+      if (!stillEncoded) rewriteVisibleQuotes();
+    } catch (error) {
+      console.error("[ProjectClad] length quote repair failed", error);
+    }
+  };
+
+  void repairStoredCartQuotes();
 })();

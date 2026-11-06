@@ -3,6 +3,7 @@
  * cut sheet document. Line properties arrive either as plain cart properties
  * or packed into a `__ooCalcPayload` JSON blob from the external calculator.
  */
+import { decodeHtmlQuotes } from "./htmlQuote";
 
 export type OrderLineProperty = { name: string; value: string };
 
@@ -64,7 +65,7 @@ export function collectOrderLineSpecMap(properties: OrderLineProperty[]): {
       const parsed = JSON.parse(calcPayload.value) as Record<string, unknown>;
       for (const [key, value] of Object.entries(parsed)) {
         if (value == null) continue;
-        const v = String(value).trim();
+        const v = decodeHtmlQuotes(String(value).trim());
         if (!v) continue;
         const nk = normalizeOrderSpecKey(key);
         if (nk === "product_price") continue;
@@ -77,7 +78,7 @@ export function collectOrderLineSpecMap(properties: OrderLineProperty[]): {
 
   for (const p of properties) {
     const rawName = p.name.trim();
-    const v = (p.value || "").trim();
+    const v = decodeHtmlQuotes((p.value || "").trim());
     if (!rawName || rawName.startsWith("__oo") || rawName.startsWith("_")) continue;
     const nk = normalizeOrderSpecKey(rawName);
     if (!map.has(nk)) map.set(nk, v || rawName);
@@ -94,7 +95,7 @@ export function getOrderLineSpecValue(
   const normalized = normalizeOrderSpecKey(key);
   for (const prop of item.properties) {
     if (normalizeOrderSpecKey(prop.name) === normalized) {
-      return (prop.value || "").trim();
+      return decodeHtmlQuotes((prop.value || "").trim());
     }
   }
   return "";

@@ -12,6 +12,217 @@
   if (window.__projectCladOpcPrefill) return;
   window.__projectCladOpcPrefill = true;
 
+  /*
+   * OPC HTML-escapes the Length label into properties[Length] and
+   * properties[__ooCalcPayload], so 120" is posted as the characters
+   * 120&quot;. Decode that quote before the cart request. Keep this in
+   * step with app/utils/htmlQuote.ts.
+   */
+  const QUOTE_ENTITY = /&(?:amp;)*quot;|&#0*34;|&#x0*22;/gi;
+
+  function decodeHtmlQuotes(value) {
+    let current = String(value);
+    for (let pass = 0; pass < 3; pass += 1) {
+      const next = current.replace(QUOTE_ENTITY, '"');
+      if (next === current) return current;
+      current = next;
+    }
+    return current;
+  }
+
+  function decodePropertyValue(value) {
+    const raw = String(value);
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          let changed = false;
+          const next = {};
+          for (const [key, entry] of Object.entries(parsed)) {
+            if (typeof entry === "string") {
+              const decoded = decodeHtmlQuotes(entry);
+              next[key] = decoded;
+              if (decoded !== entry) changed = true;
+            } else {
+              next[key] = entry;
+            }
+          }
+          return changed ? JSON.stringify(next) : raw;
+        }
+      } catch {
+        /* ordinary text */
+      }
+    }
+    return decodeHtmlQuotes(raw);
+  }
+
+  function decodePropertiesMap(props) {
+    if (Array.isArray(props)) {
+      return props.map((entry) => {
+        if (!entry || typeof entry !== "object" || typeof entry.value !== "string") {
+          return entry;
+        }
+        const value = decodePropertyValue(entry.value);
+        return value === entry.value ? entry : { ...entry, value };
+      });
+    }
+    const next = {};
+    for (const [key, entry] of Object.entries(props)) {
+      next[key] = typeof entry === "string" ? decodePropertyValue(entry) : entry;
+    }
+    return next;
+  }
+
+  function decodeCartAddJson(data) {
+    if (!data || typeof data !== "object") return data;
+    if (Array.isArray(data.items)) {
+      data.items = data.items.map((item) => {
+        if (!item || !item.properties || typeof item.properties !== "object") {
+          return item;
+        }
+        return { ...item, properties: decodePropertiesMap(item.properties) };
+      });
+    }
+    if (data.properties && typeof data.properties === "object") {
+      data.properties = decodePropertiesMap(data.properties);
+    }
+    return data;
+  }
+
+  function decodeCartAddBody(body) {
+    if (typeof body === "string") {
+      try {
+        const parsed = JSON.parse(body);
+        const decoded = decodeCartAddJson(parsed);
+        const next = JSON.stringify(decoded);
+        return next === body ? body : next;
+      } catch {
+        try {
+          const params = new URLSearchParams(body);
+          let changed = false;
+          for (const [key, entry] of params.entries()) {
+            if (!key.startsWith("properties[")) continue;
+            const decoded = decodePropertyValue(entry);
+            if (decoded !== entry) {
+              params.set(key, decoded);
+              changed = true;
+            }
+          }
+          return changed ? params.toString() : body;
+        } catch {
+          return body;
+        }
+      }
+    }
+    if (typeof URLSearchParams !== "undefined" && body instanceof URLSearchParams) {
+      for (const [key, entry] of body.entries()) {
+        if (!key.startsWith("properties[")) continue;
+        const decoded = decodePropertyValue(entry);
+        if (decoded !== entry) body.set(key, decoded);
+      }
+      return body;
+    }
+    if (typeof FormData !== "undefined" && body instanceof FormData) {
+      for (const [key, entry] of body.entries()) {
+        if (typeof entry !== "string" || !key.startsWith("properties[")) continue;
+        const decoded = decodePropertyValue(entry);
+        if (decoded !== entry) body.set(key, decoded);
+      }
+      return body;
+    }
+    return body;
+  }
+
+  function isCartAddUrl(url) {
+    return /\/cart\/add(?:\.js)?(?:\?|$)/.test(String(url || ""));
+  }
+
+  function fixPropertyControls(root) {
+    if (!root || !root.querySelectorAll) return;
+    root.querySelectorAll('[name^="properties["]').forEach((el) => {
+      if (
+        !(
+          el instanceof HTMLInputElement ||
+          el instanceof HTMLTextAreaElement
+        )
+      ) {
+        return;
+      }
+      const next = decodePropertyValue(el.value);
+      if (next !== el.value) el.value = next;
+    });
+  }
+
+  function installValueFix(proto) {
+    const desc = Object.getOwnPropertyDescriptor(proto, "value");
+    if (!desc || !desc.get || !desc.set || !desc.configurable) return;
+    Object.defineProperty(proto, "value", {
+      configurable: true,
+      enumerable: desc.enumerable,
+      get() {
+        return desc.get.call(this);
+      },
+      set(next) {
+        let value = next;
+        try {
+          const name = this.getAttribute("name") || "";
+          if (name.startsWith("properties[") && typeof value === "string") {
+            value = decodePropertyValue(value);
+          }
+        } catch {
+          /* keep the original write */
+        }
+        desc.set.call(this, value);
+      },
+    });
+  }
+
+  installValueFix(HTMLInputElement.prototype);
+  installValueFix(HTMLTextAreaElement.prototype);
+
+  document.addEventListener("submit", (event) => {
+    if (event.target instanceof HTMLFormElement) fixPropertyControls(event.target);
+  });
+
+  const originalFetch = window.fetch;
+  if (typeof originalFetch === "function") {
+    window.fetch = function (input, init) {
+      try {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof Request
+              ? input.url
+              : "";
+        if (isCartAddUrl(url) && init && init.body != null) {
+          const body = decodeCartAddBody(init.body);
+          if (body !== init.body) init = { ...init, body };
+        }
+      } catch (error) {
+        console.error("[ProjectClad] length quote fix skipped", error);
+      }
+      return originalFetch.call(this, input, init);
+    };
+  }
+
+  const originalOpen = XMLHttpRequest.prototype.open;
+  const originalSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (method, url) {
+    this.__projectCladUrl = String(url || "");
+    return originalOpen.apply(this, arguments);
+  };
+  XMLHttpRequest.prototype.send = function (body) {
+    try {
+      if (isCartAddUrl(this.__projectCladUrl) && body != null) {
+        body = decodeCartAddBody(body);
+      }
+    } catch (error) {
+      console.error("[ProjectClad] length quote fix skipped", error);
+    }
+    return originalSend.call(this, body);
+  };
+
   const QUERY_KEY = "pc_opc";
   const MAX_WAIT_MS = 20000;
   const RETRY_MS = 350;

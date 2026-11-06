@@ -2,6 +2,8 @@
  * Property rows for customer-facing transactional emails (cart save, order placed, delivered, etc.).
  * Omits internal keys (__*, _*) and normalizes a few labels for consistency with email mockups.
  */
+import { decodePropertyValue } from "./htmlQuote";
+
 export function normalizePropertyLabelForCustomer(name: string): string {
   const t = String(name).trim();
   if (t === "Colour") return "Color";
@@ -22,7 +24,7 @@ export function filterCustomerFacingProperties(
     })
     .map((p) => ({
       name: normalizePropertyLabelForCustomer(String(p.name)),
-      value: String(p.value ?? "").trim() || "—",
+      value: decodePropertyValue(String(p.value ?? "").trim()) || "—",
     }));
 }
 

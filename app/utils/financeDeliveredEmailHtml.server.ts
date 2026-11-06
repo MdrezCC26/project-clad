@@ -4,6 +4,7 @@ import {
   formatEmailDateTime,
   type BrandedEmailDetailRow,
 } from "./brandedEmailHtml.server";
+import { decodePropertyValue } from "./htmlQuote";
 
 function formatMoney(amount: number): string {
   if (Number.isNaN(amount)) return "$0.00";
@@ -274,7 +275,7 @@ function lineItemSpecRows(
       (p, i) => `
                       <tr>
                         <td style="padding:${i === 0 ? "10px" : "3px"} 12px 0 0; font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size:11px; letter-spacing:0.4px; text-transform:uppercase; color:#9A968D; white-space:nowrap; vertical-align:top;">${escapeEmailHtml(p.name)}</td>
-                        <td class="email-muted" style="padding:${i === 0 ? "10px" : "3px"} 0 0 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; color:#5A5F66; vertical-align:top;">${escapeEmailHtml(p.value)}</td>
+                        <td class="email-muted" style="padding:${i === 0 ? "10px" : "3px"} 0 0 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; color:#5A5F66; vertical-align:top;">${escapeEmailHtml(decodePropertyValue(p.value))}</td>
                       </tr>`,
     )
     .join("");

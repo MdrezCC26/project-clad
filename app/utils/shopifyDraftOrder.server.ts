@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../db.server";
 import { getOfflineAccessTokenForShop } from "./adminCustomers.server";
+import { decodePropertyValue } from "./htmlQuote";
 import {
   parseOrderLineCapture,
   parseVariantSnapshot,
@@ -350,7 +351,9 @@ export async function createBackupDraftOrderForJob(args: {
           (entry as { value: unknown }).value != null
         ) {
           const key = String((entry as { name: string }).name).trim();
-          const value = String((entry as { value: unknown }).value).trim();
+          const value = decodePropertyValue(
+            String((entry as { value: unknown }).value).trim(),
+          );
           if (key && value) customAttributes.push({ key, value });
         }
       }
