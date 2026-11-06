@@ -11483,8 +11483,9 @@ button.project-clad-order-line-thumb-preview .project-clad-order-card-thumb-badg
 }
 
 /*
- * Shop notes are free text. Gauge / Length / L1 stay on one line above.
- * A note takes the details column and wraps, including beside a tall upload.
+ * Shop notes use the details column that is already beside the image.
+ * Three lines, then an ellipsis. The thumb and tile size stay as they are.
+ * Gauge / Length / L1 stay on one line.
  */
 .project-clad-order-card-chip--note {
   display: flex;
@@ -11495,6 +11496,7 @@ button.project-clad-order-line-thumb-preview .project-clad-order-card-thumb-badg
   box-sizing: border-box;
   white-space: normal;
   text-align: left;
+  align-items: flex-start;
 }
 
 .project-clad-order-card-chip--note .project-clad-order-card-chip__k {
@@ -11505,8 +11507,12 @@ button.project-clad-order-line-thumb-preview .project-clad-order-card-thumb-badg
   flex: 1 1 auto;
   min-width: 0;
   max-width: none;
-  overflow: visible;
-  text-overflow: unset;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -18312,11 +18318,37 @@ details.project-clad-edit-mode
     .project-clad-page--projects.project-clad-page--detail
     .project-clad-order-card-chip--note
     .project-clad-order-card-chip__v {
-    white-space: normal !important;
     max-width: none !important;
-    overflow: visible !important;
-    text-overflow: unset !important;
     overflow-wrap: anywhere !important;
+  }
+
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-card-chip--note,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-card-chip--note {
+    white-space: normal !important;
+    overflow: visible !important;
+  }
+
+  body.project-clad-print-order-only
+    #project-clad-orders-font-scope
+    .project-clad-print-page
+    .project-clad-order-card-chip--note
+    .project-clad-order-card-chip__v,
+  body.project-clad-print-order-only
+    .project-clad-page--projects.project-clad-page--detail
+    .project-clad-order-card-chip--note
+    .project-clad-order-card-chip__v {
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical !important;
+    -webkit-line-clamp: 3 !important;
+    line-clamp: 3 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: normal !important;
   }
 
   body.project-clad-print-order-only

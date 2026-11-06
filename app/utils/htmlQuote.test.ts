@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { decodeHtmlQuotes, decodePropertyValue } from "./htmlQuote";
 import {
@@ -37,6 +38,20 @@ test("shop notes wrap and short specs stay compact chips", () => {
   assert.equal(isWrappingOrderLineNote("Length"), false);
   assert.equal(isWrappingOrderLineNote("L1"), false);
   assert.equal(isWrappingOrderLineNote("Color Picker"), false);
+});
+
+test("a note clamps to three lines and does not resize the tile", () => {
+  const css = readFileSync(
+    new URL("./../styles/project-clad-proxy.css", import.meta.url),
+    "utf8",
+  );
+  const noteCss = css.slice(
+    css.indexOf(".project-clad-order-card-chip--note {"),
+    css.indexOf(".project-clad-order-card-prop-blocks"),
+  );
+  assert.match(noteCss, /-webkit-line-clamp:\s*3/);
+  assert.match(noteCss, /text-overflow:\s*ellipsis/);
+  assert.doesNotMatch(noteCss, /project-clad-thumb|min-height/);
 });
 
 test("order line specs show a decoded Length for saved OPC lines", () => {
