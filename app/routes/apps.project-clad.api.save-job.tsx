@@ -38,6 +38,7 @@ import {
 } from "../utils/shapeProfile";
 import { getAuthoritativeSavedCartPrices } from "../utils/savedCartPricing.server";
 import { CartPricingError } from "../utils/calculatorPricing.server";
+import { decodePropertyValue } from "../utils/htmlQuote";
 
 type SaveJobPayload = {
   mode: "newProject" | "existingProject" | "existingJob";
@@ -98,12 +99,17 @@ const normalizeItems = (
       priceSnapshot: new Prisma.Decimal(0),
       properties:
         raw.properties && raw.properties.length
-          ? raw.properties.filter(
-              (property) =>
-                typeof property?.name === "string" &&
-                typeof property?.value === "string" &&
-                property.name.length > 0,
-            )
+          ? raw.properties
+              .filter(
+                (property) =>
+                  typeof property?.name === "string" &&
+                  typeof property?.value === "string" &&
+                  property.name.length > 0,
+              )
+              .map((property) => ({
+                name: property.name,
+                value: decodePropertyValue(property.value),
+              }))
           : undefined,
       lineMeta:
         raw.lineMeta && typeof raw.lineMeta === "object"
