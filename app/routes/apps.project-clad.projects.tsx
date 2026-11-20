@@ -14,13 +14,7 @@ import {
   getCustomersByIds,
   type CustomerInfo,
 } from "../utils/adminCustomers.server";
-import { getCsvForProjectIds } from "../utils/exportProjectsCsv.server";
-import { isEmailConfigured } from "../utils/email.server";
-import {
-  getEmailNotificationPrefs,
-  isEmailNotificationEnabled,
-} from "../utils/emailNotificationPrefs.server";
-import { sendTransactionalEmail } from "../utils/transactionalEmail.server";
+import { deleteStorefrontProject } from "../utils/deleteStorefrontProject.server";
 import { getThemeStyles } from "../utils/themeAssets.server";
 import { PROJECT_CLAD_CURSOR_GLOW_SCRIPT } from "../utils/projectCladCursorGlowScript";
 import { projectCladProxyStylesHref } from "../utils/projectCladProxyStyles.server";
@@ -565,33 +559,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     throw new Response("Forbidden", { status: 403 });
   }
 
-  const backupEmail = "michaeldrezin@canadiancladding.ca";
-
-  if (isEmailConfigured()) {
-    const deleteNotifyPrefs = await getEmailNotificationPrefs(shop);
-    if (isEmailNotificationEnabled(deleteNotifyPrefs, "projectDeleteBackup")) {
-      try {
-        const csv = await getCsvForProjectIds(shop, [projectId]);
-        await sendTransactionalEmail({
-          shop,
-          to: backupEmail,
-          subject: `Project export: ${project.name}`,
-          text: `Your project "${project.name}" has been deleted.`,
-          extraAttachments: [
-            {
-              filename: `projectclad-${project.name.replace(/[^a-z0-9-_]/gi, "-")}.csv`,
-              content: csv,
-            },
-          ],
-        });
-      } catch {
-        // Still delete the project even if email fails
-      }
-    }
-  }
-
-  await prisma.project.delete({ where: { id: projectId } });
-  return redirect("/apps/project-clad/projects");
+  await deleteStorefrontProject({
+    shop,
+    projectId,
+    projectName: project.name,
+  });
+  return redirect(`https://${shop}/apps/project-clad/projects`);
 };
 
 export default function ProjectsPage() {

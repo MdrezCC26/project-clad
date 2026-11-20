@@ -58,9 +58,9 @@ function looksLikeUrl(value: string): boolean {
 /** OPC JSON defaults unset selects/colour to `"0"`; that is not a real gauge/colour. */
 function isOpcUnsetSentinel(normalizedKey: string, value: string): boolean {
   if (value !== "0" && value !== "0.0") return false;
-  return /^(field_4|field_9|gauge|color|colour|color_picker|colour_picker|length|field_10)$/.test(
-    normalizedKey,
-  );
+  // Colour option values are often "0" (e.g. Galvanized). Only treat gauge/length
+  // placeholders as unset.
+  return /^(field_4|gauge|length|field_10)$/.test(normalizedKey);
 }
 
 function inferGaugeFromDisplayName(displayName?: string | null): string | null {
@@ -74,10 +74,27 @@ function isSkipKey(normalized: string): boolean {
   return false;
 }
 
+function isPlaceholderZero(value: string | undefined): boolean {
+  return value === "0" || value === "0.0";
+}
+
+function preferSpecValue(
+  primary?: string,
+  fallback?: string,
+): string | undefined {
+  const a = primary?.trim();
+  const b = fallback?.trim();
+  if (a && !isPlaceholderZero(a)) return a;
+  if (b && !isPlaceholderZero(b)) return b;
+  return a || b;
+}
+
 function applyAliases(fields: Record<string, string>): void {
   for (const [a, b] of FIELD_ALIASES) {
-    if (fields[a] && !fields[b]) fields[b] = fields[a];
-    if (fields[b] && !fields[a]) fields[a] = fields[b];
+    const chosen = preferSpecValue(fields[a], fields[b]);
+    if (!chosen) continue;
+    if (!fields[a] || isPlaceholderZero(fields[a])) fields[a] = chosen;
+    if (!fields[b] || isPlaceholderZero(fields[b])) fields[b] = chosen;
   }
 }
 

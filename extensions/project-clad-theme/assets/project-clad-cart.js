@@ -269,202 +269,6 @@
     return properties;
   };
 
-  const propValue = (properties, key) => {
-    const wanted = String(key).trim().toLowerCase();
-    const found = properties.find(
-      (prop) => String(prop.name || "").trim().toLowerCase() === wanted,
-    );
-    return found ? String(found.value || "").trim() : "";
-  };
-
-  const optionValue = (item, key) => {
-    const options = Array.isArray(item.options_with_values)
-      ? item.options_with_values
-      : [];
-    const wanted = String(key).trim().toLowerCase();
-    const found = options.find(
-      (option) => String(option.name || "").trim().toLowerCase() === wanted,
-    );
-    return found ? String(found.value || "").trim() : "";
-  };
-
-  const gaugeLabelFromLine = (item, properties) => {
-    const raw =
-      propValue(properties, "Gauge") ||
-      optionValue(item, "Gauge") ||
-      (/\bgauge\b/i.test(item.variant_title || "")
-        ? String(item.variant_title || "").trim()
-        : "");
-    if (!raw) return "";
-    return /\bgauge\b/i.test(raw) ? raw : `${raw} Gauge`;
-  };
-
-  const isCustomPartLine = (properties) => {
-    const shape = propValue(properties, "shape_type").toUpperCase();
-    return (
-      shape === "L" ||
-      shape === "Z" ||
-      shape === "U" ||
-      (propValue(properties, "L1") && propValue(properties, "L2"))
-    );
-  };
-
-  const findLineTitleLink = (lineEl, item) => {
-    const productTitle = String(item.product_title || "").trim().toLowerCase();
-    const links = Array.from(lineEl.querySelectorAll('a[href*="/products/"]'));
-    const titleLink = links.find((link) => {
-      const text = (link.textContent || "").replace(/\s+/g, " ").trim();
-      return text && (!productTitle || text.toLowerCase().includes(productTitle));
-    });
-    return titleLink || links.find((link) => (link.textContent || "").trim());
-  };
-
-  const cartLineContainerForLink = (link) =>
-    link.closest(
-      [
-        "[data-cart-item]",
-        "[data-line-item]",
-        ".cart-item",
-        ".cart-items__item",
-        ".cart__item",
-        ".line-item",
-        "li",
-        "tr",
-      ].join(","),
-    );
-
-  const findCartLineElement = (item) => {
-    const handle = productHandleFromUrl(item.url);
-    const links = Array.from(document.querySelectorAll('a[href*="/products/"]'))
-      .filter((link) => !link.closest("[data-projectclad]"))
-      .filter((link) => {
-        if (!handle) return true;
-        const href = link.getAttribute("href") || "";
-        return href.includes(`/products/${handle}`);
-      });
-    const title = String(item.product_title || "").trim().toLowerCase();
-    const candidates = links
-      .map((link) => ({
-        link,
-        lineEl: cartLineContainerForLink(link),
-        text: (link.textContent || "").replace(/\s+/g, " ").trim(),
-      }))
-      .filter((candidate) => candidate.lineEl);
-    const match = candidates.find(
-      (candidate) =>
-        candidate.text &&
-        (!title || candidate.text.toLowerCase().includes(title)) &&
-        !candidate.lineEl.dataset.projectcladCartLineEnhanced,
-    );
-    return (match || candidates[0] || {}).lineEl || null;
-  };
-
-  const shouldHideNativeOptionEl = (el) => {
-    if (
-      el.closest("[data-projectclad-cart-specs]") ||
-      el.querySelector("img, picture, svg, button, input, select, textarea")
-    ) {
-      return false;
-    }
-    const text = (el.textContent || "").replace(/\s+/g, " ").trim();
-    if (!text || text.length > 120) return false;
-    return /^(gauge|l1|l2|l3|a1|a2|shape[_\s-]*type)\s*:?/i.test(text);
-  };
-
-  const hideNativeCustomPartOptions = (lineEl) => {
-    lineEl
-      .querySelectorAll(
-        [
-          ".product-option",
-          "[class*='product-option']",
-          "[class*='property']",
-          "[class*='option']",
-          "dt",
-          "dd",
-          "li",
-          "p",
-          "span",
-        ].join(","),
-      )
-      .forEach((el) => {
-        if (!(el instanceof HTMLElement) || !shouldHideNativeOptionEl(el)) {
-          return;
-        }
-        el.hidden = true;
-        el.dataset.projectcladHiddenNativeOption = "true";
-        if (
-          el.tagName.toLowerCase() === "dt" &&
-          el.nextElementSibling instanceof HTMLElement &&
-          el.nextElementSibling.tagName.toLowerCase() === "dd"
-        ) {
-          el.nextElementSibling.hidden = true;
-          el.nextElementSibling.dataset.projectcladHiddenNativeOption = "true";
-        }
-      });
-  };
-
-  const formatCustomPartCartLine = (lineEl, item, properties) => {
-    const titleLink = findLineTitleLink(lineEl, item);
-    if (!(titleLink instanceof HTMLElement)) return;
-
-    const productTitle =
-      (item.product_title && String(item.product_title).trim()) ||
-      (item.title && String(item.title).trim()) ||
-      (titleLink.textContent || "").replace(/\s+/g, " ").trim();
-    const gaugeLabel = gaugeLabelFromLine(item, properties);
-    const titleText = gaugeLabel ? `${productTitle} - ${gaugeLabel}` : productTitle;
-
-    titleLink.textContent = titleText;
-    titleLink.dataset.projectcladCartTitleEnhanced = "true";
-
-    let specs = lineEl.querySelector("[data-projectclad-cart-specs]");
-    if (!(specs instanceof HTMLElement)) {
-      specs = document.createElement("div");
-      specs.className = "projectclad-cart-line-specs";
-      specs.dataset.projectcladCartSpecs = "true";
-      titleLink.insertAdjacentElement("afterend", specs);
-    }
-    specs.innerHTML = "";
-
-    ["L1", "L2", "L3", "A1", "A2"].forEach((key) => {
-      const value = propValue(properties, key);
-      if (!value) return;
-      const row = document.createElement("span");
-      row.className = "projectclad-cart-line-spec";
-      row.textContent = `${key} = ${value}`;
-      specs.appendChild(row);
-    });
-
-    const additionalDetails = propValue(properties, "Additional Details");
-    if (additionalDetails) {
-      const row = document.createElement("span");
-      row.className =
-        "projectclad-cart-line-spec projectclad-cart-line-spec--extra";
-      row.textContent = `Additional Details: ${additionalDetails}`;
-      specs.appendChild(row);
-    }
-
-    hideNativeCustomPartOptions(lineEl);
-    lineEl.dataset.projectcladCartLineEnhanced = "true";
-  };
-
-  const enhanceCustomPartCartDisplay = async () => {
-    try {
-      const response = await fetch("/cart.js", { credentials: "same-origin" });
-      if (!response.ok) return;
-      const cart = await response.json();
-      (cart.items || []).forEach((item) => {
-        const properties = propertiesArrayFromLine(item);
-        if (!isCustomPartLine(properties)) return;
-        const lineEl = findCartLineElement(item);
-        if (!(lineEl instanceof HTMLElement)) return;
-        formatCustomPartCartLine(lineEl, item, properties);
-      });
-    } catch (error) {
-      console.error("[ProjectClad] custom cart line formatting failed", error);
-    }
-  };
-
   const getCartItems = async () => {
     const response = await fetch("/cart.js", { credentials: "same-origin" });
     const cart = await response.json();
@@ -525,7 +329,6 @@
         el.style.display = "none";
       });
     });
-    enhanceCustomPartCartDisplay();
   } else {
     initCheckoutFulfillmentModal(root);
   }
@@ -602,7 +405,6 @@
     clearTimeout(cartRefreshTimer);
     cartRefreshTimer = setTimeout(() => {
       refreshCartState();
-      if (hasCustomParts) enhanceCustomPartCartDisplay();
     }, 250);
   });
 
@@ -610,7 +412,6 @@
     clearTimeout(cartRefreshTimer);
     cartRefreshTimer = setTimeout(() => {
       refreshCartState();
-      if (hasCustomParts) enhanceCustomPartCartDisplay();
     }, 500);
   });
 

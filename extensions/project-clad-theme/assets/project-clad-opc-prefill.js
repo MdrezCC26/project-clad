@@ -287,9 +287,7 @@
     const v = String(value || "").trim();
     if (v !== "0" && v !== "0.0") return false;
     const n = normalizeKey(key);
-    return /^(field_4|field_9|gauge|color|colour|color_picker|colour_picker|length|field_10)$/.test(
-      n,
-    );
+    return /^(field_4|gauge|length|field_10)$/.test(n);
   }
 
   function valueForKey(fields, rawKey) {
@@ -524,7 +522,7 @@
   }
 
   function fillControl(el, key, value) {
-    if (el instanceof HTMLSelectElement) return false;
+    if (el instanceof HTMLSelectElement) return fillSelect(el, value);
     if (el instanceof HTMLTextAreaElement) {
       if (normalizeMatch(el.value) === normalizeMatch(value)) return true;
       setNativeValue(el, value);
@@ -639,7 +637,16 @@
       }
       const wrapper = findSelectWrapper(root, fieldKey);
       if (!wrapper) continue;
-      if (triggerShowsWanted(wrapper, wanted) || clickOpcOption(wrapper, wanted)) {
+      const native = wrapper.querySelector(
+        "select.calc-custom-select-native, select",
+      );
+      const nativeOk =
+        native instanceof HTMLSelectElement && fillSelect(native, wanted);
+      if (
+        nativeOk ||
+        triggerShowsWanted(wrapper, wanted) ||
+        clickOpcOption(wrapper, wanted)
+      ) {
         done[fieldKey] = true;
       }
     }
@@ -649,7 +656,6 @@
     let filled = 0;
     for (const el of collectControls(root)) {
       if (isShopifyVariantControl(el)) continue;
-      if (el instanceof HTMLSelectElement) continue;
       const nameKey = controlNameKey(el);
       const label = labelTextFor(el);
       const heading = headingKeyFromText(

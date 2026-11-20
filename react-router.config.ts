@@ -26,6 +26,7 @@ export default {
     "canadiancladding.ca",
     "www.canadiancladding.ca",
     "rnc2a0-d3.myshopify.com",
+    "*.myshopify.com",
     "project-clad.onrender.com",
     "*.onrender.com",
     ...envHosts,

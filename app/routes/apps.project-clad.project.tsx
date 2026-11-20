@@ -73,6 +73,7 @@ import { ProjectCladStorefrontFooter } from "../components/ProjectCladStorefront
 import { ProjectCladStorefrontNav } from "../components/ProjectCladStorefrontNav";
 import { getStorefrontAppNav } from "../utils/storefrontAppNav";
 import { STOREFRONT_ORDER_CONFIRMED_ACTIVITY } from "../utils/projectActivity.shared";
+import { deleteStorefrontProject } from "../utils/deleteStorefrontProject.server";
 import {
   sendOrderPlacedEmails,
   sendProjectStatusNotificationEmail,
@@ -5027,6 +5028,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     viewerHasNATag,
   );
 
+  if (intent === "delete-project") {
+    if (!canAdminMembers) {
+      throw new Response("Forbidden", { status: 403 });
+    }
+    const submittedId = String(formData.get("projectId") || "");
+    if (submittedId && submittedId !== projectId) {
+      throw new Response("Project not found", { status: 404 });
+    }
+    await deleteStorefrontProject({
+      shop,
+      projectId,
+      projectName: project.name,
+    });
+    const origin = getStorefrontOriginForAppProxyRedirect(request, shop);
+    return redirect(`${origin}/apps/project-clad/projects`);
+  }
+
   if (intent === "save-order-delivery") {
     const saveDeliveryAckFromQuery =
       new URL(request.url).searchParams.get("pcJson") === "1";
@@ -9420,7 +9438,7 @@ export default function ProjectDetailPage() {
             </p>
           <Form
             method="post"
-            action="/apps/project-clad/projects"
+            action={`${storefrontProjectActionPath}?id=${encodeURIComponent(project.id)}`}
             style={{ marginTop: "1rem" }}
           >
             <input type="hidden" name="intent" value="delete-project" />
