@@ -491,22 +491,18 @@
     return false;
   }
 
-  function setSelectValue(select, value) {
-    const desc = Object.getOwnPropertyDescriptor(
-      HTMLSelectElement.prototype,
-      "value",
-    );
-    if (desc && desc.set) desc.set.call(select, value);
-    else select.value = value;
+  /** OPC colour options all share value "0", so select by index, not value. */
+  function setSelectIndex(select, index) {
+    select.selectedIndex = index;
     select.dispatchEvent(new Event("input", { bubbles: true }));
     select.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   function fillSelect(select, wanted) {
     const options = [...select.options];
-    const match = options.find((opt) => optionMatches(opt, wanted));
-    if (!match) return false;
-    if (select.value !== match.value) setSelectValue(select, match.value);
+    const index = options.findIndex((opt) => optionMatches(opt, wanted));
+    if (index < 0) return false;
+    if (select.selectedIndex !== index) setSelectIndex(select, index);
     return true;
   }
 
@@ -637,16 +633,16 @@
       }
       const wrapper = findSelectWrapper(root, fieldKey);
       if (!wrapper) continue;
+      // OPC's own option click updates its visible trigger; setting the native
+      // select alone changes the payload but leaves "Please select…" showing.
+      if (triggerShowsWanted(wrapper, wanted) || clickOpcOption(wrapper, wanted)) {
+        done[fieldKey] = true;
+        continue;
+      }
       const native = wrapper.querySelector(
         "select.calc-custom-select-native, select",
       );
-      const nativeOk =
-        native instanceof HTMLSelectElement && fillSelect(native, wanted);
-      if (
-        nativeOk ||
-        triggerShowsWanted(wrapper, wanted) ||
-        clickOpcOption(wrapper, wanted)
-      ) {
+      if (native instanceof HTMLSelectElement && fillSelect(native, wanted)) {
         done[fieldKey] = true;
       }
     }
@@ -656,6 +652,12 @@
     let filled = 0;
     for (const el of collectControls(root)) {
       if (isShopifyVariantControl(el)) continue;
+      if (
+        el instanceof HTMLSelectElement &&
+        el.closest(".calc-custom-select-wrapper")
+      ) {
+        continue;
+      }
       const nameKey = controlNameKey(el);
       const label = labelTextFor(el);
       const heading = headingKeyFromText(

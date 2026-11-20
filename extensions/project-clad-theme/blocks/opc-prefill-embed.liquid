@@ -1,0 +1,16 @@
+{% comment %}
+  App embed: loads project-clad-opc-prefill.js on product pages so Edit part
+  can autofill the Options Price Calculator on any product template, without
+  needing the ProjectClad save block added to each one.
+{% endcomment %}
+{% if request.page_type == 'product' %}
+  <script src="{{ 'project-clad-opc-prefill.js' | asset_url }}" defer></script>
+{% endif %}
+
+{% schema %}
+{
+  "name": "ProjectClad prefill",
+  "target": "body",
+  "settings": []
+}
+{% endschema %}
