@@ -196,6 +196,8 @@ import {
   titleCaseWords,
 } from "../utils/orderLineSpecs";
 import { buildOpcPrefillHref } from "../utils/opcPrefill";
+import { collectOrderLineNotes } from "../utils/orderLineNote";
+import { OrderLineNoteBox } from "../components/OrderLineNoteBox";
 import {
   isShapeBuilderLine,
   legsFromLineProperties,
@@ -728,7 +730,9 @@ function OrderLineThumbMedia({ item }: { item: JobItemView }) {
 type OrderLineSpecRow = { label: string; value: ReactNode };
 
 function CustomDimensionLineSpecs({ map }: { map: Map<string, string> }) {
-  const rows = collectOrderLineDimensionRows(map);
+  const rows = collectOrderLineDimensionRows(map).filter(
+    (row) => !(row.extra && isWrappingOrderLineNote(row.label)),
+  );
 
   if (!rows.length) return null;
 
@@ -747,11 +751,7 @@ function CustomDimensionLineSpecs({ map }: { map: Map<string, string> }) {
             {row.label}
           </span>
           <span className="project-clad-order-custom-spec__value">
-            {row.extra && isWrappingOrderLineNote(row.label) ? (
-              <OrderLineNote label={row.label} value={row.value} />
-            ) : (
-              row.value
-            )}
+            {row.value}
           </span>
         </div>
       ))}
@@ -979,40 +979,14 @@ function pushOrderLinePropertyDisplay(
     }
   }
 
-  if (isWrappingOrderLineNote(label)) {
-    chips.push(<OrderLineNote key={key} label={label} value={v} />);
-    return;
-  }
+  // Notes render in full under the tile (OrderLineNoteBox), not as a chip.
+  if (isWrappingOrderLineNote(label)) return;
 
   chips.push(
     <span key={key} className="project-clad-order-card-chip">
       <span className="project-clad-order-card-chip__k">{label}</span>
       <span className="project-clad-order-card-chip__v">{v}</span>
     </span>,
-  );
-}
-
-function OrderLineNote({ label, value }: { label: string; value: string }) {
-  const text = value.trim();
-  if (!text) return null;
-  const heading = titleCaseWords(label.replace(/=$/, ""));
-  /* No onClick. The app proxy never hydrates React, so a state setter would
-     not run. project-order-note.js reads the text node and opens the dialog. */
-  return (
-    <span className="project-clad-order-note">
-      <button
-        type="button"
-        className="project-clad-order-note-open"
-        data-projectclad-order-note-open=""
-        aria-haspopup="dialog"
-      >
-        View comment
-      </button>
-      <p className="project-clad-order-note-print">
-        <span className="project-clad-order-note-print__label">{heading}</span>
-        <span data-projectclad-order-note-body="">{text}</span>
-      </p>
-    </span>
   );
 }
 
@@ -3333,7 +3307,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       request,
       "project-line-image-lightbox.js",
     ),
-    orderNote: projectCladScriptSrc(request, "project-order-note.js"),
     ordersSort: projectCladScriptSrc(request, "project-orders-sort.js"),
     poPdfUpload: projectCladScriptSrc(request, "project-po-pdf-upload.js"),
     projectsLinkNav: projectCladScriptSrc(
@@ -10957,6 +10930,9 @@ export default function ProjectDetailPage() {
                                       ) : null}
                                       <OrderLineUnknownVariantNotice item={item} />
                                     </div>
+                                    <OrderLineNoteBox
+                                      notes={collectOrderLineNotes(item.properties)}
+                                    />
                                   </div>
                                 </td>
                               </tr>
@@ -11454,11 +11430,6 @@ export default function ProjectDetailPage() {
         `app/styles/project-clad-proxy.css`.
       */}
       <script src={proxyScriptSrcs.lineImageLightbox} />
-      {/*
-        View comment. React onClick does not run on this proxy page, so the
-        button is plain HTML and this script opens the dialog.
-      */}
-      <script src={proxyScriptSrcs.orderNote} />
       {/*
         Orders-list interactive sort.
 
